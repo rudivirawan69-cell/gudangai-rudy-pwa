@@ -1,4 +1,4 @@
-// GudangAI API Layer V2
+// GudangAI API Layer V2.1 — text/plain POST for Apps Script CORS
 const RETRY_COUNT = 3;
 const RETRY_DELAY_MS = 2000;
 
@@ -64,13 +64,34 @@ async function submitTransaction(action, entity, items) {
   const url = getApiUrl();
   const typeMap = { barangMasuk: 'masuk', barangKeluar: 'keluar', barangRusak: 'rusak' };
   if (!url) { return { success: true, offline: true, id: enqueue(typeMap[action], entity, items).id }; }
+
+  // text/plain menghindari CORS preflight (OPTIONS) yang sering gagal di Apps Script
+  const body = JSON.stringify({ action, entity, items });
+  const opts = {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body,
+    redirect: 'follow',
+  };
+
   try {
-    const res = await fetchWithRetry(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, entity, items }) });
-    const data = await res.json();
+    const res = await fetchWithRetry(url, opts);
+    const text = await res.text();
+    let data;
+    try { data = JSON.parse(text); }
+    catch {
+      throw new Error('Server tidak mengembalikan JSON. Cek deploy Apps Script (Anyone). Respons: ' + text.slice(0, 120));
+    }
     if (data.error) throw new Error(data.error);
+    if (data.success === false) throw new Error(data.message || data.error || 'Gagal menulis ke spreadsheet');
     return { success: true, offline: false, ...data };
   } catch (err) {
-    return { success: true, offline: true, id: enqueue(typeMap[action], entity, items).id, error: err.message };
+    const msg = err.message || '';
+    const isNetwork = !navigator.onLine || /Failed to fetch|NetworkError|Load failed|HTTP 5/i.test(msg);
+    if (isNetwork) {
+      return { success: true, offline: true, id: enqueue(typeMap[action], entity, items).id, error: msg };
+    }
+    return { success: false, offline: false, error: msg };
   }
 }
 
@@ -89,9 +110,10 @@ export async function syncPendingQueue() {
   for (let i = 0; i < queue.length; i++) {
     if (queue[i].synced) continue;
     try {
-      const res = await fetchWithRetry(url, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      const res = await fetchWithRetry(url, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify({ action: actionMap[queue[i].type] || 'barangMasuk', entity: queue[i].entity, items: queue[i].items }) });
-      const data = await res.json();
+      const text = await res.text();
+      const data = JSON.parse(text);
       if (data.error) throw new Error(data.error);
       queue[i] = { ...queue[i], synced: true, syncedAt: new Date().toISOString() };
       synced++;
