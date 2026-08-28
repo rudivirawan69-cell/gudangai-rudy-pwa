@@ -1,0 +1,87 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --color-navy-950: #0a1628;
+  --color-navy-900: #0b2a55;
+  --color-navy-800: #0f3a73;
+  --color-navy-700: #164e8a;
+  --color-navy-600: #1d6ab8;
+  --color-navy-500: #2563eb;
+  --color-cyan-glow: #22d3ee;
+  --color-surface: #f0f4f8;
+  --color-surface-alt: #e8eef5;
+}
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  background: var(--color-surface);
+  color: #1e293b;
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior-y: contain;
+  min-height: 100dvh;
+}
+
+#root { min-height: 100dvh; display: flex; flex-direction: column; }
+
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 4px; }
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes pulse-ring {
+  0% { transform: scale(0.8); opacity: 1; }
+  100% { transform: scale(2.2); opacity: 0; }
+}
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.animate-slide-up { animation: slideUp 0.35s ease-out forwards; }
+.animate-fade-in { animation: fadeIn 0.3s ease-out forwards; }
+.animate-pulse-ring { animation: pulse-ring 1.5s ease-out infinite; }
+.skeleton {
+  background: linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 8px;
+}
+
+.safe-bottom { padding-bottom: max(16px, env(safe-area-inset-bottom)); }
+
+/* Status chip styles */
+.chip-safe { @apply bg-emerald-100 text-emerald-700 border border-emerald-200; }
+.chip-warning { @apply bg-amber-100 text-amber-700 border border-amber-200; }
+.chip-danger { @apply bg-red-100 text-red-700 border border-red-200; }
+.chip-zero { @apply bg-gray-100 text-gray-500 border border-gray-200; }
+
+/* Glass card */
+.glass-card {
+  background: rgba(255,255,255,0.85);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255,255,255,0.6);
+}
+
+/* Bottom nav active indicator */
+.nav-active::after {
+  content: '';
+  position: absolute;
+  bottom: 2px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 20px;
+  height: 3px;
+  background: var(--color-cyan-glow);
+  border-radius: 3px;
+}
