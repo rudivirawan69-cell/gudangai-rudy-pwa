@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useCallback } from 'react';
+import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import { searchMaster, ENTITIES, findByKode } from '../data/master';
 import { submitBarangMasuk, submitBarangKeluar, submitBarangRusak, saveToHistory } from '../data/api';
 import {
@@ -36,6 +36,11 @@ function ItemRow({ item, onRemove, onUpdate }) {
   );
 }
 
+function getSpeechRecognition() {
+  if (typeof window === 'undefined') return null;
+  return window.SpeechRecognition || window.webkitSpeechRecognition || null;
+}
+
 export default function InputPage() {
   const [entity, setEntity] = useState('CV');
   const [type, setType] = useState('masuk');
@@ -44,16 +49,21 @@ export default function InputPage() {
   const [showSearch, setShowSearch] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState(null);
+  const [voiceText, setVoiceText] = useState('');
   const searchRef = useRef(null);
   const fileInputRef = useRef(null);
 
   // PDF Upload state
   const [uploadedFiles, setUploadedFiles] = useState([]);
 
-  // Voice input state
+  // Voice input state - use state + useEffect for reliable detection
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef(null);
-  const speechSupported = typeof window !== 'undefined' && ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window);
+  const [speechSupported, setSpeechSupported] = useState(false);
+
+  useEffect(() => {
+    setSpeechSupported(!!getSpeechRecognition());
+  }, []);
 
   const handleFileUpload = (e) => {
     const files = Array.from(e.target.files || []);
@@ -69,21 +79,27 @@ export default function InputPage() {
 
   const removeFile = (idx) => setUploadedFiles(prev => prev.filter((_, i) => i !== idx));
 
-  const toggleVoice = useCallback(() => {
-    if (!speechSupported) return;
+  const startVoice = useCallback((targetSearch = false) => {
+    const SR = getSpeechRecognition();
+    if (!SR) return;
     if (isListening && recognitionRef.current) {
       recognitionRef.current.stop();
       setIsListening(false);
       return;
     }
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     const recognition = new SR();
     recognition.lang = 'id-ID';
     recognition.interimResults = false;
     recognition.maxAlternatives = 1;
     recognition.onresult = (event) => {
       const transcript = event.results[0][0].transcript;
-      setSearch(transcript);
+      if (targetSearch) {
+        setSearch(transcript);
+      } else {
+        setVoiceText(transcript);
+        setSearch(transcript);
+        setShowSearch(true);
+      }
       setIsListening(false);
     };
     recognition.onerror = () => setIsListening(false);
@@ -91,7 +107,7 @@ export default function InputPage() {
     recognitionRef.current = recognition;
     recognition.start();
     setIsListening(true);
-  }, [isListening, speechSupported]);
+  }, [isListening]);
 
   const suggestions = useMemo(() => {
     if (!search || search.length < 1) return [];
@@ -104,7 +120,7 @@ export default function InputPage() {
     } else {
       setItems(prev => [...prev, { ...masterItem, qty: 1, keterangan: '' }]);
     }
-    setSearch(''); setShowSearch(false);
+    setSearch(''); setShowSearch(false); setVoiceText('');
   };
 
   const removeItem = (kode) => setItems(prev => prev.filter(i => i.kode !== kode));
@@ -185,10 +201,38 @@ export default function InputPage() {
         )}
       </div>
 
-      <button onClick={() => { setShowSearch(true); setTimeout(() => searchRef.current?.focus(), 100); }}
-        className="w-full py-3 rounded-xl border-2 border-dashed border-blue-300 text-blue-600 text-sm font-medium flex items-center justify-center gap-2 hover:bg-blue-50 transition-colors mb-4">
-        <Plus className="w-4 h-4" /> Tambah Barang
-      </button>
+      {/* Action buttons: Tambah + Voice */}
+      <div className="flex gap-2 mb-4">
+        <button onClick={() => { setShowSearch(true); setTimeout(() => searchRef.current?.focus(), 100); }}
+          className="flex-1 py-3 rounded-xl border-2 border-dashed border-blue-300 text-blue-600 text-sm font-medium flex items-center justify-center gap-2 hover:bg-blue-50 transition-colors">
+          <Plus className="w-4 h-4" /> Tambah Barang
+        </button>
+        {speechSupported && (
+          <button onClick={() => startVoice(false)}
+            className={`w-14 rounded-xl flex items-center justify-center transition-all shrink-0 ${
+              isListening
+                ? 'bg-red-500 text-white shadow-lg shadow-red-200 animate-pulse border-2 border-red-400'
+                : 'bg-white text-cyan-600 border-2 border-dashed border-cyan-300 hover:bg-cyan-50'
+            }`}
+            title={isListening ? 'Stop Voice' : 'Input Suara'}>
+            {isListening ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+          </button>
+        )}
+      </div>
+
+      {/* Voice feedback */}
+      {isListening && (
+        <div className="mb-4 bg-red-50 border border-red-200 rounded-xl px-4 py-3 flex items-center gap-3 animate-slide-up">
+          <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse" />
+          <p className="text-sm text-red-700 font-medium">Mendengarkan... ucapkan nama barang</p>
+        </div>
+      )}
+      {voiceText && !isListening && (
+        <div className="mb-4 bg-cyan-50 border border-cyan-200 rounded-xl px-4 py-2 animate-slide-up">
+          <p className="text-[10px] text-cyan-600 uppercase tracking-wider font-medium">Hasil suara</p>
+          <p className="text-sm text-gray-800 font-medium">{voiceText}</p>
+        </div>
+      )}
 
       {showSearch && (
         <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4"
@@ -208,7 +252,7 @@ export default function InputPage() {
                     className="w-full pl-10 pr-4 py-3 bg-gray-50 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-200" />
                 </div>
                 {speechSupported && (
-                  <button onClick={toggleVoice}
+                  <button onClick={() => startVoice(true)}
                     className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all shrink-0 ${
                       isListening
                         ? 'bg-red-500 text-white shadow-lg shadow-red-200 animate-pulse'
