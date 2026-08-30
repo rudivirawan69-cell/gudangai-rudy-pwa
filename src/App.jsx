@@ -6,7 +6,7 @@ import StokPage from './pages/StokPage';
 import InputPage from './pages/InputPage';
 import RiwayatPage from './pages/RiwayatPage';
 import SettingsPage from './pages/SettingsPage';
-import ValidasiPage from './pages/ValidasiPage';
+import POPage from './pages/POPage';
 import { getApiUrl, syncPendingQueue } from './data/api';
 import {
   LayoutDashboard,
@@ -24,7 +24,7 @@ const TABS = [
   { id: 'dashboard', label: 'Beranda', icon: LayoutDashboard },
   { id: 'stok', label: 'Stok', icon: Package },
   { id: 'input', label: 'Input', icon: PackagePlus },
-  { id: 'validasi', label: 'PDF', icon: FileText },
+  { id: 'po', label: 'PO', icon: FileText },
   { id: 'riwayat', label: 'Riwayat', icon: Clock },
   { id: 'settings', label: 'Atur', icon: Settings },
 ];
@@ -45,33 +45,26 @@ function ConnectionBanner() {
   }, []);
 
   useEffect(() => {
-    if (online && hasUrl) {
-      syncPendingQueue().catch(() => {});
-    }
+    if (online && hasUrl) syncPendingQueue().catch(() => {});
   }, [online, hasUrl]);
 
   if (!hasUrl) {
     return (
       <div className="bg-amber-50 border-b border-amber-100 px-3 py-1.5 flex items-center justify-center gap-1.5 text-[11px] text-amber-700 font-medium">
-        <WifiOff className="w-3 h-3" />
-        Mode Demo · Atur URL API di Pengaturan
+        <WifiOff className="w-3 h-3" /> Mode Demo · Atur URL API di Pengaturan
       </div>
     );
   }
-
   if (!online) {
     return (
       <div className="bg-red-50 border-b border-red-100 px-3 py-1.5 flex items-center justify-center gap-1.5 text-[11px] text-red-700 font-medium">
-        <WifiOff className="w-3 h-3" />
-        Mode Offline · Data disimpan lokal
+        <WifiOff className="w-3 h-3" /> Mode Offline · Data disimpan lokal
       </div>
     );
   }
-
   return (
     <div className="bg-emerald-50 border-b border-emerald-100 px-3 py-1.5 flex items-center justify-center gap-1.5 text-[11px] text-emerald-700 font-medium">
-      <Wifi className="w-3 h-3" />
-      Terhubung ke GudangAI RUDY
+      <Wifi className="w-3 h-3" /> Terhubung ke GudangAI RUDY
     </div>
   );
 }
@@ -83,37 +76,24 @@ function AppShell() {
   if (loading) {
     return (
       <div className="min-h-dvh bg-gradient-to-br from-[#0a1628] to-[#0b2a55] flex items-center justify-center">
-        <div className="text-center animate-fade-in">
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-cyan-400 to-blue-500 flex items-center justify-center mx-auto mb-4 shadow-[0_0_40px_rgba(34,211,238,0.3)]">
-            <Snowflake className="w-8 h-8 text-white animate-spin" style={{ animationDuration: '3s' }} />
-          </div>
-          <p className="text-white text-lg font-bold tracking-tight">
-            GudangAI <span className="text-cyan-400 font-extrabold">RUDY</span>
-          </p>
-          <p className="text-cyan-300/60 text-sm mt-1">Memuat...</p>
+        <div className="text-center">
+          <Snowflake className="w-8 h-8 text-white animate-spin mx-auto mb-4" style={{ animationDuration: '3s' }} />
+          <p className="text-white text-lg font-bold">GudangAI <span className="text-cyan-400">RUDY</span></p>
         </div>
       </div>
     );
   }
-
   if (!user) return <LoginPage />;
 
   const renderPage = () => {
     switch (activeTab) {
-      case 'dashboard':
-        return <DashboardPage onNavigate={setActiveTab} />;
-      case 'stok':
-        return <StokPage />;
-      case 'input':
-        return <InputPage />;
-      case 'validasi':
-        return <ValidasiPage />;
-      case 'riwayat':
-        return <RiwayatPage />;
-      case 'settings':
-        return <SettingsPage />;
-      default:
-        return <DashboardPage onNavigate={setActiveTab} />;
+      case 'dashboard': return <DashboardPage onNavigate={setActiveTab} />;
+      case 'stok': return <StokPage />;
+      case 'input': return <InputPage />;
+      case 'po': return <POPage />;
+      case 'riwayat': return <RiwayatPage />;
+      case 'settings': return <SettingsPage />;
+      default: return <DashboardPage onNavigate={setActiveTab} />;
     }
   };
 
@@ -126,13 +106,10 @@ function AppShell() {
           {TABS.map(({ id, label, icon: Icon }) => {
             const active = activeTab === id;
             return (
-              <button
-                key={id}
-                onClick={() => setActiveTab(id)}
-                className={`flex flex-col items-center justify-center gap-0.5 flex-1 py-2 rounded-xl transition-colors ${
+              <button key={id} onClick={() => setActiveTab(id)}
+                className={`flex flex-col items-center justify-center gap-0.5 flex-1 py-2 rounded-xl ${
                   active ? 'text-[#0b2a55]' : 'text-gray-400'
-                }`}
-              >
+                }`}>
                 <Icon className={`w-5 h-5 ${active ? 'stroke-[2.5]' : ''}`} />
                 <span className={`text-[10px] font-medium ${active ? 'font-semibold' : ''}`}>{label}</span>
               </button>
