@@ -1,7 +1,7 @@
 /**
- * Validasi PDF / nota Barang Keluar terhadap master + alias.
+ * Validasi PDF / nota terhadap master + alias.
  */
-import { matchByAlias, getMasterByEntity, searchMaster } from './master.js';
+import { matchByAlias, searchMaster } from './master';
 
 export function parseLinesFromText(text) {
   if (!text) return [];
@@ -102,9 +102,7 @@ export async function extractTextFromPdf(file) {
     return text;
   } catch (err) {
     throw new Error(
-      'Gagal ekstrak PDF (' +
-        (err.message || err) +
-        '). Salin teks manual ke kotak Validasi.'
+      'Gagal ekstrak PDF (' + (err.message || err) + '). Salin teks manual ke kotak Validasi.'
     );
   }
 }
