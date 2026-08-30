@@ -1,35 +1,11 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { fetchStock, getApiUrl } from '../data/api';
-
-const CACHE_KEY = 'gudangai_stock_cache';
-const AUTO_REFRESH_MS = 120000; // 2 minutes
-
-function getCachedStock(entity) {
-  try {
-    const cache = JSON.parse(localStorage.getItem(CACHE_KEY) || '{}');
-    const entry = cache[entity];
-    if (entry && entry.items && entry.at) {
-      if (Date.now() - entry.at < 600000) return entry.items;
-    }
-  } catch {}
-  return null;
-}
-
-function setCachedStock(entity, items) {
-  try {
-    const cache = JSON.parse(localStorage.getItem(CACHE_KEY) || '{}');
-    cache[entity] = { items, at: Date.now() };
-    localStorage.setItem(CACHE_KEY, JSON.stringify(cache));
-  } catch {}
-}
+import { useState, useEffect, useCallback } from 'react';
+import { fetchStock } from '../data/api';
 
 export function useStock(entity) {
-  const [items, setItems] = useState(() => getCachedStock(entity) || []);
+  const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [lastRefresh, setLastRefresh] = useState(null);
-  const [isLive, setIsLive] = useState(false);
-  const intervalRef = useRef(null);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -38,18 +14,8 @@ export function useStock(entity) {
       const data = await fetchStock(entity);
       setItems(data);
       setLastRefresh(new Date());
-      const hasUrl = Boolean(getApiUrl());
-      setIsLive(hasUrl);
-      if (hasUrl && data.length > 0) {
-        setCachedStock(entity, data);
-      }
     } catch (err) {
       setError(err.message);
-      const cached = getCachedStock(entity);
-      if (cached) {
-        setItems(cached);
-        setIsLive(false);
-      }
     } finally {
       setLoading(false);
     }
@@ -57,32 +23,16 @@ export function useStock(entity) {
 
   useEffect(() => { refresh(); }, [refresh]);
 
+  // Refresh berkala saat online agar stok tetap akurat
   useEffect(() => {
-    const hasUrl = Boolean(getApiUrl());
-    if (!hasUrl) return;
-
-    const startInterval = () => {
-      intervalRef.current = setInterval(refresh, AUTO_REFRESH_MS);
-    };
-    const stopInterval = () => {
-      if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
-    };
-
-    const handleVisibility = () => {
-      if (document.visibilityState === 'visible') {
-        refresh();
-        startInterval();
-      } else {
-        stopInterval();
-      }
-    };
-
-    startInterval();
-    document.addEventListener('visibilitychange', handleVisibility);
-
+    const onVis = () => { if (document.visibilityState === 'visible' && navigator.onLine) refresh(); };
+    const id = setInterval(() => { if (navigator.onLine) refresh(); }, 60000);
+    document.addEventListener('visibilitychange', onVis);
+    window.addEventListener('online', refresh);
     return () => {
-      stopInterval();
-      document.removeEventListener('visibilitychange', handleVisibility);
+      clearInterval(id);
+      document.removeEventListener('visibilitychange', onVis);
+      window.removeEventListener('online', refresh);
     };
   }, [refresh]);
 
@@ -96,5 +46,5 @@ export function useStock(entity) {
     return { total, safe, warning, danger, zero, totalStok };
   }, [items]);
 
-  return { items, loading, error, refresh, lastRefresh, getStats, isLive };
+  return { items, loading, error, refresh, lastRefresh, getStats };
 }
