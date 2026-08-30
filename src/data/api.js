@@ -7,9 +7,16 @@
  *  - Health: GET/POST action=status|ping { secret }
  */
 
-const RETRY_COUNT = 3;
-const RETRY_DELAY_MS = 1500;
+const RETRY_COUNT = 4;
+const RETRY_BASE_MS = 800;
+const REQUEST_TIMEOUT_MS = 28000;
 const SCHEMA_VERSION = '1.0';
+
+function emitConn(detail) {
+  try {
+    window.dispatchEvent(new CustomEvent('gudangai-conn', { detail }));
+  } catch (_) {}
+}
 
 export function getApiUrl() {
   return (localStorage.getItem('gudangai_api_url') || '').trim();
@@ -54,15 +61,32 @@ function newIds() {
 async function fetchWithRetry(url, options = {}, retries = RETRY_COUNT) {
   let lastError;
   for (let attempt = 1; attempt <= retries; attempt++) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
     try {
-      const res = await fetch(url, options);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const res = await fetch(url, { ...options, signal: controller.signal });
+      clearTimeout(timer);
+      if (!res.ok) {
+        if (res.status >= 400 && res.status < 500 && res.status !== 408 && res.status !== 429) {
+          throw new Error(`HTTP ${res.status}`);
+        }
+        throw new Error(`HTTP ${res.status}`);
+      }
+      if (attempt > 1) emitConn({ state: 'recovered', attempt });
       return res;
     } catch (err) {
+      clearTimeout(timer);
       lastError = err;
-      if (attempt < retries) await delay(RETRY_DELAY_MS);
+      const isAbort = err && err.name === 'AbortError';
+      const msg = isAbort ? 'Timeout koneksi' : (err && err.message) || 'Network error';
+      emitConn({ state: 'retry', attempt, max: retries, error: msg });
+      if (attempt < retries) {
+        const wait = RETRY_BASE_MS * Math.pow(1.7, attempt - 1) + Math.random() * 200;
+        await delay(wait);
+      }
     }
   }
+  emitConn({ state: 'failed', error: (lastError && lastError.message) || 'Gagal' });
   throw lastError;
 }
 
@@ -251,7 +275,7 @@ async function submitTransaction(action, entity, items) {
       }
     } catch (err) {
       const msg = err.message || '';
-      const isNetwork = !navigator.onLine || /Failed to fetch|NetworkError|Load failed|HTTP 5/i.test(msg);
+      const isNetwork = !navigator.onLine || /Failed to fetch|NetworkError|Load failed|Timeout|HTTP 5/i.test(msg);
       if (isNetwork) {
         const rest = items.slice(written.length);
         const id = enqueue(typeMap[action], entity, rest).id;
