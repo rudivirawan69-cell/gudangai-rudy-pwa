@@ -3,6 +3,8 @@ import { useAuth } from '../hooks/useAuth';
 import {
   getApiUrl,
   setApiUrl,
+  getApiSecret,
+  setApiSecret as saveApiSecret,
   healthCheck,
   getPendingQueue,
   syncPendingQueue,
@@ -28,6 +30,8 @@ export default function SettingsPage() {
   const { user, updateProfile, changePin } = useAuth();
 
   const [apiUrl, setApiUrlState] = useState('');
+  const [apiSecretVal, setApiSecretVal] = useState('');
+  const [secretMsg, setSecretMsg] = useState('');
   const [connStatus, setConnStatus] = useState('idle');
   const [connMessage, setConnMessage] = useState('');
   const [username, setUsername] = useState('');
@@ -41,6 +45,7 @@ export default function SettingsPage() {
 
   useEffect(() => {
     setApiUrlState(getApiUrl());
+    setApiSecretVal(getApiSecret());
     setUsername(localStorage.getItem('gudangai_username') || user?.name || 'Rudi Virawan');
     setPendingCount(getPendingQueue().length);
   }, [user]);
@@ -49,6 +54,12 @@ export default function SettingsPage() {
     setApiUrl(apiUrl.trim());
     setConnStatus('idle');
     setConnMessage(apiUrl.trim() ? 'URL disimpan. Silakan uji koneksi.' : 'URL dihapus. Mode demo aktif.');
+  };
+
+  const handleSaveSecret = () => {
+    saveApiSecret(apiSecretVal.trim());
+    setSecretMsg(apiSecretVal.trim() ? 'API Secret disimpan.' : 'API Secret dihapus.');
+    setTimeout(() => setSecretMsg(''), 2500);
   };
 
   const handleTestConnection = useCallback(async () => {
@@ -65,7 +76,7 @@ export default function SettingsPage() {
     if (result.ok) {
       setConnStatus('ok');
       setConnMessage(
-        `Terhubung · ${result.data?.timestamp ? new Date(result.data.timestamp).toLocaleString('id-ID') : 'OK'}`
+        `Terhubung \u00b7 ${result.data?.timestamp ? new Date(result.data.timestamp).toLocaleString('id-ID') : 'OK'}`
       );
     } else {
       setConnStatus('fail');
@@ -83,7 +94,7 @@ export default function SettingsPage() {
 
   const handleChangePin = () => {
     if (!/^\d{4,6}$/.test(newPin)) {
-      setPinMsg('PIN harus 4–6 digit angka.');
+      setPinMsg('PIN harus 4\u20136 digit angka.');
       return;
     }
     if (newPin !== confirmPin) {
@@ -179,7 +190,7 @@ export default function SettingsPage() {
               type="url"
               value={apiUrl}
               onChange={(e) => setApiUrlState(e.target.value)}
-              placeholder="https://script.google.com/macros/s/…/exec"
+              placeholder="https://script.google.com/macros/s/\u2026/exec"
               className="mt-1 w-full px-3 py-2.5 bg-gray-50 rounded-xl border border-gray-200 text-sm font-mono focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-100"
             />
             <p className="mt-1.5 text-[11px] text-gray-400 flex items-start gap-1">
@@ -218,6 +229,32 @@ export default function SettingsPage() {
               {connMessage}
             </div>
           )}
+
+          <div className="pt-2 border-t border-gray-100">
+            <label className="text-[11px] font-medium text-gray-500 uppercase tracking-wider">
+              API Secret
+            </label>
+            <input
+              type="password"
+              value={apiSecretVal}
+              onChange={(e) => setApiSecretVal(e.target.value)}
+              placeholder="Masukkan API Secret dari Script Properties"
+              className="mt-1 w-full px-3 py-2.5 bg-gray-50 rounded-xl border border-gray-200 text-sm tracking-wider focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-100"
+            />
+            <p className="mt-1.5 text-[11px] text-gray-400 flex items-start gap-1">
+              <Info className="w-3 h-3 mt-0.5 shrink-0" />
+              Harus sama dengan API_SECRET di Script Properties Google Apps Script.
+            </p>
+            <button
+              onClick={handleSaveSecret}
+              className="mt-2 w-full py-2.5 rounded-xl bg-gray-100 text-gray-700 text-sm font-semibold active:bg-gray-200 transition-colors"
+            >
+              Simpan Secret
+            </button>
+            {secretMsg && (
+              <p className="text-xs text-emerald-600 text-center mt-1.5">{secretMsg}</p>
+            )}
+          </div>
         </div>
       </section>
 
@@ -258,7 +295,7 @@ export default function SettingsPage() {
         <div className="p-4 space-y-3">
           <div>
             <label className="text-[11px] font-medium text-gray-500 uppercase tracking-wider">
-              PIN baru (4–6 digit)
+              PIN baru (4\u20136 digit)
             </label>
             <input
               type="password"
@@ -267,7 +304,7 @@ export default function SettingsPage() {
               value={newPin}
               onChange={(e) => setNewPin(e.target.value.replace(/\D/g, ''))}
               className="mt-1 w-full px-3 py-2.5 bg-gray-50 rounded-xl border border-gray-200 text-sm tracking-widest focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-100"
-              placeholder="••••"
+              placeholder="\u2022\u2022\u2022\u2022"
             />
           </div>
           <div>
@@ -281,7 +318,7 @@ export default function SettingsPage() {
               value={confirmPin}
               onChange={(e) => setConfirmPin(e.target.value.replace(/\D/g, ''))}
               className="mt-1 w-full px-3 py-2.5 bg-gray-50 rounded-xl border border-gray-200 text-sm tracking-widest focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-100"
-              placeholder="••••"
+              placeholder="\u2022\u2022\u2022\u2022"
             />
           </div>
           <button
@@ -343,8 +380,8 @@ export default function SettingsPage() {
               {syncResult.message
                 ? syncResult.message
                 : syncResult.skipped
-                  ? 'Lewati — offline atau URL belum diatur.'
-                  : `Berhasil: ${syncResult.synced} · Gagal: ${syncResult.failed}`}
+                  ? 'Lewati \u2014 offline atau URL belum diatur.'
+                  : `Berhasil: ${syncResult.synced} \u00b7 Gagal: ${syncResult.failed}`}
             </div>
           )}
         </div>
@@ -353,7 +390,7 @@ export default function SettingsPage() {
       <div className="flex items-start gap-2 px-1 py-2">
         <Shield className="w-4 h-4 text-gray-400 shrink-0 mt-0.5" />
         <p className="text-[11px] text-gray-400 leading-relaxed">
-          GudangAI · Cold Storage Nasi Goreng 69 · Data disimpan lokal di perangkat Anda.
+          GudangAI \u00b7 Cold Storage Nasi Goreng 69 \u00b7 Data disimpan lokal di perangkat Anda.
           Koneksi ke Google Sheets hanya aktif setelah URL Web App diatur dan berhasil diuji.
         </p>
       </div>

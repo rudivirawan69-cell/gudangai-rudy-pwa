@@ -1,9 +1,10 @@
-import { useState, useMemo, useRef } from 'react';
+import { useState, useMemo, useRef, useCallback } from 'react';
 import { searchMaster, ENTITIES, findByKode } from '../data/master';
 import { submitBarangMasuk, submitBarangKeluar, submitBarangRusak, saveToHistory } from '../data/api';
 import {
   PackagePlus, PackageMinus, Search, Plus, Trash2, Send,
-  CheckCircle, AlertCircle, Loader2, X, AlertTriangle
+  CheckCircle, AlertCircle, Loader2, X, AlertTriangle,
+  Upload, FileText, Mic, MicOff
 } from 'lucide-react';
 
 function ItemRow({ item, onRemove, onUpdate }) {
@@ -13,7 +14,7 @@ function ItemRow({ item, onRemove, onUpdate }) {
         <div className="flex-1 min-w-0">
           <p className="text-xs text-blue-600 font-mono font-semibold">{item.kode}</p>
           <p className="text-sm font-medium text-gray-800 truncate">{item.nama}</p>
-          <p className="text-[11px] text-gray-400">{item.divisi} · {item.satuan}</p>
+          <p className="text-[11px] text-gray-400">{item.divisi} \u00b7 {item.satuan}</p>
         </div>
         <button onClick={onRemove} className="text-gray-400 hover:text-red-500 p-1"><Trash2 className="w-4 h-4" /></button>
       </div>
@@ -44,6 +45,53 @@ export default function InputPage() {
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState(null);
   const searchRef = useRef(null);
+  const fileInputRef = useRef(null);
+
+  // PDF Upload state
+  const [uploadedFiles, setUploadedFiles] = useState([]);
+
+  // Voice input state
+  const [isListening, setIsListening] = useState(false);
+  const recognitionRef = useRef(null);
+  const speechSupported = typeof window !== 'undefined' && ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window);
+
+  const handleFileUpload = (e) => {
+    const files = Array.from(e.target.files || []);
+    const pdfFiles = files.filter(f => f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf'));
+    if (pdfFiles.length === 0) return;
+    setUploadedFiles(prev => {
+      const existing = new Set(prev.map(f => f.name + f.size));
+      const newFiles = pdfFiles.filter(f => !existing.has(f.name + f.size));
+      return [...prev, ...newFiles];
+    });
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const removeFile = (idx) => setUploadedFiles(prev => prev.filter((_, i) => i !== idx));
+
+  const toggleVoice = useCallback(() => {
+    if (!speechSupported) return;
+    if (isListening && recognitionRef.current) {
+      recognitionRef.current.stop();
+      setIsListening(false);
+      return;
+    }
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const recognition = new SR();
+    recognition.lang = 'id-ID';
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+    recognition.onresult = (event) => {
+      const transcript = event.results[0][0].transcript;
+      setSearch(transcript);
+      setIsListening(false);
+    };
+    recognition.onerror = () => setIsListening(false);
+    recognition.onend = () => setIsListening(false);
+    recognitionRef.current = recognition;
+    recognition.start();
+    setIsListening(true);
+  }, [isListening, speechSupported]);
 
   const suggestions = useMemo(() => {
     if (!search || search.length < 1) return [];
@@ -113,6 +161,30 @@ export default function InputPage() {
         ))}
       </div>
 
+      {/* PDF Upload Section */}
+      <div className="mb-4">
+        <input ref={fileInputRef} type="file" accept=".pdf,application/pdf" multiple
+          onChange={handleFileUpload} className="hidden" id="pdf-upload" />
+        <button onClick={() => fileInputRef.current?.click()}
+          className="w-full py-3 rounded-xl border-2 border-dashed border-cyan-300 text-cyan-600 text-sm font-medium flex items-center justify-center gap-2 hover:bg-cyan-50 transition-colors">
+          <Upload className="w-4 h-4" /> Upload PDF Surat Jalan
+        </button>
+        {uploadedFiles.length > 0 && (
+          <div className="mt-2 space-y-1.5">
+            {uploadedFiles.map((file, idx) => (
+              <div key={idx} className="flex items-center gap-2 bg-cyan-50 rounded-lg px-3 py-2 border border-cyan-100">
+                <FileText className="w-4 h-4 text-cyan-600 shrink-0" />
+                <span className="text-xs text-gray-700 truncate flex-1">{file.name}</span>
+                <span className="text-[10px] text-gray-400 shrink-0">{(file.size / 1024).toFixed(0)} KB</span>
+                <button onClick={() => removeFile(idx)} className="text-gray-400 hover:text-red-500 shrink-0">
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       <button onClick={() => { setShowSearch(true); setTimeout(() => searchRef.current?.focus(), 100); }}
         className="w-full py-3 rounded-xl border-2 border-dashed border-blue-300 text-blue-600 text-sm font-medium flex items-center justify-center gap-2 hover:bg-blue-50 transition-colors mb-4">
         <Plus className="w-4 h-4" /> Tambah Barang
@@ -125,14 +197,27 @@ export default function InputPage() {
                onClick={e => e.stopPropagation()}>
             <div className="p-4 border-b border-gray-100">
               <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-semibold text-gray-800">Cari Barang ({entity}) — Alias Aktif</h3>
+                <h3 className="text-sm font-semibold text-gray-800">Cari Barang ({entity}) \u2014 Alias Aktif</h3>
                 <button onClick={() => setShowSearch(false)} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button>
               </div>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <input ref={searchRef} type="text" autoFocus placeholder='Ketik kode, nama, atau alias...'
-                  value={search} onChange={e => setSearch(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 bg-gray-50 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-200" />
+              <div className="relative flex gap-2">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <input ref={searchRef} type="text" autoFocus placeholder='Ketik kode, nama, atau alias...'
+                    value={search} onChange={e => setSearch(e.target.value)}
+                    className="w-full pl-10 pr-4 py-3 bg-gray-50 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-200" />
+                </div>
+                {speechSupported && (
+                  <button onClick={toggleVoice}
+                    className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all shrink-0 ${
+                      isListening
+                        ? 'bg-red-500 text-white shadow-lg shadow-red-200 animate-pulse'
+                        : 'bg-gray-100 text-gray-500 hover:bg-blue-100 hover:text-blue-600'
+                    }`}
+                    title={isListening ? 'Stop' : 'Cari dengan suara'}>
+                    {isListening ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+                  </button>
+                )}
               </div>
             </div>
             <div className="flex-1 overflow-y-auto p-2">
@@ -147,7 +232,7 @@ export default function InputPage() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-gray-800 truncate">{item.nama}</p>
-                    <p className="text-[11px] text-gray-400">{item.kode} · {item.divisi} · {item.satuan}</p>
+                    <p className="text-[11px] text-gray-400">{item.kode} \u00b7 {item.divisi} \u00b7 {item.satuan}</p>
                   </div>
                   <Plus className="w-5 h-5 text-gray-300 group-hover:text-blue-500" />
                 </button>
@@ -176,8 +261,8 @@ export default function InputPage() {
         <div className="sticky bottom-20 bg-white/90 backdrop-blur-lg rounded-2xl p-4 shadow-xl border border-gray-200 animate-slide-up">
           <div className="flex items-center justify-between mb-3">
             <div>
-              <p className="text-xs text-gray-500">{totalItems} item · {totalQty} total qty</p>
-              <p className="text-xs text-gray-400">{entity} · {tc.label}</p>
+              <p className="text-xs text-gray-500">{totalItems} item \u00b7 {totalQty} total qty</p>
+              <p className="text-xs text-gray-400">{entity} \u00b7 {tc.label}</p>
             </div>
           </div>
           <button onClick={handleSubmit} disabled={submitting || totalQty === 0}
@@ -197,7 +282,7 @@ export default function InputPage() {
             <p className="text-sm font-semibold">{result.success ? 'Berhasil!' : 'Gagal'}</p>
             <p className="text-xs opacity-90">
               {result.success
-                ? result.offline ? 'Disimpan offline — akan sync saat online' : `${result.written || 0} item terkirim ke server`
+                ? result.offline ? 'Disimpan offline \u2014 akan sync saat online' : `${result.written || 0} item terkirim ke server`
                 : result.error || 'Terjadi kesalahan'}
             </p>
           </div>
