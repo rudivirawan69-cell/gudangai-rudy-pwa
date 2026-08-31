@@ -139,30 +139,71 @@ function generateDemoStock(masterList) {
 export async function healthCheck() {
   if (!getApiUrl()) return { ok: false, offline: true, error: 'URL API belum diatur' };
   try {
-    let data;
+    let data = null;
+    let lastErr = null;
     try {
       data = await postJson({ action: 'status', requestId: newIds().requestId });
-    } catch {
-      data = await getJson('status');
+    } catch (e) {
+      lastErr = e;
     }
+    if (!data || (data.error && !data.success && data.status !== 'OK')) {
+      try {
+        data = await getJson('status');
+      } catch (e) {
+        lastErr = e;
+      }
+    }
+    if (!data || (data.error && data.available)) {
+      try {
+        const url = getApiUrl();
+        const res = await fetchWithRetry(url + '?action=healthCheck', { method: 'GET', redirect: 'follow' });
+        const text = await res.text();
+        data = JSON.parse(text);
+      } catch (e) {
+        lastErr = e;
+      }
+    }
+
+    if (data && data.code === 'UNAUTHORIZED') {
+      return {
+        ok: false,
+        error: 'Unauthorized — isi API Secret di Atur (sama dengan Script Properties API_SECRET backend 6.4.4)',
+        version: data.version,
+      };
+    }
+
+    if (data && (data.available || String(data.version || '').includes('V2') || (data.status === 'ok' && !data.success && data.timestamp))) {
+      const ver = data.version || 'V2-PWA';
+      return {
+        ok: false,
+        error:
+          'Backend ' +
+          ver +
+          ' terdeteksi. Input transaksi butuh Backend 6.4.4 (action addTransaction). Deploy ulang Code.gs v6.4.4 sebagai Web App, lalu isi URL + API Secret di Atur.',
+        version: ver,
+        legacy: true,
+        raw: data,
+      };
+    }
+
     if (data && (data.success === true || data.status === 'OK' || data.status === 'ok')) {
       return {
         ok: true,
         data: {
           status: 'ok',
           version: data.version || data.title || 'V6',
-          timestamp: data.serverTime || data.time || new Date().toISOString(),
+          timestamp: data.serverTime || data.time || data.timestamp || new Date().toISOString(),
           activeMonth: data.activeMonth,
           raw: data,
         },
       };
     }
-    if (data && data.code === 'UNAUTHORIZED') {
-      return { ok: false, error: 'Unauthorized — isi API Secret di Atur (sama dengan Script Properties API_SECRET)' };
-    }
-    return { ok: false, error: data?.error || 'Respons tidak valid' };
+    return {
+      ok: false,
+      error: (data && (data.error || data.code)) || (lastErr && lastErr.message) || 'Respons tidak valid',
+    };
   } catch (err) {
-    return { ok: false, error: err.message || 'Gagal terhubung' };
+    return { ok: false, offline: !navigator.onLine, error: err.message || 'Gagal cek koneksi' };
   }
 }
 
@@ -197,12 +238,28 @@ export async function fetchStock(entity) {
     try {
       data = await postJson({ action: 'getAllStock', entitas: entity, requestId: newIds().requestId });
     } catch {
-      data = await getJson('getAllStock', { entitas: entity });
+      try {
+        data = await getJson('getAllStock', { entitas: entity });
+      } catch {
+        data = null;
+      }
     }
-    if (data && data.code === 'UNAUTHORIZED') throw new Error('Unauthorized — cek API Secret');
-    if (data && data.error && !data.items) throw new Error(data.error);
-    const items = (data.items || []).map((it) => mapStockItem(it, entity));
-    return items;
+    if (!data || (data.error && !data.items) || data.available) {
+      try {
+        data = await getJson('getStockAll', { entitas: entity });
+      } catch (_) {}
+      if (!data || (data.error && !data.items)) {
+        try {
+          data = await getJson('getStock', { entitas: entity });
+        } catch (_) {}
+      }
+    }
+    if (data && data.code === 'UNAUTHORIZED') throw new Error('Unauthorized — cek API Secret di Atur');
+    if (data && data.error && !data.items && !Array.isArray(data.stock) && !Array.isArray(data.data)) {
+      throw new Error(data.error);
+    }
+    const raw = data.items || data.stock || data.data || [];
+    return raw.map((it) => mapStockItem(it, entity));
   } catch (err) {
     console.warn('fetchStock gagal:', err.message);
     const { getMasterByEntity } = await import('./master.js');
@@ -235,7 +292,13 @@ async function submitTransaction(action, entity, items) {
   const url = getApiUrl();
   const typeMap = { barangMasuk: 'masuk', barangKeluar: 'keluar', barangRusak: 'rusak' };
   if (!url) {
-    return { success: true, offline: true, id: enqueue(typeMap[action], entity, items).id };
+    const id = enqueue(typeMap[action], entity, items).id;
+    return {
+      success: false,
+      offline: true,
+      id,
+      error: 'URL API belum diatur di Atur. Transaksi disimpan antrian offline (id: ' + id + ').',
+    };
   }
 
   const sheet = SHEET_MAP[action];
@@ -251,7 +314,10 @@ async function submitTransaction(action, entity, items) {
       sheet,
       entitas: entity,
       kodeBarang: String(it.kode || '').trim(),
-      qty: Number(it.qty) || 0,
+      qty: (function () {
+        const n = Number(it.qty);
+        return Number.isFinite(n) ? Math.round(n * 1000) / 1000 : 0;
+      })(),
       keterangan: String(it.keterangan || '').trim(),
       requestId: ids.requestId,
       transactionId: ids.transactionId,
@@ -264,18 +330,32 @@ async function submitTransaction(action, entity, items) {
         return {
           success: false,
           offline: false,
-          error: 'Unauthorized — isi API Secret di halaman Atur (dari Script Properties API_SECRET backend 6.4.4)',
+          error: 'Unauthorized — isi API Secret di Atur (Script Properties API_SECRET, Backend 6.4.4)',
+        };
+      }
+      if (data && (data.available || /tidak dikenal|UNKNOWN_ACTION|not found/i.test(String(data.error || '')))) {
+        return {
+          success: false,
+          offline: false,
+          error:
+            'Backend tidak mendukung addTransaction. Deploy Code.gs v6.4.4 sebagai Web App (Execute as: Me, Anyone), lalu ganti URL di Atur + isi API Secret.',
         };
       }
       if (data && (data.success === true || data.status === 'APPLIED' || data.status === 'OK')) {
-        written.push({ kode: payload.kodeBarang, qty: data.qty != null ? data.qty : payload.qty, row: data.row, status: data.status });
+        written.push({
+          kode: payload.kodeBarang,
+          qty: data.qty != null ? data.qty : payload.qty,
+          row: data.row,
+          status: data.status,
+        });
       } else {
         const msg = data?.error || data?.code || 'Gagal menulis transaksi';
-        errors.push(`${payload.kodeBarang}: ${msg}`);
+        errors.push(payload.kodeBarang + ': ' + msg);
       }
     } catch (err) {
       const msg = err.message || '';
-      const isNetwork = !navigator.onLine || /Failed to fetch|NetworkError|Load failed|Timeout|HTTP 5/i.test(msg);
+      const isNetwork =
+        !navigator.onLine || /Failed to fetch|NetworkError|Load failed|Timeout|HTTP 5/i.test(msg);
       if (isNetwork) {
         const rest = items.slice(written.length);
         const id = enqueue(typeMap[action], entity, rest).id;
@@ -287,7 +367,7 @@ async function submitTransaction(action, entity, items) {
           error: msg,
         };
       }
-      errors.push(`${payload.kodeBarang}: ${msg}`);
+      errors.push(payload.kodeBarang + ': ' + msg);
     }
   }
 
@@ -299,7 +379,7 @@ async function submitTransaction(action, entity, items) {
       success: false,
       offline: false,
       written: written.length,
-      error: `Sebagian gagal (${written.length}/${items.length}). ${errors.join('; ')}`,
+      error: 'Sebagian gagal (' + written.length + '/' + items.length + '). ' + errors.join('; '),
       details: written,
     };
   }
