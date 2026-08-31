@@ -104,9 +104,6 @@ export default function DashboardPage({ onNavigate }) {
   const yesterdayKeluar = chartSeries[1].points[5]?.value || 0;
   const deltaPct = yesterdayKeluar > 0 ? Math.round(((todayKeluar - yesterdayKeluar) / yesterdayKeluar) * 100) : todayKeluar > 0 ? 100 : 0;
 
-  const maxUnit = Math.max(statsCV.totalStok, statsPT.totalStok, 1);
-  const hCV = Math.max(8, Math.round((statsCV.totalStok / maxUnit) * 64));
-  const hPT = Math.max(8, Math.round((statsPT.totalStok / maxUnit) * 64));
   const pieT = Math.max(1, totalItems);
   const circ = 2 * Math.PI * 14;
   const pieSegs = [
@@ -216,20 +213,39 @@ export default function DashboardPage({ onNavigate }) {
               </div>
             </div>
           </div>
-          <div>
-            <p className="text-[10px] text-slate-400 mb-2 font-medium">Unit stok CV vs PT</p>
-            <div className="flex items-end gap-3 h-20 justify-center">
-              <div className="flex flex-col items-center gap-1 flex-1">
-                <span className="text-[10px] font-bold text-blue-600 tabular-nums">{statsCV.totalStok.toLocaleString('id-ID')}</span>
-                <div className="w-full max-w-[40px] rounded-t-md bg-blue-500" style={{ height: hCV }} />
-                <span className="text-[10px] text-slate-500 font-medium">CV</span>
-              </div>
-              <div className="flex flex-col items-center gap-1 flex-1">
-                <span className="text-[10px] font-bold text-violet-600 tabular-nums">{statsPT.totalStok.toLocaleString('id-ID')}</span>
-                <div className="w-full max-w-[40px] rounded-t-md bg-violet-500" style={{ height: hPT }} />
-                <span className="text-[10px] text-slate-500 font-medium">PT</span>
-              </div>
-            </div>
+          <div className="min-w-0">
+            <p className="text-[10px] text-slate-400 mb-2.5 font-medium">Unit stok CV vs PT</p>
+            {(() => {
+              const maxU = Math.max(statsCV.totalStok, statsPT.totalStok, 1);
+              const pctCV = Math.max(4, Math.round((statsCV.totalStok / maxU) * 100));
+              const pctPT = Math.max(4, Math.round((statsPT.totalStok / maxU) * 100));
+              return (
+                <div className="space-y-3">
+                  <div>
+                    <div className="flex items-baseline justify-between gap-2 mb-1">
+                      <span className="text-[11px] font-semibold text-blue-700 shrink-0">CV</span>
+                      <span className="text-[12px] font-bold text-blue-600 tabular-nums">
+                        {statsCV.totalStok.toLocaleString('id-ID')}
+                      </span>
+                    </div>
+                    <div className="h-2.5 w-full rounded-full bg-blue-100 overflow-hidden">
+                      <div className="h-full rounded-full bg-blue-500 transition-all duration-500" style={{ width: pctCV + '%' }} />
+                    </div>
+                  </div>
+                  <div>
+                    <div className="flex items-baseline justify-between gap-2 mb-1">
+                      <span className="text-[11px] font-semibold text-violet-700 shrink-0">PT</span>
+                      <span className="text-[12px] font-bold text-violet-600 tabular-nums">
+                        {statsPT.totalStok.toLocaleString('id-ID')}
+                      </span>
+                    </div>
+                    <div className="h-2.5 w-full rounded-full bg-violet-100 overflow-hidden">
+                      <div className="h-full rounded-full bg-violet-500 transition-all duration-500" style={{ width: pctPT + '%' }} />
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         </div>
         <div className="mt-3 pt-3 border-t border-slate-50 grid grid-cols-2 gap-2 text-[10px] text-slate-500">
