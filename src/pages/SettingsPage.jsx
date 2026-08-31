@@ -1,37 +1,34 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import {
-  getApiUrl,
-  setApiUrl,
-  getApiSecret,
-  setApiSecret as saveApiSecret,
-  healthCheck,
-  getPendingQueue,
-  syncPendingQueue,
-  clearSyncedQueue,
+  getApiUrl, setApiUrl, getApiSecret, setApiSecret,
+  healthCheck, getPendingQueue, syncPendingQueue, clearSyncedQueue,
 } from '../data/api';
 import {
-  Settings,
-  Wifi,
-  WifiOff,
-  CheckCircle2,
-  XCircle,
-  Loader2,
-  Link2,
-  KeyRound,
-  User,
-  RefreshCw,
-  Trash2,
-  Shield,
-  Info,
+  Wifi, CheckCircle2, XCircle, Loader2, Link2, KeyRound, User,
+  RefreshCw, Trash2, Shield, ChevronRight, LogOut, Settings as SettingsIcon, Cloud,
 } from 'lucide-react';
 
-export default function SettingsPage() {
-  const { user, updateProfile, changePin } = useAuth();
+function MenuRow({ icon: Icon, iconBg, title, subtitle, onClick, right, danger }) {
+  return (
+    <button type="button" onClick={onClick}
+      className="w-full flex items-center gap-3 px-4 py-3.5 text-left active:bg-slate-50 transition-colors border-b border-slate-50 last:border-0">
+      <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${iconBg || 'bg-slate-100 text-slate-600'}`}>
+        <Icon className="w-5 h-5" />
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className={`text-sm font-semibold ${danger ? 'text-red-600' : 'text-slate-800'}`}>{title}</p>
+        {subtitle && <p className="text-[11px] text-slate-400 truncate mt-0.5">{subtitle}</p>}
+      </div>
+      {right || <ChevronRight className={`w-4 h-4 shrink-0 ${danger ? 'text-red-300' : 'text-slate-300'}`} />}
+    </button>
+  );
+}
 
+export default function SettingsPage() {
+  const { user, updateProfile, changePin, logout } = useAuth();
   const [apiUrl, setApiUrlState] = useState('');
-  const [apiSecretVal, setApiSecretVal] = useState('');
-  const [secretMsg, setSecretMsg] = useState('');
+  const [apiSecret, setApiSecretState] = useState('');
   const [connStatus, setConnStatus] = useState('idle');
   const [connMessage, setConnMessage] = useState('');
   const [username, setUsername] = useState('');
@@ -42,24 +39,27 @@ export default function SettingsPage() {
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState(null);
   const [pendingCount, setPendingCount] = useState(0);
+  const [panel, setPanel] = useState(null);
+  const [showLogout, setShowLogout] = useState(false);
 
   useEffect(() => {
     setApiUrlState(getApiUrl());
-    setApiSecretVal(getApiSecret());
+    setApiSecretState(getApiSecret());
     setUsername(localStorage.getItem('gudangai_username') || user?.name || 'Rudi Virawan');
     setPendingCount(getPendingQueue().length);
   }, [user]);
 
   const handleSaveUrl = () => {
     setApiUrl(apiUrl.trim());
+    setApiSecret(apiSecret.trim());
     setConnStatus('idle');
-    setConnMessage(apiUrl.trim() ? 'URL disimpan. Silakan uji koneksi.' : 'URL dihapus. Mode demo aktif.');
-  };
-
-  const handleSaveSecret = () => {
-    saveApiSecret(apiSecretVal.trim());
-    setSecretMsg(apiSecretVal.trim() ? 'API Secret disimpan.' : 'API Secret dihapus.');
-    setTimeout(() => setSecretMsg(''), 2500);
+    setConnMessage(
+      apiUrl.trim()
+        ? apiSecret.trim()
+          ? 'URL + API Secret disimpan. Silakan uji koneksi.'
+          : 'URL disimpan. API Secret masih kosong — backend 6.4 butuh secret.'
+        : 'URL dihapus. Mode demo aktif.'
+    );
   };
 
   const handleTestConnection = useCallback(async () => {
@@ -69,20 +69,18 @@ export default function SettingsPage() {
       return;
     }
     if (apiUrl.trim()) setApiUrl(apiUrl.trim());
-
+    if (apiSecret.trim()) setApiSecret(apiSecret.trim());
     setConnStatus('testing');
     setConnMessage('Menguji koneksi...');
     const result = await healthCheck();
     if (result.ok) {
       setConnStatus('ok');
-      setConnMessage(
-        `Terhubung \u00b7 ${result.data?.timestamp ? new Date(result.data.timestamp).toLocaleString('id-ID') : 'OK'}`
-      );
+      setConnMessage(`Terhubung · ${result.data?.version || ''} · ${result.data?.activeMonth || ''} · ${result.data?.timestamp ? new Date(result.data.timestamp).toLocaleString('id-ID') : 'OK'}`);
     } else {
       setConnStatus('fail');
       setConnMessage(result.error || 'Gagal terhubung');
     }
-  }, [apiUrl]);
+  }, [apiUrl, apiSecret]);
 
   const handleSaveProfile = () => {
     const name = username.trim() || 'Rudi Virawan';
@@ -93,25 +91,17 @@ export default function SettingsPage() {
   };
 
   const handleChangePin = () => {
-    if (!/^\d{4,6}$/.test(newPin)) {
-      setPinMsg('PIN harus 4\u20136 digit angka.');
-      return;
-    }
-    if (newPin !== confirmPin) {
-      setPinMsg('Konfirmasi PIN tidak cocok.');
-      return;
-    }
+    if (!/^\d{4,6}$/.test(newPin)) { setPinMsg('PIN harus 4–6 digit angka.'); return; }
+    if (newPin !== confirmPin) { setPinMsg('Konfirmasi PIN tidak cocok.'); return; }
     localStorage.setItem('gudangai_pin', newPin);
     if (changePin) changePin(newPin);
-    setNewPin('');
-    setConfirmPin('');
+    setNewPin(''); setConfirmPin('');
     setPinMsg('PIN berhasil diubah.');
     setTimeout(() => setPinMsg(''), 2500);
   };
 
   const handleSync = async () => {
-    setSyncing(true);
-    setSyncResult(null);
+    setSyncing(true); setSyncResult(null);
     const result = await syncPendingQueue();
     setSyncResult(result);
     setPendingCount(getPendingQueue().length);
@@ -124,276 +114,120 @@ export default function SettingsPage() {
     setSyncResult({ message: 'Antrian tersinkron dibersihkan.' });
   };
 
-  const statusIcon = () => {
-    if (connStatus === 'testing') return <Loader2 className="w-5 h-5 text-cyan-500 animate-spin" />;
-    if (connStatus === 'ok') return <CheckCircle2 className="w-5 h-5 text-emerald-500" />;
-    if (connStatus === 'fail') return <XCircle className="w-5 h-5 text-red-500" />;
-    return <Link2 className="w-5 h-5 text-gray-400" />;
-  };
-
-  const statusBadge = () => {
-    if (connStatus === 'ok') {
-      return (
-        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-medium border border-emerald-200">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> Terhubung
-        </span>
-      );
-    }
-    if (connStatus === 'fail') {
-      return (
-        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-50 text-red-700 text-xs font-medium border border-red-200">
-          <span className="w-1.5 h-1.5 rounded-full bg-red-500" /> Gagal
-        </span>
-      );
-    }
-    if (!getApiUrl()) {
-      return (
-        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gray-100 text-gray-600 text-xs font-medium border border-gray-200">
-          <span className="w-1.5 h-1.5 rounded-full bg-gray-400" /> Belum diatur
-        </span>
-      );
-    }
-    return (
-      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 text-xs font-medium border border-amber-200">
-        <span className="w-1.5 h-1.5 rounded-full bg-amber-500" /> Belum diuji
-      </span>
-    );
-  };
+  const connSubtitle =
+    connStatus === 'ok' ? 'Terhubung ke backend'
+      : connStatus === 'fail' ? 'Gagal — cek URL/secret'
+        : getApiUrl() ? 'URL tersimpan · belum diuji' : 'Belum diatur · mode demo';
 
   return (
-    <div className="pb-4 animate-fade-in space-y-4">
-      <div className="flex items-center gap-3 mb-1">
-        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#0b2a55] to-[#164e8a] flex items-center justify-center shadow-md">
-          <Settings className="w-5 h-5 text-white" />
+    <div className="pb-2 animate-fade-in space-y-3.5">
+      <div className="card p-4 flex items-center gap-3">
+        <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#0b2a55] to-[#164e8a] flex items-center justify-center text-white text-xl font-bold shadow-md">
+          {(user?.name || 'R').charAt(0).toUpperCase()}
         </div>
-        <div>
-          <h1 className="text-lg font-bold text-gray-800">Pengaturan</h1>
-          <p className="text-xs text-gray-500">Koneksi, profil & keamanan</p>
+        <div className="min-w-0 flex-1">
+          <p className="text-base font-bold text-slate-900 truncate">{user?.name || 'Rudi Virawan'}</p>
+          <p className="text-[11px] text-slate-400">SPV Gudang · Cold Storage NG69</p>
+          <p className="text-[10px] text-cyan-700 mt-0.5 font-medium">GudangAI RUDY</p>
         </div>
       </div>
 
-      <section className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-        <div className="px-4 py-3 border-b border-gray-50 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Wifi className="w-4 h-4 text-[#0b2a55]" />
-            <h2 className="text-sm font-semibold text-gray-800">Koneksi Google Sheets</h2>
-          </div>
-          {statusBadge()}
+      <div className="card overflow-hidden">
+        <MenuRow icon={User} iconBg="bg-blue-50 text-blue-600" title="Profil Saya" subtitle="Nama tampilan di dashboard" onClick={() => setPanel(panel === 'profile' ? null : 'profile')} />
+        <MenuRow icon={Link2} iconBg="bg-cyan-50 text-cyan-700" title="Koneksi Google Sheets" subtitle={connSubtitle}
+          onClick={() => setPanel(panel === 'koneksi' ? null : 'koneksi')}
+          right={connStatus === 'ok' ? <CheckCircle2 className="w-5 h-5 text-emerald-500" /> : connStatus === 'fail' ? <XCircle className="w-5 h-5 text-red-500" /> : <ChevronRight className="w-4 h-4 text-slate-300" />} />
+        <MenuRow icon={Cloud} iconBg="bg-violet-50 text-violet-600" title="Mode Offline & Sync" subtitle={pendingCount ? `${pendingCount} transaksi pending` : 'Antrian kosong'} onClick={() => setPanel(panel === 'sync' ? null : 'sync')} />
+        <MenuRow icon={KeyRound} iconBg="bg-amber-50 text-amber-700" title="Ganti PIN" subtitle="Keamanan login 4–6 digit" onClick={() => setPanel(panel === 'pin' ? null : 'pin')} />
+        <MenuRow icon={SettingsIcon} iconBg="bg-slate-100 text-slate-600" title="Tentang Aplikasi" subtitle="GudangAI · Backend V6.4.4" onClick={() => setPanel(panel === 'about' ? null : 'about')} />
+      </div>
+
+      {panel === 'profile' && (
+        <div className="card p-4 space-y-3">
+          <p className="text-xs font-semibold text-slate-600">Nama tampilan</p>
+          <input value={username} onChange={(e) => setUsername(e.target.value)} className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm" placeholder="Nama" />
+          <button type="button" onClick={handleSaveProfile} className="w-full py-2.5 rounded-xl bg-[#0b2a55] text-white text-sm font-semibold">Simpan Nama</button>
+          {profileMsg && <p className="text-xs text-emerald-600">{profileMsg}</p>}
         </div>
+      )}
 
-        <div className="p-4 space-y-3">
-          <div>
-            <label className="text-[11px] font-medium text-gray-500 uppercase tracking-wider">
-              URL Apps Script Web App
-            </label>
-            <input
-              type="url"
-              value={apiUrl}
-              onChange={(e) => setApiUrlState(e.target.value)}
-              placeholder="https://script.google.com/macros/s/\u2026/exec"
-              className="mt-1 w-full px-3 py-2.5 bg-gray-50 rounded-xl border border-gray-200 text-sm font-mono focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-100"
-            />
-            <p className="mt-1.5 text-[11px] text-gray-400 flex items-start gap-1">
-              <Info className="w-3 h-3 mt-0.5 shrink-0" />
-              Deploy Code.gs sebagai Web App (Anyone), lalu tempel URL di sini.
-            </p>
-          </div>
-
+      {panel === 'koneksi' && (
+        <div className="card p-4 space-y-3">
+          <p className="text-xs font-semibold text-slate-600">URL Web App Apps Script</p>
+          <input value={apiUrl} onChange={(e) => setApiUrlState(e.target.value)} className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs font-mono" placeholder="https://script.google.com/macros/s/.../exec" />
+          <p className="text-xs font-semibold text-slate-600">API Secret (Script Properties)</p>
+          <input type="password" value={apiSecret} onChange={(e) => setApiSecretState(e.target.value)} className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm" placeholder="API_SECRET backend 6.4.4" />
           <div className="flex gap-2">
-            <button
-              onClick={handleSaveUrl}
-              className="flex-1 py-2.5 rounded-xl bg-gray-100 text-gray-700 text-sm font-semibold active:bg-gray-200 transition-colors"
-            >
-              Simpan URL
-            </button>
-            <button
-              onClick={handleTestConnection}
-              disabled={connStatus === 'testing'}
-              className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-[#0b2a55] to-[#164e8a] text-white text-sm font-semibold flex items-center justify-center gap-2 active:opacity-90 disabled:opacity-60 transition-all"
-            >
-              {statusIcon()}
-              Uji Koneksi
+            <button type="button" onClick={handleSaveUrl} className="flex-1 py-2.5 rounded-xl bg-slate-100 text-slate-700 text-sm font-semibold">Simpan</button>
+            <button type="button" onClick={handleTestConnection} className="flex-1 py-2.5 rounded-xl bg-[#0b2a55] text-white text-sm font-semibold flex items-center justify-center gap-1.5">
+              {connStatus === 'testing' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wifi className="w-4 h-4" />} Uji Koneksi
             </button>
           </div>
-
           {connMessage && (
-            <div
-              className={`text-xs px-3 py-2 rounded-lg ${
-                connStatus === 'ok'
-                  ? 'bg-emerald-50 text-emerald-700'
-                  : connStatus === 'fail'
-                    ? 'bg-red-50 text-red-700'
-                    : 'bg-gray-50 text-gray-600'
-              }`}
-            >
-              {connMessage}
-            </div>
-          )}
-
-          <div className="pt-2 border-t border-gray-100">
-            <label className="text-[11px] font-medium text-gray-500 uppercase tracking-wider">
-              API Secret
-            </label>
-            <input
-              type="password"
-              value={apiSecretVal}
-              onChange={(e) => setApiSecretVal(e.target.value)}
-              placeholder="Masukkan API Secret dari Script Properties"
-              className="mt-1 w-full px-3 py-2.5 bg-gray-50 rounded-xl border border-gray-200 text-sm tracking-wider focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-100"
-            />
-            <p className="mt-1.5 text-[11px] text-gray-400 flex items-start gap-1">
-              <Info className="w-3 h-3 mt-0.5 shrink-0" />
-              Harus sama dengan API_SECRET di Script Properties Google Apps Script.
-            </p>
-            <button
-              onClick={handleSaveSecret}
-              className="mt-2 w-full py-2.5 rounded-xl bg-gray-100 text-gray-700 text-sm font-semibold active:bg-gray-200 transition-colors"
-            >
-              Simpan Secret
-            </button>
-            {secretMsg && (
-              <p className="text-xs text-emerald-600 text-center mt-1.5">{secretMsg}</p>
-            )}
-          </div>
-        </div>
-      </section>
-
-      <section className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-        <div className="px-4 py-3 border-b border-gray-50 flex items-center gap-2">
-          <User className="w-4 h-4 text-[#0b2a55]" />
-          <h2 className="text-sm font-semibold text-gray-800">Profil</h2>
-        </div>
-        <div className="p-4 space-y-3">
-          <div>
-            <label className="text-[11px] font-medium text-gray-500 uppercase tracking-wider">
-              Nama pengguna
-            </label>
-            <input
-              type="text"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              className="mt-1 w-full px-3 py-2.5 bg-gray-50 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-100"
-            />
-          </div>
-          <button
-            onClick={handleSaveProfile}
-            className="w-full py-2.5 rounded-xl bg-gray-100 text-gray-700 text-sm font-semibold active:bg-gray-200 transition-colors"
-          >
-            Simpan Nama
-          </button>
-          {profileMsg && (
-            <p className="text-xs text-emerald-600 text-center">{profileMsg}</p>
+            <p className={`text-[11px] px-2.5 py-2 rounded-lg ${
+              connStatus === 'ok' ? 'bg-emerald-50 text-emerald-700' : connStatus === 'fail' ? 'bg-red-50 text-red-700' : 'bg-slate-50 text-slate-600'
+            }`}>{connMessage}</p>
           )}
         </div>
-      </section>
+      )}
 
-      <section className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-        <div className="px-4 py-3 border-b border-gray-50 flex items-center gap-2">
-          <KeyRound className="w-4 h-4 text-[#0b2a55]" />
-          <h2 className="text-sm font-semibold text-gray-800">Keamanan PIN</h2>
-        </div>
-        <div className="p-4 space-y-3">
-          <div>
-            <label className="text-[11px] font-medium text-gray-500 uppercase tracking-wider">
-              PIN baru (4\u20136 digit)
-            </label>
-            <input
-              type="password"
-              inputMode="numeric"
-              maxLength={6}
-              value={newPin}
-              onChange={(e) => setNewPin(e.target.value.replace(/\D/g, ''))}
-              className="mt-1 w-full px-3 py-2.5 bg-gray-50 rounded-xl border border-gray-200 text-sm tracking-widest focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-100"
-              placeholder="\u2022\u2022\u2022\u2022"
-            />
-          </div>
-          <div>
-            <label className="text-[11px] font-medium text-gray-500 uppercase tracking-wider">
-              Konfirmasi PIN
-            </label>
-            <input
-              type="password"
-              inputMode="numeric"
-              maxLength={6}
-              value={confirmPin}
-              onChange={(e) => setConfirmPin(e.target.value.replace(/\D/g, ''))}
-              className="mt-1 w-full px-3 py-2.5 bg-gray-50 rounded-xl border border-gray-200 text-sm tracking-widest focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-100"
-              placeholder="\u2022\u2022\u2022\u2022"
-            />
-          </div>
-          <button
-            onClick={handleChangePin}
-            className="w-full py-2.5 rounded-xl bg-gradient-to-r from-[#0b2a55] to-[#164e8a] text-white text-sm font-semibold active:opacity-90 transition-all"
-          >
-            Ubah PIN
-          </button>
-          {pinMsg && (
-            <p
-              className={`text-xs text-center ${
-                pinMsg.includes('berhasil') ? 'text-emerald-600' : 'text-red-600'
-              }`}
-            >
-              {pinMsg}
-            </p>
-          )}
-        </div>
-      </section>
-
-      <section className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-        <div className="px-4 py-3 border-b border-gray-50 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <RefreshCw className="w-4 h-4 text-[#0b2a55]" />
-            <h2 className="text-sm font-semibold text-gray-800">Antrian offline</h2>
-          </div>
-          <span className="text-xs font-medium text-gray-500">
-            {pendingCount} pending
-          </span>
-        </div>
-        <div className="p-4 space-y-3">
-          <p className="text-xs text-gray-500">
-            Transaksi yang gagal dikirim akan disimpan di perangkat dan dapat disinkronkan
-            saat koneksi tersedia.
-          </p>
+      {panel === 'sync' && (
+        <div className="card p-4 space-y-3">
+          <p className="text-xs text-slate-500">Transaksi gagal disimpan di perangkat dan disinkron saat online.</p>
           <div className="flex gap-2">
-            <button
-              onClick={handleSync}
-              disabled={syncing || pendingCount === 0}
-              className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-500 text-white text-sm font-semibold flex items-center justify-center gap-2 active:opacity-90 disabled:opacity-50 transition-all"
-            >
-              {syncing ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <RefreshCw className="w-4 h-4" />
-              )}
-              Sinkronkan
+            <button type="button" onClick={handleSync} disabled={syncing || pendingCount === 0}
+              className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-500 text-white text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-50">
+              {syncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />} Sinkronkan ({pendingCount})
             </button>
-            <button
-              onClick={handleClearSynced}
-              className="px-4 py-2.5 rounded-xl bg-gray-100 text-gray-600 text-sm font-medium active:bg-gray-200 transition-colors"
-              title="Bersihkan yang sudah tersinkron"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
+            <button type="button" onClick={handleClearSynced} className="px-4 py-2.5 rounded-xl bg-slate-100 text-slate-600"><Trash2 className="w-4 h-4" /></button>
           </div>
           {syncResult && (
-            <div className="text-xs px-3 py-2 rounded-lg bg-gray-50 text-gray-700">
-              {syncResult.message
-                ? syncResult.message
-                : syncResult.skipped
-                  ? 'Lewati \u2014 offline atau URL belum diatur.'
-                  : `Berhasil: ${syncResult.synced} \u00b7 Gagal: ${syncResult.failed}`}
-            </div>
+            <p className="text-xs text-slate-600 bg-slate-50 rounded-lg px-3 py-2">
+              {syncResult.message ? syncResult.message : syncResult.skipped ? 'Lewati — offline atau URL belum diatur.' : `Berhasil: ${syncResult.synced} · Gagal: ${syncResult.failed}`}
+            </p>
           )}
         </div>
-      </section>
+      )}
 
-      <div className="flex items-start gap-2 px-1 py-2">
-        <Shield className="w-4 h-4 text-gray-400 shrink-0 mt-0.5" />
-        <p className="text-[11px] text-gray-400 leading-relaxed">
-          GudangAI \u00b7 Cold Storage Nasi Goreng 69 \u00b7 Data disimpan lokal di perangkat Anda.
-          Koneksi ke Google Sheets hanya aktif setelah URL Web App diatur dan berhasil diuji.
-        </p>
+      {panel === 'pin' && (
+        <div className="card p-4 space-y-3">
+          <input type="password" inputMode="numeric" value={newPin} onChange={(e) => setNewPin(e.target.value)} className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm" placeholder="PIN baru (4–6 digit)" />
+          <input type="password" inputMode="numeric" value={confirmPin} onChange={(e) => setConfirmPin(e.target.value)} className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm" placeholder="Konfirmasi PIN" />
+          <button type="button" onClick={handleChangePin} className="w-full py-2.5 rounded-xl bg-[#0b2a55] text-white text-sm font-semibold">Ubah PIN</button>
+          {pinMsg && <p className="text-xs text-emerald-600">{pinMsg}</p>}
+        </div>
+      )}
+
+      {panel === 'about' && (
+        <div className="card p-4 text-[11px] text-slate-500 leading-relaxed space-y-1">
+          <p className="font-semibold text-slate-700">GudangAI RUDY</p>
+          <p>Cold Storage Nasi Goreng 69 · CV & PT</p>
+          <p>Frontend PWA · Backend Google Apps Script V6.4.4+OUTBOX</p>
+          <p>Data lokal di perangkat · Sheets hanya setelah URL + secret diuji.</p>
+        </div>
+      )}
+
+      <div className="card overflow-hidden">
+        <MenuRow icon={LogOut} iconBg="bg-red-50 text-red-600" title="Keluar" subtitle="Login ulang dengan PIN" onClick={() => setShowLogout(true)} danger />
       </div>
+
+      <div className="flex items-start gap-2 px-1">
+        <Shield className="w-3.5 h-3.5 text-slate-300 shrink-0 mt-0.5" />
+        <p className="text-[10px] text-slate-400 leading-relaxed">PIN & data antrian tersimpan lokal. Jangan bagikan API Secret.</p>
+      </div>
+
+      {showLogout && (
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowLogout(false)}>
+          <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl border border-slate-100" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-slate-800 mb-2">Keluar?</h3>
+            <p className="text-sm text-slate-500 mb-6">Anda perlu login kembali dengan PIN.</p>
+            <div className="flex gap-3">
+              <button type="button" onClick={() => setShowLogout(false)} className="flex-1 py-3 rounded-xl bg-slate-100 text-slate-600 text-sm font-medium">Batal</button>
+              <button type="button" onClick={() => logout && logout()} className="flex-1 py-3 rounded-xl bg-red-500 text-white text-sm font-medium">Ya, Keluar</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
