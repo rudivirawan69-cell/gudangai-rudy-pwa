@@ -311,7 +311,7 @@ export default function InputPage() {
     } else if (res.status === 'ambiguous') {
       setPendingVoice(parsed);
       setVoiceCandidates(res.candidates || []);
-      setVoiceMsg(`Beberapa kemungkinan — pilih di bawah`);
+      setVoiceMsg('Beberapa kemungkinan — pilih di bawah');
     } else {
       setPendingVoice(parsed);
       setVoiceCandidates([]);
@@ -383,12 +383,32 @@ export default function InputPage() {
   const tc = typeConfig[type];
 
   const quickActions = [
-    { id: 'masuk', label: 'Barang Masuk', sub: 'Tambah stok', icon: PackagePlus, color: 'bg-emerald-50 text-emerald-600', ring: type === 'masuk' },
-    { id: 'keluar', label: 'Barang Keluar', sub: 'Kurangi stok', icon: PackageMinus, color: 'bg-orange-50 text-orange-600', ring: type === 'keluar' },
-    { id: 'rusak', label: 'Barang Rusak', sub: 'Catat rusak', icon: AlertTriangle, color: 'bg-red-50 text-red-600', ring: type === 'rusak' },
-    { id: 'voice', label: 'Suara', sub: listening ? 'Mendengar…' : 'Ucapkan item', icon: listening ? MicOff : Mic, color: listening ? 'bg-rose-100 text-rose-600' : 'bg-rose-50 text-rose-600', ring: listening },
-    { id: 'scan', label: 'PDF / QR', sub: 'Validasi nota', icon: ScanLine, color: 'bg-cyan-50 text-cyan-700', ring: false },
-    { id: 'cari', label: 'Cari Master', sub: 'Pilih item', icon: Search, color: 'bg-blue-50 text-blue-600', ring: false },
+    {
+      id: 'masuk', label: 'Barang Masuk', sub: type === 'masuk' ? '● AKTIF' : 'Tambah stok',
+      icon: PackagePlus,
+      color: type === 'masuk' ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-200' : 'bg-emerald-50 text-emerald-600',
+      active: type === 'masuk', mode: 'masuk',
+    },
+    {
+      id: 'keluar', label: 'Barang Keluar', sub: type === 'keluar' ? '● AKTIF' : 'Kurangi stok',
+      icon: PackageMinus,
+      color: type === 'keluar' ? 'bg-orange-500 text-white shadow-lg shadow-orange-200' : 'bg-orange-50 text-orange-600',
+      active: type === 'keluar', mode: 'keluar',
+    },
+    {
+      id: 'rusak', label: 'Barang Rusak', sub: type === 'rusak' ? '● AKTIF' : 'Catat rusak',
+      icon: AlertTriangle,
+      color: type === 'rusak' ? 'bg-red-500 text-white shadow-lg shadow-red-200' : 'bg-red-50 text-red-600',
+      active: type === 'rusak', mode: 'rusak',
+    },
+    {
+      id: 'voice', label: 'Suara', sub: listening ? '● Mendengar…' : 'Ucapkan item',
+      icon: listening ? MicOff : Mic,
+      color: listening ? 'bg-rose-500 text-white shadow-lg shadow-rose-200' : 'bg-rose-50 text-rose-600',
+      active: listening, mode: null,
+    },
+    { id: 'scan', label: 'PDF / QR', sub: 'Validasi nota', icon: ScanLine, color: 'bg-cyan-50 text-cyan-700', active: false, mode: null },
+    { id: 'cari', label: 'Cari Master', sub: 'Pilih item', icon: Search, color: 'bg-blue-50 text-blue-600', active: false, mode: null },
   ];
 
   const onQuick = (id) => {
@@ -405,14 +425,47 @@ export default function InputPage() {
         <div className="grid grid-cols-3 gap-2.5">
           {quickActions.map((a) => {
             const Icon = a.icon;
+            const isMode = a.mode === 'masuk' || a.mode === 'keluar' || a.mode === 'rusak';
+            const dimOther = isMode && !a.active;
+            const modeClass = a.active && a.mode === 'masuk'
+              ? 'mode-active-masuk'
+              : a.active && a.mode === 'keluar'
+                ? 'mode-active-keluar'
+                : a.active && a.mode === 'rusak'
+                  ? 'mode-active-rusak'
+                  : a.active && a.id === 'voice'
+                    ? 'ring-2 ring-rose-400 border-rose-300'
+                    : '';
             return (
-              <button key={a.id} type="button" onClick={() => onQuick(a.id)}
-                className={`card card-interactive p-3 flex flex-col items-center text-center gap-1.5 min-h-[88px] justify-center ${
-                  a.ring ? 'ring-2 ring-[#0b2a55] border-transparent' : ''
+              <button
+                key={a.id}
+                type="button"
+                onClick={() => onQuick(a.id)}
+                className={`card card-interactive relative p-3 flex flex-col items-center text-center gap-1.5 min-h-[92px] justify-center transition-all duration-300 ${modeClass} ${
+                  dimOther ? 'mode-dim' : ''
+                }`}
+              >
+                {a.active && isMode && (
+                  <span className={`mode-badge absolute top-1.5 right-1.5 w-2 h-2 rounded-full ${
+                    a.mode === 'masuk' ? 'bg-emerald-500' : a.mode === 'keluar' ? 'bg-orange-500' : 'bg-red-500'
+                  }`} />
+                )}
+                <div className={`w-11 h-11 rounded-xl flex items-center justify-center transition-all duration-300 ${a.color} ${
+                  a.active ? 'scale-110' : ''
                 }`}>
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${a.color}`}><Icon className="w-5 h-5" /></div>
-                <p className="text-[11px] font-semibold text-slate-800 leading-tight">{a.label}</p>
-                <p className="text-[9px] text-slate-400 leading-tight">{a.sub}</p>
+                  <Icon className={`w-5 h-5 ${a.active ? 'animate-soft-pulse' : ''}`} />
+                </div>
+                <p className={`text-[11px] font-semibold leading-tight ${
+                  a.active && isMode ? 'text-slate-900' : 'text-slate-800'
+                }`}>{a.label}</p>
+                <p className={`text-[9px] leading-tight font-medium ${
+                  a.active ? (
+                    a.mode === 'masuk' ? 'text-emerald-700' :
+                    a.mode === 'keluar' ? 'text-orange-700' :
+                    a.mode === 'rusak' ? 'text-red-700' :
+                    'text-rose-600'
+                  ) : 'text-slate-400'
+                }`}>{a.sub}</p>
               </button>
             );
           })}
@@ -450,9 +503,21 @@ export default function InputPage() {
         ))}
       </div>
 
-      <p className="text-[11px] text-slate-500 mb-2 px-0.5">
-        Mode: <span className="font-semibold text-slate-800">{typeConfig[type].label}</span> · {entity}
-      </p>
+      <div className={`mb-3 rounded-xl px-3 py-2 flex items-center gap-2 border transition-all duration-300 ${
+        type === 'masuk' ? 'bg-emerald-50 border-emerald-200' :
+        type === 'keluar' ? 'bg-orange-50 border-orange-200' :
+        'bg-red-50 border-red-200'
+      }`}>
+        <span className={`w-2.5 h-2.5 rounded-full mode-badge ${
+          type === 'masuk' ? 'bg-emerald-500' : type === 'keluar' ? 'bg-orange-500' : 'bg-red-500'
+        }`} />
+        <p className="text-[12px] font-semibold text-slate-800">
+          Mode aktif: <span className={
+            type === 'masuk' ? 'text-emerald-700' : type === 'keluar' ? 'text-orange-700' : 'text-red-700'
+          }>{typeConfig[type].label}</span>
+          <span className="text-slate-400 font-normal"> · {entity}</span>
+        </p>
+      </div>
 
       <div className="grid grid-cols-2 gap-2 mb-3">
         <button type="button" onClick={openPdfPicker} disabled={scanBusy}
