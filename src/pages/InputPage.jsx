@@ -1,14 +1,17 @@
 import { useState, useMemo, useRef } from 'react';
-import { searchMaster, ENTITIES } from '../data/master';
+import { searchMaster, ENTITIES, matchByAlias } from '../data/master';
 import { submitBarangMasuk, submitBarangKeluar, submitBarangRusak, saveToHistory } from '../data/api';
 import {
   extractTextFromPdf, parseLinesFromText, validateItems, scanBarcodeFromVideo, detectEntityFromText,
 } from '../data/pdfValidate';
 import {
-  PackagePlus, PackageMinus, Search, Plus, Trash2, Send,
+  PackagePlus, PackageMinus, Search, Trash2, Send,
   CheckCircle, AlertCircle, Loader2, X, AlertTriangle,
-  FileText, Camera, QrCode, ScanLine
+  FileText, Camera, QrCode, ScanLine, Mic, MicOff
 } from 'lucide-react';
+import {
+  isSpeechSupported, createRecognizer, parseVoiceCommand, resolveVoiceItem,
+} from '../data/voiceInput';
 
 function ItemRow({ item, onRemove, onUpdate }) {
   return (
@@ -70,6 +73,12 @@ export default function InputPage() {
   const [scanText, setScanText] = useState('');
   const [preview, setPreview] = useState([]);
   const [cameraOn, setCameraOn] = useState(false);
+  const [listening, setListening] = useState(false);
+  const [voiceText, setVoiceText] = useState('');
+  const [voiceMsg, setVoiceMsg] = useState('');
+  const [voiceCandidates, setVoiceCandidates] = useState([]);
+  const [pendingVoice, setPendingVoice] = useState(null);
+  const recogRef = useRef(null);
   const searchRef = useRef(null);
   const fileRef = useRef(null);
   const videoRef = useRef(null);
@@ -229,6 +238,126 @@ export default function InputPage() {
     }
   };
 
+  const applyVoiceParsed = (parsed) => {
+    if (!parsed || parsed.empty) {
+      setVoiceMsg('Tidak terdengar perintah. Coba: "keluar 10 ice cream"');
+      return;
+    }
+    if (parsed.type) setType(parsed.type);
+    const useEntity = parsed.entity || entity;
+    if (parsed.entity && parsed.entity !== entity) {
+      setEntity(parsed.entity);
+      setItems([]);
+    }
+    if (!parsed.query) {
+      setVoiceMsg(`Mode ${parsed.type || type} · qty ${parsed.qty}. Sebutkan nama barang.`);
+      setPendingVoice(parsed);
+      return;
+    }
+    const res = resolveVoiceItem(useEntity, parsed.query, searchMaster, matchByAlias);
+    if (res.status === 'matched' && res.item) {
+      setItems((prev) => {
+        const map = new Map(prev.map((i) => [i.kode, { ...i }]));
+        const kode = res.item.kode;
+        if (map.has(kode)) {
+          const cur = map.get(kode);
+          cur.qty = (Number(cur.qty) || 0) + (Number(parsed.qty) || 1);
+        } else {
+          map.set(kode, { ...res.item, qty: parsed.qty || 1, keterangan: `voice: ${parsed.raw}` });
+        }
+        return Array.from(map.values());
+      });
+      setVoiceMsg(`✓ ${parsed.type || type} ${parsed.qty} × ${res.item.nama}`);
+      setVoiceCandidates([]);
+      setPendingVoice(null);
+    } else if (res.status === 'ambiguous') {
+      setPendingVoice(parsed);
+      setVoiceCandidates(res.candidates || []);
+      setVoiceMsg(`Beberapa kemungkinan untuk "${parsed.query}" — pilih di bawah`);
+    } else {
+      setPendingVoice(parsed);
+      setVoiceCandidates([]);
+      setVoiceMsg(`Tidak ketemu: "${parsed.query}". Coba Cari Master atau ucapkan lagi.`);
+    }
+  };
+
+  const stopVoice = () => {
+    try { recogRef.current?.stop?.(); } catch (_) {}
+    try { recogRef.current?.abort?.(); } catch (_) {}
+    recogRef.current = null;
+    setListening(false);
+  };
+
+  const startVoice = () => {
+    if (!isSpeechSupported()) {
+      setVoiceMsg('Browser tidak mendukung suara. Gunakan Chrome Android.');
+      return;
+    }
+    if (listening) {
+      stopVoice();
+      return;
+    }
+    const rec = createRecognizer({ lang: 'id-ID', continuous: false, interimResults: true });
+    if (!rec) {
+      setVoiceMsg('SpeechRecognition tidak tersedia');
+      return;
+    }
+    recogRef.current = rec;
+    setVoiceText('');
+    setVoiceMsg('Mendengarkan… sebutkan: masuk/keluar/rusak + jumlah + nama barang');
+    setVoiceCandidates([]);
+    setListening(true);
+    rec.onresult = (ev) => {
+      let interim = '';
+      let finalText = '';
+      for (let i = ev.resultIndex; i < ev.results.length; i++) {
+        const r = ev.results[i];
+        if (r.isFinal) finalText += r[0].transcript;
+        else interim += r[0].transcript;
+      }
+      if (interim) setVoiceText(interim);
+      if (finalText) {
+        setVoiceText(finalText);
+        applyVoiceParsed(parseVoiceCommand(finalText));
+      }
+    };
+    rec.onerror = (ev) => {
+      const err = ev.error || 'error';
+      if (err === 'not-allowed') setVoiceMsg('Izin mikrofon ditolak. Aktifkan di pengaturan browser.');
+      else if (err === 'no-speech') setVoiceMsg('Tidak ada suara. Coba lagi.');
+      else setVoiceMsg('Error suara: ' + err);
+      setListening(false);
+    };
+    rec.onend = () => {
+      setListening(false);
+      recogRef.current = null;
+    };
+    try {
+      rec.start();
+    } catch (e) {
+      setVoiceMsg(e.message || 'Gagal mulai mikrofon');
+      setListening(false);
+    }
+  };
+
+  const pickVoiceCandidate = (item) => {
+    const parsed = pendingVoice || { qty: 1, type, raw: voiceText };
+    if (parsed.type) setType(parsed.type);
+    setItems((prev) => {
+      const map = new Map(prev.map((i) => [i.kode, { ...i }]));
+      if (map.has(item.kode)) {
+        const cur = map.get(item.kode);
+        cur.qty = (Number(cur.qty) || 0) + (Number(parsed.qty) || 1);
+      } else {
+        map.set(item.kode, { ...item, qty: parsed.qty || 1, keterangan: `voice: ${parsed.raw || ''}` });
+      }
+      return Array.from(map.values());
+    });
+    setVoiceMsg(`✓ ${parsed.type || type} ${parsed.qty || 1} × ${item.nama}`);
+    setVoiceCandidates([]);
+    setPendingVoice(null);
+  };
+
   const typeConfig = {
     masuk: { icon: PackagePlus, label: 'Masuk', gradient: 'from-emerald-500 to-emerald-600', shadow: 'shadow-emerald-200' },
     keluar: { icon: PackageMinus, label: 'Keluar', gradient: 'from-orange-500 to-red-500', shadow: 'shadow-orange-200' },
@@ -240,16 +369,16 @@ export default function InputPage() {
     { id: 'masuk', label: 'Barang Masuk', sub: 'Tambah stok', icon: PackagePlus, color: 'bg-emerald-50 text-emerald-600', ring: type === 'masuk' },
     { id: 'keluar', label: 'Barang Keluar', sub: 'Kurangi stok', icon: PackageMinus, color: 'bg-orange-50 text-orange-600', ring: type === 'keluar' },
     { id: 'rusak', label: 'Barang Rusak', sub: 'Catat rusak', icon: AlertTriangle, color: 'bg-red-50 text-red-600', ring: type === 'rusak' },
+    { id: 'voice', label: 'Suara', sub: listening ? 'Mendengar…' : 'Ucapkan item', icon: listening ? MicOff : Mic, color: listening ? 'bg-rose-100 text-rose-600' : 'bg-rose-50 text-rose-600', ring: listening },
     { id: 'scan', label: 'PDF / QR', sub: 'Validasi nota', icon: ScanLine, color: 'bg-cyan-50 text-cyan-700', ring: false },
     { id: 'cari', label: 'Cari Master', sub: 'Pilih item', icon: Search, color: 'bg-blue-50 text-blue-600', ring: false },
-    { id: 'kamera', label: 'Kamera', sub: 'Scan barcode', icon: Camera, color: 'bg-violet-50 text-violet-600', ring: false },
   ];
 
   const onQuick = (id) => {
     if (id === 'masuk' || id === 'keluar' || id === 'rusak') { setType(id); return; }
+    if (id === 'voice') { startVoice(); return; }
     if (id === 'scan') { setShowScan(true); setScanError(''); return; }
-    if (id === 'cari') { setShowSearch(true); setTimeout(() => searchRef.current?.focus(), 80); return; }
-    if (id === 'kamera') { setShowScan(true); setScanError(''); setTimeout(() => startCamera(), 100); }
+    if (id === 'cari') { setShowSearch(true); setTimeout(() => searchRef.current?.focus(), 80); }
   };
 
   return (
@@ -273,6 +402,33 @@ export default function InputPage() {
         </div>
       </div>
 
+      {(listening || voiceText || voiceMsg) && (
+        <div className={`mb-3 rounded-xl border px-3 py-2.5 ${listening ? 'bg-rose-50 border-rose-200' : 'bg-slate-50 border-slate-100'}`}>
+          <div className="flex items-center gap-2 mb-1">
+            {listening ? <Mic className="w-4 h-4 text-rose-600 animate-pulse" /> : <MicOff className="w-4 h-4 text-slate-400" />}
+            <p className="text-[11px] font-semibold text-slate-700">{listening ? 'Mendengarkan…' : 'Hasil suara'}</p>
+            {listening && (
+              <button type="button" onClick={stopVoice} className="ml-auto text-[10px] font-medium text-rose-600">Stop</button>
+            )}
+          </div>
+          {voiceText && <p className="text-sm text-slate-800 font-medium">“{voiceText}”</p>}
+          {voiceMsg && <p className="text-[11px] text-slate-500 mt-0.5">{voiceMsg}</p>}
+          {voiceCandidates.length > 0 && (
+            <div className="mt-2 space-y-1">
+              {voiceCandidates.map((c) => (
+                <button key={c.kode} type="button" onClick={() => pickVoiceCandidate(c)}
+                  className="w-full text-left px-2.5 py-1.5 rounded-lg bg-white border border-slate-100 text-[11px] active:bg-rose-50">
+                  <span className="font-mono text-blue-600">{c.kode}</span> — {c.nama}
+                </button>
+              ))}
+            </div>
+          )}
+          {!isSpeechSupported() && (
+            <p className="text-[10px] text-amber-700 mt-1">Browser ini tidak support Speech Recognition. Pakai Chrome di Android.</p>
+          )}
+        </div>
+      )}
+
       <div className="flex gap-2 mb-3">
         {ENTITIES.map(e => (
           <button key={e} onClick={() => { setEntity(e); setItems([]); setPreview([]); }}
@@ -284,7 +440,7 @@ export default function InputPage() {
 
       <p className="text-[11px] text-slate-500 mb-3 px-0.5">
         Mode aktif: <span className="font-semibold text-slate-800">{typeConfig[type].label}</span> · {entity}
-        {' · '}ketuk Masuk/Keluar/Rusak di atas untuk ganti
+        {' · '}ketuk Masuk/Keluar/Rusak atau pakai Suara
       </p>
 
       <div className="space-y-2 mb-4">
@@ -295,7 +451,7 @@ export default function InputPage() {
           />
         ))}
         {items.length === 0 && (
-          <p className="text-center text-gray-400 text-xs py-6">Belum ada item — pakai Quick Action di atas</p>
+          <p className="text-center text-gray-400 text-xs py-6">Belum ada item — Suara / PDF / Cari Master</p>
         )}
       </div>
 
@@ -351,7 +507,7 @@ export default function InputPage() {
               <h3 className="text-sm font-bold">PDF / QR / Nota → {typeConfig[type].label}</h3>
               <button onClick={() => { stopCamera(); setShowScan(false); }}><X className="w-5 h-5 text-gray-400" /></button>
             </div>
-            <p className="text-[11px] text-gray-500">1) Baca semua baris · 2) Validasi · 3) Review akurasi · 4) Ke daftar · 5) Kirim server</p>
+            <p className="text-[11px] text-gray-500">1) Baca semua baris · 2) Validasi · 3) Review · 4) Ke daftar · 5) Kirim server</p>
             <input ref={fileRef} type="file" accept="application/pdf,image/*" capture="environment" className="hidden" onChange={onFile} />
             <div className="grid grid-cols-3 gap-2">
               <button onClick={() => fileRef.current?.click()} disabled={scanBusy}
@@ -385,13 +541,10 @@ export default function InputPage() {
               <div className="space-y-2">
                 <div className="grid grid-cols-4 gap-1.5 text-center">
                   <div className="rounded-lg bg-gray-50 p-2"><p className="text-sm font-bold">{previewStats.total}</p><p className="text-[9px] text-gray-500">Total</p></div>
-                  <div className="rounded-lg bg-emerald-50 p-2"><p className="text-sm font-bold text-emerald-600">{previewStats.matched}</p><p className="text-[9px] text-emerald-600">Cocok</p></div>
+                  <div className="rounded-lg bg-emerald-50 p-2"><p className="text-sm font-bold text-emerald-600">{previewStats.matched}</p><p className="text-[9px] text-amber-600">Cocok</p></div>
                   <div className="rounded-lg bg-amber-50 p-2"><p className="text-sm font-bold text-amber-600">{previewStats.ambiguous}</p><p className="text-[9px] text-amber-600">Ambigu</p></div>
                   <div className="rounded-lg bg-red-50 p-2"><p className="text-sm font-bold text-red-600">{previewStats.unmatched}</p><p className="text-[9px] text-red-600">FLAG</p></div>
                 </div>
-                <p className={`text-center text-xs font-semibold ${
-                  previewStats.pct === 100 ? 'text-emerald-600' : previewStats.pct >= 70 ? 'text-amber-600' : 'text-red-600'
-                }`}>Akurasi match: {previewStats.pct}%{previewStats.pct === 100 ? ' — siap' : ' — perbaiki dulu'}</p>
                 <div className="max-h-56 overflow-y-auto space-y-1.5 border rounded-xl p-2">
                   {preview.map((r, idx) => (
                     <div key={idx} className={`rounded-lg px-2.5 py-2 text-xs border ${
@@ -401,7 +554,6 @@ export default function InputPage() {
                       <div className="flex gap-2">
                         <div className="flex-1 min-w-0">
                           <p className="font-medium text-gray-800 truncate">{r.nama}</p>
-                          <p className="text-[10px] text-gray-400 truncate">{r.raw}</p>
                           {r.status === 'matched' && <p className="text-[10px] text-emerald-700">→ {r.kode} · {r.namaMaster}</p>}
                           {r.status === 'ambiguous' && (r.candidates || []).map(c => (
                             <button key={c.kode} onClick={() => pickCandidate(idx, c)}
@@ -420,7 +572,7 @@ export default function InputPage() {
                 </div>
                 <button onClick={acceptMatchedToCart} disabled={previewStats.matched === 0}
                   className="w-full py-3 rounded-xl bg-cyan-600 text-white text-sm font-bold disabled:opacity-50">
-                  Masukkan {previewStats.matched} item cocok ke daftar (belum ke server)
+                  Masukkan {previewStats.matched} item cocok ke daftar
                 </button>
               </div>
             )}
