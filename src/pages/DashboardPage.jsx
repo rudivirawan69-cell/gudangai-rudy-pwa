@@ -3,9 +3,8 @@ import { useStock } from '../hooks/useStock';
 import { useAuth } from '../hooks/useAuth';
 import { getPendingQueue, getTransactionHistory } from '../data/api';
 import {
-  Package, PackagePlus, PackageMinus, AlertTriangle, ShieldCheck,
-  WifiOff, ChevronRight, RefreshCw,
-  FileText, ScanLine, Snowflake, BarChart3
+  AlertTriangle, ShieldCheck, WifiOff, ChevronRight, RefreshCw,
+  Snowflake, BarChart3
 } from 'lucide-react';
 
 function LineChart({ series }) {
@@ -105,14 +104,23 @@ export default function DashboardPage({ onNavigate }) {
   const yesterdayKeluar = chartSeries[1].points[5]?.value || 0;
   const deltaPct = yesterdayKeluar > 0 ? Math.round(((todayKeluar - yesterdayKeluar) / yesterdayKeluar) * 100) : todayKeluar > 0 ? 100 : 0;
 
-  const quickActions = [
-    { id: 'masuk', label: 'Barang Masuk', sub: 'Tambah stok', icon: PackagePlus, color: 'bg-emerald-50 text-emerald-600', tab: 'input' },
-    { id: 'keluar', label: 'Barang Keluar', sub: 'Kurangi stok', icon: PackageMinus, color: 'bg-orange-50 text-orange-600', tab: 'input' },
-    { id: 'rusak', label: 'Barang Rusak', sub: 'Catat rusak', icon: AlertTriangle, color: 'bg-red-50 text-red-600', tab: 'input' },
-    { id: 'scan', label: 'PDF / QR', sub: 'Validasi nota', icon: ScanLine, color: 'bg-cyan-50 text-cyan-700', tab: 'input' },
-    { id: 'stok', label: 'Cek Stok', sub: 'CV & PT', icon: Package, color: 'bg-blue-50 text-blue-600', tab: 'stok' },
-    { id: 'po', label: 'PO & Laporan', sub: 'Mingguan', icon: FileText, color: 'bg-violet-50 text-violet-600', tab: 'po' },
+  const maxUnit = Math.max(statsCV.totalStok, statsPT.totalStok, 1);
+  const hCV = Math.max(8, Math.round((statsCV.totalStok / maxUnit) * 64));
+  const hPT = Math.max(8, Math.round((statsPT.totalStok / maxUnit) * 64));
+  const pieT = Math.max(1, totalItems);
+  const circ = 2 * Math.PI * 14;
+  const pieSegs = [
+    { n: aman, c: '#10b981' },
+    { n: waspada, c: '#f59e0b' },
+    { n: kritis, c: '#ef4444' },
   ];
+  let pieOff = 0;
+  const piePaths = pieSegs.map((s) => {
+    const len = (s.n / pieT) * circ;
+    const seg = { ...s, len, offset: pieOff };
+    pieOff += len;
+    return seg;
+  });
 
   return (
     <div className="pb-2 animate-fade-in space-y-3.5">
@@ -187,25 +195,66 @@ export default function DashboardPage({ onNavigate }) {
         </div>
       </div>
 
-      <div>
-        <div className="flex items-center justify-between mb-2 px-0.5">
-          <h2 className="text-sm font-semibold text-slate-800">Quick Action</h2>
-          {pendingQueue.length > 0 && (
-            <span className="text-[10px] font-medium text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full">{pendingQueue.length} antri sync</span>
-          )}
+      <div className="card p-4">
+        <h3 className="text-sm font-semibold text-slate-800 mb-3 flex items-center gap-1.5">
+          <BarChart3 className="w-4 h-4 text-cyan-600" /> Analisa Stok
+        </h3>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <p className="text-[10px] text-slate-400 mb-2 font-medium">Komposisi status</p>
+            <div className="flex items-center gap-3">
+              <svg viewBox="0 0 36 36" className="w-16 h-16 shrink-0" style={{ transform: 'rotate(-90deg)' }}>
+                {piePaths.map((s, i) => (
+                  <circle key={i} cx="18" cy="18" r="14" fill="none" stroke={s.c} strokeWidth="5"
+                    strokeDasharray={`${s.len} ${circ - s.len}`} strokeDashoffset={-s.offset} />
+                ))}
+              </svg>
+              <div className="space-y-1 text-[10px]">
+                <p className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500" /> Aman {aman}</p>
+                <p className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500" /> Waspada {waspada}</p>
+                <p className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500" /> Kritis {kritis}</p>
+              </div>
+            </div>
+          </div>
+          <div>
+            <p className="text-[10px] text-slate-400 mb-2 font-medium">Unit stok CV vs PT</p>
+            <div className="flex items-end gap-3 h-20 justify-center">
+              <div className="flex flex-col items-center gap-1 flex-1">
+                <span className="text-[10px] font-bold text-blue-600 tabular-nums">{statsCV.totalStok.toLocaleString('id-ID')}</span>
+                <div className="w-full max-w-[40px] rounded-t-md bg-blue-500" style={{ height: hCV }} />
+                <span className="text-[10px] text-slate-500 font-medium">CV</span>
+              </div>
+              <div className="flex flex-col items-center gap-1 flex-1">
+                <span className="text-[10px] font-bold text-violet-600 tabular-nums">{statsPT.totalStok.toLocaleString('id-ID')}</span>
+                <div className="w-full max-w-[40px] rounded-t-md bg-violet-500" style={{ height: hPT }} />
+                <span className="text-[10px] text-slate-500 font-medium">PT</span>
+              </div>
+            </div>
+          </div>
         </div>
-        <div className="grid grid-cols-3 gap-2.5">
-          {quickActions.map((a) => {
-            const Icon = a.icon;
-            return (
-              <button key={a.id} type="button" onClick={() => onNavigate?.(a.tab)}
-                className="card card-interactive p-3 flex flex-col items-center text-center gap-1.5 min-h-[88px] justify-center">
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${a.color}`}><Icon className="w-5 h-5" /></div>
-                <p className="text-[11px] font-semibold text-slate-800 leading-tight">{a.label}</p>
-                <p className="text-[9px] text-slate-400 leading-tight">{a.sub}</p>
-              </button>
-            );
-          })}
+        <div className="mt-3 pt-3 border-t border-slate-50 grid grid-cols-2 gap-2 text-[10px] text-slate-500">
+          <p>SKU CV: <span className="font-semibold text-slate-700">{statsCV.total}</span> · kritis {statsCV.danger + statsCV.zero}</p>
+          <p>SKU PT: <span className="font-semibold text-slate-700">{statsPT.total}</span> · kritis {statsPT.danger + statsPT.zero}</p>
+        </div>
+      </div>
+
+      <div className="card p-4">
+        <h3 className="text-sm font-semibold text-slate-800 mb-2">Volume minggu ini</h3>
+        <div className="grid grid-cols-3 gap-2">
+          <div className="rounded-xl bg-cyan-50 border border-cyan-100 p-2.5 text-center">
+            <p className="text-[9px] text-cyan-700 font-medium">Masuk</p>
+            <p className="text-base font-bold text-cyan-800 tabular-nums">{Math.round(weekMasuk)}</p>
+          </div>
+          <div className="rounded-xl bg-orange-50 border border-orange-100 p-2.5 text-center">
+            <p className="text-[9px] text-orange-700 font-medium">Keluar</p>
+            <p className="text-base font-bold text-orange-800 tabular-nums">{Math.round(weekKeluar)}</p>
+          </div>
+          <div className="rounded-xl bg-slate-50 border border-slate-100 p-2.5 text-center">
+            <p className="text-[9px] text-slate-600 font-medium">Netto</p>
+            <p className={`text-base font-bold tabular-nums ${weekMasuk - weekKeluar >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>
+              {Math.round(weekMasuk - weekKeluar)}
+            </p>
+          </div>
         </div>
       </div>
 
