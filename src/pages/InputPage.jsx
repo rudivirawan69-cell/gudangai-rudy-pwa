@@ -22,7 +22,7 @@ function ItemRow({ item, onRemove, onUpdate }) {
           <p className="text-sm font-medium text-gray-800 truncate">{item.nama}</p>
           <p className="text-[11px] text-gray-400">{item.divisi} · {item.satuan}</p>
         </div>
-        <button onClick={onRemove} className="text-gray-400 hover:text-red-500 p-1"><Trash2 className="w-4 h-4" /></button>
+        <button type="button" onClick={onRemove} className="text-gray-400 hover:text-red-500 p-1"><Trash2 className="w-4 h-4" /></button>
       </div>
       <div className="flex gap-2">
         <div className="flex-1">
@@ -50,7 +50,7 @@ function ManualPick({ entity, query, onPick }) {
       <input value={q} onChange={e => setQ(e.target.value)} placeholder="Cari master..."
         className="w-full text-[10px] px-2 py-1 rounded border border-gray-200 bg-white" />
       {hits.map(c => (
-        <button key={c.kode} onClick={() => onPick(c)}
+        <button key={c.kode} type="button" onClick={() => onPick(c)}
           className="block w-full text-left mt-0.5 px-2 py-1 rounded bg-white text-[10px] border border-gray-100">
           {c.kode} — {c.nama}
         </button>
@@ -81,11 +81,12 @@ export default function InputPage() {
   const recogRef = useRef(null);
   const searchRef = useRef(null);
   const fileRef = useRef(null);
+  const pdfRef = useRef(null);
+  const imageRef = useRef(null);
   const videoRef = useRef(null);
   const streamRef = useRef(null);
 
   const results = useMemo(() => searchMaster(entity, search), [entity, search]);
-
   const previewStats = useMemo(() => {
     const matched = preview.filter(r => r.status === 'matched').length;
     const ambiguous = preview.filter(r => r.status === 'ambiguous').length;
@@ -106,7 +107,7 @@ export default function InputPage() {
     const useEnt = ent || entity;
     const rows = parseLinesFromText(text);
     if (!rows.length) {
-      setScanError('Tidak ada baris rekap. Pastikan kolom TOTAL terbaca (nama + angka akhir).');
+      setScanError('Tidak ada baris rekap. Pastikan kolom TOTAL terbaca (nama + angka).');
       setPreview([]);
       return;
     }
@@ -116,33 +117,61 @@ export default function InputPage() {
 
   const onFile = async (e) => {
     const file = e.target.files?.[0];
-    if (!file) return;
+    const resetInputs = () => {
+      if (fileRef.current) fileRef.current.value = '';
+      if (pdfRef.current) pdfRef.current.value = '';
+      if (imageRef.current) imageRef.current.value = '';
+    };
+    if (!file) { resetInputs(); return; }
+    setShowScan(true);
     setScanBusy(true);
     setScanError('');
     setPreview([]);
+    setScanText('');
     try {
-      if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
+      const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf') || file.type === 'application/x-pdf';
+      if (isPdf) {
         const text = await extractTextFromPdf(file);
-        setScanText(text);
-        const detected = detectEntityFromText(text);
-        if (detected && detected !== entity) setEntity(detected);
-        runValidatePreview(text, detected || entity);
-      } else if (file.type.startsWith('image/')) {
-        setScanError('Foto dimuat. Salin semua baris dari nota ke kotak teks, lalu Validasi.');
-      } else setScanError('Gunakan PDF atau foto nota.');
+        if (!text || !String(text).trim()) {
+          setScanError('PDF terbaca kosong (mungkin scan). Ketik baris manual lalu Validasi.');
+        } else {
+          setScanText(text);
+          const detected = detectEntityFromText(text);
+          if (detected && detected !== entity) setEntity(detected);
+          runValidatePreview(text, detected || entity);
+        }
+      } else if (file.type.startsWith('image/') || /\.(jpe?g|png|webp|heic)$/i.test(file.name)) {
+        setScanError('Foto dipilih: "' + file.name + '". Ketik/salin isi nota ke kotak teks (satu baris: nama + qty), lalu Validasi.');
+      } else {
+        setScanError('Format tidak didukung. Unggah PDF rekap atau foto JPG/PNG.');
+      }
     } catch (err) {
       setScanError(err.message || 'Gagal baca file');
     } finally {
       setScanBusy(false);
-      if (fileRef.current) fileRef.current.value = '';
+      resetInputs();
     }
+  };
+
+  const openPdfPicker = (e) => {
+    e?.preventDefault?.();
+    e?.stopPropagation?.();
+    setShowScan(true);
+    setScanError('');
+    setTimeout(() => { (pdfRef.current || fileRef.current)?.click(); }, 80);
+  };
+
+  const openImagePicker = (e) => {
+    e?.preventDefault?.();
+    e?.stopPropagation?.();
+    setShowScan(true);
+    setScanError('');
+    setTimeout(() => { (imageRef.current || fileRef.current)?.click(); }, 80);
   };
 
   const startCamera = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: 'environment' } }, audio: false,
-      });
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false });
       streamRef.current = stream;
       setCameraOn(true);
       setTimeout(() => {
@@ -186,7 +215,6 @@ export default function InputPage() {
       kode: item.kode, namaMaster: item.nama, satuan: item.satuan, candidates: undefined,
     } : r));
   };
-
   const removePreviewRow = (idx) => setPreview(prev => prev.filter((_, i) => i !== idx));
   const updatePreviewQty = (idx, qty) => {
     setPreview(prev => prev.map((r, i) => i === idx ? { ...r, qty: parseFloat(qty) || 0 } : r));
@@ -217,22 +245,36 @@ export default function InputPage() {
   };
 
   const handleSubmit = async () => {
-    if (items.length === 0 || submitting) return;
+    if (submitting) return;
+    if (items.length === 0) {
+      setResult({ success: false, error: 'Belum ada item. Tambah lewat Cari Master, Suara, atau PDF.' });
+      return;
+    }
+    const bad = items.filter((i) => !i.kode || !(Number(i.qty) > 0));
+    if (bad.length) {
+      setResult({ success: false, error: 'Qty harus > 0 untuk semua item.' });
+      return;
+    }
     setSubmitting(true);
+    setResult(null);
     try {
-      const payload = items.map(i => ({
+      const payload = items.map((i) => ({
         kode: String(i.kode).trim(),
         qty: Math.round(Number(i.qty) * 1000) / 1000,
         keterangan: String(i.keterangan || '').trim().slice(0, 200),
       }));
       const submitFn = type === 'masuk' ? submitBarangMasuk : type === 'keluar' ? submitBarangKeluar : submitBarangRusak;
       const res = await submitFn(entity, payload);
-      saveToHistory({ type, entity, items: items.map(i => ({ kode: i.kode, nama: i.nama, qty: i.qty, keterangan: i.keterangan })), ...res });
+      saveToHistory({
+        type, entity,
+        items: items.map((i) => ({ kode: i.kode, nama: i.nama, qty: i.qty, keterangan: i.keterangan })),
+        ...res,
+      });
       setResult(res);
       if (res.success) setItems([]);
-      setTimeout(() => setResult(null), 6000);
+      setTimeout(() => setResult(null), 8000);
     } catch (err) {
-      setResult({ success: false, error: err.message });
+      setResult({ success: false, error: err.message || 'Gagal mengirim' });
     } finally {
       setSubmitting(false);
     }
@@ -240,15 +282,12 @@ export default function InputPage() {
 
   const applyVoiceParsed = (parsed) => {
     if (!parsed || parsed.empty) {
-      setVoiceMsg('Tidak terdengar perintah. Coba: "keluar 10 ice cream"');
+      setVoiceMsg('Tidak terdengar. Coba: "keluar 10 ice cream"');
       return;
     }
     if (parsed.type) setType(parsed.type);
     const useEntity = parsed.entity || entity;
-    if (parsed.entity && parsed.entity !== entity) {
-      setEntity(parsed.entity);
-      setItems([]);
-    }
+    if (parsed.entity && parsed.entity !== entity) { setEntity(parsed.entity); setItems([]); }
     if (!parsed.query) {
       setVoiceMsg(`Mode ${parsed.type || type} · qty ${parsed.qty}. Sebutkan nama barang.`);
       setPendingVoice(parsed);
@@ -258,12 +297,11 @@ export default function InputPage() {
     if (res.status === 'matched' && res.item) {
       setItems((prev) => {
         const map = new Map(prev.map((i) => [i.kode, { ...i }]));
-        const kode = res.item.kode;
-        if (map.has(kode)) {
-          const cur = map.get(kode);
+        if (map.has(res.item.kode)) {
+          const cur = map.get(res.item.kode);
           cur.qty = (Number(cur.qty) || 0) + (Number(parsed.qty) || 1);
         } else {
-          map.set(kode, { ...res.item, qty: parsed.qty || 1, keterangan: `voice: ${parsed.raw}` });
+          map.set(res.item.kode, { ...res.item, qty: parsed.qty || 1, keterangan: `voice: ${parsed.raw}` });
         }
         return Array.from(map.values());
       });
@@ -273,11 +311,11 @@ export default function InputPage() {
     } else if (res.status === 'ambiguous') {
       setPendingVoice(parsed);
       setVoiceCandidates(res.candidates || []);
-      setVoiceMsg(`Beberapa kemungkinan untuk "${parsed.query}" — pilih di bawah`);
+      setVoiceMsg(`Beberapa kemungkinan — pilih di bawah`);
     } else {
       setPendingVoice(parsed);
       setVoiceCandidates([]);
-      setVoiceMsg(`Tidak ketemu: "${parsed.query}". Coba Cari Master atau ucapkan lagi.`);
+      setVoiceMsg(`Tidak ketemu: "${parsed.query}". Coba Cari Master.`);
     }
   };
 
@@ -289,55 +327,34 @@ export default function InputPage() {
   };
 
   const startVoice = () => {
-    if (!isSpeechSupported()) {
-      setVoiceMsg('Browser tidak mendukung suara. Gunakan Chrome Android.');
-      return;
-    }
-    if (listening) {
-      stopVoice();
-      return;
-    }
+    if (!isSpeechSupported()) { setVoiceMsg('Browser tidak support suara. Pakai Chrome Android.'); return; }
+    if (listening) { stopVoice(); return; }
     const rec = createRecognizer({ lang: 'id-ID', continuous: false, interimResults: true });
-    if (!rec) {
-      setVoiceMsg('SpeechRecognition tidak tersedia');
-      return;
-    }
+    if (!rec) { setVoiceMsg('SpeechRecognition tidak tersedia'); return; }
     recogRef.current = rec;
     setVoiceText('');
-    setVoiceMsg('Mendengarkan… sebutkan: masuk/keluar/rusak + jumlah + nama barang');
+    setVoiceMsg('Mendengarkan… masuk/keluar/rusak + jumlah + nama');
     setVoiceCandidates([]);
     setListening(true);
     rec.onresult = (ev) => {
-      let interim = '';
-      let finalText = '';
+      let interim = '', finalText = '';
       for (let i = ev.resultIndex; i < ev.results.length; i++) {
         const r = ev.results[i];
         if (r.isFinal) finalText += r[0].transcript;
         else interim += r[0].transcript;
       }
       if (interim) setVoiceText(interim);
-      if (finalText) {
-        setVoiceText(finalText);
-        applyVoiceParsed(parseVoiceCommand(finalText));
-      }
+      if (finalText) { setVoiceText(finalText); applyVoiceParsed(parseVoiceCommand(finalText)); }
     };
     rec.onerror = (ev) => {
       const err = ev.error || 'error';
-      if (err === 'not-allowed') setVoiceMsg('Izin mikrofon ditolak. Aktifkan di pengaturan browser.');
+      if (err === 'not-allowed') setVoiceMsg('Izin mikrofon ditolak.');
       else if (err === 'no-speech') setVoiceMsg('Tidak ada suara. Coba lagi.');
       else setVoiceMsg('Error suara: ' + err);
       setListening(false);
     };
-    rec.onend = () => {
-      setListening(false);
-      recogRef.current = null;
-    };
-    try {
-      rec.start();
-    } catch (e) {
-      setVoiceMsg(e.message || 'Gagal mulai mikrofon');
-      setListening(false);
-    }
+    rec.onend = () => { setListening(false); recogRef.current = null; };
+    try { rec.start(); } catch (e) { setVoiceMsg(e.message || 'Gagal mikrofon'); setListening(false); }
   };
 
   const pickVoiceCandidate = (item) => {
@@ -407,9 +424,7 @@ export default function InputPage() {
           <div className="flex items-center gap-2 mb-1">
             {listening ? <Mic className="w-4 h-4 text-rose-600 animate-pulse" /> : <MicOff className="w-4 h-4 text-slate-400" />}
             <p className="text-[11px] font-semibold text-slate-700">{listening ? 'Mendengarkan…' : 'Hasil suara'}</p>
-            {listening && (
-              <button type="button" onClick={stopVoice} className="ml-auto text-[10px] font-medium text-rose-600">Stop</button>
-            )}
+            {listening && <button type="button" onClick={stopVoice} className="ml-auto text-[10px] font-medium text-rose-600">Stop</button>}
           </div>
           {voiceText && <p className="text-sm text-slate-800 font-medium">“{voiceText}”</p>}
           {voiceMsg && <p className="text-[11px] text-slate-500 mt-0.5">{voiceMsg}</p>}
@@ -417,31 +432,38 @@ export default function InputPage() {
             <div className="mt-2 space-y-1">
               {voiceCandidates.map((c) => (
                 <button key={c.kode} type="button" onClick={() => pickVoiceCandidate(c)}
-                  className="w-full text-left px-2.5 py-1.5 rounded-lg bg-white border border-slate-100 text-[11px] active:bg-rose-50">
+                  className="w-full text-left px-2.5 py-1.5 rounded-lg bg-white border border-slate-100 text-[11px]">
                   <span className="font-mono text-blue-600">{c.kode}</span> — {c.nama}
                 </button>
               ))}
             </div>
-          )}
-          {!isSpeechSupported() && (
-            <p className="text-[10px] text-amber-700 mt-1">Browser ini tidak support Speech Recognition. Pakai Chrome di Android.</p>
           )}
         </div>
       )}
 
       <div className="flex gap-2 mb-3">
         {ENTITIES.map(e => (
-          <button key={e} onClick={() => { setEntity(e); setItems([]); setPreview([]); }}
+          <button key={e} type="button" onClick={() => { setEntity(e); setItems([]); setPreview([]); }}
             className={`flex-1 py-2 rounded-xl text-xs font-semibold ${
               entity === e ? 'bg-[#0b2a55] text-white' : 'bg-white text-gray-600 border border-gray-200'
             }`}>{e}</button>
         ))}
       </div>
 
-      <p className="text-[11px] text-slate-500 mb-3 px-0.5">
-        Mode aktif: <span className="font-semibold text-slate-800">{typeConfig[type].label}</span> · {entity}
-        {' · '}ketuk Masuk/Keluar/Rusak atau pakai Suara
+      <p className="text-[11px] text-slate-500 mb-2 px-0.5">
+        Mode: <span className="font-semibold text-slate-800">{typeConfig[type].label}</span> · {entity}
       </p>
+
+      <div className="grid grid-cols-2 gap-2 mb-3">
+        <button type="button" onClick={openPdfPicker} disabled={scanBusy}
+          className="py-3 rounded-xl border-2 border-dashed border-cyan-300 bg-cyan-50/60 text-cyan-800 text-xs font-semibold flex items-center justify-center gap-2 disabled:opacity-50">
+          <FileText className="w-4 h-4" /> Unggah PDF
+        </button>
+        <button type="button" onClick={openImagePicker} disabled={scanBusy}
+          className="py-3 rounded-xl border-2 border-dashed border-amber-300 bg-amber-50/60 text-amber-800 text-xs font-semibold flex items-center justify-center gap-2 disabled:opacity-50">
+          <Camera className="w-4 h-4" /> Foto / Galeri
+        </button>
+      </div>
 
       <div className="space-y-2 mb-4">
         {items.map((item, idx) => (
@@ -451,12 +473,12 @@ export default function InputPage() {
           />
         ))}
         {items.length === 0 && (
-          <p className="text-center text-gray-400 text-xs py-6">Belum ada item — Suara / PDF / Cari Master</p>
+          <p className="text-center text-gray-400 text-xs py-6">Belum ada item — Cari Master / PDF / Suara</p>
         )}
       </div>
 
       {items.length > 0 && (
-        <button onClick={handleSubmit} disabled={submitting}
+        <button type="button" onClick={handleSubmit} disabled={submitting}
           className={`w-full py-3.5 rounded-xl bg-gradient-to-r ${tc.gradient} text-white text-sm font-bold flex items-center justify-center gap-2 shadow-lg disabled:opacity-60`}>
           {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
           Kirim {items.length} item · {typeConfig[type].label} ({entity}) → Server
@@ -475,12 +497,12 @@ export default function InputPage() {
       )}
 
       {showSearch && (
-        <div className="fixed inset-0 z-50 bg-black/40 flex items-end justify-center" onClick={() => setShowSearch(false)}>
+        <div className="fixed inset-0 z-[60] bg-black/50 flex items-end justify-center" onClick={() => setShowSearch(false)}>
           <div className="bg-white rounded-t-2xl w-full max-w-lg max-h-[80vh] flex flex-col" onClick={e => e.stopPropagation()}>
             <div className="p-4 border-b">
               <div className="flex justify-between mb-2">
                 <h3 className="text-sm font-semibold">Cari Barang ({entity})</h3>
-                <button onClick={() => setShowSearch(false)}><X className="w-5 h-5 text-gray-400" /></button>
+                <button type="button" onClick={() => setShowSearch(false)}><X className="w-5 h-5 text-gray-400" /></button>
               </div>
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -490,7 +512,7 @@ export default function InputPage() {
             </div>
             <div className="overflow-y-auto flex-1 p-2">
               {results.slice(0, 40).map(item => (
-                <button key={item.kode} onClick={() => addItem(item)} className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-blue-50">
+                <button key={item.kode} type="button" onClick={() => addItem(item)} className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-blue-50">
                   <p className="text-xs font-mono text-blue-600">{item.kode}</p>
                   <p className="text-sm text-gray-800">{item.nama}</p>
                 </button>
@@ -501,38 +523,42 @@ export default function InputPage() {
       )}
 
       {showScan && (
-        <div className="fixed inset-0 z-50 bg-black/40 flex items-end justify-center" onClick={() => { stopCamera(); setShowScan(false); }}>
+        <div className="fixed inset-0 z-[60] bg-black/50 flex items-end justify-center" onClick={() => { stopCamera(); setShowScan(false); }}>
           <div className="bg-white rounded-t-2xl w-full max-w-lg max-h-[92vh] overflow-y-auto p-4 space-y-3" onClick={e => e.stopPropagation()}>
             <div className="flex justify-between">
               <h3 className="text-sm font-bold">PDF / QR / Nota → {typeConfig[type].label}</h3>
-              <button onClick={() => { stopCamera(); setShowScan(false); }}><X className="w-5 h-5 text-gray-400" /></button>
+              <button type="button" onClick={() => { stopCamera(); setShowScan(false); }}><X className="w-5 h-5 text-gray-400" /></button>
             </div>
-            <p className="text-[11px] text-gray-500">1) Baca semua baris · 2) Validasi · 3) Review · 4) Ke daftar · 5) Kirim server</p>
-            <input ref={fileRef} type="file" accept="application/pdf,image/*" capture="environment" className="hidden" onChange={onFile} />
+            <p className="text-[11px] text-gray-500">1) Unggah PDF · 2) Validasi · 3) Review · 4) Ke daftar · 5) Kirim</p>
+            <input ref={fileRef} type="file" accept="application/pdf,image/*" className="hidden" onChange={onFile} />
+            <input ref={pdfRef} type="file" accept="application/pdf,.pdf" className="hidden" onChange={onFile} />
+            <input ref={imageRef} type="file" accept="image/*,.jpg,.jpeg,.png,.webp" className="hidden" onChange={onFile} />
             <div className="grid grid-cols-3 gap-2">
-              <button onClick={() => fileRef.current?.click()} disabled={scanBusy}
-                className="py-3 rounded-xl bg-cyan-50 text-cyan-800 text-xs font-semibold flex flex-col items-center gap-1 border border-cyan-100">
+              <button type="button" onClick={openPdfPicker} disabled={scanBusy}
+                className="py-3 rounded-xl bg-cyan-50 text-cyan-800 text-xs font-semibold flex flex-col items-center gap-1 border border-cyan-100 disabled:opacity-50">
                 <FileText className="w-5 h-5" /> PDF
               </button>
-              <button onClick={startCamera} className="py-3 rounded-xl bg-violet-50 text-violet-800 text-xs font-semibold flex flex-col items-center gap-1 border border-violet-100">
+              <button type="button" onClick={startCamera}
+                className="py-3 rounded-xl bg-violet-50 text-violet-800 text-xs font-semibold flex flex-col items-center gap-1 border border-violet-100">
                 <Camera className="w-5 h-5" /> Kamera
               </button>
-              <button onClick={() => fileRef.current?.click()} className="py-3 rounded-xl bg-amber-50 text-amber-800 text-xs font-semibold flex flex-col items-center gap-1 border border-amber-100">
-                <QrCode className="w-5 h-5" /> Foto Nota
+              <button type="button" onClick={openImagePicker}
+                className="py-3 rounded-xl bg-amber-50 text-amber-800 text-xs font-semibold flex flex-col items-center gap-1 border border-amber-100">
+                <QrCode className="w-5 h-5" /> Foto/Galeri
               </button>
             </div>
             {cameraOn && (
               <div className="space-y-2">
                 <video ref={videoRef} playsInline muted className="w-full rounded-xl bg-black aspect-[3/4] object-cover" />
                 <div className="flex gap-2">
-                  <button onClick={scanQr} disabled={scanBusy} className="flex-1 py-2 rounded-xl bg-violet-600 text-white text-xs font-semibold">Scan QR</button>
-                  <button onClick={stopCamera} className="px-3 py-2 rounded-xl bg-gray-100 text-xs">Tutup</button>
+                  <button type="button" onClick={scanQr} disabled={scanBusy} className="flex-1 py-2 rounded-xl bg-violet-600 text-white text-xs font-semibold">Scan QR</button>
+                  <button type="button" onClick={stopCamera} className="px-3 py-2 rounded-xl bg-gray-100 text-xs">Tutup</button>
                 </div>
               </div>
             )}
             <textarea value={scanText} onChange={e => setScanText(e.target.value)} rows={4}
-              placeholder="Semua baris dari PDF muncul di sini..." className="w-full px-3 py-2 bg-gray-50 rounded-xl border text-sm" />
-            <button onClick={() => runValidatePreview(scanText)} disabled={scanBusy || !scanText.trim()}
+              placeholder="Teks dari PDF / ketik manual baris item..." className="w-full px-3 py-2 bg-gray-50 rounded-xl border text-sm" />
+            <button type="button" onClick={() => runValidatePreview(scanText)} disabled={scanBusy || !scanText.trim()}
               className="w-full py-2.5 rounded-xl bg-[#0b2a55] text-white text-sm font-semibold disabled:opacity-50">
               {scanBusy ? 'Membaca PDF…' : 'Validasi semua baris'}
             </button>
@@ -541,9 +567,9 @@ export default function InputPage() {
               <div className="space-y-2">
                 <div className="grid grid-cols-4 gap-1.5 text-center">
                   <div className="rounded-lg bg-gray-50 p-2"><p className="text-sm font-bold">{previewStats.total}</p><p className="text-[9px] text-gray-500">Total</p></div>
-                  <div className="rounded-lg bg-emerald-50 p-2"><p className="text-sm font-bold text-emerald-600">{previewStats.matched}</p><p className="text-[9px] text-amber-600">Cocok</p></div>
-                  <div className="rounded-lg bg-amber-50 p-2"><p className="text-sm font-bold text-amber-600">{previewStats.ambiguous}</p><p className="text-[9px] text-amber-600">Ambigu</p></div>
-                  <div className="rounded-lg bg-red-50 p-2"><p className="text-sm font-bold text-red-600">{previewStats.unmatched}</p><p className="text-[9px] text-red-600">FLAG</p></div>
+                  <div className="rounded-lg bg-emerald-50 p-2"><p className="text-sm font-bold text-emerald-600">{previewStats.matched}</p><p className="text-[9px]">Cocok</p></div>
+                  <div className="rounded-lg bg-amber-50 p-2"><p className="text-sm font-bold text-amber-600">{previewStats.ambiguous}</p><p className="text-[9px]">Ambigu</p></div>
+                  <div className="rounded-lg bg-red-50 p-2"><p className="text-sm font-bold text-red-600">{previewStats.unmatched}</p><p className="text-[9px]">FLAG</p></div>
                 </div>
                 <div className="max-h-56 overflow-y-auto space-y-1.5 border rounded-xl p-2">
                   {preview.map((r, idx) => (
@@ -556,23 +582,23 @@ export default function InputPage() {
                           <p className="font-medium text-gray-800 truncate">{r.nama}</p>
                           {r.status === 'matched' && <p className="text-[10px] text-emerald-700">→ {r.kode} · {r.namaMaster}</p>}
                           {r.status === 'ambiguous' && (r.candidates || []).map(c => (
-                            <button key={c.kode} onClick={() => pickCandidate(idx, c)}
-                              className="block w-full text-left mt-1 px-2 py-1 rounded bg-white text-[10px] border">Pilih: {c.kode} — {c.nama}</button>
+                            <button key={c.kode} type="button" onClick={() => pickCandidate(idx, c)}
+                              className="block w-full text-left mt-1 px-2 py-1 rounded bg-white text-[10px] border">Pilih: {c.kode}</button>
                           ))}
                           {r.status === 'unmatched' && <ManualPick entity={entity} query={r.nama} onPick={item => pickCandidate(idx, item)} />}
                         </div>
                         <div className="flex flex-col items-end gap-1">
                           <input type="number" min="0" value={r.qty} onChange={e => updatePreviewQty(idx, e.target.value)}
                             className="w-14 px-1 py-0.5 rounded border text-center text-xs font-semibold" />
-                          <button onClick={() => removePreviewRow(idx)}><Trash2 className="w-3.5 h-3.5 text-gray-400" /></button>
+                          <button type="button" onClick={() => removePreviewRow(idx)}><Trash2 className="w-3.5 h-3.5 text-gray-400" /></button>
                         </div>
                       </div>
                     </div>
                   ))}
                 </div>
-                <button onClick={acceptMatchedToCart} disabled={previewStats.matched === 0}
+                <button type="button" onClick={acceptMatchedToCart} disabled={previewStats.matched === 0}
                   className="w-full py-3 rounded-xl bg-cyan-600 text-white text-sm font-bold disabled:opacity-50">
-                  Masukkan {previewStats.matched} item cocok ke daftar
+                  Masukkan {previewStats.matched} item ke daftar
                 </button>
               </div>
             )}
