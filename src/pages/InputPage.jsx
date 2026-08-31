@@ -2,7 +2,7 @@ import { useState, useMemo, useRef } from 'react';
 import { searchMaster, ENTITIES } from '../data/master';
 import { submitBarangMasuk, submitBarangKeluar, submitBarangRusak, saveToHistory } from '../data/api';
 import {
-  extractTextFromPdf, parseLinesFromText, validateItems, scanBarcodeFromVideo,
+  extractTextFromPdf, parseLinesFromText, validateItems, scanBarcodeFromVideo, detectEntityFromText,
 } from '../data/pdfValidate';
 import {
   PackagePlus, PackageMinus, Search, Plus, Trash2, Send,
@@ -93,14 +93,15 @@ export default function InputPage() {
     setSearch('');
   };
 
-  const runValidatePreview = (text) => {
+  const runValidatePreview = (text, ent) => {
+    const useEnt = ent || entity;
     const rows = parseLinesFromText(text);
     if (!rows.length) {
-      setScanError('Tidak ada baris barang terdeteksi di teks/PDF.');
+      setScanError('Tidak ada baris rekap. Pastikan kolom TOTAL terbaca (nama + angka akhir).');
       setPreview([]);
       return;
     }
-    setPreview(validateItems(entity, rows));
+    setPreview(validateItems(useEnt, rows));
     setScanError('');
   };
 
@@ -114,7 +115,9 @@ export default function InputPage() {
       if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
         const text = await extractTextFromPdf(file);
         setScanText(text);
-        runValidatePreview(text);
+        const detected = detectEntityFromText(text);
+        if (detected && detected !== entity) setEntity(detected);
+        runValidatePreview(text, detected || entity);
       } else if (file.type.startsWith('image/')) {
         setScanError('Foto dimuat. Salin semua baris dari nota ke kotak teks, lalu Validasi.');
       } else setScanError('Gunakan PDF atau foto nota.');
@@ -233,20 +236,41 @@ export default function InputPage() {
   };
   const tc = typeConfig[type];
 
+  const quickActions = [
+    { id: 'masuk', label: 'Barang Masuk', sub: 'Tambah stok', icon: PackagePlus, color: 'bg-emerald-50 text-emerald-600', ring: type === 'masuk' },
+    { id: 'keluar', label: 'Barang Keluar', sub: 'Kurangi stok', icon: PackageMinus, color: 'bg-orange-50 text-orange-600', ring: type === 'keluar' },
+    { id: 'rusak', label: 'Barang Rusak', sub: 'Catat rusak', icon: AlertTriangle, color: 'bg-red-50 text-red-600', ring: type === 'rusak' },
+    { id: 'scan', label: 'PDF / QR', sub: 'Validasi nota', icon: ScanLine, color: 'bg-cyan-50 text-cyan-700', ring: false },
+    { id: 'cari', label: 'Cari Master', sub: 'Pilih item', icon: Search, color: 'bg-blue-50 text-blue-600', ring: false },
+    { id: 'kamera', label: 'Kamera', sub: 'Scan barcode', icon: Camera, color: 'bg-violet-50 text-violet-600', ring: false },
+  ];
+
+  const onQuick = (id) => {
+    if (id === 'masuk' || id === 'keluar' || id === 'rusak') { setType(id); return; }
+    if (id === 'scan') { setShowScan(true); setScanError(''); return; }
+    if (id === 'cari') { setShowSearch(true); setTimeout(() => searchRef.current?.focus(), 80); return; }
+    if (id === 'kamera') { setShowScan(true); setScanError(''); setTimeout(() => startCamera(), 100); }
+  };
+
   return (
     <div className="pb-4 animate-fade-in">
-      <div className="flex gap-2 mb-3">
-        {Object.entries(typeConfig).map(([key, cfg]) => {
-          const Icon = cfg.icon;
-          return (
-            <button key={key} onClick={() => setType(key)}
-              className={`flex-1 py-2.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 ${
-                type === key ? `bg-gradient-to-r ${cfg.gradient} text-white shadow-lg ${cfg.shadow}` : 'bg-white text-gray-600 border border-gray-200'
-              }`}>
-              <Icon className="w-3.5 h-3.5" /> {cfg.label}
-            </button>
-          );
-        })}
+      <div className="mb-3">
+        <h2 className="text-sm font-semibold text-slate-800 mb-2">Quick Action</h2>
+        <div className="grid grid-cols-3 gap-2.5">
+          {quickActions.map((a) => {
+            const Icon = a.icon;
+            return (
+              <button key={a.id} type="button" onClick={() => onQuick(a.id)}
+                className={`card card-interactive p-3 flex flex-col items-center text-center gap-1.5 min-h-[88px] justify-center ${
+                  a.ring ? 'ring-2 ring-[#0b2a55] border-transparent' : ''
+                }`}>
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${a.color}`}><Icon className="w-5 h-5" /></div>
+                <p className="text-[11px] font-semibold text-slate-800 leading-tight">{a.label}</p>
+                <p className="text-[9px] text-slate-400 leading-tight">{a.sub}</p>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       <div className="flex gap-2 mb-3">
@@ -258,16 +282,10 @@ export default function InputPage() {
         ))}
       </div>
 
-      <div className="grid grid-cols-2 gap-2 mb-4">
-        <button onClick={() => { setShowSearch(true); setTimeout(() => searchRef.current?.focus(), 80); }}
-          className="py-3 rounded-xl border-2 border-dashed border-blue-300 text-blue-600 text-sm font-medium flex items-center justify-center gap-2">
-          <Plus className="w-4 h-4" /> Cari Master
-        </button>
-        <button onClick={() => { setShowScan(true); setScanError(''); }}
-          className="py-3 rounded-xl border-2 border-dashed border-cyan-300 text-cyan-700 text-sm font-medium flex items-center justify-center gap-2">
-          <ScanLine className="w-4 h-4" /> PDF / QR / Nota
-        </button>
-      </div>
+      <p className="text-[11px] text-slate-500 mb-3 px-0.5">
+        Mode aktif: <span className="font-semibold text-slate-800">{typeConfig[type].label}</span> · {entity}
+        {' · '}ketuk Masuk/Keluar/Rusak di atas untuk ganti
+      </p>
 
       <div className="space-y-2 mb-4">
         {items.map((item, idx) => (
@@ -277,7 +295,7 @@ export default function InputPage() {
           />
         ))}
         {items.length === 0 && (
-          <p className="text-center text-gray-400 text-xs py-6">Belum ada item — cari master atau unggah PDF/nota</p>
+          <p className="text-center text-gray-400 text-xs py-6">Belum ada item — pakai Quick Action di atas</p>
         )}
       </div>
 
@@ -334,7 +352,6 @@ export default function InputPage() {
               <button onClick={() => { stopCamera(); setShowScan(false); }}><X className="w-5 h-5 text-gray-400" /></button>
             </div>
             <p className="text-[11px] text-gray-500">1) Baca semua baris · 2) Validasi · 3) Review akurasi · 4) Ke daftar · 5) Kirim server</p>
-
             <input ref={fileRef} type="file" accept="application/pdf,image/*" capture="environment" className="hidden" onChange={onFile} />
             <div className="grid grid-cols-3 gap-2">
               <button onClick={() => fileRef.current?.click()} disabled={scanBusy}
@@ -348,7 +365,6 @@ export default function InputPage() {
                 <QrCode className="w-5 h-5" /> Foto Nota
               </button>
             </div>
-
             {cameraOn && (
               <div className="space-y-2">
                 <video ref={videoRef} playsInline muted className="w-full rounded-xl bg-black aspect-[3/4] object-cover" />
@@ -358,18 +374,13 @@ export default function InputPage() {
                 </div>
               </div>
             )}
-
             <textarea value={scanText} onChange={e => setScanText(e.target.value)} rows={4}
-              placeholder="Semua baris dari PDF muncul di sini..."
-              className="w-full px-3 py-2 bg-gray-50 rounded-xl border text-sm" />
-
+              placeholder="Semua baris dari PDF muncul di sini..." className="w-full px-3 py-2 bg-gray-50 rounded-xl border text-sm" />
             <button onClick={() => runValidatePreview(scanText)} disabled={scanBusy || !scanText.trim()}
               className="w-full py-2.5 rounded-xl bg-[#0b2a55] text-white text-sm font-semibold disabled:opacity-50">
               {scanBusy ? 'Membaca PDF…' : 'Validasi semua baris'}
             </button>
-
             {scanError && <p className="text-[11px] text-amber-700 bg-amber-50 rounded-lg px-2 py-1.5">{scanError}</p>}
-
             {preview.length > 0 && (
               <div className="space-y-2">
                 <div className="grid grid-cols-4 gap-1.5 text-center">
@@ -380,10 +391,7 @@ export default function InputPage() {
                 </div>
                 <p className={`text-center text-xs font-semibold ${
                   previewStats.pct === 100 ? 'text-emerald-600' : previewStats.pct >= 70 ? 'text-amber-600' : 'text-red-600'
-                }`}>
-                  Akurasi match: {previewStats.pct}%{previewStats.pct === 100 ? ' — siap' : ' — perbaiki dulu'}
-                </p>
-
+                }`}>Akurasi match: {previewStats.pct}%{previewStats.pct === 100 ? ' — siap' : ' — perbaiki dulu'}</p>
                 <div className="max-h-56 overflow-y-auto space-y-1.5 border rounded-xl p-2">
                   {preview.map((r, idx) => (
                     <div key={idx} className={`rounded-lg px-2.5 py-2 text-xs border ${
@@ -410,12 +418,10 @@ export default function InputPage() {
                     </div>
                   ))}
                 </div>
-
                 <button onClick={acceptMatchedToCart} disabled={previewStats.matched === 0}
                   className="w-full py-3 rounded-xl bg-cyan-600 text-white text-sm font-bold disabled:opacity-50">
                   Masukkan {previewStats.matched} item cocok ke daftar (belum ke server)
                 </button>
-                <p className="text-[10px] text-center text-gray-400">Setelah di daftar → cek qty → Kirim … → Server</p>
               </div>
             )}
           </div>
