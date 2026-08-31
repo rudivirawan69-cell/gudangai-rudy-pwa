@@ -1,7 +1,7 @@
 /**
  * Validasi PDF rekap order / nota terhadap master + alias.
- * Format: tabel REKAP ORDER (NO | KETERANGAN | UNIT | outlets... | TOTAL)
- * Qty = kolom TOTAL.
+ * Format utama: tabel REKAP ORDER CV/PT (NO | KETERANGAN | UNIT | outlets... | TOTAL)
+ * Qty = kolom TOTAL (bukan breakdown outlet).
  */
 import { matchByAlias, searchMaster } from './master';
 
@@ -30,23 +30,17 @@ export function parseRekapOrderLines(text) {
   const lines = splitPdfTextToLines(text);
   const results = [];
   const seen = new Set();
-
   for (const raw of lines) {
     if (SKIP.test(raw)) continue;
     if (/^\d+[.,]?\d*$/.test(raw)) continue;
     if (/^(pack|pcs|kg|ekor|pail)$/i.test(raw)) continue;
-
     const nums = [...raw.matchAll(/(\d+[.,]\d+|\d+)/g)].map((m) =>
       parseFloat(String(m[1]).replace(',', '.'))
     );
-
     let qty = 0;
     let nama = raw;
-
     const withNo = raw.match(/^(\d{1,3})[.)]?\s+(.+)$/);
     if (withNo) nama = withNo[2];
-
-    // Pack/Ekor terakhir (bukan pcs di dalam kurung size)
     const unitRe = /\b(Pack|Ekor|Pail)\b/gi;
     let unitMatch = null;
     let m;
@@ -59,123 +53,89 @@ export function parseRekapOrderLines(text) {
         parseFloat(String(x[1]).replace(',', '.'))
       );
       if (tailNums.length) qty = tailNums[tailNums.length - 1];
-      else if (nums.length >= 2) qty = nums[nums.length - 1];
-    } else if (nums.length >= 1) {
-      const last = nums[nums.length - 1];
-      if (last > 0 && last < 100000) qty = last;
-      nama = nama.replace(/(\d+[.,]\d+|\d+)/g, ' ').replace(/\s+/g, ' ').trim();
     }
-
+    if (!qty && nums.length) {
+      const candidates = nums.filter((n) => n > 0 && n < 100000);
+      if (candidates.length) qty = candidates[candidates.length - 1];
+    }
     nama = nama
-      .replace(/^\d{1,3}[.)]\s*/, '')
-      .replace(/\s+(Pack|Pcs|Kg|Ekor|Pail)\s*$/i, '')
-      .replace(/\s+/g, ' ')
+      .replace(/\s*\d+[.,]?\d*\s*$/, '')
+      .replace(/\s{2,}/g, ' ')
+      .replace(/\/\s*CV\.?.*$/i, '')
+      .replace(/\/\s*PT\.?.*$/i, '')
       .trim();
-
-    if (nama.length < 3) continue;
-    if (SKIP.test(nama)) continue;
-    if (qty <= 0) continue;
-
-    const key = nama.toLowerCase().replace(/\s+/g, ' ');
-    if (seen.has(key)) {
-      const prev = results.find((r) => r.nama.toLowerCase().replace(/\s+/g, ' ') === key);
-      if (prev) prev.qty = Math.round((prev.qty + qty) * 100) / 100;
-      continue;
-    }
+    if (!nama || nama.length < 2) continue;
+    const key = nama.toLowerCase() + '|' + qty;
+    if (seen.has(key)) continue;
     seen.add(key);
-
-    results.push({
-      nama,
-      qty: Math.round(qty * 100) / 100,
-      raw,
-      source: 'rekap-order',
-    });
+    if (qty > 0) results.push({ nama, qty, raw });
   }
   return results;
 }
 
 export function parseLinesFromText(text) {
   const rekap = parseRekapOrderLines(text);
-  if (rekap.length >= 2) return rekap;
-
+  if (rekap.length >= 1) return rekap;
   const lines = splitPdfTextToLines(text);
-  const results = [];
+  const out = [];
   for (const raw of lines) {
     if (SKIP.test(raw)) continue;
-    if (/^\d+[.)]?\s*$/.test(raw)) continue;
-
     let qty = 1;
     let nama = raw;
-    let m =
-      raw.match(/^(\d+[.,]?\d*)\s*[x×]\s*(.+)$/i) ||
-      raw.match(/^(.+?)\s*[x×]\s*(\d+[.,]?\d*)$/i) ||
-      raw.match(/^(\d+[.,]?\d*)\s+(.+)$/) ||
-      raw.match(/^(.+?)\s+[:=]?\s*(\d+[.,]?\d*)\s*(pack|pcs|kg|ekor|pail|ltr|liter)?$/i);
-
-    if (m) {
-      if (/^\d/.test(m[1])) {
-        qty = parseFloat(String(m[1]).replace(',', '.')) || 1;
-        nama = (m[2] || '').trim();
-      } else {
-        nama = (m[1] || '').trim();
-        qty = parseFloat(String(m[2]).replace(',', '.')) || 1;
-      }
-    }
-    nama = nama.replace(/^\d{1,3}[.)]\s*/, '').trim();
-    nama = nama.replace(/\s+(pack|pcs|kg|ekor|pail|ltr|liter)\s*$/i, '').trim();
-    if (nama.length < 2) continue;
-    if (qty <= 0) qty = 1;
-    results.push({ nama, qty, raw, source: 'generic' });
+    const m1 = raw.match(/^(\d+[.,]?\d*)\s*[x×]\s*(.+)$/i);
+    const m2 = raw.match(/^(.+?)\s+[x×]\s*(\d+[.,]?\d*)$/i);
+    const m3 = raw.match(/^(.+?)\s+(\d+[.,]?\d*)\s*(pack|pcs|kg|ekor)?$/i);
+    if (m1) { qty = parseFloat(m1[1].replace(',', '.')); nama = m1[2]; }
+    else if (m2) { nama = m2[1]; qty = parseFloat(m2[2].replace(',', '.')); }
+    else if (m3) { nama = m3[1]; qty = parseFloat(m3[2].replace(',', '.')); }
+    nama = nama.replace(/\s{2,}/g, ' ').trim();
+    if (nama.length >= 2 && qty > 0) out.push({ nama, qty, raw });
   }
-  return results;
+  return out;
 }
 
 export function validateItems(entity, rows) {
-  return rows.map((row) => {
-    const match = matchByAlias(entity, row.nama);
-    if (match && match.item) {
+  return (rows || []).map((row) => {
+    const m = matchByAlias(entity, row.nama);
+    if (m && m.item) {
       return {
         ...row,
         status: 'matched',
-        matchType: match.matchType,
-        confidence: match.confidence ?? 1,
-        item: match.item,
-        kode: match.item.kode,
-        namaMaster: match.item.nama,
-        satuan: match.item.satuan,
+        matchType: m.matchType,
+        item: m.item,
+        kode: m.item.kode,
+        namaMaster: m.item.nama,
+        satuan: m.item.satuan,
       };
     }
-    const hits = searchMaster(entity, row.nama);
+    const hits = searchMaster(entity, row.nama).slice(0, 5);
     if (hits.length === 1) {
-      const item = hits[0];
       return {
         ...row,
         status: 'matched',
-        matchType: 'search-single',
-        confidence: 0.85,
-        item,
-        kode: item.kode,
-        namaMaster: item.nama,
-        satuan: item.satuan,
+        matchType: 'search',
+        item: hits[0],
+        kode: hits[0].kode,
+        namaMaster: hits[0].nama,
+        satuan: hits[0].satuan,
       };
     }
     if (hits.length > 1) {
-      return {
-        ...row,
-        status: 'ambiguous',
-        confidence: 0.4,
-        candidates: hits.slice(0, 5),
-        item: null,
-      };
+      return { ...row, status: 'ambiguous', candidates: hits };
     }
-    return { ...row, status: 'unmatched', confidence: 0, item: null, candidates: [] };
+    return { ...row, status: 'unmatched' };
   });
 }
 
 export async function extractTextFromPdf(file) {
   const buf = await file.arrayBuffer();
   try {
-    const pdfjs = await import('https://cdn.jsdelivr.net/npm/pdfjs-dist@4.8.69/+esm');
+    let pdfjs;
+    try {
+      pdfjs = await import('https://cdn.jsdelivr.net/npm/pdfjs-dist@4.8.69/+esm');
+    } catch {
+      pdfjs = await import('https://unpkg.com/pdfjs-dist@4.8.69/build/pdf.min.mjs');
+    }
     if (pdfjs.GlobalWorkerOptions) {
       pdfjs.GlobalWorkerOptions.workerSrc =
         'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.8.69/build/pdf.worker.min.mjs';
@@ -208,7 +168,9 @@ export async function extractTextFromPdf(file) {
     return pageBlocks.join('\n');
   } catch (err) {
     throw new Error(
-      'Gagal ekstrak PDF (' + (err.message || err) + '). Salin teks manual ke kotak Validasi.'
+      'Gagal ekstrak PDF (' +
+        (err.message || err) +
+        '). Salin teks manual ke kotak Validasi.'
     );
   }
 }
@@ -231,20 +193,5 @@ export function summarizeValidation(results) {
   const ambiguous = results.filter((r) => r.status === 'ambiguous');
   const total = results.length;
   const pct = total ? Math.round((matched.length / total) * 100) : 0;
-  return {
-    total,
-    matched: matched.length,
-    unmatched: unmatched.length,
-    ambiguous: ambiguous.length,
-    accuracyPct: pct,
-    allMatched: unmatched.length === 0 && ambiguous.length === 0 && matched.length > 0,
-    matchedItems: matched.map((r) => ({
-      kode: r.kode,
-      nama: r.namaMaster,
-      qty: r.qty,
-      satuan: r.satuan,
-      keterangan: r.raw,
-      item: r.item,
-    })),
-  };
+  return { matched, unmatched, ambiguous, total, pct };
 }
