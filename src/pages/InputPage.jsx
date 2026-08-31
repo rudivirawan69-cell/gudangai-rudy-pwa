@@ -446,23 +446,21 @@ export default function InputPage() {
                 }`}
               >
                 {a.active && isMode && (
-                  <span className={`mode-badge absolute top-1.5 right-1.5 w-2 h-2 rounded-full ${
+                  <span className={`mode-badge absolute top-1.5 right-1.5 w-2.5 h-2.5 rounded-full ${
                     a.mode === 'masuk' ? 'bg-emerald-500' : a.mode === 'keluar' ? 'bg-orange-500' : 'bg-red-500'
                   }`} />
                 )}
-                <div className={`w-11 h-11 rounded-xl flex items-center justify-center transition-all duration-300 ${a.color} ${
-                  a.active ? 'scale-110' : ''
-                }`}>
-                  <Icon className={`w-5 h-5 ${a.active ? 'animate-soft-pulse' : ''}`} />
+                <div className={`mode-icon-wrap w-11 h-11 rounded-xl flex items-center justify-center transition-all duration-300 ${a.color}`}>
+                  <Icon className="w-5 h-5" />
                 </div>
                 <p className={`text-[11px] font-semibold leading-tight ${
                   a.active && isMode ? 'text-slate-900' : 'text-slate-800'
                 }`}>{a.label}</p>
                 <p className={`text-[9px] leading-tight font-medium ${
                   a.active ? (
-                    a.mode === 'masuk' ? 'text-emerald-700' :
-                    a.mode === 'keluar' ? 'text-orange-700' :
-                    a.mode === 'rusak' ? 'text-red-700' :
+                    a.mode === 'masuk' ? 'text-emerald-800' :
+                    a.mode === 'keluar' ? 'text-orange-800' :
+                    a.mode === 'rusak' ? 'text-red-800' :
                     'text-rose-600'
                   ) : 'text-slate-400'
                 }`}>{a.sub}</p>
@@ -503,15 +501,15 @@ export default function InputPage() {
         ))}
       </div>
 
-      <div className={`mb-3 rounded-xl px-3 py-2 flex items-center gap-2 border transition-all duration-300 ${
-        type === 'masuk' ? 'bg-emerald-50 border-emerald-200' :
-        type === 'keluar' ? 'bg-orange-50 border-orange-200' :
-        'bg-red-50 border-red-200'
+      <div className={`mb-3 rounded-xl px-3 py-2.5 flex items-center gap-2 border-2 transition-all duration-300 ${
+        type === 'masuk' ? 'bg-emerald-50 border-emerald-400' :
+        type === 'keluar' ? 'bg-orange-50 border-orange-400' :
+        'bg-red-50 border-red-400'
       }`}>
-        <span className={`w-2.5 h-2.5 rounded-full mode-badge ${
+        <span className={`w-3 h-3 rounded-full mode-badge ${
           type === 'masuk' ? 'bg-emerald-500' : type === 'keluar' ? 'bg-orange-500' : 'bg-red-500'
         }`} />
-        <p className="text-[12px] font-semibold text-slate-800">
+        <p className="text-[13px] font-bold text-slate-800">
           Mode aktif: <span className={
             type === 'masuk' ? 'text-emerald-700' : type === 'keluar' ? 'text-orange-700' : 'text-red-700'
           }>{typeConfig[type].label}</span>
