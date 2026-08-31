@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { SpeedInsights } from '@vercel/speed-insights/react';
 import { AuthProvider, useAuth } from './hooks/useAuth';
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
@@ -174,6 +175,7 @@ export default function App() {
   return (
     <AuthProvider>
       <AppShell />
+      <SpeedInsights />
     </AuthProvider>
   );
 }
