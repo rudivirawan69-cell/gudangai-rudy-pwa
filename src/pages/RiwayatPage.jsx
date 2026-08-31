@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { getTransactionHistory } from '../data/api';
 import {
   Clock, ArrowUpRight, ArrowDownRight, Search,
-  AlertTriangle, BarChart3, Package, WifiOff, CheckCircle2, TrendingUp
+  AlertTriangle, Package, WifiOff, CheckCircle2, TrendingUp
 } from 'lucide-react';
 
 function typeMeta(type) {
@@ -28,7 +28,6 @@ export default function RiwayatPage() {
   const [filterEntity, setFilterEntity] = useState('all');
   const [dense, setDense] = useState(true);
   const history = getTransactionHistory();
-  const now = new Date();
 
   const filtered = useMemo(() => {
     let list = history;
@@ -63,59 +62,6 @@ export default function RiwayatPage() {
     });
     return Object.values(groups).sort((a, b) => b.sort - a.sort);
   }, [filtered]);
-
-  const dailyCompare = useMemo(() => {
-    const days = [];
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date(now);
-      d.setHours(0, 0, 0, 0);
-      d.setDate(d.getDate() - i);
-      const key = d.toDateString();
-      let keluar = 0, masuk = 0, rusak = 0, tx = 0;
-      history.forEach((h) => {
-        if (!h.savedAt || new Date(h.savedAt).toDateString() !== key) return;
-        const q = qtyOf(h);
-        if (h.type === 'keluar') keluar += q;
-        else if (h.type === 'masuk') masuk += q;
-        else if (h.type === 'rusak') rusak += q;
-        tx += 1;
-      });
-      days.push({
-        key,
-        label: d.toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric' }),
-        dayNum: d.getDate(),
-        keluar: Math.round(keluar * 10) / 10,
-        masuk: Math.round(masuk * 10) / 10,
-        rusak: Math.round(rusak * 10) / 10,
-        tx,
-        isToday: i === 0,
-      });
-    }
-    return days;
-  }, [history, now.toDateString()]);
-
-  const today = dailyCompare[6] || { keluar: 0, masuk: 0, rusak: 0, tx: 0 };
-  const yesterday = dailyCompare[5] || { keluar: 0 };
-  const deltaKeluar =
-    yesterday.keluar > 0
-      ? Math.round(((today.keluar - yesterday.keluar) / yesterday.keluar) * 100)
-      : today.keluar > 0
-        ? 100
-        : 0;
-
-  const weekTotals = useMemo(() => {
-    return dailyCompare.reduce(
-      (a, d) => ({
-        keluar: a.keluar + d.keluar,
-        masuk: a.masuk + d.masuk,
-        rusak: a.rusak + d.rusak,
-        tx: a.tx + d.tx,
-      }),
-      { keluar: 0, masuk: 0, rusak: 0, tx: 0 }
-    );
-  }, [dailyCompare]);
-
-  const maxBar = Math.max(1, ...dailyCompare.map((d) => Math.max(d.keluar, d.masuk, d.rusak)));
 
   const stats = useMemo(() => {
     const total = history.length;
@@ -153,75 +99,6 @@ export default function RiwayatPage() {
         </button>
       </div>
 
-      <div className="grid grid-cols-3 gap-2">
-        <div className="rounded-xl bg-orange-50 border border-orange-100 p-2.5 text-center">
-          <p className="text-lg font-bold text-orange-600 tabular-nums leading-none">{today.keluar}</p>
-          <p className="text-[9px] text-orange-700/80 mt-1 font-medium">Keluar hari ini</p>
-        </div>
-        <div className="rounded-xl bg-emerald-50 border border-emerald-100 p-2.5 text-center">
-          <p className="text-lg font-bold text-emerald-600 tabular-nums leading-none">{today.masuk}</p>
-          <p className="text-[9px] text-emerald-700/80 mt-1 font-medium">Masuk hari ini</p>
-        </div>
-        <div className="rounded-xl bg-red-50 border border-red-100 p-2.5 text-center">
-          <p className="text-lg font-bold text-red-600 tabular-nums leading-none">{today.rusak}</p>
-          <p className="text-[9px] text-red-700/80 mt-1 font-medium">Rusak hari ini</p>
-        </div>
-        <div className="rounded-xl bg-slate-50 border border-slate-100 p-2.5 text-center">
-          <p className="text-lg font-bold text-slate-800 tabular-nums leading-none">{Math.round(weekTotals.keluar)}</p>
-          <p className="text-[9px] text-slate-500 mt-1">Keluar 7 hari</p>
-        </div>
-        <div className="rounded-xl bg-cyan-50 border border-cyan-100 p-2.5 text-center">
-          <p className="text-lg font-bold text-cyan-700 tabular-nums leading-none">{Math.round(weekTotals.masuk - weekTotals.keluar)}</p>
-          <p className="text-[9px] text-cyan-700/80 mt-1">Netto minggu</p>
-        </div>
-        <div className="rounded-xl bg-violet-50 border border-violet-100 p-2.5 text-center">
-          <p className={`text-lg font-bold tabular-nums leading-none ${deltaKeluar > 0 ? 'text-orange-600' : deltaKeluar < 0 ? 'text-emerald-600' : 'text-slate-600'}`}>
-            {deltaKeluar > 0 ? '+' : ''}{deltaKeluar}%
-          </p>
-          <p className="text-[9px] text-violet-700/80 mt-1">vs kemarin</p>
-        </div>
-      </div>
-
-      <div className="card p-3">
-        <div className="flex items-center justify-between mb-2">
-          <p className="text-[11px] font-semibold text-slate-700 flex items-center gap-1">
-            <BarChart3 className="w-3.5 h-3.5 text-cyan-600" /> Pergerakan 7 hari
-          </p>
-          <div className="flex items-center gap-2 text-[9px] text-slate-400">
-            <span className="flex items-center gap-0.5"><span className="w-1.5 h-1.5 rounded-full bg-orange-400" />Keluar</span>
-            <span className="flex items-center gap-0.5"><span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />Masuk</span>
-            <span className="flex items-center gap-0.5"><span className="w-1.5 h-1.5 rounded-full bg-red-400" />Rusak</span>
-          </div>
-        </div>
-        <div className="grid grid-cols-7 gap-1.5 items-end h-[72px]">
-          {dailyCompare.map((d) => (
-            <div key={d.key} className="flex flex-col items-center gap-0.5 h-full justify-end">
-              <div className="w-full flex flex-col-reverse gap-0.5 items-stretch justify-end flex-1 min-h-0">
-                {d.keluar > 0 && (
-                  <div className={`w-full rounded-sm ${d.isToday ? 'bg-orange-500' : 'bg-orange-300'}`}
-                    style={{ height: `${Math.max(4, (d.keluar / maxBar) * 56)}px` }} title={`Keluar ${d.keluar}`} />
-                )}
-                {d.masuk > 0 && (
-                  <div className="w-full rounded-sm bg-emerald-400"
-                    style={{ height: `${Math.max(3, (d.masuk / maxBar) * 56)}px` }} title={`Masuk ${d.masuk}`} />
-                )}
-                {d.rusak > 0 && (
-                  <div className="w-full rounded-sm bg-red-400"
-                    style={{ height: `${Math.max(3, (d.rusak / maxBar) * 56)}px` }} title={`Rusak ${d.rusak}`} />
-                )}
-                {d.keluar === 0 && d.masuk === 0 && d.rusak === 0 && (
-                  <div className="w-full h-1 rounded-sm bg-slate-100" />
-                )}
-              </div>
-              <p className={`text-[9px] font-medium ${d.isToday ? 'text-cyan-700' : 'text-slate-400'}`}>{d.dayNum}</p>
-            </div>
-          ))}
-        </div>
-        <p className="text-[9px] text-slate-400 text-center mt-1.5">
-          {weekTotals.tx} transaksi minggu ini · qty keluar {Math.round(weekTotals.keluar * 10) / 10}
-        </p>
-      </div>
-
       {stats.total > 0 && (
         <div className="grid grid-cols-3 gap-2">
           <div className="flex items-center gap-1.5 rounded-lg bg-emerald-50 px-2 py-1.5">
@@ -255,22 +132,28 @@ export default function RiwayatPage() {
             placeholder="Cari kode, nama, keterangan…"
             className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 bg-white text-sm focus:outline-none focus:border-cyan-400" />
         </div>
-        <div className="flex gap-1.5 overflow-x-auto pb-0.5">
+
+        {/* Filter Tipe — center */}
+        <div className="flex justify-center gap-1.5">
           {typeFilters.map((f) => (
             <button key={f.id} type="button" onClick={() => setFilterType(f.id)}
-              className={`shrink-0 px-3 py-1.5 rounded-full text-[11px] font-semibold ${
+              className={`px-3 py-1.5 rounded-full text-[11px] font-semibold ${
                 filterType === f.id ? 'bg-[#0b2a55] text-white' : 'bg-white border border-slate-200 text-slate-600'
               }`}>{f.label}</button>
           ))}
-          <span className="w-px bg-slate-200 self-stretch mx-0.5" />
+        </div>
+
+        {/* Filter Entitas — center, baris terpisah */}
+        <div className="flex justify-center gap-1.5">
           {entityFilters.map((f) => (
             <button key={f.id} type="button" onClick={() => setFilterEntity(f.id)}
-              className={`shrink-0 px-3 py-1.5 rounded-full text-[11px] font-semibold ${
+              className={`px-3 py-1.5 rounded-full text-[11px] font-semibold ${
                 filterEntity === f.id ? 'bg-cyan-600 text-white' : 'bg-white border border-slate-200 text-slate-600'
               }`}>{f.label}</button>
           ))}
         </div>
-        <p className="text-[10px] text-slate-400 px-0.5">
+
+        <p className="text-[10px] text-slate-400 px-0.5 text-center">
           Menampilkan <span className="font-semibold text-slate-600">{filtered.length}</span> dari {history.length}
         </p>
       </div>

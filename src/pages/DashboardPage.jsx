@@ -40,6 +40,95 @@ function LineChart({ series }) {
   );
 }
 
+/* ── Bar chart 7 hari (dipindah dari Riwayat) ── */
+function WeeklyBarChart({ history }) {
+  const now = new Date();
+  const dailyCompare = useMemo(() => {
+    const days = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(now);
+      d.setHours(0, 0, 0, 0);
+      d.setDate(d.getDate() - i);
+      const key = d.toDateString();
+      let keluar = 0, masuk = 0, rusak = 0, tx = 0;
+      history.forEach((h) => {
+        if (!h.savedAt || new Date(h.savedAt).toDateString() !== key) return;
+        const q = (h.items || []).reduce((s, it) => s + (Number(it.qty) || 0), 0);
+        if (h.type === 'keluar') keluar += q;
+        else if (h.type === 'masuk') masuk += q;
+        else if (h.type === 'rusak') rusak += q;
+        tx += 1;
+      });
+      days.push({
+        key,
+        dayNum: d.getDate(),
+        keluar: Math.round(keluar * 10) / 10,
+        masuk: Math.round(masuk * 10) / 10,
+        rusak: Math.round(rusak * 10) / 10,
+        tx,
+        isToday: i === 0,
+      });
+    }
+    return days;
+  }, [history, now.toDateString()]);
+
+  const weekTotals = useMemo(() => {
+    return dailyCompare.reduce(
+      (a, d) => ({
+        keluar: a.keluar + d.keluar,
+        masuk: a.masuk + d.masuk,
+        rusak: a.rusak + d.rusak,
+        tx: a.tx + d.tx,
+      }),
+      { keluar: 0, masuk: 0, rusak: 0, tx: 0 }
+    );
+  }, [dailyCompare]);
+
+  const maxBar = Math.max(1, ...dailyCompare.map((d) => Math.max(d.keluar, d.masuk, d.rusak)));
+
+  return (
+    <div className="card p-3">
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-[11px] font-semibold text-slate-700 flex items-center gap-1">
+          <BarChart3 className="w-3.5 h-3.5 text-cyan-600" /> Pergerakan 7 hari
+        </p>
+        <div className="flex items-center gap-2 text-[9px] text-slate-400">
+          <span className="flex items-center gap-0.5"><span className="w-1.5 h-1.5 rounded-full bg-orange-400" />Keluar</span>
+          <span className="flex items-center gap-0.5"><span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />Masuk</span>
+          <span className="flex items-center gap-0.5"><span className="w-1.5 h-1.5 rounded-full bg-red-400" />Rusak</span>
+        </div>
+      </div>
+      <div className="grid grid-cols-7 gap-1.5 items-end h-[72px]">
+        {dailyCompare.map((d) => (
+          <div key={d.key} className="flex flex-col items-center gap-0.5 h-full justify-end">
+            <div className="w-full flex flex-col-reverse gap-0.5 items-stretch justify-end flex-1 min-h-0">
+              {d.keluar > 0 && (
+                <div className={`w-full rounded-sm ${d.isToday ? 'bg-orange-500' : 'bg-orange-300'}`}
+                  style={{ height: `${Math.max(4, (d.keluar / maxBar) * 56)}px` }} title={`Keluar ${d.keluar}`} />
+              )}
+              {d.masuk > 0 && (
+                <div className="w-full rounded-sm bg-emerald-400"
+                  style={{ height: `${Math.max(3, (d.masuk / maxBar) * 56)}px` }} title={`Masuk ${d.masuk}`} />
+              )}
+              {d.rusak > 0 && (
+                <div className="w-full rounded-sm bg-red-400"
+                  style={{ height: `${Math.max(3, (d.rusak / maxBar) * 56)}px` }} title={`Rusak ${d.rusak}`} />
+              )}
+              {d.keluar === 0 && d.masuk === 0 && d.rusak === 0 && (
+                <div className="w-full h-1 rounded-sm bg-slate-100" />
+              )}
+            </div>
+            <p className={`text-[9px] font-medium ${d.isToday ? 'text-cyan-700' : 'text-slate-400'}`}>{d.dayNum}</p>
+          </div>
+        ))}
+      </div>
+      <p className="text-[9px] text-slate-400 text-center mt-1.5">
+        {weekTotals.tx} transaksi minggu ini · qty keluar {Math.round(weekTotals.keluar * 10) / 10}
+      </p>
+    </div>
+  );
+}
+
 function statusChip(stok) {
   if (stok <= 0) return { label: 'Habis', cls: 'bg-slate-100 text-slate-600' };
   if (stok <= 5) return { label: 'Kritis', cls: 'bg-red-50 text-red-600' };
@@ -191,6 +280,9 @@ export default function DashboardPage({ onNavigate }) {
           </div>
         </div>
       </div>
+
+      {/* ── Bar Chart Pergerakan 7 Hari (dari Riwayat) ── */}
+      <WeeklyBarChart history={history} />
 
       <div className="card p-4">
         <h3 className="text-sm font-semibold text-slate-800 mb-3 flex items-center gap-1.5">
