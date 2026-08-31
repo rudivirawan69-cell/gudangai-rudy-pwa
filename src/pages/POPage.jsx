@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { getMasterByEntity, ENTITIES } from '../data/master';
-import { getApiUrl, getApiSecret } from '../data/api';
+import { getApiUrl, getApiSecret, getTransactionHistory } from '../data/api';
 import {
   ClipboardList, Send, Loader2, CheckCircle, AlertCircle, Plus, Trash2, Calendar
 } from 'lucide-react';
@@ -38,6 +38,34 @@ export default function POPage() {
   const [msg, setMsg] = useState(null);
   const [filter, setFilter] = useState('');
 
+  const weekReport = useMemo(() => {
+    const history = getTransactionHistory();
+    const now = new Date();
+    const start = new Date(now);
+    const day = start.getDay();
+    const diff = day === 0 ? -6 : 1 - day;
+    start.setHours(0, 0, 0, 0);
+    start.setDate(start.getDate() + diff);
+    let masuk = 0, keluar = 0, rusak = 0, tx = 0;
+    history.forEach((h) => {
+      if (!h.savedAt) return;
+      const d = new Date(h.savedAt);
+      if (d < start) return;
+      const q = (h.items || []).reduce((s, it) => s + (Number(it.qty) || 0), 0);
+      if (h.type === 'masuk') masuk += q;
+      else if (h.type === 'rusak') rusak += q;
+      else if (h.type === 'keluar') keluar += q;
+      tx += 1;
+    });
+    return {
+      label: weekLabel(now),
+      masuk: Math.round(masuk * 10) / 10,
+      keluar: Math.round(keluar * 10) / 10,
+      rusak: Math.round(rusak * 10) / 10,
+      tx,
+    };
+  }, []);
+
   const catalog = useMemo(() => {
     const all = getMasterByEntity(entity);
     if (poType === 'cs') return all.filter(isCS);
@@ -65,7 +93,6 @@ export default function POPage() {
       const url = getApiUrl();
       const secret = getApiSecret();
       if (!url) throw new Error('URL API belum diisi di Atur');
-
       const body = {
         action: 'createPO',
         schemaVersion: '1.0',
@@ -79,7 +106,6 @@ export default function POPage() {
           satuan: l.satuan, divisi: l.divisi, keterangan: l.keterangan || '',
         })),
       };
-
       const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
@@ -87,16 +113,11 @@ export default function POPage() {
       });
       const data = await res.json().catch(() => ({}));
       if (data.success === false) throw new Error(data.error || data.message || 'Gagal create PO');
-
       const key = 'gudangai_po_drafts';
       const drafts = JSON.parse(localStorage.getItem(key) || '[]');
       drafts.unshift({ ...body, savedAt: new Date().toISOString(), server: data });
       localStorage.setItem(key, JSON.stringify(drafts.slice(0, 50)));
-
-      setMsg({
-        success: true,
-        text: data.message || `PO tersimpan (${poType === 'cs' ? 'PO CS' : 'PO Mingguan'})`,
-      });
+      setMsg({ success: true, text: data.message || `PO tersimpan (${poType === 'cs' ? 'PO CS' : 'PO Mingguan'})` });
       setLines([]);
       setNote('');
     } catch (err) {
@@ -112,6 +133,32 @@ export default function POPage() {
 
   return (
     <div className="pb-4 animate-fade-in space-y-4">
+      <div className="card p-4">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-sm font-semibold text-slate-800 flex items-center gap-1.5">
+            <Calendar className="w-4 h-4 text-cyan-600" /> Laporan Mingguan
+          </h3>
+          <span className="text-[10px] text-slate-400">{weekReport.label}</span>
+        </div>
+        <div className="grid grid-cols-3 gap-2">
+          <div className="rounded-xl bg-emerald-50 border border-emerald-100 p-2.5 text-center">
+            <p className="text-[9px] text-emerald-600 font-medium uppercase">Masuk</p>
+            <p className="text-lg font-bold text-emerald-700 tabular-nums">{weekReport.masuk}</p>
+          </div>
+          <div className="rounded-xl bg-orange-50 border border-orange-100 p-2.5 text-center">
+            <p className="text-[9px] text-orange-600 font-medium uppercase">Keluar</p>
+            <p className="text-lg font-bold text-orange-700 tabular-nums">{weekReport.keluar}</p>
+          </div>
+          <div className="rounded-xl bg-red-50 border border-red-100 p-2.5 text-center">
+            <p className="text-[9px] text-red-600 font-medium uppercase">Rusak</p>
+            <p className="text-lg font-bold text-red-700 tabular-nums">{weekReport.rusak}</p>
+          </div>
+        </div>
+        <p className="text-[10px] text-slate-400 mt-2 text-center">
+          {weekReport.tx} transaksi minggu ini · dari riwayat perangkat
+        </p>
+      </div>
+
       <div>
         <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2">
           <ClipboardList className="w-5 h-5 text-[#0b2a55]" /> Purchase Order
