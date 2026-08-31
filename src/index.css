@@ -65,31 +65,54 @@ body {
 
 /* Active mode boxes — Input Masuk / Keluar / Rusak */
 @keyframes modePulse {
-  0%, 100% { box-shadow: 0 0 0 0 var(--mode-glow); transform: scale(1); }
-  50% { box-shadow: 0 0 0 6px transparent; transform: scale(1.02); }
+  0%, 100% {
+    box-shadow: 0 0 0 0 var(--mode-glow), 0 4px 14px var(--mode-shadow);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 0 8px transparent, 0 6px 18px var(--mode-shadow);
+    transform: scale(1.03);
+  }
+}
+@keyframes modeIconBounce {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.12); }
 }
 .mode-active-masuk {
-  --mode-glow: rgba(16, 185, 129, 0.45);
-  background: linear-gradient(145deg, #ecfdf5 0%, #d1fae5 50%, #a7f3d0 100%);
-  border-color: #10b981 !important;
-  animation: modePulse 1.8s ease-in-out infinite;
+  --mode-glow: rgba(16, 185, 129, 0.55);
+  --mode-shadow: rgba(16, 185, 129, 0.35);
+  background: linear-gradient(145deg, #d1fae5 0%, #a7f3d0 45%, #6ee7b7 100%) !important;
+  border: 2px solid #10b981 !important;
+  animation: modePulse 1.6s ease-in-out infinite;
+  z-index: 1;
 }
 .mode-active-keluar {
-  --mode-glow: rgba(249, 115, 22, 0.45);
-  background: linear-gradient(145deg, #fff7ed 0%, #ffedd5 50%, #fed7aa 100%);
-  border-color: #f97316 !important;
-  animation: modePulse 1.8s ease-in-out infinite;
+  --mode-glow: rgba(249, 115, 22, 0.55);
+  --mode-shadow: rgba(249, 115, 22, 0.35);
+  background: linear-gradient(145deg, #ffedd5 0%, #fed7aa 45%, #fdba74 100%) !important;
+  border: 2px solid #f97316 !important;
+  animation: modePulse 1.6s ease-in-out infinite;
+  z-index: 1;
 }
 .mode-active-rusak {
-  --mode-glow: rgba(239, 68, 68, 0.45);
-  background: linear-gradient(145deg, #fef2f2 0%, #fee2e2 50%, #fecaca 100%);
-  border-color: #ef4444 !important;
-  animation: modePulse 1.8s ease-in-out infinite;
+  --mode-glow: rgba(239, 68, 68, 0.55);
+  --mode-shadow: rgba(239, 68, 68, 0.35);
+  background: linear-gradient(145deg, #fee2e2 0%, #fecaca 45%, #fca5a5 100%) !important;
+  border: 2px solid #ef4444 !important;
+  animation: modePulse 1.6s ease-in-out infinite;
+  z-index: 1;
+}
+.mode-active-masuk .mode-icon-wrap,
+.mode-active-keluar .mode-icon-wrap,
+.mode-active-rusak .mode-icon-wrap {
+  animation: modeIconBounce 1.6s ease-in-out infinite;
 }
 .mode-dim {
-  opacity: 0.55;
-  filter: grayscale(0.25);
+  opacity: 0.42;
+  filter: grayscale(0.45);
+  transform: scale(0.96);
 }
 .mode-badge {
-  animation: softPulse 1.5s ease-in-out infinite;
+  animation: softPulse 1.2s ease-in-out infinite;
+  box-shadow: 0 0 0 3px rgba(255,255,255,0.9);
 }
