@@ -2,22 +2,22 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { getApiUrl, healthCheck, syncPendingQueue } from '../data/api';
 
 /**
- * Central connection state for GudangAI RUDY.
- * - Tracks browser online/offline
- * - Periodically health-checks backend when URL is set
- * - Auto-syncs offline queue when connection recovers
- * - Emits `gudangai-conn` CustomEvent for banner UI
+ * Connection state — stabil, minim noise di banner.
+ * - Tidak emit "retry" di setiap poll (itu yang terasa "putus-putus")
+ * - Hanya flag error setelah 2 gagal beruntun
+ * - Poll lebih jarang (default 90s)
  */
-export function useConnection({ pollMs = 45000 } = {}) {
+export function useConnection({ pollMs = 90000 } = {}) {
   const [online, setOnline] = useState(
     typeof navigator !== 'undefined' ? navigator.onLine : true
   );
-  const [apiOk, setApiOk] = useState(null); // null = unknown, true/false
+  const [apiOk, setApiOk] = useState(null);
   const [lastCheck, setLastCheck] = useState(null);
   const [message, setMessage] = useState('');
   const [syncing, setSyncing] = useState(false);
-  const attemptRef = useRef(0);
-  const hasUrl = Boolean(getApiUrl());
+  const failStreak = useRef(0);
+  const lastOkAt = useRef(0);
+  const hasUrl = Boolean(typeof window !== 'undefined' && getApiUrl());
 
   const emit = useCallback((detail) => {
     try {
@@ -27,7 +27,7 @@ export function useConnection({ pollMs = 45000 } = {}) {
     }
   }, []);
 
-  const checkHealth = useCallback(async () => {
+  const checkHealth = useCallback(async ({ quiet = false } = {}) => {
     if (!getApiUrl()) {
       setApiOk(null);
       return { ok: false, skipped: true };
@@ -36,28 +36,37 @@ export function useConnection({ pollMs = 45000 } = {}) {
       setApiOk(false);
       return { ok: false, offline: true };
     }
-    attemptRef.current += 1;
-    const attempt = attemptRef.current;
-    emit({ state: 'retry', attempt, max: 3 });
+    // Hindari spam health jika baru sukses < 20 detik
+    if (quiet && lastOkAt.current && Date.now() - lastOkAt.current < 20000) {
+      return { ok: true, cached: true };
+    }
     try {
       const result = await healthCheck();
       setLastCheck(new Date());
       if (result.ok) {
+        failStreak.current = 0;
+        lastOkAt.current = Date.now();
         setApiOk(true);
         setMessage('');
-        emit({ state: 'recovered' });
-        attemptRef.current = 0;
+        if (!quiet) emit({ state: 'recovered' });
         return result;
       }
-      setApiOk(false);
-      setMessage(result.error || 'Backend tidak merespons');
-      emit({ state: 'failed', error: result.error || 'Gagal terhubung' });
+      failStreak.current += 1;
+      // Hanya anggap putus setelah 2 gagal beruntun
+      if (failStreak.current >= 2) {
+        setApiOk(false);
+        setMessage(result.error || 'Backend tidak merespons');
+        emit({ state: 'failed', error: result.error || 'Gagal terhubung' });
+      }
       return result;
     } catch (err) {
-      setApiOk(false);
+      failStreak.current += 1;
       const msg = err?.message || 'Koneksi putus';
-      setMessage(msg);
-      emit({ state: 'failed', error: msg });
+      if (failStreak.current >= 2) {
+        setApiOk(false);
+        setMessage(msg);
+        emit({ state: 'failed', error: msg });
+      }
       return { ok: false, error: msg };
     }
   }, [emit]);
@@ -66,18 +75,16 @@ export function useConnection({ pollMs = 45000 } = {}) {
     if (!navigator.onLine || !getApiUrl()) return null;
     setSyncing(true);
     try {
-      const result = await syncPendingQueue();
-      return result;
+      return await syncPendingQueue();
     } finally {
       setSyncing(false);
     }
   }, []);
 
-  // Browser online / offline
   useEffect(() => {
     const on = () => {
       setOnline(true);
-      checkHealth().then((r) => {
+      checkHealth({ quiet: false }).then((r) => {
         if (r?.ok) syncQueue();
       });
     };
@@ -95,33 +102,39 @@ export function useConnection({ pollMs = 45000 } = {}) {
     };
   }, [checkHealth, syncQueue, emit]);
 
-  // Visibility + interval health check
   useEffect(() => {
-    if (!hasUrl) return undefined;
+    if (!getApiUrl()) return undefined;
     const onVis = () => {
       if (document.visibilityState === 'visible' && navigator.onLine) {
-        checkHealth();
+        checkHealth({ quiet: true });
       }
     };
     document.addEventListener('visibilitychange', onVis);
     const id = setInterval(() => {
-      if (navigator.onLine) checkHealth();
+      if (navigator.onLine) checkHealth({ quiet: true });
     }, pollMs);
-    // initial
-    if (navigator.onLine) checkHealth();
+    if (navigator.onLine) checkHealth({ quiet: false });
     return () => {
       document.removeEventListener('visibilitychange', onVis);
       clearInterval(id);
     };
-  }, [hasUrl, pollMs, checkHealth]);
+  }, [pollMs, checkHealth]);
 
   const status =
-    !hasUrl ? 'demo' : !online ? 'offline' : apiOk === true ? 'connected' : apiOk === false ? 'error' : 'checking';
+    !getApiUrl()
+      ? 'demo'
+      : !online
+        ? 'offline'
+        : apiOk === true
+          ? 'connected'
+          : apiOk === false
+            ? 'error'
+            : 'checking';
 
   return {
     online,
     apiOk,
-    hasUrl,
+    hasUrl: Boolean(getApiUrl()),
     status,
     message,
     lastCheck,
