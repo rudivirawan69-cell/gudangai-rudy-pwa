@@ -9,6 +9,7 @@ import RiwayatPage from './pages/RiwayatPage';
 import SettingsPage from './pages/SettingsPage';
 import POPage from './pages/POPage';
 import { getApiUrl, syncPendingQueue } from './data/api';
+import { useConnection } from './hooks/useConnection';
 import {
   LayoutDashboard,
   Package,
@@ -30,40 +31,25 @@ const TABS = [
 ];
 
 function ConnectionBanner() {
-  const [online, setOnline] = useState(navigator.onLine);
-  const [connMsg, setConnMsg] = useState('');
-  const hasUrl = Boolean(getApiUrl());
+  const { online, hasUrl, status, message, syncing } = useConnection({ pollMs: 45000 });
+  const [flash, setFlash] = useState('');
 
   useEffect(() => {
-    const on = () => setOnline(true);
-    const off = () => setOnline(false);
-    window.addEventListener('online', on);
-    window.addEventListener('offline', off);
     const onConn = (e) => {
       const d = e.detail || {};
       if (d.state === 'retry') {
-        setConnMsg(`Mencoba ulang ${d.attempt}/${d.max}…`);
+        setFlash(`Mencoba ulang ${d.attempt}/${d.max}…`);
       } else if (d.state === 'recovered') {
-        setConnMsg('Koneksi pulih');
-        setTimeout(() => setConnMsg(''), 2000);
-      } else if (d.state === 'failed') {
-        setConnMsg(d.error || 'Gagal terhubung');
-        setTimeout(() => setConnMsg(''), 4000);
+        setFlash('Koneksi pulih');
+        setTimeout(() => setFlash(''), 2000);
+      } else if (d.state === 'failed' && d.error) {
+        setFlash(d.error);
+        setTimeout(() => setFlash(''), 4000);
       }
     };
     window.addEventListener('gudangai-conn', onConn);
-    return () => {
-      window.removeEventListener('online', on);
-      window.removeEventListener('offline', off);
-      window.removeEventListener('gudangai-conn', onConn);
-    };
+    return () => window.removeEventListener('gudangai-conn', onConn);
   }, []);
-
-  useEffect(() => {
-    if (online && hasUrl) {
-      syncPendingQueue().catch(() => {});
-    }
-  }, [online, hasUrl]);
 
   if (!hasUrl) {
     return (
@@ -74,7 +60,7 @@ function ConnectionBanner() {
     );
   }
 
-  if (!online) {
+  if (!online || status === 'offline') {
     return (
       <div className="bg-red-50/95 border-b border-red-100/80 px-3 py-1.5 flex items-center justify-center gap-1.5 text-[11px] text-red-700 font-medium backdrop-blur-sm">
         <WifiOff className="w-3 h-3 shrink-0" />
@@ -83,11 +69,20 @@ function ConnectionBanner() {
     );
   }
 
-  if (connMsg) {
+  if (flash || (status === 'error' && message)) {
     return (
       <div className="bg-sky-50/95 border-b border-sky-100/80 px-3 py-1.5 flex items-center justify-center gap-1.5 text-[11px] text-sky-800 font-medium backdrop-blur-sm">
         <Wifi className="w-3 h-3 shrink-0 animate-soft-pulse" />
-        {connMsg}
+        {flash || message}
+      </div>
+    );
+  }
+
+  if (status === 'checking' || syncing) {
+    return (
+      <div className="bg-sky-50/95 border-b border-sky-100/80 px-3 py-1.5 flex items-center justify-center gap-1.5 text-[11px] text-sky-800 font-medium backdrop-blur-sm">
+        <Wifi className="w-3 h-3 shrink-0 animate-soft-pulse" />
+        {syncing ? 'Menyinkronkan…' : 'Memeriksa koneksi…'}
       </div>
     );
   }
