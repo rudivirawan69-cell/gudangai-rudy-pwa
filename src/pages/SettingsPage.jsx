@@ -12,6 +12,24 @@ import { AVATAR_DATA_URL } from '../assets/imageAssets';
 
 const AVATAR_SRC = AVATAR_DATA_URL;
 
+function formatConnLabel(data) {
+  if (!data) return 'OK';
+  const ver = data.version || data.title || '';
+  const sheet =
+    data.spreadsheet ||
+    data.raw?.spreadsheet ||
+    (typeof data.activeMonth === 'string'
+      ? data.activeMonth
+      : data.activeMonth?.nama
+        ? `${data.activeMonth.nama} ${data.activeMonth.tahun || ''}`.trim()
+        : data.raw?.activeMonth?.nama
+          ? `${data.raw.activeMonth.nama} ${data.raw.activeMonth.tahun || ''}`.trim()
+          : '');
+  const ts = data.timestamp || data.serverTime || data.raw?.serverTime;
+  const when = ts ? new Date(ts).toLocaleString('id-ID') : '';
+  return ['Terhubung', ver, sheet, when].filter(Boolean).join(' · ');
+}
+
 function MenuRow({ icon: Icon, iconBg, title, subtitle, onClick, right, danger }) {
   return (
     <button type="button" onClick={onClick}
@@ -99,7 +117,15 @@ export default function SettingsPage() {
     const result = await healthCheck();
     if (result.ok) {
       setConnStatus('ok');
-      setConnMessage(`Terhubung · ${result.data?.version || ''} · ${result.data?.activeMonth || ''} · ${result.data?.timestamp ? new Date(result.data.timestamp).toLocaleString('id-ID') : 'OK'}`);
+      // Merge raw fields so spreadsheet name is visible
+      const payload = {
+        ...result.data,
+        spreadsheet: result.data?.spreadsheet || result.data?.raw?.spreadsheet,
+        activeMonth: result.data?.activeMonth || result.data?.raw?.activeMonth,
+        version: result.data?.version || result.data?.raw?.version,
+        timestamp: result.data?.timestamp || result.data?.raw?.serverTime,
+      };
+      setConnMessage(formatConnLabel(payload));
     } else {
       setConnStatus('fail');
       setConnMessage(result.error || 'Gagal terhubung');
