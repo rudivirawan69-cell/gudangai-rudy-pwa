@@ -8,8 +8,9 @@ import {
   Wifi, CheckCircle2, XCircle, Loader2, Link2, KeyRound, User,
   RefreshCw, Trash2, Shield, ChevronRight, LogOut, Settings as SettingsIcon, Cloud,
 } from 'lucide-react';
+import { AVATAR_DATA_URL } from '../assets/imageAssets';
 
-const AVATAR_SRC = '/assets/avatar-rudi.jpg';
+const AVATAR_SRC = AVATAR_DATA_URL;
 
 function MenuRow({ icon: Icon, iconBg, title, subtitle, onClick, right, danger }) {
   return (
@@ -167,7 +168,7 @@ export default function SettingsPage() {
         <div className="card p-4 space-y-3">
           <div className="flex items-center gap-3">
             <Avatar name={username} size="lg" />
-            <p className="text-[11px] text-slate-500">Foto profil dari /assets/avatar-rudi.jpg</p>
+            <p className="text-[11px] text-slate-500">Foto profil aktif</p>
           </div>
           <p className="text-xs font-semibold text-slate-600">Nama tampilan</p>
           <input value={username} onChange={(e) => setUsername(e.target.value)} className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm" placeholder="Nama" />
