@@ -7,7 +7,6 @@ import {
   AlertTriangle, ShieldCheck, WifiOff, ChevronRight, RefreshCw,
   Snowflake, BarChart3
 } from 'lucide-react';
-import { BG_DATA_URL } from '../assets/imageAssets';
 
 function LineChart({ series }) {
   const w = 320;
@@ -80,11 +79,7 @@ function DivisionStatusBars({ items }) {
         const pct = (n) => Math.max(n > 0 ? 4 : 0, Math.round((n / maxTotal) * 100));
         const kritisPct = r.total ? Math.round((r.kritis / r.total) * 100) : 0;
         return (
-          <div
-            key={r.divisi}
-            className="animate-slide-up"
-            style={{ animationDelay: `${idx * 40}ms`, animationFillMode: 'both' }}
-          >
+          <div key={r.divisi} className="animate-slide-up" style={{ animationDelay: `${idx * 40}ms`, animationFillMode: 'both' }}>
             <div className="flex items-center justify-between gap-2 mb-1">
               <span className="text-[11px] font-semibold text-slate-700 truncate">{r.divisi}</span>
               <span className="text-[10px] text-slate-400 tabular-nums shrink-0">
@@ -92,9 +87,9 @@ function DivisionStatusBars({ items }) {
               </span>
             </div>
             <div className="h-2.5 w-full rounded-full bg-slate-100 overflow-hidden flex">
-              <div className="h-full bg-emerald-500 transition-all duration-500 ease-out" style={{ width: `${pct(r.aman)}%` }} title={`Aman ${r.aman}`} />
-              <div className="h-full bg-amber-400 transition-all duration-500 ease-out" style={{ width: `${pct(r.waspada)}%` }} title={`Waspada ${r.waspada}`} />
-              <div className="h-full bg-red-500 transition-all duration-500 ease-out" style={{ width: `${pct(r.kritis)}%` }} title={`Kritis ${r.kritis}`} />
+              <div className="h-full bg-emerald-500 transition-all duration-500 ease-out" style={{ width: `${pct(r.aman)}%` }} />
+              <div className="h-full bg-amber-400 transition-all duration-500 ease-out" style={{ width: `${pct(r.waspada)}%` }} />
+              <div className="h-full bg-red-500 transition-all duration-500 ease-out" style={{ width: `${pct(r.kritis)}%` }} />
             </div>
             <div className="flex gap-3 mt-0.5 text-[9px] text-slate-400">
               <span className="flex items-center gap-0.5"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />{r.aman}</span>
@@ -187,9 +182,8 @@ export default function DashboardPage({ onNavigate }) {
 
   return (
     <div className="pb-3 animate-fade-in space-y-3">
-      <div className="rounded-2xl p-4 shadow-xl relative overflow-hidden animate-slide-up">
-        <div className="absolute inset-0 bg-cover bg-center scale-105" style={{ backgroundImage: `url(${BG_DATA_URL})` }} aria-hidden />
-        <div className="absolute inset-0 bg-gradient-to-br from-[#0b2a55]/92 via-[#0f3a73]/88 to-[#164e8a]/90 backdrop-blur-[2px]" />
+      {/* Header — gradient navy stabil (foto background ditunda) */}
+      <div className="bg-gradient-to-br from-[#0b2a55] via-[#0f3a73] to-[#164e8a] rounded-2xl p-4 shadow-xl relative overflow-hidden animate-slide-up">
         <div className="absolute top-0 right-0 w-36 h-36 bg-cyan-400/15 rounded-full blur-3xl pointer-events-none" />
         <div className="relative z-10">
           <div className="flex items-start justify-between gap-2 mb-3">
@@ -214,7 +208,7 @@ export default function DashboardPage({ onNavigate }) {
               )}
             </div>
             <button type="button" onClick={() => { stockCV.refresh(); stockPT.refresh(); }} disabled={loading}
-              className="w-9 h-9 rounded-xl bg-white/10 border border-white/15 flex items-center justify-center text-white/80 active:scale-95 shrink-0 transition-transform" aria-label="Refresh">
+              className="w-9 h-9 rounded-xl bg-white/10 border border-white/15 flex items-center justify-center text-white/80 active:scale-95 shrink-0" aria-label="Refresh">
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             </button>
           </div>
