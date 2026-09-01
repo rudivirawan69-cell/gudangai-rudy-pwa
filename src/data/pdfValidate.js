@@ -1,53 +1,63 @@
 /**
- * PDF Validation + QR/Barcode — parse PDF surat jalan and match items to master data
+ * PDF/Text Validation - parse items and match to master data
+ * Uses alias-config.json (189 items, 396+ aliases) for accurate matching
  */
-import { matchByAlias, getMasterByEntity } from './master';
+import { matchByAlias, searchMaster } from './master';
 
-/** Extract text from a PDF File (placeholder — full pdf.js TBD) */
-export async function extractTextFromPdf(file) {
-  return { text: '', lines: [], error: 'PDF parser akan tersedia di update berikutnya.' };
+function parseLine(line) {
+  const trimmed = line.trim();
+  if (!trimmed) return null;
+  let clean = trimmed.replace(/^\d+[\.)\s]+/, '').trim();
+  clean = clean.replace(/\b(?:pack|pcs|kg|ekor|box|pail|unit|liter|porsi)\b/gi, '').trim();
+  const lastNumMatch = clean.match(/^(.+?)\s+(\d+(?:[.,]\d+)?)\s*$/);
+  if (lastNumMatch) return { name: lastNumMatch[1].trim(), qty: parseFloat(lastNumMatch[2].replace(',', '.')) || 1 };
+  const tabParts = clean.split('\t');
+  if (tabParts.length >= 2) {
+    const num = parseFloat(tabParts[tabParts.length - 1].replace(',', '.'));
+    if (!isNaN(num) && num > 0) return { name: tabParts.slice(0, -1).join(' ').trim(), qty: num };
+  }
+  const spaceParts = clean.split(/\s{2,}/);
+  if (spaceParts.length >= 2) {
+    const num = parseFloat(spaceParts[spaceParts.length - 1].replace(',', '.'));
+    if (!isNaN(num) && num > 0) return { name: spaceParts.slice(0, -1).join(' ').trim(), qty: num };
+  }
+  return { name: clean, qty: 1 };
 }
 
-/** Parse raw text into structured lines */
-export function parseLinesFromText(text) {
-  if (!text) return [];
-  return text.split('\n').map(l => l.trim()).filter(Boolean);
+function checkAmbiguity(name) {
+  const lower = name.toLowerCase();
+  if (/daging\s*slice/i.test(lower) && !/yakiniku|lowfat/i.test(lower)) return 'YAKINIKU atau LOWFAT?';
+  if (/bakso\s*ikan/i.test(lower) && !/cidea/i.test(lower) && !/good\s*eat/i.test(lower)) return 'Bakso Ikan biasa atau CIDEA?';
+  if (/saos\s*lada\s*hitam/i.test(lower) && !/promo/i.test(lower)) return 'Saos Lada Hitam biasa atau PROMO?';
+  return null;
 }
 
-/** Detect entity (CV/PT) from text context */
-export function detectEntityFromText(text) {
-  if (!text) return 'CV';
-  const lower = text.toLowerCase();
-  if (lower.includes('rasyuka') || lower.includes('pt.') || lower.includes('pt ')) return 'PT';
-  return 'CV';
-}
-
-/** Validate parsed items against master data using alias matching */
 export function validateItems(lines, entity) {
-  const matched = [];
-  const unmatched = [];
+  const matched = [], unmatched = [], ambiguous = [];
   for (const line of lines) {
-    const parts = line.split(/\s{2,}|\t/);
-    let name = '', qty = 0;
-    if (parts.length >= 2) {
-      for (let i = parts.length - 1; i >= 0; i--) {
-        const num = parseFloat(parts[i].replace(',', '.'));
-        if (!isNaN(num) && num > 0) { qty = num; name = parts.slice(0, i).filter(p => !/^\d+\.?$/.test(p.trim())).join(' ').trim(); break; }
-      }
-      if (!name) name = parts.slice(0, -1).join(' ').trim();
-    } else { name = line; }
-    if (!name) continue;
+    const parsed = parseLine(line);
+    if (!parsed || !parsed.name) continue;
+    const { name, qty } = parsed;
     const result = matchByAlias(entity, name);
     if (result) {
-      matched.push({ line, nameFromPdf: name, ...result.item, qty: qty || 1, matchType: result.matchType });
+      const warn = checkAmbiguity(name);
+      if (warn) {
+        ambiguous.push({ line, nameFromPdf: name, qty, ...result.item, matchType: result.matchType, warning: warn });
+      } else {
+        matched.push({ line, nameFromPdf: name, qty, ...result.item, matchType: result.matchType });
+      }
     } else {
-      unmatched.push({ line, nameFromPdf: name, qty: qty || 0 });
+      const fuzzy = searchMaster(entity, name);
+      if (fuzzy.length === 1) {
+        matched.push({ line, nameFromPdf: name, qty, ...fuzzy[0], matchType: 'fuzzy' });
+      } else if (fuzzy.length > 1) {
+        ambiguous.push({ line, nameFromPdf: name, qty, ...fuzzy[0], matchType: 'fuzzy-multi', warning: `${fuzzy.length} kandidat`, candidates: fuzzy.slice(0, 5) });
+      } else {
+        unmatched.push({ line, nameFromPdf: name, qty });
+      }
     }
   }
-  return { matched, unmatched };
+  return { matched, unmatched, ambiguous };
 }
 
-/** Scan barcode from video stream (placeholder) */
-export async function scanBarcodeFromVideo() {
-  return { code: null, error: 'QR Scanner akan tersedia di update berikutnya.' };
-}
+export { parseLine, checkAmbiguity };
