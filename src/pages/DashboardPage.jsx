@@ -7,6 +7,7 @@ import {
   AlertTriangle, ShieldCheck, WifiOff, ChevronRight, RefreshCw,
   Snowflake, BarChart3
 } from 'lucide-react';
+import { BG_DATA_URL } from '../assets/imageAssets';
 
 function LineChart({ series }) {
   const w = 320;
@@ -187,7 +188,7 @@ export default function DashboardPage({ onNavigate }) {
   return (
     <div className="pb-3 animate-fade-in space-y-3">
       <div className="rounded-2xl p-4 shadow-xl relative overflow-hidden animate-slide-up">
-        <div className="absolute inset-0 bg-cover bg-center scale-105" style={{ backgroundImage: "url('/assets/bg-gudangai.jpg')" }} aria-hidden />
+        <div className="absolute inset-0 bg-cover bg-center scale-105" style={{ backgroundImage: `url(${BG_DATA_URL})` }} aria-hidden />
         <div className="absolute inset-0 bg-gradient-to-br from-[#0b2a55]/92 via-[#0f3a73]/88 to-[#164e8a]/90 backdrop-blur-[2px]" />
         <div className="absolute top-0 right-0 w-36 h-36 bg-cyan-400/15 rounded-full blur-3xl pointer-events-none" />
         <div className="relative z-10">
