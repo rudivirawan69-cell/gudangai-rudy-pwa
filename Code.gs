@@ -1,74 +1,455 @@
 /**
- * GudangAI — Google Apps Script Web App V2.3
+ * ============================================================================
+ * BACKEND GudangAI-69 V6.4.4+OUTBOX + PO Writer
  * Spreadsheet: COLD STORAGE SEPTEMBER '26
- * Spreadsheet ID: 1lJwqvSNZUNBO4ZH-PgVZsgd5Cf57UgCjGJIRD05IeCw
+ * ID: 1lJwqvSNZUNBO4ZH-PgVZsgd5Cf57UgCjGJIRD05IeCw
+ * ============================================================================
  *
- * ATURAN MENULIS (sesuai proteksi sheet):
- * - Sheet transaksi: HANYA Tanggal(B), Kode(C), QTY(F), Keterangan(G)
- * - JANGAN tulis Nama(D), Satuan(E) → VLOOKUP
- * - Stock CV/PT: HANYA BACA Stock Akhir, jangan update
+ * DEPLOY:
+ * 1) Apps Script → paste SELURUH file ini (ganti semua)
+ * 2) Project Settings → Script properties:
+ *      API_SECRET = (isi secret yang sama di PWA Atur)
+ * 3) Deploy → Manage deployments → Edit → New version → Deploy
+ * 4) Pastikan: Execute as ME · Who has access: ANYONE
+ *
+ * PO SHEET (tab "purchase order") — FORMAT TETAP:
+ *   Baris 5 header: B=NO | C=NAMA BARANG | D=SIZE | E=SATUAN | F=PO CV | G=PO PT | H=TOTAL | I=TGL KEDATANGAN
+ *   Data mulai baris 6 → kolom B s/d I saja (jangan geser kolom)
+ * ============================================================================
  */
-var SPREADSHEET_ID = '1lJwqvSNZUNBO4ZH-PgVZsgd5Cf57UgCjGJIRD05IeCw';
+
+var SPREADSHEET_ID_FALLBACK = '1lJwqvSNZUNBO4ZH-PgVZsgd5Cf57UgCjGJIRD05IeCw';
+var VERSION = '6.4.4+OUTBOX+PO';
+var TITLE = 'BACKEND GudangAI-69 V6.4.4';
+var TZ = 'Asia/Jakarta';
+
+/** Nama tab purchase order (urutan dicoba) */
+var PO_SHEET_NAMES = ['purchase order', 'Purchase Order', 'Purchase order', 'PO', 'PURCHASE ORDER'];
+
+/** Baris pertama data PO (header di baris 5) */
+var PO_DATA_START_ROW = 6;
+/** Kolom: B=2 … I=9 */
+var PO_COL = {
+  NO: 2,       // B
+  NAMA: 3,     // C
+  SIZE: 4,     // D
+  SATUAN: 5,   // E
+  PO_CV: 6,    // F
+  PO_PT: 7,    // G
+  TOTAL: 8,    // H
+  TGL: 9       // I
+};
+
+// ---------------------------------------------------------------------------
+// ENTRY
+// ---------------------------------------------------------------------------
 
 function doGet(e) {
   try {
-    var action = (e && e.parameter && e.parameter.action) || '';
-    var entity = (e && e.parameter && e.parameter.entity) || '';
-    if (action === 'healthCheck') {
-      return jsonResponse({ status: 'ok', version: 'V2.3-PWA', timestamp: new Date().toISOString(), timezone: 'Asia/Jakarta' });
+    e = e || {};
+    var p = e.parameter || {};
+    var action = String(p.action || '').trim();
+    var secret = p.secret || '';
+    if (!checkSecret_(secret) && action !== '') {
+      if (getApiSecret_() && action !== 'ping') {
+        return json_({ success: false, status: 'REJECTED', code: 'UNAUTHORIZED', error: 'Unauthorized' });
+      }
     }
-    if (action === 'getStock') {
-      if (entity !== 'CV' && entity !== 'PT') return jsonResponse({ error: 'entity harus CV atau PT' });
-      var items = getStockFromSheet(entity);
-      return jsonResponse({ items: items, entity: entity, count: items.length });
-    }
-    if (action === 'getStockAll') {
-      var cv = getStockFromSheet('CV'), pt = getStockFromSheet('PT');
-      return jsonResponse({ CV: { items: cv, count: cv.length }, PT: { items: pt, count: pt.length }, totalItems: cv.length + pt.length });
-    }
-    return jsonResponse({ error: 'action tidak dikenal', available: ['healthCheck', 'getStock', 'getStockAll'] });
+    return route_(action, p, null);
   } catch (err) {
-    return jsonResponse({ error: String(err.message || err) });
+    return json_({ success: false, error: String(err.message || err) });
   }
 }
 
 function doPost(e) {
   try {
-    if (!e || !e.postData || !e.postData.contents) return jsonResponse({ error: 'body kosong' });
-    var body = JSON.parse(e.postData.contents);
-    var action = body.action || '';
-    var entity = body.entity || '';
-    var items = body.items || [];
-    if (['barangMasuk', 'barangKeluar', 'barangRusak'].indexOf(action) === -1) {
-      return jsonResponse({ error: 'action harus: barangMasuk, barangKeluar, barangRusak' });
+    var body = {};
+    if (e && e.postData && e.postData.contents) {
+      try {
+        body = JSON.parse(e.postData.contents);
+      } catch (pe) {
+        return json_({ success: false, error: 'Body JSON tidak valid' });
+      }
     }
-    if (entity !== 'CV' && entity !== 'PT') return jsonResponse({ error: 'entity harus CV atau PT' });
-    if (!Array.isArray(items) || items.length === 0) return jsonResponse({ error: 'items harus array tidak kosong' });
-
-    var stockMap = {};
-    var si = getStockFromSheet(entity);
-    for (var s = 0; s < si.length; s++) stockMap[si[s].kode] = si[s].stok;
-
-    var result = writeTransaction(action, entity, items, stockMap);
-    return jsonResponse({
-      success: true,
-      action: action,
-      entity: entity,
-      written: result.written,
-      skipped: result.skipped,
-      warnings: result.warnings,
-      timestamp: new Date().toISOString()
-    });
+    var secret = body.secret || (e.parameter && e.parameter.secret) || '';
+    if (!checkSecret_(secret)) {
+      return json_({ success: false, status: 'REJECTED', code: 'UNAUTHORIZED', error: 'Unauthorized' });
+    }
+    var action = String(body.action || '').trim();
+    return route_(action, e.parameter || {}, body);
   } catch (err) {
-    return jsonResponse({ error: String(err.message || err) });
+    return json_({ success: false, error: String(err.message || err) });
   }
 }
 
-function normHeader(x) {
+function route_(action, params, body) {
+  body = body || {};
+  params = params || {};
+  var a = String(action || '').trim();
+
+  if (a === 'status' || a === 'ping' || a === 'healthCheck') {
+    return json_(statusPayload_());
+  }
+
+  if (a === 'getAllStock' || a === 'getStockAll' || a === 'getStock') {
+    var ent = String(body.entitas || body.entity || params.entitas || params.entity || 'CV').toUpperCase();
+    if (ent !== 'CV' && ent !== 'PT') {
+      return json_({ success: false, error: 'entitas harus CV atau PT' });
+    }
+    var items = getAllStock_(ent);
+    return json_({ success: true, count: items.length, items: items, entitas: ent });
+  }
+
+  if (a === 'addTransaction') {
+    return json_(addTransaction_(body));
+  }
+
+  /**
+   * generatePO / writePurchaseOrder
+   * Body:
+   * {
+   *   action: "generatePO",
+   *   mode: "cs" | "produksi" | "all",
+   *   clearExisting: true,
+   *   items: [
+   *     { nama, size?, satuan?, poCV?, poPT?, qty?, entity?, tglKedatangan? }
+   *   ]
+   * }
+   */
+  if (a === 'generatePO' || a === 'writePurchaseOrder' || a === 'writePO') {
+    return json_(writePurchaseOrder_(body));
+  }
+
+  return json_({
+    success: false,
+    status: 'REJECTED',
+    code: 'UNKNOWN_ACTION',
+    error: 'Action tidak dikenali: ' + a,
+    available: ['status', 'getAllStock', 'addTransaction', 'generatePO', 'writePurchaseOrder']
+  });
+}
+
+// ---------------------------------------------------------------------------
+// AUTH
+// ---------------------------------------------------------------------------
+
+function getApiSecret_() {
+  try {
+    return String(PropertiesService.getScriptProperties().getProperty('API_SECRET') || '').trim();
+  } catch (e) {
+    return '';
+  }
+}
+
+/** Jika API_SECRET kosong di properties → izinkan (dev). Jika terisi → wajib cocok. */
+function checkSecret_(provided) {
+  var need = getApiSecret_();
+  if (!need) return true;
+  return String(provided || '').trim() === need;
+}
+
+function getSpreadsheetId_() {
+  try {
+    var fromProp = PropertiesService.getScriptProperties().getProperty('SPREADSHEET_ID');
+    if (fromProp) return String(fromProp).trim();
+  } catch (e) {}
+  return SPREADSHEET_ID_FALLBACK;
+}
+
+function openSS_() {
+  return SpreadsheetApp.openById(getSpreadsheetId_());
+}
+
+function statusPayload_() {
+  var ss = openSS_();
+  var now = new Date();
+  return {
+    success: true,
+    status: 'OK',
+    version: VERSION,
+    title: TITLE,
+    spreadsheet: ss.getName(),
+    activeMonth: { bulan: 9, tahun: 2026, nama: 'SEPTEMBER' },
+    serverTime: now.toISOString(),
+    poSheet: findPoSheet_(ss) ? findPoSheet_(ss).getName() : null
+  };
+}
+
+// ---------------------------------------------------------------------------
+// STOCK
+// ---------------------------------------------------------------------------
+
+function getAllStock_(entitas) {
+  var ss = openSS_();
+  var names = entitas === 'CV'
+    ? ['Stock CV', 'stock CV', 'STOCK CV']
+    : ['Stock PT', 'stock PT', 'STOCK PT'];
+  var sheet = null;
+  for (var i = 0; i < names.length; i++) {
+    sheet = ss.getSheetByName(names[i]);
+    if (sheet) break;
+  }
+  if (!sheet) throw new Error('Sheet Stock ' + entitas + ' tidak ditemukan');
+
+  var data = sheet.getDataRange().getValues();
+  if (data.length < 2) return [];
+
+  var headerRow = 0;
+  for (var r = 0; r < Math.min(6, data.length); r++) {
+    var joined = data[r].map(function (x) { return norm_(x); }).join('|');
+    if (joined.indexOf('kode') >= 0) {
+      headerRow = r;
+      break;
+    }
+  }
+
+  var h = data[headerRow].map(norm_);
+  var iK = findCol_(h, ['kode barang', 'kode']);
+  var iN = findCol_(h, ['nama barang', 'nama']);
+  var iD = findCol_(h, ['divisi']);
+  var iS = findCol_(h, ['satuan']);
+  var iQ = findCol_(h, ['stock akhir', 'stok akhir', 'stockakhir', 'stok', 'stock']);
+  var iA = findCol_(h, ['stock aman', 'stok aman', 'batas aman', 'min', 'minimum']);
+
+  if (iK < 0) throw new Error('Kolom Kode tidak ditemukan');
+  if (iQ < 0) throw new Error('Kolom Stock Akhir tidak ditemukan');
+
+  var items = [];
+  for (var i = headerRow + 1; i < data.length; i++) {
+    var row = data[i];
+    var kode = String(row[iK] || '').trim();
+    if (!kode || norm_(kode).indexOf('kode') >= 0) continue;
+    items.push({
+      kode: kode,
+      entitas: entitas,
+      nama: iN >= 0 ? String(row[iN] || '').trim() : '',
+      divisi: iD >= 0 ? String(row[iD] || '').trim() : '',
+      satuan: iS >= 0 ? String(row[iS] || '').trim() : 'Pack',
+      stockAkhir: num_(row[iQ]),
+      stockAman: iA >= 0 ? num_(row[iA]) : 0
+    });
+  }
+  return items;
+}
+
+// ---------------------------------------------------------------------------
+// TRANSAKSI (addTransaction) — kompat PWA
+// ---------------------------------------------------------------------------
+
+function addTransaction_(body) {
+  var sheetName = String(body.sheet || '').trim();
+  var entitas = String(body.entitas || body.entity || '').toUpperCase();
+  var kode = String(body.kodeBarang || body.kode || '').trim();
+  var qty = num_(body.qty);
+  var ket = String(body.keterangan || '').trim();
+
+  if (!kode) return { success: false, error: 'Kode kosong' };
+  if (!sheetName) return { success: false, error: 'sheet wajib' };
+
+  var ss = openSS_();
+  var candidates = [sheetName];
+  if (/masuk/i.test(sheetName)) candidates = candidates.concat(['Barang masuk', 'Barang Masuk']);
+  if (/keluar/i.test(sheetName)) candidates = candidates.concat(['Barang keluar', 'Barang Keluar']);
+  if (/rusak/i.test(sheetName)) candidates = candidates.concat(['Barang Rusak', 'Barang rusak']);
+
+  var sheet = null;
+  for (var i = 0; i < candidates.length; i++) {
+    sheet = ss.getSheetByName(candidates[i]);
+    if (sheet) break;
+  }
+  if (!sheet) return { success: false, error: 'Sheet transaksi tidak ditemukan: ' + sheetName };
+
+  var tgl = Utilities.formatDate(new Date(), TZ, 'dd/MM/yyyy');
+  var nr = Math.max(sheet.getLastRow(), 1) + 1;
+
+  // Hanya kolom yang diizinkan (proteksi VLOOKUP)
+  sheet.getRange(nr, 2).setValue(tgl);   // B Tanggal
+  sheet.getRange(nr, 3).setValue(kode);  // C Kode
+  sheet.getRange(nr, 6).setValue(qty);   // F Qty
+  sheet.getRange(nr, 7).setValue(ket || entitas); // G Keterangan
+
+  SpreadsheetApp.flush();
+  return {
+    success: true,
+    status: 'APPLIED',
+    row: nr,
+    qty: qty,
+    kode: kode,
+    transactionId: body.transactionId || '',
+    requestId: body.requestId || ''
+  };
+}
+
+// ---------------------------------------------------------------------------
+// PURCHASE ORDER WRITER — kolom B–I mulai baris 6
+// ---------------------------------------------------------------------------
+
+/**
+ * Tulis item ke sheet purchase order.
+ * Gabungkan baris dengan nama sama (CV+PT di kolom F/G).
+ */
+function writePurchaseOrder_(body) {
+  var ss = openSS_();
+  var sheet = findPoSheet_(ss);
+  if (!sheet) {
+    return {
+      success: false,
+      error: 'Sheet "purchase order" tidak ditemukan. Nama tab harus: purchase order'
+    };
+  }
+
+  var rawItems = body.items || body.rows || [];
+  if (!Array.isArray(rawItems) || rawItems.length === 0) {
+    return { success: false, error: 'items kosong' };
+  }
+
+  var clearExisting = body.clearExisting !== false; // default: true
+  var tglDefault = body.tglKedatangan || defaultTglKedatangan_();
+  var mode = String(body.mode || body.title || 'CS').toUpperCase();
+
+  // Map: key = nama lower → { nama, size, satuan, poCV, poPT, tgl }
+  var map = {};
+  var order = [];
+
+  for (var i = 0; i < rawItems.length; i++) {
+    var it = rawItems[i] || {};
+    var nama = String(it.nama || it.namaBarang || it.name || '').trim();
+    if (!nama) continue;
+
+    var key = nama.toLowerCase();
+    var entity = String(it.entity || it.entitas || '').toUpperCase();
+    var poCV = num_(it.poCV != null ? it.poCV : (entity === 'CV' ? (it.qty != null ? it.qty : it.suggestQty) : 0));
+    var poPT = num_(it.poPT != null ? it.poPT : (entity === 'PT' ? (it.qty != null ? it.qty : it.suggestQty) : 0));
+    if (!entity && it.qty != null && poCV === 0 && poPT === 0) {
+      poCV = num_(it.qty);
+    }
+
+    if (!map[key]) {
+      map[key] = {
+        nama: nama,
+        size: String(it.size || it.SIZE || '').trim(),
+        satuan: String(it.satuan || it.satuanBarang || 'Pack').trim() || 'Pack',
+        poCV: 0,
+        poPT: 0,
+        tgl: String(it.tglKedatangan || it.tgl || tglDefault).trim()
+      };
+      order.push(key);
+    }
+    map[key].poCV += poCV;
+    map[key].poPT += poPT;
+    if (it.size) map[key].size = String(it.size).trim();
+    if (it.satuan) map[key].satuan = String(it.satuan).trim();
+  }
+
+  var rows = [];
+  for (var o = 0; o < order.length; o++) {
+    var r = map[order[o]];
+    var total = r.poCV + r.poPT;
+    if (total <= 0) continue;
+    rows.push(r);
+  }
+
+  if (rows.length === 0) {
+    return { success: false, error: 'Tidak ada baris dengan qty > 0' };
+  }
+
+  ensurePoHeader_(sheet);
+
+  if (clearExisting) {
+    clearPoData_(sheet);
+  }
+
+  var start = PO_DATA_START_ROW;
+  if (!clearExisting) {
+    var last = sheet.getLastRow();
+    start = Math.max(PO_DATA_START_ROW, last + 1);
+  }
+
+  // Tulis batch: kolom B–I
+  var values = [];
+  for (var j = 0; j < rows.length; j++) {
+    var row = rows[j];
+    var total = row.poCV + row.poPT;
+    values.push([
+      j + 1,           // B NO
+      row.nama,        // C NAMA BARANG
+      row.size,        // D SIZE
+      row.satuan,      // E SATUAN
+      row.poCV,        // F PO CV
+      row.poPT,        // G PO PT
+      total,           // H TOTAL
+      row.tgl          // I TGL KEDATANGAN
+    ]);
+  }
+
+  sheet.getRange(start, PO_COL.NO, start + values.length - 1, PO_COL.TGL).setValues(values);
+  SpreadsheetApp.flush();
+
+  return {
+    success: true,
+    status: 'APPLIED',
+    sheet: sheet.getName(),
+    mode: mode,
+    written: values.length,
+    startRow: start,
+    endRow: start + values.length - 1,
+    columns: 'B:I',
+    message: 'PO tertulis ' + values.length + ' baris ke sheet "' + sheet.getName() + '" mulai baris ' + start
+  };
+}
+
+function findPoSheet_(ss) {
+  for (var i = 0; i < PO_SHEET_NAMES.length; i++) {
+    var sh = ss.getSheetByName(PO_SHEET_NAMES[i]);
+    if (sh) return sh;
+  }
+  var all = ss.getSheets();
+  for (var j = 0; j < all.length; j++) {
+    var n = String(all[j].getName() || '').toLowerCase();
+    if (n.indexOf('purchase') >= 0 || n === 'po') return all[j];
+  }
+  return null;
+}
+
+function ensurePoHeader_(sheet) {
+  var h = sheet.getRange(5, PO_COL.NO, 5, PO_COL.TGL).getValues()[0];
+  var empty = true;
+  for (var i = 0; i < h.length; i++) {
+    if (String(h[i] || '').trim()) {
+      empty = false;
+      break;
+    }
+  }
+  if (empty) {
+    sheet.getRange(5, PO_COL.NO, 5, PO_COL.TGL).setValues([[
+      'NO', 'NAMA BARANG', 'SIZE', 'SATUAN', 'PO CV', 'PO PT', 'TOTAL', 'TGL KEDATANGAN'
+    ]]);
+  }
+}
+
+function clearPoData_(sheet) {
+  var last = sheet.getLastRow();
+  if (last < PO_DATA_START_ROW) return;
+  var maxClear = Math.max(last, PO_DATA_START_ROW);
+  var end = Math.min(maxClear, PO_DATA_START_ROW + 199);
+  sheet.getRange(PO_DATA_START_ROW, PO_COL.NO, end, PO_COL.TGL).clearContent();
+}
+
+function defaultTglKedatangan_() {
+  var d = new Date();
+  d.setDate(d.getDate() + 2);
+  return Utilities.formatDate(d, TZ, 'dd MMM yyyy');
+}
+
+// ---------------------------------------------------------------------------
+// UTILS
+// ---------------------------------------------------------------------------
+
+function norm_(x) {
   return String(x || '').toLowerCase().replace(/\s+/g, ' ').trim();
 }
 
-function findCol(headers, keywords) {
+function findCol_(headers, keywords) {
   var i, j;
   for (j = 0; j < keywords.length; j++) {
     for (i = 0; i < headers.length; i++) {
@@ -83,112 +464,33 @@ function findCol(headers, keywords) {
   return -1;
 }
 
-function parseNumber(v) {
-  if (typeof v === 'number') return v;
-  var s = String(v || '').replace(/\./g, '').replace(',', '.').replace(/[^\d.\-]/g, '').trim();
+function num_(v) {
+  if (typeof v === 'number' && isFinite(v)) return v;
+  var s = String(v == null ? '' : v).replace(/\./g, '').replace(',', '.').replace(/[^\d.\-]/g, '').trim();
   var n = parseFloat(s);
   return isNaN(n) ? 0 : n;
 }
 
-function getStockFromSheet(entity) {
-  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  var sheet = ss.getSheetByName(entity === 'CV' ? 'Stock CV' : 'Stock PT');
-  if (!sheet) throw new Error('Sheet Stock ' + entity + ' tidak ditemukan');
-
-  var data = sheet.getDataRange().getValues();
-  if (data.length < 2) return [];
-
-  var headerRow = 0;
-  for (var r = 0; r < Math.min(5, data.length); r++) {
-    var rowStr = data[r].map(function(x) { return normHeader(x); }).join('|');
-    if (rowStr.indexOf('kode') >= 0) { headerRow = r; break; }
-  }
-
-  var h = data[headerRow].map(normHeader);
-  var iK = findCol(h, ['kode barang', 'kode']);
-  var iN = findCol(h, ['nama barang', 'nama']);
-  var iD = findCol(h, ['divisi']);
-  var iS = findCol(h, ['satuan']);
-  var iQ = findCol(h, ['stock akhir', 'stok akhir', 'stockakhir', 'stok', 'stock', 'qty', 'jumlah']);
-
-  if (iK < 0) throw new Error('Kolom Kode tidak ditemukan di Stock ' + entity);
-  if (iQ < 0) throw new Error('Kolom Stock Akhir tidak ditemukan di Stock ' + entity);
-
-  var items = [];
-  for (var i = headerRow + 1; i < data.length; i++) {
-    var row = data[i];
-    var kode = String(row[iK] || '').trim();
-    if (!kode || kode.toLowerCase().indexOf('kode') >= 0) continue;
-
-    items.push({
-      kode: kode,
-      nama: iN >= 0 ? String(row[iN] || '').trim() : '',
-      satuan: iS >= 0 ? String(row[iS] || '').trim() : '',
-      divisi: iD >= 0 ? String(row[iD] || '').trim() : '',
-      stok: parseNumber(row[iQ]),
-      lastUpdate: new Date().toISOString()
-    });
-  }
-  return items;
+function json_(o) {
+  return ContentService
+    .createTextOutput(JSON.stringify(o))
+    .setMimeType(ContentService.MimeType.JSON);
 }
 
-function writeTransaction(action, entity, items, stockMap) {
-  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-
-  var sheetNames = {
-    barangMasuk: ['Barang masuk', 'Barang Masuk', 'barang masuk'],
-    barangKeluar: ['Barang keluar', 'Barang Keluar', 'barang keluar'],
-    barangRusak: ['Barang Rusak', 'Barang rusak', 'barang rusak']
-  };
-  var candidates = sheetNames[action] || [];
-  var sheet = null;
-  for (var c = 0; c < candidates.length; c++) {
-    sheet = ss.getSheetByName(candidates[c]);
-    if (sheet) break;
-  }
-  if (!sheet) throw new Error('Sheet transaksi "' + candidates[0] + '" tidak ditemukan');
-
-  var tgl = Utilities.formatDate(new Date(), 'Asia/Jakarta', 'dd/MM/yyyy');
-  var written = 0, skipped = 0, warnings = [];
-
-  for (var i = 0; i < items.length; i++) {
-    var it = items[i];
-    var kode = String(it.kode || '').trim();
-    var qty = typeof it.qty === 'number' ? it.qty : parseFloat(it.qty) || 0;
-    var ket = String(it.keterangan || '').trim();
-    if (!kode) { skipped++; continue; }
-
-    if (action === 'barangKeluar' && stockMap) {
-      var cs = stockMap[kode] !== undefined ? stockMap[kode] : null;
-      if (cs !== null && cs <= 0) {
-        qty = 0;
-        ket = '(STOK HABIS)' + (ket ? ' ' + ket : '');
-        warnings.push(kode + ': stok 0');
-      } else if (cs !== null && qty > cs) {
-        var oq = qty;
-        qty = cs;
-        ket = '(DISESUAIKAN dari ' + oq + ')' + (ket ? ' ' + ket : '');
-        warnings.push(kode + ': disesuaikan ' + oq + '→' + qty);
-      }
-    }
-
-    if (qty === 0 && action === 'barangMasuk') { skipped++; continue; }
-
-    var nr = Math.max(sheet.getLastRow(), 1) + 1;
-
-    // HANYA 4 kolom yang diizinkan
-    sheet.getRange(nr, 2).setValue(tgl);
-    sheet.getRange(nr, 3).setValue(kode);
-    sheet.getRange(nr, 6).setValue(qty);
-    sheet.getRange(nr, 7).setValue(ket || entity);
-
-    written++;
-  }
-
-  SpreadsheetApp.flush();
-  return { written: written, skipped: skipped, warnings: warnings };
-}
-
-function jsonResponse(o) {
-  return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON);
+/**
+ * Tes manual di editor Apps Script:
+ * 1) pilih fungsi testWritePO
+ * 2) Run
+ */
+function testWritePO() {
+  var res = writePurchaseOrder_({
+    clearExisting: true,
+    mode: 'cs',
+    items: [
+      { nama: 'Ayam Fillet Dada', size: '', satuan: 'Pack', entity: 'CV', qty: 10 },
+      { nama: 'Ayam Fillet Dada', size: '', satuan: 'Pack', entity: 'PT', qty: 5 },
+      { nama: 'Nugget', satuan: 'Pack', poCV: 20, poPT: 10 }
+    ]
+  });
+  Logger.log(JSON.stringify(res));
 }
