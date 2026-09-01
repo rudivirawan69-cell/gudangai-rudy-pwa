@@ -2,14 +2,14 @@
  * GudangAI RUDY — API layer for Backend V6.4.4+OUTBOX
  * Protocol:
  *  - Auth: body/query field `secret` = Script Properties API_SECRET
- *  - Write: POST action=addTransaction { sheet, entitas, kodeBarang, qty, keterangan, secret, schemaVersion, transactionId, nonce }
- *  - Stock: POST/GET action=getAllStock { entitas, secret }
- *  - Health: GET/POST action=status|ping { secret }
+ *  - Write: POST action=addTransaction
+ *  - Stock: GET action=getAllStock (prefer GET di mobile)
+ *  - Health: GET action=status
  */
 
-const RETRY_COUNT = 4;
+const RETRY_COUNT = 3;
 const RETRY_BASE_MS = 800;
-const REQUEST_TIMEOUT_MS = 28000;
+const REQUEST_TIMEOUT_MS = 22000;
 const SCHEMA_VERSION = '1.0';
 
 function emitConn(detail) {
@@ -66,20 +66,12 @@ async function fetchWithRetry(url, options = {}, retries = RETRY_COUNT) {
     try {
       const res = await fetch(url, { ...options, signal: controller.signal });
       clearTimeout(timer);
-      if (!res.ok) {
-        if (res.status >= 400 && res.status < 500 && res.status !== 408 && res.status !== 429) {
-          throw new Error(`HTTP ${res.status}`);
-        }
-        throw new Error(`HTTP ${res.status}`);
-      }
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       if (attempt > 1) emitConn({ state: 'recovered', attempt });
       return res;
     } catch (err) {
       clearTimeout(timer);
       lastError = err;
-      const isAbort = err && err.name === 'AbortError';
-      const msg = isAbort ? 'Timeout koneksi' : (err && err.message) || 'Network error';
-      emitConn({ state: 'retry', attempt, max: retries, error: msg });
       if (attempt < retries) {
         const wait = RETRY_BASE_MS * Math.pow(1.7, attempt - 1) + Math.random() * 200;
         await delay(wait);
@@ -141,24 +133,15 @@ export async function healthCheck() {
   try {
     let data = null;
     let lastErr = null;
+    // GET dulu (lebih stabil di mobile)
     try {
-      data = await postJson({ action: 'status', requestId: newIds().requestId });
+      data = await getJson('status');
     } catch (e) {
       lastErr = e;
     }
-    if (!data || (data.error && !data.success && data.status !== 'OK')) {
+    if (!data || (data.error && !data.success && data.status !== 'OK' && data.code !== 'UNAUTHORIZED')) {
       try {
-        data = await getJson('status');
-      } catch (e) {
-        lastErr = e;
-      }
-    }
-    if (!data || (data.error && data.available)) {
-      try {
-        const url = getApiUrl();
-        const res = await fetchWithRetry(url + '?action=healthCheck', { method: 'GET', redirect: 'follow' });
-        const text = await res.text();
-        data = JSON.parse(text);
+        data = await postJson({ action: 'status', requestId: newIds().requestId });
       } catch (e) {
         lastErr = e;
       }
@@ -167,22 +150,8 @@ export async function healthCheck() {
     if (data && data.code === 'UNAUTHORIZED') {
       return {
         ok: false,
-        error: 'Unauthorized — isi API Secret di Atur (sama dengan Script Properties API_SECRET backend 6.4.4)',
+        error: 'Unauthorized — isi API Secret di Atur (sama dengan Script Properties API_SECRET)',
         version: data.version,
-      };
-    }
-
-    if (data && (data.available || String(data.version || '').includes('V2') || (data.status === 'ok' && !data.success && data.timestamp))) {
-      const ver = data.version || 'V2-PWA';
-      return {
-        ok: false,
-        error:
-          'Backend ' +
-          ver +
-          ' terdeteksi. Input transaksi butuh Backend 6.4.4 (action addTransaction). Deploy ulang Code.gs v6.4.4 sebagai Web App, lalu isi URL + API Secret di Atur.',
-        version: ver,
-        legacy: true,
-        raw: data,
       };
     }
 
@@ -238,10 +207,10 @@ export async function fetchStock(entity) {
   try {
     let data;
     try {
-      data = await postJson({ action: 'getAllStock', entitas: entity, requestId: newIds().requestId });
+      data = await getJson('getAllStock', { entitas: entity });
     } catch {
       try {
-        data = await getJson('getAllStock', { entitas: entity });
+        data = await postJson({ action: 'getAllStock', entitas: entity, requestId: newIds().requestId });
       } catch {
         data = null;
       }
@@ -250,20 +219,18 @@ export async function fetchStock(entity) {
       try {
         data = await getJson('getStockAll', { entitas: entity });
       } catch (_) {}
-      if (!data || (data.error && !data.items)) {
-        try {
-          data = await getJson('getStock', { entitas: entity });
-        } catch (_) {}
-      }
     }
     if (data && data.code === 'UNAUTHORIZED') throw new Error('Unauthorized — cek API Secret di Atur');
     if (data && data.error && !data.items && !Array.isArray(data.stock) && !Array.isArray(data.data)) {
       throw new Error(data.error);
     }
-    const raw = data.items || data.stock || data.data || [];
+    const raw = (data && (data.items || data.stock || data.data)) || [];
     return raw.map((it) => mapStockItem(it, entity));
   } catch (err) {
     console.warn('fetchStock gagal:', err.message);
+    if (/Unauthorized|API Secret|URL API/i.test(String(err.message || ''))) {
+      throw err;
+    }
     const { getMasterByEntity } = await import('./master.js');
     return generateDemoStock(getMasterByEntity(entity));
   }
@@ -332,15 +299,14 @@ async function submitTransaction(action, entity, items) {
         return {
           success: false,
           offline: false,
-          error: 'Unauthorized — isi API Secret di Atur (Script Properties API_SECRET, Backend 6.4.4)',
+          error: 'Unauthorized — isi API Secret di Atur (Script Properties API_SECRET)',
         };
       }
       if (data && (data.available || /tidak dikenal|UNKNOWN_ACTION|not found/i.test(String(data.error || '')))) {
         return {
           success: false,
           offline: false,
-          error:
-            'Backend tidak mendukung addTransaction. Deploy Code.gs v6.4.4 sebagai Web App (Execute as: Me, Anyone), lalu ganti URL di Atur + isi API Secret.',
+          error: 'Backend tidak mendukung addTransaction. Deploy Code.gs v6.4.4 Web App + URL/Secret di Atur.',
         };
       }
       if (data && (data.success === true || data.status === 'APPLIED' || data.status === 'OK')) {
