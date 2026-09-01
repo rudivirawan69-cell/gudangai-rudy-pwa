@@ -9,6 +9,8 @@ import {
   RefreshCw, Trash2, Shield, ChevronRight, LogOut, Settings as SettingsIcon, Cloud,
 } from 'lucide-react';
 
+const AVATAR_SRC = '/assets/avatar-rudi.jpg';
+
 function MenuRow({ icon: Icon, iconBg, title, subtitle, onClick, right, danger }) {
   return (
     <button type="button" onClick={onClick}
@@ -22,6 +24,27 @@ function MenuRow({ icon: Icon, iconBg, title, subtitle, onClick, right, danger }
       </div>
       {right || <ChevronRight className={`w-4 h-4 shrink-0 ${danger ? 'text-red-300' : 'text-slate-300'}`} />}
     </button>
+  );
+}
+
+function Avatar({ name, size = 'lg' }) {
+  const [err, setErr] = useState(false);
+  const dim = size === 'lg' ? 'w-14 h-14' : 'w-10 h-10';
+  const text = size === 'lg' ? 'text-xl' : 'text-sm';
+  if (err) {
+    return (
+      <div className={`${dim} rounded-2xl bg-gradient-to-br from-[#0b2a55] to-[#164e8a] flex items-center justify-center text-white ${text} font-bold shadow-md`}>
+        {(name || 'R').charAt(0).toUpperCase()}
+      </div>
+    );
+  }
+  return (
+    <img
+      src={AVATAR_SRC}
+      alt={name || 'Avatar'}
+      className={`${dim} rounded-2xl object-cover shadow-md border-2 border-white/80`}
+      onError={() => setErr(true)}
+    />
   );
 }
 
@@ -122,9 +145,7 @@ export default function SettingsPage() {
   return (
     <div className="pb-2 animate-fade-in space-y-3.5">
       <div className="card p-4 flex items-center gap-3">
-        <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#0b2a55] to-[#164e8a] flex items-center justify-center text-white text-xl font-bold shadow-md">
-          {(user?.name || 'R').charAt(0).toUpperCase()}
-        </div>
+        <Avatar name={user?.name || 'Rudi Virawan'} size="lg" />
         <div className="min-w-0 flex-1">
           <p className="text-base font-bold text-slate-900 truncate">{user?.name || 'Rudi Virawan'}</p>
           <p className="text-[11px] text-slate-400">SPV Gudang · Cold Storage NG69</p>
@@ -144,6 +165,10 @@ export default function SettingsPage() {
 
       {panel === 'profile' && (
         <div className="card p-4 space-y-3">
+          <div className="flex items-center gap-3">
+            <Avatar name={username} size="lg" />
+            <p className="text-[11px] text-slate-500">Foto profil dari /assets/avatar-rudi.jpg</p>
+          </div>
           <p className="text-xs font-semibold text-slate-600">Nama tampilan</p>
           <input value={username} onChange={(e) => setUsername(e.target.value)} className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm" placeholder="Nama" />
           <button type="button" onClick={handleSaveProfile} className="w-full py-2.5 rounded-xl bg-[#0b2a55] text-white text-sm font-semibold">Simpan Nama</button>
