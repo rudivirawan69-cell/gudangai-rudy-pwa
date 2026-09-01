@@ -1,13 +1,14 @@
 /**
  * GudangAI — Google Apps Script Web App V2.3
- * Spreadsheet ID: 1YAJKGm5JHQH_eYrDMeZEorfGTHhHxu9L4t4pYp7rqww
+ * Spreadsheet: COLD STORAGE SEPTEMBER '26
+ * Spreadsheet ID: 1lJwqvSNZUNBO4ZH-PgVZsgd5Cf57UgCjGJIRD05IeCw
  *
  * ATURAN MENULIS (sesuai proteksi sheet):
  * - Sheet transaksi: HANYA Tanggal(B), Kode(C), QTY(F), Keterangan(G)
  * - JANGAN tulis Nama(D), Satuan(E) → VLOOKUP
  * - Stock CV/PT: HANYA BACA Stock Akhir, jangan update
  */
-var SPREADSHEET_ID = '1YAJKGm5JHQH_eYrDMeZEorfGTHhHxu9L4t4pYp7rqww';
+var SPREADSHEET_ID = '1lJwqvSNZUNBO4ZH-PgVZsgd5Cf57UgCjGJIRD05IeCw';
 
 function doGet(e) {
   try {
