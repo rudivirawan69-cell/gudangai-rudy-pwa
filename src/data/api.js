@@ -194,6 +194,7 @@ export async function healthCheck() {
           version: data.version || data.title || 'V6',
           timestamp: data.serverTime || data.time || data.timestamp || new Date().toISOString(),
           activeMonth: data.activeMonth,
+          spreadsheet: data.spreadsheet || data.sheetName || data.title || '',
           raw: data,
         },
       };
@@ -222,6 +223,7 @@ function mapStockItem(it, entity) {
     satuan: it.satuan || '',
     divisi: it.divisi || '',
     stok: Number(it.stockAkhir != null ? it.stockAkhir : it.stok) || 0,
+    stockAman: Number(it.stockAman != null ? it.stockAman : it.aman) || 0,
     lastUpdate: new Date().toISOString(),
     entitas: it.entitas || entity,
   };
