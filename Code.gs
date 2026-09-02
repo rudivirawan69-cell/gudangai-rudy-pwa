@@ -1,6 +1,6 @@
 /**
  * ============================================================================
- * BACKEND GudangAI-69 V6.4.4+OUTBOX + PO Writer
+ * BACKEND GudangAI-69 V6.4.5+STOCK-UPDATE + PO Writer
  * Spreadsheet: COLD STORAGE SEPTEMBER '26
  * ID: 1lJwqvSNZUNBO4ZH-PgVZsgd5Cf57UgCjGJIRD05IeCw
  * ============================================================================
@@ -19,8 +19,8 @@
  */
 
 var SPREADSHEET_ID_FALLBACK = '1lJwqvSNZUNBO4ZH-PgVZsgd5Cf57UgCjGJIRD05IeCw';
-var VERSION = '6.4.4+OUTBOX+PO';
-var TITLE = 'BACKEND GudangAI-69 V6.4.4';
+var VERSION = '6.4.5+STOCK-UPDATE';
+var TITLE = 'BACKEND GudangAI-69 V6.4.5';
 var TZ = 'Asia/Jakarta';
 
 /** Nama tab purchase order (urutan dicoba) */
@@ -104,54 +104,39 @@ function route_(action, params, body) {
     return json_(addTransaction_(body));
   }
 
-  /**
-   * generatePO / writePurchaseOrder
-   * Body:
-   * {
-   *   action: "generatePO",
-   *   mode: "cs" | "produksi" | "all",
-   *   clearExisting: true,
-   *   items: [
-   *     { nama, size?, satuan?, poCV?, poPT?, qty?, entity?, tglKedatangan? }
-   *   ]
-   * }
-   */
-  if (a === 'generatePO' || a === 'writePurchaseOrder' || a === 'writePO') {
+  if (a === 'generatePO' || a === 'writePurchaseOrder') {
     return json_(writePurchaseOrder_(body));
   }
 
   return json_({
     success: false,
-    status: 'REJECTED',
-    code: 'UNKNOWN_ACTION',
-    error: 'Action tidak dikenali: ' + a,
+    error: 'UNKNOWN_ACTION',
     available: ['status', 'getAllStock', 'addTransaction', 'generatePO', 'writePurchaseOrder']
   });
 }
 
 // ---------------------------------------------------------------------------
-// AUTH
+// AUTH / CONFIG
 // ---------------------------------------------------------------------------
 
 function getApiSecret_() {
   try {
-    return String(PropertiesService.getScriptProperties().getProperty('API_SECRET') || '').trim();
+    return PropertiesService.getScriptProperties().getProperty('API_SECRET') || '';
   } catch (e) {
     return '';
   }
 }
 
-/** Jika API_SECRET kosong di properties → izinkan (dev). Jika terisi → wajib cocok. */
-function checkSecret_(provided) {
-  var need = getApiSecret_();
-  if (!need) return true;
-  return String(provided || '').trim() === need;
+function checkSecret_(secret) {
+  var expected = getApiSecret_();
+  if (!expected) return true; // no secret configured → allow (dev)
+  return String(secret || '') === expected;
 }
 
 function getSpreadsheetId_() {
   try {
-    var fromProp = PropertiesService.getScriptProperties().getProperty('SPREADSHEET_ID');
-    if (fromProp) return String(fromProp).trim();
+    var id = PropertiesService.getScriptProperties().getProperty('SPREADSHEET_ID');
+    if (id) return id;
   } catch (e) {}
   return SPREADSHEET_ID_FALLBACK;
 }
@@ -233,7 +218,7 @@ function getAllStock_(entitas) {
 }
 
 // ---------------------------------------------------------------------------
-// TRANSAKSI (addTransaction) — kompat PWA
+// TRANSAKSI (addTransaction) — kompat PWA + update stock
 // ---------------------------------------------------------------------------
 
 function addTransaction_(body) {
@@ -245,6 +230,9 @@ function addTransaction_(body) {
 
   if (!kode) return { success: false, error: 'Kode kosong' };
   if (!sheetName) return { success: false, error: 'sheet wajib' };
+  if (entitas !== 'CV' && entitas !== 'PT') {
+    return { success: false, error: 'entitas harus CV atau PT' };
+  }
 
   var ss = openSS_();
   var candidates = [sheetName];
@@ -259,24 +247,145 @@ function addTransaction_(body) {
   }
   if (!sheet) return { success: false, error: 'Sheet transaksi tidak ditemukan: ' + sheetName };
 
+  var isKeluar = /keluar/i.test(sheetName);
+  var isMasuk = /masuk/i.test(sheetName);
+  var isRusak = /rusak/i.test(sheetName);
+
+  // --- Update Stock CV / Stock PT ---
+  var stockResult = updateStock_(ss, entitas, kode, qty, isKeluar, isMasuk, isRusak);
+  if (stockResult.error && !stockResult.soft) {
+    return { success: false, error: stockResult.error };
+  }
+
+  // Sesuaikan qty & keterangan sesuai aturan bisnis
+  var finalQty = qty;
+  var finalKet = ket || entitas;
+  if (stockResult.adjusted) {
+    finalQty = stockResult.qtyWritten;
+    if (stockResult.note) {
+      finalKet = (finalKet ? finalKet + ' ' : '') + stockResult.note;
+    }
+  }
+
   var tgl = Utilities.formatDate(new Date(), TZ, 'dd/MM/yyyy');
   var nr = Math.max(sheet.getLastRow(), 1) + 1;
 
-  // Hanya kolom yang diizinkan (proteksi VLOOKUP)
+  // Hanya kolom yang diizinkan (proteksi VLOOKUP) — JANGAN tulis Nama (D) / Satuan (E)
   sheet.getRange(nr, 2).setValue(tgl);   // B Tanggal
   sheet.getRange(nr, 3).setValue(kode);  // C Kode
-  sheet.getRange(nr, 6).setValue(qty);   // F Qty
-  sheet.getRange(nr, 7).setValue(ket || entitas); // G Keterangan
+  sheet.getRange(nr, 6).setValue(finalQty);   // F Qty
+  sheet.getRange(nr, 7).setValue(finalKet);   // G Keterangan
 
   SpreadsheetApp.flush();
   return {
     success: true,
     status: 'APPLIED',
     row: nr,
-    qty: qty,
+    qty: finalQty,
     kode: kode,
+    stockAkhir: stockResult.stockAkhir,
+    adjusted: !!stockResult.adjusted,
+    note: stockResult.note || '',
     transactionId: body.transactionId || '',
     requestId: body.requestId || ''
+  };
+}
+
+/**
+ * Update stock di sheet Stock CV / Stock PT.
+ * Aturan:
+ * - barangMasuk  : stok += qty
+ * - barangKeluar : stok -= qty (jika stok <= 0 → qty=0 + "(STOK HABIS)"; jika qty > stok → sesuaikan + "(DISESUAIKAN)")
+ * - barangRusak  : stok -= qty (sama seperti keluar, tanpa stok negatif)
+ * Jangan menulis kolom Nama / Satuan.
+ */
+function updateStock_(ss, entitas, kode, qty, isKeluar, isMasuk, isRusak) {
+  var names = entitas === 'CV'
+    ? ['Stock CV', 'stock CV', 'STOCK CV']
+    : ['Stock PT', 'stock PT', 'STOCK PT'];
+  var sheet = null;
+  for (var i = 0; i < names.length; i++) {
+    sheet = ss.getSheetByName(names[i]);
+    if (sheet) break;
+  }
+  if (!sheet) {
+    return { soft: true, error: 'Sheet Stock ' + entitas + ' tidak ditemukan (transaksi tetap dicatat)' };
+  }
+
+  var data = sheet.getDataRange().getValues();
+  if (data.length < 2) {
+    return { soft: true, error: 'Sheet Stock kosong' };
+  }
+
+  var headerRow = 0;
+  for (var r = 0; r < Math.min(6, data.length); r++) {
+    var joined = data[r].map(function (x) { return norm_(x); }).join('|');
+    if (joined.indexOf('kode') >= 0) {
+      headerRow = r;
+      break;
+    }
+  }
+
+  var h = data[headerRow].map(norm_);
+  var iK = findCol_(h, ['kode barang', 'kode']);
+  var iQ = findCol_(h, ['stock akhir', 'stok akhir', 'stockakhir', 'stok', 'stock']);
+
+  if (iK < 0 || iQ < 0) {
+    return { soft: true, error: 'Kolom Kode / Stock Akhir tidak ditemukan di Stock ' + entitas };
+  }
+
+  var targetRow = -1;
+  var current = 0;
+  for (var i = headerRow + 1; i < data.length; i++) {
+    var k = String(data[i][iK] || '').trim();
+    if (k === kode) {
+      targetRow = i + 1; // 1-based
+      current = num_(data[i][iQ]);
+      break;
+    }
+  }
+
+  if (targetRow < 0) {
+    return { soft: true, error: 'Kode ' + kode + ' tidak ada di Stock ' + entitas + ' (transaksi tetap dicatat)', stockAkhir: null };
+  }
+
+  var newStock = current;
+  var qtyWritten = qty;
+  var adjusted = false;
+  var note = '';
+
+  if (isMasuk) {
+    newStock = current + qty;
+  } else if (isKeluar || isRusak) {
+    if (current <= 0) {
+      qtyWritten = 0;
+      newStock = 0;
+      adjusted = true;
+      note = '(STOK HABIS)';
+    } else if (qty > current) {
+      qtyWritten = current;
+      newStock = 0;
+      adjusted = true;
+      note = '(DISESUAIKAN)';
+    } else {
+      newStock = current - qty;
+      qtyWritten = qty;
+    }
+  } else {
+    // fallback: treat as keluar
+    newStock = Math.max(0, current - qty);
+    qtyWritten = Math.min(qty, current);
+  }
+
+  // Tulis hanya kolom Stock Akhir (jangan sentuh Nama/Satuan)
+  sheet.getRange(targetRow, iQ + 1).setValue(newStock);
+
+  return {
+    stockAkhir: newStock,
+    qtyWritten: qtyWritten,
+    adjusted: adjusted,
+    note: note,
+    previous: current
   };
 }
 
@@ -303,11 +412,10 @@ function writePurchaseOrder_(body) {
     return { success: false, error: 'items kosong' };
   }
 
-  var clearExisting = body.clearExisting !== false; // default: true
-  var tglDefault = body.tglKedatangan || defaultTglKedatangan_();
-  var mode = String(body.mode || body.title || 'CS').toUpperCase();
+  var clearExisting = !!body.clearExisting;
+  var mode = String(body.mode || 'cs').toLowerCase();
+  var tglDefault = defaultTglKedatangan_();
 
-  // Map: key = nama lower → { nama, size, satuan, poCV, poPT, tgl }
   var map = {};
   var order = [];
 
