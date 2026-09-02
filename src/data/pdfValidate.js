@@ -1,5 +1,6 @@
 /**
  * PDF/Text Validation — REKAP ORDER / nota
+ * - Hybrid: pdf.js text layer → jika tipis, OCR Tesseract.js (ind+eng)
  * - Hanya baca: NAMA BARANG + TOTAL qty
  * - Nomor urut PDF, header kolom, TGL di PDF = diabaikan
  * - Qty 25.00 → 25 ; 2.00 → 2
@@ -10,8 +11,10 @@ import { matchByAlias, searchMaster } from './master';
 
 const PDFJS_CDN = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.min.mjs';
 const PDFJS_WORKER = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.worker.min.mjs';
+const TESSERACT_CDN = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.esm.min.js';
 
 let pdfjsLibPromise = null;
+let tesseractPromise = null;
 
 async function loadPdfJs() {
   if (pdfjsLibPromise) return pdfjsLibPromise;
@@ -25,12 +28,53 @@ async function loadPdfJs() {
   return pdfjsLibPromise;
 }
 
-/** Extract plain text from PDF with row grouping by Y. */
-export async function extractTextFromPdf(file) {
-  if (!file) throw new Error('File kosong');
-  const buf = await file.arrayBuffer();
-  const pdfjs = await loadPdfJs();
-  const doc = await pdfjs.getDocument({ data: buf }).promise;
+async function loadTesseract() {
+  if (tesseractPromise) return tesseractPromise;
+  tesseractPromise = import(/* @vite-ignore */ TESSERACT_CDN);
+  return tesseractPromise;
+}
+
+async function renderPageToCanvas(page, scale = 2) {
+  const viewport = page.getViewport({ scale });
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.ceil(viewport.width);
+  canvas.height = Math.ceil(viewport.height);
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  await page.render({ canvasContext: ctx, viewport }).promise;
+  return canvas;
+}
+
+/**
+ * OCR a canvas / image source with Tesseract (Indonesian + English).
+ */
+export async function ocrImage(source, onProgress) {
+  const Tesseract = await loadTesseract();
+  const createWorker = Tesseract.createWorker || Tesseract.default?.createWorker;
+  if (!createWorker) throw new Error('Tesseract.js tidak termuat');
+
+  onProgress?.('Memuat engine OCR…');
+  const worker = await createWorker('ind+eng', 1, {
+    logger: (m) => {
+      if (!onProgress) return;
+      if (m.status === 'recognizing text' && m.progress != null) {
+        onProgress(`OCR ${Math.round(m.progress * 100)}%`);
+      } else if (m.status) {
+        onProgress(String(m.status));
+      }
+    },
+  });
+
+  try {
+    const { data } = await worker.recognize(source);
+    return (data?.text || '').trim();
+  } finally {
+    try {
+      await worker.terminate();
+    } catch (_) {}
+  }
+}
+
+async function extractTextLayer(doc) {
   const parts = [];
   for (let p = 1; p <= doc.numPages; p++) {
     const page = await doc.getPage(p);
@@ -61,13 +105,80 @@ export async function extractTextFromPdf(file) {
   return parts.join('\n').trim();
 }
 
+async function ocrPdfDocument(doc, onProgress) {
+  const pageTexts = [];
+  const maxPages = Math.min(doc.numPages, 8);
+  for (let p = 1; p <= maxPages; p++) {
+    onProgress?.(`OCR halaman ${p}/${maxPages}…`);
+    const page = await doc.getPage(p);
+    const canvas = await renderPageToCanvas(page, 2);
+    const text = await ocrImage(canvas, (m) => onProgress?.(`Halaman ${p}/${maxPages}: ${m}`));
+    if (text) pageTexts.push(text);
+  }
+  if (doc.numPages > maxPages) {
+    onProgress?.(`Hanya ${maxPages} halaman pertama di-OCR (total ${doc.numPages}).`);
+  }
+  return pageTexts.join('\n\n').trim();
+}
+
+/**
+ * Hybrid PDF extract:
+ * 1) Text layer pdf.js
+ * 2) Jika terlalu sedikit teks → OCR Tesseract (scan/foto-PDF)
+ */
+export async function extractTextFromPdf(file, onProgress) {
+  if (!file) throw new Error('File kosong');
+  onProgress?.('Membaca PDF…');
+  const buf = await file.arrayBuffer();
+  const pdfjs = await loadPdfJs();
+  const doc = await pdfjs.getDocument({ data: buf }).promise;
+
+  onProgress?.('Mengekstrak teks digital…');
+  let text = await extractTextLayer(doc);
+
+  const alphaLen = (text.match(/[A-Za-z\u00C0-\u024F]/g) || []).length;
+  const needOcr = !text || text.length < 40 || alphaLen < 20;
+
+  if (!needOcr) {
+    onProgress?.('Teks digital ditemukan');
+    return { text, method: 'text' };
+  }
+
+  onProgress?.('PDF scan terdeteksi — menjalankan OCR…');
+  try {
+    const ocrText = await ocrPdfDocument(doc, onProgress);
+    if (ocrText && ocrText.length > (text?.length || 0)) {
+      return { text: ocrText, method: text ? 'mixed' : 'ocr' };
+    }
+    if (text && text.length >= 3) return { text, method: 'text' };
+    if (ocrText) return { text: ocrText, method: 'ocr' };
+  } catch (err) {
+    if (text && text.length >= 3) return { text, method: 'text' };
+    throw new Error('OCR gagal: ' + (err.message || err));
+  }
+
+  return { text: text || '', method: 'text' };
+}
+
+/** OCR foto nota / gambar (JPG, PNG, WebP). */
+export async function extractTextFromImage(file, onProgress) {
+  if (!file) throw new Error('File kosong');
+  onProgress?.('Menyiapkan gambar…');
+  const text = await ocrImage(file, onProgress);
+  return { text: text || '', method: 'ocr' };
+}
+
+export async function extractTextFromPdfString(file, onProgress) {
+  const r = await extractTextFromPdf(file, onProgress);
+  return typeof r === 'string' ? r : r.text;
+}
+
 const HEADER_RE =
   /^(no\.?|keterangan|nama\s*barang|size|satuan|unit|total|po\s*cv|po\s*pt|tgl|tanggal|outlet|halaman|page|rekap|order|cv\.|pt\.|frozen\s*food|cold\s*storage)/i;
 
 const UNIT_ONLY_RE =
   /^(pack|pcs|ekor|kg|box|pail|unit|liter|porsi|frozen|chilled|dry|btl|botol|bal|dus)$/i;
 
-/** Normalize qty: 25.00 → 25, 2.50 stays 2.5 */
 export function normalizeQty(n) {
   const x = Number(n);
   if (!Number.isFinite(x) || x <= 0) return 0;
@@ -86,10 +197,6 @@ function cleanName(raw) {
   return s;
 }
 
-/**
- * Parse one logical item line → { name, qty } | null
- * Prefer last numeric token as TOTAL (kolom TOTAL di rekap).
- */
 export function parseLine(line) {
   const trimmed = String(line || '').trim();
   if (!trimmed || trimmed.length < 2) return null;
@@ -122,9 +229,6 @@ export function parseLine(line) {
   return { name, qty };
 }
 
-/**
- * Merge broken multi-line PDF rows: name on one line, "Pail FROZEN 2.00 2.00" on next.
- */
 export function parseLinesFromText(text) {
   if (!text) return [];
   const raw = String(text)
