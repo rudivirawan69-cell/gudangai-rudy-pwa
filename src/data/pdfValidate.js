@@ -74,19 +74,7 @@ async function extractTextLayer(doc) {
     const content = await page.getTextContent();
     const items = content.items || [];
 
-    const eolLines = [];
-    let buf = '';
-    for (const it of items) {
-      const str = it.str || '';
-      buf += str;
-      if (it.hasEOL) {
-        const line = buf.replace(/\s+/g, ' ').trim();
-        if (line) eolLines.push(line);
-        buf = '';
-      }
-    }
-    if (buf.trim()) eolLines.push(buf.replace(/\s+/g, ' ').trim());
-
+    // Build rows by Y-coordinate with generous tolerance to merge columns
     const rows = [];
     for (const it of items) {
       const str = (it.str || '').replace(/\s+/g, ' ').trim();
@@ -95,7 +83,8 @@ async function extractTextLayer(doc) {
       const x = tr[4] || 0;
       const y = tr[5] || 0;
       const h = Math.abs(tr[3] || tr[0] || 12) || 12;
-      const tol = Math.max(5, h * 0.65);
+      // Use larger tolerance to ensure all columns on same row merge
+      const tol = Math.max(8, h * 0.85);
       let row = null;
       for (const r of rows) {
         if (Math.abs(r.y - y) <= tol) { row = r; break; }
@@ -107,16 +96,11 @@ async function extractTextLayer(doc) {
       row.cells.push({ x, str });
     }
     rows.sort((a, b) => b.y - a.y);
-    const yLines = [];
     for (const row of rows) {
       row.cells.sort((a, b) => a.x - b.x);
       const line = row.cells.map((c) => c.str).join(' ').replace(/\s+/g, ' ').trim();
-      if (line) yLines.push(line);
+      if (line) allLines.push(line);
     }
-
-    const chosen = (yLines.length >= eolLines.length && yLines.length >= 3) ? yLines
-      : (eolLines.length >= 3 ? eolLines : (yLines.length ? yLines : eolLines));
-    allLines.push(...chosen);
     allLines.push('');
   }
   return allLines.join('\n').trim();
@@ -196,6 +180,12 @@ export function normalizeQty(n) {
   return Math.round(x * 1000) / 1000;
 }
 
+/** Format qty for display: 25.00→"25", 2.00→"2", 0.5→"0.5" */
+export function formatQtyDisplay(n) {
+  const q = normalizeQty(n);
+  return String(q);
+}
+
 function cleanName(raw) {
   let s = String(raw || '')
     .replace(/["\u201C\u201D']/g, ' ')
@@ -218,7 +208,7 @@ export function parseLine(line) {
 
   let clean = trimmed
     .replace(/^\d{1,4}[\.)]\s+/, '')
-    .replace(/^\d{1,4}\s+(?=[A-Za-zÀ-ÿ])/, '')
+    .replace(/^\d{1,4}\s+(?=[A-Za-z\xC0-\xFF])/, '')
     .trim();
   if (!clean || HEADER_RE.test(clean) || SKIP_LINE_RE.test(clean)) return null;
 
@@ -231,11 +221,27 @@ export function parseLine(line) {
     qty = normalizeQty(parseFloat(totalMark[1].replace(',', '.')));
     nameSource = withoutParen.replace(totalMark[0], ' ').replace(/\s+/g, ' ').trim();
   } else {
+    // Extract ALL numbers from the line
     const numMatches = [...withoutParen.matchAll(/(\d+(?:[.,]\d+)?)/g)];
     if (numMatches.length) {
+      // TOTAL QTY = the LAST number on the line (PDF format: ... PO_CV PO_PT TOTAL)
       const last = numMatches[numMatches.length - 1];
       qty = normalizeQty(parseFloat(String(last[1]).replace(',', '.')));
-      nameSource = withoutParen.slice(0, last.index).trim();
+      // Name = everything BEFORE the first number cluster at the end
+      // Find where the trailing number sequence starts
+      let nameEnd = last.index;
+      // Walk backwards to find earliest number in the trailing cluster
+      for (let j = numMatches.length - 2; j >= 0; j--) {
+        const prev = numMatches[j];
+        const gapText = withoutParen.slice(prev.index + prev[0].length, numMatches[j + 1].index).trim();
+        // If the gap between consecutive numbers is only whitespace, units, or empty → part of trailing numbers
+        if (!gapText || /^[\s.,|]+$/.test(gapText) || /^(?:pack|pcs|ekor|kg|box|pail|unit|liter|porsi|frozen|chilled|dry)$/i.test(gapText)) {
+          nameEnd = prev.index;
+        } else {
+          break;
+        }
+      }
+      nameSource = withoutParen.slice(0, nameEnd).trim();
       nameSource = nameSource
         .replace(/(\d+(?:[.,]\d+)?\s*)+$/g, '')
         .replace(/\b(?:pack|pcs|ekor|kg|box|pail|unit|liter|porsi|frozen|chilled|dry)\s*$/i, '')
@@ -266,7 +272,7 @@ export function parseLinesFromText(text) {
 
   const expanded = [];
   for (const line of raw) {
-    const parts = line.split(/(?=(?:^|\s)\d{1,4}(?:[.)]\s+|\s+)(?=[A-Za-zÀ-ÿ]))/);
+    const parts = line.split(/(?=(?:^|\s)\d{1,4}(?:[.)]\s+|\s+)(?=[A-Za-z\xC0-\xFF]))/);
     let chunks = parts.map((c) => c.trim()).filter(Boolean);
     if (chunks.length >= 2) {
       const joined = [];
@@ -322,7 +328,7 @@ export function parseLinesFromText(text) {
       const numTail =
         pureNum ||
         cont ||
-        (/^\d/.test(nxt) && !/[A-Za-zÀ-ÿ]{3,}/.test(nxt) && nxt.length < 40);
+        (/^\d/.test(nxt) && !/[A-Za-z\xC0-\xFF]{3,}/.test(nxt) && nxt.length < 40);
       if (numTail) {
         line = `${line} ${nxt}`;
         i += 1;
@@ -342,7 +348,7 @@ export function parseLinesFromText(text) {
 
     if (line.length > 160) {
       const inner = line
-        .split(/(?=\s\d{1,4}(?:[.)]\s+|\s+)(?=[A-Za-zÀ-ÿ]))/)
+        .split(/(?=\s\d{1,4}(?:[.)]\s+|\s+)(?=[A-Za-z\xC0-\xFF]))/)
         .map((s) => s.trim())
         .filter(Boolean);
       if (inner.length >= 2) {

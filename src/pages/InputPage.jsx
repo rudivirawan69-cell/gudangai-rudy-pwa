@@ -3,7 +3,7 @@ import { searchMaster, ENTITIES } from '../data/master';
 import { useStock } from '../hooks/useStock';
 import { searchLiveStock } from '../data/liveSearch';
 import { submitBarangMasuk, submitBarangKeluar, submitBarangRusak, saveToHistory } from '../data/api';
-import { validateItems, extractTextFromPdf, extractTextFromImage, parseLinesFromText } from '../data/pdfValidate';
+import { validateItems, extractTextFromPdf, extractTextFromImage, parseLinesFromText, parseLine, normalizeQty, formatQtyDisplay } from '../data/pdfValidate';
 import { isSpeechSupported, createRecognizer, parseVoiceCommand, resolveVoiceItem } from '../data/voiceInput';
 import {
   PackagePlus, PackageMinus, Search, Trash2, Send, CheckCircle, AlertCircle,
@@ -125,7 +125,7 @@ export default function InputPage() {
       if (!cmd) return;
       if (cmd.type) setType(cmd.type);
       const resolved = resolveVoiceItem(cmd.nameQuery, entity, searchMaster);
-      if (!resolved) { setVoiceError(`Tidak ketemu: \"${cmd.nameQuery || transcript}\"`); return; }
+      if (!resolved) { setVoiceError(`Tidak ketemu: "${cmd.nameQuery || transcript}"`); return; }
       if (!resolved.exact && resolved.candidates?.length > 1) {
         setVoiceCandidates({ candidates: resolved.candidates, qty: cmd.qty || 1, raw: transcript, type: cmd.type });
         setVoiceHint(`Mode ${cmd.type || type} \u00b7 qty ${cmd.qty || 1}. Pilih barang.`);
@@ -261,9 +261,18 @@ export default function InputPage() {
   const tc = typeConfig[type];
   const ambCount = (validationResult?.ambiguous || []).length;
 
+  // Helper: format extract display line
+  const formatExtractLine = (line) => {
+    const parsed = parseLine(line);
+    if (!parsed || !parsed.name) return line;
+    const qtyStr = parsed.qty > 0 ? formatQtyDisplay(parsed.qty) : '';
+    return qtyStr ? `${parsed.name}  ${qtyStr}` : parsed.name;
+  };
+
   return (
-    <div className="pb-32 pt-2 min-h-[60vh]">
-      <div className="grid grid-cols-3 gap-2.5 mb-4">
+    <div className="pb-36 pt-3 min-h-[60vh]">
+      {/* Mode selection - more spacing */}
+      <div className="grid grid-cols-3 gap-2.5 mb-4 mt-1">
         {(['masuk', 'keluar', 'rusak']).map((m) => {
           const cfg = typeConfig[m]; const Icon = cfg.icon; const active = type === m;
           return (
@@ -279,6 +288,7 @@ export default function InputPage() {
         })}
       </div>
 
+      {/* Entity toggle */}
       <div className="flex gap-2 mb-4">
         {ENTITIES.map((e) => (
           <button key={e} type="button" onClick={() => setEntity(e)}
@@ -288,6 +298,7 @@ export default function InputPage() {
         ))}
       </div>
 
+      {/* Action buttons - more spacing */}
       <div className="grid grid-cols-3 gap-2 mb-5">
         <button type="button" onClick={() => { setShowSearch(true); setTimeout(() => searchRef.current?.focus(), 100); }}
           className="py-3 rounded-xl border-2 border-dashed border-blue-300 bg-blue-50/60 text-blue-700 text-[11px] font-semibold flex flex-col items-center justify-center gap-1 min-h-[64px]">
@@ -339,6 +350,7 @@ export default function InputPage() {
         </div>
       )}
 
+      {/* Submit button - properly above navbar */}
       {items.length > 0 && (
         <div className="fixed bottom-[5.5rem] left-0 right-0 z-30 px-3.5">
           <div className="max-w-lg mx-auto">
@@ -403,9 +415,29 @@ export default function InputPage() {
                 {pdfBusy ? (voiceHint || 'Memproses\u2026') : (pdfFileName ? `File: ${pdfFileName}` : 'Pilih PDF / teks / foto (OCR)')}
               </button>
               {(voiceHint || voiceError) && <p className={`text-[11px] mb-2 ${voiceError ? 'text-red-600' : 'text-cyan-700'}`}>{voiceError || voiceHint}</p>}
+
+              {/* Extract display box - taller and wider */}
+              {uploadText && (
+                <div className="mb-3 rounded-xl border border-slate-200 bg-slate-50 p-3 max-h-[180px] overflow-y-auto">
+                  <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider mb-1.5">Hasil Ekstrak PDF — Nama Barang + Qty</p>
+                  <div className="text-[12px] font-mono text-slate-700 space-y-0.5 leading-relaxed">
+                    {parseLinesFromText(uploadText).map((line, idx) => {
+                      const parsed = parseLine(line);
+                      if (!parsed) return null;
+                      return (
+                        <div key={idx} className="flex justify-between gap-2 py-0.5">
+                          <span className="text-slate-800 flex-1 min-w-0 truncate">{parsed.name}</span>
+                          <span className="text-blue-700 font-bold shrink-0 tabular-nums">{parsed.qty > 0 ? formatQtyDisplay(parsed.qty) : '-'}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               <textarea value={uploadText} onChange={(e) => { setUploadText(e.target.value); setValidationResult(null); }}
                 placeholder={'Ayam Fillet Dada 50\nNugget Katsu 30\nIce Cream INDOLAKTO 5'}
-                rows={5} className="w-full px-4 py-3 bg-gray-50 rounded-xl border text-sm font-mono resize-none focus:outline-none focus:border-blue-400" />
+                rows={4} className="w-full px-4 py-3 bg-gray-50 rounded-xl border text-sm font-mono resize-none focus:outline-none focus:border-blue-400" />
               <button type="button" onClick={handleValidateText} disabled={!uploadText.trim()}
                 className="w-full mt-3 py-3 rounded-xl bg-[#0b2a55] text-white text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-40 min-h-[48px]">
                 <Eye className="w-4 h-4" /> Validasi & Match
@@ -437,7 +469,7 @@ export default function InputPage() {
                         <p className="text-[11px] text-emerald-700/80 font-mono">{m.kode} \u00b7 {m.matchType}</p>
                         {m.nameFromPdf && <p className="text-[10px] text-gray-500 mt-0.5">PDF: {m.nameFromPdf}</p>}
                       </div>
-                      <span className="text-base font-bold text-emerald-700 tabular-nums">{m.qty}</span>
+                      <span className="text-base font-bold text-emerald-700 tabular-nums">{formatQtyDisplay(m.qty)}</span>
                     </div>
                   </div>
                 ))}
@@ -446,7 +478,7 @@ export default function InputPage() {
                   <div key={'a' + i} className="bg-amber-50 rounded-xl px-4 py-3 mb-2 border border-amber-200">
                     <div className="flex justify-between gap-2 mb-2">
                       <p className="text-[13px] font-semibold text-amber-900">\u201c{a.nameFromPdf}\u201d</p>
-                      <span className="text-sm font-bold text-amber-700 tabular-nums">{a.qty}</span>
+                      <span className="text-sm font-bold text-amber-700 tabular-nums">{formatQtyDisplay(a.qty)}</span>
                     </div>
                     <p className="text-[11px] text-amber-700 mb-2">Pilih kandidat (wajib \u2014 tidak menebak):</p>
                     <div className="space-y-1.5">
@@ -477,7 +509,7 @@ export default function InputPage() {
                   <div key={'u' + i} className="bg-red-50 rounded-xl px-4 py-3 mb-2 border border-red-200">
                     <div className="flex justify-between gap-2">
                       <p className="text-[14px] font-medium text-red-800">\u201c{u.nameFromPdf}\u201d</p>
-                      <span className="text-sm font-bold text-red-700 tabular-nums">{u.qty}</span>
+                      <span className="text-sm font-bold text-red-700 tabular-nums">{formatQtyDisplay(u.qty)}</span>
                     </div>
                     <p className="text-[11px] text-gray-400">Tidak ditemukan di master {entity}.</p>
                   </div>
