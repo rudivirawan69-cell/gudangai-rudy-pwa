@@ -4,7 +4,7 @@ import {
   Loader2, QrCode, Trash2, Send, Image as ImageIcon, X
 } from 'lucide-react';
 import {
-  extractTextFromPdf, parseLinesFromText, validateItems,
+  extractTextFromPdf, extractTextFromImage, parseLinesFromText, validateItems,
   summarizeValidation, scanBarcodeFromVideo,
 } from '../data/pdfValidate';
 import { submitBarangKeluar, saveToHistory } from '../data/api';
@@ -60,16 +60,31 @@ export default function ValidasiPage() {
     const file = e.target.files?.[0];
     if (!file) return;
     setBusy(true); setError(''); setResults([]); setSubmitMsg(null);
+    const onProgress = (msg) => setError(msg);
     try {
       if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
         setPreviewUrl('');
-        const text = await extractTextFromPdf(file);
+        const result = await extractTextFromPdf(file, onProgress);
+        const text = typeof result === 'string' ? result : (result?.text || '');
+        const method = typeof result === 'object' && result?.method ? result.method : 'text';
         setRawText(text);
-        runValidation(text);
+        if (text.trim().length >= 3) {
+          runValidation(text);
+          setError(method === 'ocr' || method === 'mixed' ? `PDF dibaca via OCR (${method})` : '');
+        } else {
+          setError('PDF kosong / OCR gagal membaca teks. Ketik manual.');
+        }
       } else if (file.type.startsWith('image/')) {
         setPreviewUrl(URL.createObjectURL(file));
-        setRawText('');
-        setError('Foto nota dimuat. Ketik/salin baris barang dari nota ke kotak teks.');
+        const result = await extractTextFromImage(file, onProgress);
+        const text = result?.text || '';
+        setRawText(text);
+        if (text.trim().length >= 3) {
+          runValidation(text);
+          setError('Foto dibaca via OCR');
+        } else {
+          setError('OCR tidak membaca teks. Ketik/salin baris dari nota.');
+        }
       } else setError('Format tidak didukung. Unggah PDF atau foto.');
     } catch (err) {
       setError(err.message || 'Gagal membaca file');
@@ -111,11 +126,26 @@ export default function ValidasiPage() {
     canvas.width = video.videoWidth || 640;
     canvas.height = video.videoHeight || 480;
     canvas.getContext('2d').drawImage(video, 0, 0);
-    canvas.toBlob((blob) => {
+    canvas.toBlob(async (blob) => {
       if (!blob) return;
       setPreviewUrl(URL.createObjectURL(blob));
       stopCamera();
-      setError('Foto tersimpan. Ketik nama barang dari nota ke kotak teks lalu Validasi.');
+      setBusy(true);
+      try {
+        const result = await extractTextFromImage(blob, (m) => setError(m));
+        const text = result?.text || '';
+        setRawText(text);
+        if (text.trim().length >= 3) {
+          runValidation(text);
+          setError('Foto kamera dibaca via OCR');
+        } else {
+          setError('OCR tidak membaca teks. Ketik manual dari foto.');
+        }
+      } catch (err) {
+        setError(err.message || 'OCR gagal');
+      } finally {
+        setBusy(false);
+      }
     }, 'image/jpeg', 0.85);
   };
 
@@ -175,7 +205,7 @@ export default function ValidasiPage() {
     <div className="pb-4 animate-fade-in space-y-4">
       <div>
         <h2 className="text-lg font-bold text-gray-800">Validasi PDF Barang Keluar</h2>
-        <p className="text-xs text-gray-500 mt-0.5">Unggah PDF / foto nota, cocokkan ke master CV·PT + alias, lalu kirim sebagai barang keluar.</p>
+        <p className="text-xs text-gray-500 mt-0.5">PDF digital / scan / foto nota — OCR otomatis (ind+eng), cocokkan master + alias.</p>
       </div>
 
       <div className="flex gap-2">
@@ -199,8 +229,8 @@ export default function ValidasiPage() {
           <input ref={fileRef} type="file" accept={mode === 'pdf' ? 'application/pdf,image/*' : 'image/*'} capture={mode === 'camera' ? 'environment' : undefined} className="hidden" onChange={onFile} />
           <button onClick={() => fileRef.current?.click()} disabled={busy} className="w-full py-8 flex flex-col items-center gap-2 text-gray-500 rounded-xl">
             {busy ? <Loader2 className="w-8 h-8 animate-spin text-cyan-600" /> : mode === 'pdf' ? <FileText className="w-8 h-8 text-cyan-600" /> : <ImageIcon className="w-8 h-8 text-cyan-600" />}
-            <span className="text-sm font-semibold text-gray-700">{mode === 'pdf' ? 'Pilih PDF Barang Keluar' : 'Ambil / Pilih Foto Nota'}</span>
-            <span className="text-[11px] text-gray-400">Validasi otomatis ke master + alias</span>
+            <span className="text-sm font-semibold text-gray-700">{mode === 'pdf' ? 'Pilih PDF (teks / scan OCR)' : 'Ambil / Pilih Foto Nota'}</span>
+            <span className="text-[11px] text-gray-400">{busy ? (error || 'OCR berjalan…') : 'Tesseract.js ind+eng · offline-capable'}</span>
           </button>
           {mode === 'camera' && (
             <div className="mt-3 space-y-2">
@@ -212,7 +242,7 @@ export default function ValidasiPage() {
                 <div className="space-y-2">
                   <video ref={videoRef} playsInline muted className="w-full rounded-xl bg-black aspect-[3/4] object-cover" />
                   <div className="flex gap-2">
-                    <button onClick={capturePhoto} className="flex-1 py-2.5 rounded-xl bg-cyan-600 text-white text-sm font-semibold">Ambil Foto</button>
+                    <button onClick={capturePhoto} className="flex-1 py-2.5 rounded-xl bg-cyan-600 text-white text-sm font-semibold">Ambil + OCR</button>
                     <button onClick={scanQr} disabled={busy} className="flex-1 py-2.5 rounded-xl bg-violet-600 text-white text-sm font-semibold flex items-center justify-center gap-1"><QrCode className="w-4 h-4" /> Scan QR</button>
                     <button onClick={stopCamera} className="px-3 py-2.5 rounded-xl bg-gray-100 text-gray-600"><X className="w-4 h-4" /></button>
                   </div>
@@ -231,7 +261,7 @@ export default function ValidasiPage() {
       )}
 
       <div className="bg-white rounded-2xl border border-gray-100 p-3">
-        <label className="text-[11px] font-medium text-gray-500 uppercase tracking-wider">Teks baris barang (dari PDF atau ketik manual)</label>
+        <label className="text-[11px] font-medium text-gray-500 uppercase tracking-wider">Teks baris barang (OCR / ketik)</label>
         <textarea value={rawText} onChange={(e) => setRawText(e.target.value)} rows={5}
           placeholder={'Contoh:\n2x Ayam Fillet Dada\nUdang 5\nBakso Sapi Halus x3'}
           className="mt-1.5 w-full px-3 py-2 bg-gray-50 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-cyan-400" />
