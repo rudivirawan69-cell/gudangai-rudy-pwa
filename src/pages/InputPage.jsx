@@ -3,7 +3,7 @@ import { searchMaster, ENTITIES } from '../data/master';
 import { useStock } from '../hooks/useStock';
 import { searchLiveStock } from '../data/liveSearch';
 import { submitBarangMasuk, submitBarangKeluar, submitBarangRusak, saveToHistory } from '../data/api';
-import { validateItems, extractTextFromPdf, parseLinesFromText } from '../data/pdfValidate';
+import { validateItems, extractTextFromPdf, extractTextFromImage, parseLinesFromText } from '../data/pdfValidate';
 import { isSpeechSupported, createRecognizer, parseVoiceCommand, resolveVoiceItem } from '../data/voiceInput';
 import {
   PackagePlus, PackageMinus, Search, Trash2, Send, CheckCircle, AlertCircle,
@@ -155,18 +155,22 @@ export default function InputPage() {
     const file = e.target.files?.[0];
     if (!file) return;
     setPdfBusy(true); setVoiceError(''); setVoiceHint(''); setValidationResult(null); setPdfFileName(file.name || '');
+    const onProgress = (msg) => setVoiceHint(msg);
     try {
       if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
         setVoiceHint('Membaca PDF…');
-        const text = await extractTextFromPdf(file);
+        const result = await extractTextFromPdf(file, onProgress);
+        const text = typeof result === 'string' ? result : (result?.text || '');
+        const method = typeof result === 'object' && result?.method ? result.method : 'text';
         if (!text || text.trim().length < 3) {
-          setVoiceHint('PDF tidak berisi teks terbaca (mungkin scan). Salin manual ke kotak teks.');
+          setVoiceHint('Tidak ada teks terbaca. Coba foto lebih jelas atau ketik manual.');
           setUploadText('');
         } else {
           setUploadText(text);
           const res = runValidateFromText(text, entity);
           const n = (res.matched?.length || 0) + (res.ambiguous?.length || 0) + (res.unmatched?.length || 0);
-          setVoiceHint(`PDF: ${file.name} · ${n} baris barang. Review Match / Ambigu.`);
+          const via = method === 'ocr' ? 'OCR' : method === 'mixed' ? 'teks+OCR' : 'teks digital';
+          setVoiceHint(`PDF via ${via}: ${file.name} · ${n} baris barang. Review Match / Ambigu.`);
         }
       } else if (file.type.startsWith('text/') || /\.(txt|csv)$/i.test(file.name)) {
         const text = await file.text();
@@ -174,7 +178,18 @@ export default function InputPage() {
         runValidateFromText(text, entity);
         setVoiceHint(`File teks: ${file.name}`);
       } else if (file.type.startsWith('image/')) {
-        setVoiceHint('Foto dimuat. Salin baris barang ke kotak teks, lalu Validasi.');
+        setVoiceHint('OCR foto nota…');
+        const result = await extractTextFromImage(file, onProgress);
+        const text = result?.text || '';
+        if (!text || text.trim().length < 3) {
+          setVoiceHint('OCR tidak membaca teks. Ketik/salin manual ke kotak.');
+          setUploadText('');
+        } else {
+          setUploadText(text);
+          const res = runValidateFromText(text, entity);
+          const n = (res.matched?.length || 0) + (res.ambiguous?.length || 0) + (res.unmatched?.length || 0);
+          setVoiceHint(`OCR foto: ${file.name} · ${n} baris. Review Match / Ambigu.`);
+        }
       } else {
         setVoiceHint('Format tidak didukung. Unggah PDF rekap, teks, atau foto.');
       }
@@ -392,15 +407,15 @@ export default function InputPage() {
           <div className="bg-white rounded-t-2xl w-full max-w-lg h-[96vh] max-h-[96vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
             <div className="p-4 border-b shrink-0">
               <div className="flex justify-between mb-2">
-                <h3 className="text-sm font-semibold text-gray-800">Validasi PDF — Alias Mapping ({entity})</h3>
+                <h3 className="text-sm font-semibold text-gray-800">Validasi PDF — OCR + Alias ({entity})</h3>
                 <button type="button" onClick={() => setShowUpload(false)} className="p-2"><X className="w-5 h-5 text-gray-400" /></button>
               </div>
-              <p className="text-[11px] text-gray-400 mb-3">Hanya <b>nama barang</b> + <b>total qty</b> yang divalidasi. No urut &amp; tgl di PDF diabaikan. Qty 25.00 → 25. Ambigu wajib dipilih (tidak menebak).</p>
+              <p className="text-[11px] text-gray-400 mb-3">PDF digital / <b>scan OCR</b> / foto. Hanya <b>nama + total qty</b>. Qty 25.00→25. Ambigu wajib dipilih.</p>
               <input ref={fileRef} type="file" accept="text/plain,text/csv,application/pdf,image/*" className="hidden" onChange={handleFileText} />
               <button type="button" onClick={() => fileRef.current?.click()} disabled={pdfBusy}
                 className="w-full mb-3 py-2.5 rounded-xl border-2 border-dashed border-cyan-300 bg-cyan-50/50 text-cyan-700 text-xs font-semibold flex items-center justify-center gap-1.5 disabled:opacity-50">
                 {pdfBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
-                {pdfBusy ? 'Membaca PDF…' : (pdfFileName ? `File: ${pdfFileName}` : 'Pilih PDF / teks / foto')}
+                {pdfBusy ? (voiceHint || 'Memproses…') : (pdfFileName ? `File: ${pdfFileName}` : 'Pilih PDF / teks / foto (OCR)')}
               </button>
               {(voiceHint || voiceError) && <p className={`text-[11px] mb-2 ${voiceError ? 'text-red-600' : 'text-cyan-700'}`}>{voiceError || voiceHint}</p>}
               <textarea value={uploadText} onChange={(e) => { setUploadText(e.target.value); setValidationResult(null); }}
