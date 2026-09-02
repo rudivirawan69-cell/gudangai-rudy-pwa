@@ -18,7 +18,7 @@ function ItemRow({ item, onRemove, onUpdate, showMatch }) {
           <p className="text-xs text-blue-600 font-mono font-bold">{item.kode}</p>
           <p className="text-[15px] font-semibold text-gray-800 leading-tight mt-0.5">{item.nama}</p>
           <div className="flex items-center gap-2 mt-1 flex-wrap">
-            <p className="text-[12px] text-gray-400">{item.divisi} · {item.satuan}</p>
+            <p className="text-[12px] text-gray-400">{item.divisi} \u00b7 {item.satuan}</p>
             {showMatch && item.matchType && (
               <span className="text-[9px] px-1.5 py-0.5 rounded bg-cyan-100 text-cyan-700 font-medium">{item.matchType}</span>
             )}
@@ -30,11 +30,11 @@ function ItemRow({ item, onRemove, onUpdate, showMatch }) {
         </button>
       </div>
       <div className="flex gap-3">
-        <div className="w-24">
+        <div className="w-28">
           <label className="text-[10px] text-gray-500 uppercase tracking-wider font-medium">Qty</label>
           <input type="number" min="0" step="1" inputMode="decimal" value={item.qty}
             onChange={(e) => onUpdate({ qty: parseFloat(e.target.value) || 0 })}
-            className="w-full mt-1 px-3 py-3 bg-gray-50 rounded-xl border border-gray-200 text-base font-bold text-center focus:outline-none focus:border-blue-400" />
+            className="w-full mt-1 px-3 py-3.5 bg-gray-50 rounded-xl border border-gray-200 text-lg font-bold text-center focus:outline-none focus:border-blue-400" />
         </div>
         <div className="flex-1">
           <label className="text-[10px] text-gray-500 uppercase tracking-wider font-medium">Keterangan</label>
@@ -75,8 +75,8 @@ export default function InputPage() {
 
   const results = useMemo(() => {
     const live = stock.items || [];
-    if (live.length) return searchLiveStock(search, live);
-    return searchMaster(search, entity);
+    if (live.length) return searchLiveStock(live, search);
+    return searchMaster(entity, search);
   }, [search, entity, stock.items]);
 
   const typeConfig = {
@@ -109,7 +109,7 @@ export default function InputPage() {
     const r = createRecognizer();
     if (!r) { setVoiceError('SpeechRecognition tidak tersedia'); return; }
     recognizerRef.current = r;
-    r.onstart = () => { setListening(true); setVoiceHint('Mendengarkan… masuk/keluar/rusak + jumlah + nama'); };
+    r.onstart = () => { setListening(true); setVoiceHint('Mendengarkan\u2026 masuk/keluar/rusak + jumlah + nama'); };
     r.onerror = (ev) => {
       setListening(false);
       const code = ev?.error || '';
@@ -125,14 +125,14 @@ export default function InputPage() {
       if (!cmd) return;
       if (cmd.type) setType(cmd.type);
       const resolved = resolveVoiceItem(cmd.nameQuery, entity, searchMaster);
-      if (!resolved) { setVoiceError(`Tidak ketemu: "${cmd.nameQuery || transcript}"`); return; }
+      if (!resolved) { setVoiceError(`Tidak ketemu: \"${cmd.nameQuery || transcript}\"`); return; }
       if (!resolved.exact && resolved.candidates?.length > 1) {
         setVoiceCandidates({ candidates: resolved.candidates, qty: cmd.qty || 1, raw: transcript, type: cmd.type });
-        setVoiceHint(`Mode ${cmd.type || type} · qty ${cmd.qty || 1}. Pilih barang.`);
+        setVoiceHint(`Mode ${cmd.type || type} \u00b7 qty ${cmd.qty || 1}. Pilih barang.`);
         return;
       }
       addItem(resolved.item, { qty: cmd.qty || 1, source: 'voice', voiceRaw: transcript, keterangan: 'voice: ' + transcript });
-      setVoiceHint(`Ditambah: ${resolved.item.nama} × ${cmd.qty || 1}`);
+      setVoiceHint(`Ditambah: ${resolved.item.nama} \u00d7 ${cmd.qty || 1}`);
     };
     try { r.start(); } catch (err) { setVoiceError('Gagal mikrofon: ' + (err.message || err)); setListening(false); }
   };
@@ -164,19 +164,19 @@ export default function InputPage() {
     setPdfFileName(file.name);
     setValidationResult(null);
     setVoiceError('');
-    setVoiceHint('Membaca file…');
+    setVoiceHint('Membaca file\u2026');
     try {
       const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
       const isImg = /^image\//.test(file.type) || /\.(jpe?g|png|webp|gif|bmp)$/i.test(file.name);
       let text = '';
       let method = 'text';
       if (isPdf) {
-        setVoiceHint('Ekstrak teks PDF…');
+        setVoiceHint('Ekstrak teks PDF\u2026');
         const out = await extractTextFromPdf(file, (m) => setVoiceHint(m));
         text = out?.text || '';
         method = out?.method || 'pdf';
       } else if (isImg) {
-        setVoiceHint('OCR gambar…');
+        setVoiceHint('OCR gambar\u2026');
         const out = await extractTextFromImage(file, (m) => setVoiceHint(m));
         text = out?.text || '';
         method = out?.method || 'ocr';
@@ -185,10 +185,10 @@ export default function InputPage() {
       }
       setUploadText(text || '');
       if (text && text.trim().length > 5) {
-        setVoiceHint(`Teks siap (${method}). Menjalankan validasi…`);
+        setVoiceHint(`Teks siap (${method}). Menjalankan validasi\u2026`);
         const res = runValidateFromText(text);
         const n = (res.matched?.length || 0) + (res.ambiguous?.length || 0) + (res.unmatched?.length || 0);
-        setVoiceHint(`Selesai: ${n} baris · ${method}`);
+        setVoiceHint(`Selesai: ${n} baris \u00b7 ${method}`);
       } else {
         setVoiceHint('Teks kosong / tidak terbaca. Coba OCR manual atau ketik ulang.');
       }
@@ -213,7 +213,7 @@ export default function InputPage() {
           qty: m.qty,
           source: 'pdf',
           matchType: m.matchType || 'exact',
-          keterangan: [ketBase, m.nameFromPdf ? `PDF: ${m.nameFromPdf}` : ''].filter(Boolean).join(' · '),
+          keterangan: [ketBase, m.nameFromPdf ? `PDF: ${m.nameFromPdf}` : ''].filter(Boolean).join(' \u00b7 '),
         }
       );
     });
@@ -262,8 +262,8 @@ export default function InputPage() {
   const ambCount = (validationResult?.ambiguous || []).length;
 
   return (
-    <div className="pb-28 min-h-[60vh]">
-      <div className="grid grid-cols-3 gap-2.5 mb-3">
+    <div className="pb-32 pt-2 min-h-[60vh]">
+      <div className="grid grid-cols-3 gap-2.5 mb-4">
         {(['masuk', 'keluar', 'rusak']).map((m) => {
           const cfg = typeConfig[m]; const Icon = cfg.icon; const active = type === m;
           return (
@@ -279,7 +279,7 @@ export default function InputPage() {
         })}
       </div>
 
-      <div className="flex gap-2 mb-3">
+      <div className="flex gap-2 mb-4">
         {ENTITIES.map((e) => (
           <button key={e} type="button" onClick={() => setEntity(e)}
             className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all ${entity === e ? 'bg-[#0b2a55] text-white shadow-md' : 'bg-white text-slate-600 border border-slate-200'}`}>
@@ -288,7 +288,7 @@ export default function InputPage() {
         ))}
       </div>
 
-      <div className="grid grid-cols-3 gap-2 mb-4">
+      <div className="grid grid-cols-3 gap-2 mb-5">
         <button type="button" onClick={() => { setShowSearch(true); setTimeout(() => searchRef.current?.focus(), 100); }}
           className="py-3 rounded-xl border-2 border-dashed border-blue-300 bg-blue-50/60 text-blue-700 text-[11px] font-semibold flex flex-col items-center justify-center gap-1 min-h-[64px]">
           <Search className="w-4 h-4" /> Cari Master
@@ -310,11 +310,11 @@ export default function InputPage() {
 
       {voiceCandidates && (
         <div className="mb-3 rounded-xl border border-violet-200 bg-violet-50 p-3 space-y-2">
-          <p className="text-xs font-semibold text-violet-800">Hasil suara — pilih barang:</p>
+          <p className="text-xs font-semibold text-violet-800">Hasil suara \u2014 pilih barang:</p>
           {voiceCandidates.candidates.map((c) => (
             <button key={c.kode} type="button" onClick={() => pickVoiceCandidate(c)}
               className="w-full text-left px-3 py-2 rounded-lg bg-white border border-violet-100 text-xs">
-              <span className="font-mono text-violet-700 font-bold">{c.kode}</span> — {c.nama}
+              <span className="font-mono text-violet-700 font-bold">{c.kode}</span> \u2014 {c.nama}
             </button>
           ))}
           <button type="button" onClick={() => setVoiceCandidates(null)} className="text-[11px] text-violet-600 underline">Batal</button>
@@ -329,7 +329,7 @@ export default function InputPage() {
             onRemove={() => setItems((prev) => prev.filter((_, i) => i !== idx))}
             onUpdate={(u) => setItems((prev) => prev.map((it, i) => (i === idx ? { ...it, ...u } : it)))} />
         ))}
-        {items.length === 0 && <p className="text-center text-gray-400 text-xs py-8">Belum ada item — Cari Master, Suara, atau PDF / Validasi</p>}
+        {items.length === 0 && <p className="text-center text-gray-400 text-xs py-8">Belum ada item \u2014 Cari Master, Suara, atau PDF / Validasi</p>}
       </div>
 
       {result && (
@@ -340,12 +340,12 @@ export default function InputPage() {
       )}
 
       {items.length > 0 && (
-        <div className="fixed bottom-20 left-0 right-0 z-30 px-3.5">
+        <div className="fixed bottom-[5.5rem] left-0 right-0 z-30 px-3.5">
           <div className="max-w-lg mx-auto">
             <button type="button" onClick={handleSubmit} disabled={submitting}
               className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white text-sm font-bold flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/25 disabled:opacity-60 min-h-[52px]">
               {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-              {submitting ? 'Mengirim...' : `Kirim ${items.length} item · ${tc.label} (${entity})`}
+              {submitting ? 'Mengirim...' : `Kirim ${items.length} item \u00b7 ${tc.label} (${entity})`}
             </button>
           </div>
         </div>
@@ -356,7 +356,7 @@ export default function InputPage() {
           <div className="bg-white rounded-t-2xl w-full max-w-lg max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
             <div className="p-4 border-b">
               <div className="flex justify-between mb-2">
-                <h3 className="text-sm font-semibold">Cari Master ({entity}) {stock.items?.length ? `· Live ${stock.items.length}` : ''}</h3>
+                <h3 className="text-sm font-semibold">Cari Master ({entity}) {stock.items?.length ? `\u00b7 Live ${stock.items.length}` : ''}</h3>
                 <button type="button" onClick={() => setShowSearch(false)} className="p-2"><X className="w-5 h-5 text-gray-400" /></button>
               </div>
               <div className="relative">
@@ -373,7 +373,7 @@ export default function InputPage() {
                     <div className="min-w-0">
                       <p className="text-xs font-mono text-blue-600 font-bold">{item.kode}</p>
                       <p className="text-sm text-gray-800 truncate">{item.nama}</p>
-                      <p className="text-[10px] text-gray-400">{item.divisi} · {item.satuan}</p>
+                      <p className="text-[10px] text-gray-400">{item.divisi} \u00b7 {item.satuan}</p>
                     </div>
                     {item.stok != null && (
                       <span className={`text-sm font-bold tabular-nums shrink-0 ${item.stok <= 5 ? 'text-red-600' : item.stok <= 20 ? 'text-amber-600' : 'text-emerald-600'}`}>{item.stok}</span>
@@ -392,15 +392,15 @@ export default function InputPage() {
           <div className="sheet-panel bg-white rounded-t-2xl w-full max-w-lg h-[96vh] max-h-[96vh] flex flex-col shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="p-4 border-b shrink-0">
               <div className="flex justify-between mb-2">
-                <h3 className="text-sm font-semibold text-gray-800">Validasi PDF — OCR + Alias ({entity})</h3>
+                <h3 className="text-sm font-semibold text-gray-800">Validasi PDF \u2014 OCR + Alias ({entity})</h3>
                 <button type="button" onClick={() => setShowUpload(false)} className="p-2"><X className="w-5 h-5 text-gray-400" /></button>
               </div>
-              <p className="text-[11px] text-gray-400 mb-3">PDF digital / <b>scan OCR</b> / foto. Hanya <b>nama + total qty</b>. Qty 25.00→25. Ambigu wajib dipilih.</p>
+              <p className="text-[11px] text-gray-400 mb-3">PDF digital / <b>scan OCR</b> / foto. Hanya <b>nama + total qty</b>. Qty 25.00\u219225. Ambigu wajib dipilih.</p>
               <input ref={fileRef} type="file" accept="text/plain,text/csv,application/pdf,image/*" className="hidden" onChange={handleFileText} />
               <button type="button" onClick={() => fileRef.current?.click()} disabled={pdfBusy}
                 className="w-full mb-3 py-2.5 rounded-xl border-2 border-dashed border-cyan-300 bg-cyan-50/50 text-cyan-700 text-xs font-semibold flex items-center justify-center gap-1.5 disabled:opacity-50">
                 {pdfBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
-                {pdfBusy ? (voiceHint || 'Memproses…') : (pdfFileName ? `File: ${pdfFileName}` : 'Pilih PDF / teks / foto (OCR)')}
+                {pdfBusy ? (voiceHint || 'Memproses\u2026') : (pdfFileName ? `File: ${pdfFileName}` : 'Pilih PDF / teks / foto (OCR)')}
               </button>
               {(voiceHint || voiceError) && <p className={`text-[11px] mb-2 ${voiceError ? 'text-red-600' : 'text-cyan-700'}`}>{voiceError || voiceHint}</p>}
               <textarea value={uploadText} onChange={(e) => { setUploadText(e.target.value); setValidationResult(null); }}
@@ -434,7 +434,7 @@ export default function InputPage() {
                     <div className="flex justify-between items-start gap-2">
                       <div className="min-w-0 flex-1">
                         <p className="text-[13px] font-semibold text-emerald-900">{m.nama}</p>
-                        <p className="text-[11px] text-emerald-700/80 font-mono">{m.kode} · {m.matchType}</p>
+                        <p className="text-[11px] text-emerald-700/80 font-mono">{m.kode} \u00b7 {m.matchType}</p>
                         {m.nameFromPdf && <p className="text-[10px] text-gray-500 mt-0.5">PDF: {m.nameFromPdf}</p>}
                       </div>
                       <span className="text-base font-bold text-emerald-700 tabular-nums">{m.qty}</span>
@@ -445,10 +445,10 @@ export default function InputPage() {
                 {(validationResult.ambiguous || []).map((a, i) => (
                   <div key={'a' + i} className="bg-amber-50 rounded-xl px-4 py-3 mb-2 border border-amber-200">
                     <div className="flex justify-between gap-2 mb-2">
-                      <p className="text-[13px] font-semibold text-amber-900">&ldquo;{a.nameFromPdf}&rdquo;</p>
+                      <p className="text-[13px] font-semibold text-amber-900">\u201c{a.nameFromPdf}\u201d</p>
                       <span className="text-sm font-bold text-amber-700 tabular-nums">{a.qty}</span>
                     </div>
-                    <p className="text-[11px] text-amber-700 mb-2">Pilih kandidat (wajib — tidak menebak):</p>
+                    <p className="text-[11px] text-amber-700 mb-2">Pilih kandidat (wajib \u2014 tidak menebak):</p>
                     <div className="space-y-1.5">
                       {(a.candidates || []).map((c) => (
                         <button key={c.kode} type="button"
@@ -457,7 +457,7 @@ export default function InputPage() {
                             setValidationResult((prev) => ({ ...prev, matched: [...(prev.matched || []), fixed], ambiguous: (prev.ambiguous || []).filter((_, idx) => idx !== i) }));
                           }}
                           className="w-full text-left px-3 py-2 rounded-lg bg-white border border-amber-200 text-xs active:bg-amber-100">
-                          <span className="font-mono text-amber-800 font-bold">{c.kode}</span> — {c.nama}
+                          <span className="font-mono text-amber-800 font-bold">{c.kode}</span> \u2014 {c.nama}
                         </button>
                       ))}
                       <button type="button"
@@ -476,7 +476,7 @@ export default function InputPage() {
                 {(validationResult.unmatched || []).map((u, i) => (
                   <div key={'u' + i} className="bg-red-50 rounded-xl px-4 py-3 mb-2 border border-red-200">
                     <div className="flex justify-between gap-2">
-                      <p className="text-[14px] font-medium text-red-800">&ldquo;{u.nameFromPdf}&rdquo;</p>
+                      <p className="text-[14px] font-medium text-red-800">\u201c{u.nameFromPdf}\u201d</p>
                       <span className="text-sm font-bold text-red-700 tabular-nums">{u.qty}</span>
                     </div>
                     <p className="text-[11px] text-gray-400">Tidak ditemukan di master {entity}.</p>
