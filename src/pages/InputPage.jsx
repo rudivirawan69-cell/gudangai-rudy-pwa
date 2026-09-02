@@ -38,7 +38,7 @@ function ItemRow({ item, onRemove, onUpdate, showMatch }) {
         </div>
         <div className="flex-1">
           <label className="text-[10px] text-gray-500 uppercase tracking-wider font-medium">Keterangan</label>
-          <input type="text" placeholder="Opsional" value={item.keterangan}
+          <input type="text" placeholder="Kosong (opsional)" value={item.keterangan}
             onChange={(e) => onUpdate({ keterangan: e.target.value })}
             className="w-full mt-1 px-3 py-3 bg-gray-50 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-blue-400" />
         </div>
@@ -131,7 +131,7 @@ export default function InputPage() {
         setVoiceHint(`Mode ${cmd.type || type} \u00b7 qty ${cmd.qty || 1}. Pilih barang.`);
         return;
       }
-      addItem(resolved.item, { qty: cmd.qty || 1, source: 'voice', voiceRaw: transcript, keterangan: 'voice: ' + transcript });
+      addItem(resolved.item, { qty: cmd.qty || 1, source: 'voice', voiceRaw: transcript, keterangan: '' });
       setVoiceHint(`Ditambah: ${resolved.item.nama} \u00d7 ${cmd.qty || 1}`);
     };
     try { r.start(); } catch (err) { setVoiceError('Gagal mikrofon: ' + (err.message || err)); setListening(false); }
@@ -139,7 +139,7 @@ export default function InputPage() {
 
   const pickVoiceCandidate = (item) => {
     if (!voiceCandidates) return;
-    addItem(item, { qty: voiceCandidates.qty || 1, source: 'voice', voiceRaw: voiceCandidates.raw, keterangan: 'voice: ' + (voiceCandidates.raw || '') });
+    addItem(item, { qty: voiceCandidates.qty || 1, source: 'voice', voiceRaw: voiceCandidates.raw, keterangan: '' });
     if (voiceCandidates.type) setType(voiceCandidates.type);
     setVoiceCandidates(null);
     setVoiceHint(`Ditambah: ${item.nama}`);
@@ -205,7 +205,8 @@ export default function InputPage() {
   const handleApplyValidated = (matchedList) => {
     const list = matchedList || [];
     if (!list.length) return;
-    const ketBase = tanggalPengeluaran ? `Tgl ${tanggalPengeluaran}` : '';
+    // KETERANGAN KOSONG — tidak kirim tgl/nama PDF ke server
+    // Kecuali user isi manual di kotak keterangan
     list.forEach((m) => {
       addItem(
         { kode: m.kode, nama: m.nama, satuan: m.satuan, divisi: m.divisi },
@@ -213,7 +214,7 @@ export default function InputPage() {
           qty: m.qty,
           source: 'pdf',
           matchType: m.matchType || 'exact',
-          keterangan: [ketBase, m.nameFromPdf ? `PDF: ${m.nameFromPdf}` : ''].filter(Boolean).join(' \u00b7 '),
+          keterangan: '', // KOSONG — sesuai instruksi
         }
       );
     });
@@ -222,6 +223,13 @@ export default function InputPage() {
     setValidationResult(null);
     setUploadText('');
     setType('keluar');
+  };
+
+  // Format tanggal dd/mm/yyyy for spreadsheet
+  const formatTanggalForSheet = (isoDate) => {
+    if (!isoDate) return '';
+    const [y, m, d] = isoDate.split('-');
+    return `${d}/${m}/${y}`;
   };
 
   const handleSubmit = async () => {
@@ -235,7 +243,7 @@ export default function InputPage() {
         nama: it.nama,
         qty: it.qty,
         satuan: it.satuan,
-        keterangan: it.keterangan || '',
+        keterangan: (it.keterangan || '').trim(), // KOSONG kecuali user isi manual
         divisi: it.divisi,
       }));
       let res;
@@ -261,17 +269,9 @@ export default function InputPage() {
   const tc = typeConfig[type];
   const ambCount = (validationResult?.ambiguous || []).length;
 
-  // Helper: format extract display line
-  const formatExtractLine = (line) => {
-    const parsed = parseLine(line);
-    if (!parsed || !parsed.name) return line;
-    const qtyStr = parsed.qty > 0 ? formatQtyDisplay(parsed.qty) : '';
-    return qtyStr ? `${parsed.name}  ${qtyStr}` : parsed.name;
-  };
-
   return (
     <div className="pb-36 pt-3 min-h-[60vh]">
-      {/* Mode selection - more spacing */}
+      {/* Mode selection */}
       <div className="grid grid-cols-3 gap-2.5 mb-4 mt-1">
         {(['masuk', 'keluar', 'rusak']).map((m) => {
           const cfg = typeConfig[m]; const Icon = cfg.icon; const active = type === m;
@@ -298,7 +298,7 @@ export default function InputPage() {
         ))}
       </div>
 
-      {/* Action buttons - more spacing */}
+      {/* Action buttons */}
       <div className="grid grid-cols-3 gap-2 mb-5">
         <button type="button" onClick={() => { setShowSearch(true); setTimeout(() => searchRef.current?.focus(), 100); }}
           className="py-3 rounded-xl border-2 border-dashed border-blue-300 bg-blue-50/60 text-blue-700 text-[11px] font-semibold flex flex-col items-center justify-center gap-1 min-h-[64px]">
@@ -350,7 +350,7 @@ export default function InputPage() {
         </div>
       )}
 
-      {/* Submit button - properly above navbar */}
+      {/* Submit button */}
       {items.length > 0 && (
         <div className="fixed bottom-[5.5rem] left-0 right-0 z-30 px-3.5">
           <div className="max-w-lg mx-auto">
@@ -416,10 +416,10 @@ export default function InputPage() {
               </button>
               {(voiceHint || voiceError) && <p className={`text-[11px] mb-2 ${voiceError ? 'text-red-600' : 'text-cyan-700'}`}>{voiceError || voiceHint}</p>}
 
-              {/* Extract display box - taller and wider */}
+              {/* Extract display box */}
               {uploadText && (
                 <div className="mb-3 rounded-xl border border-slate-200 bg-slate-50 p-3 max-h-[180px] overflow-y-auto">
-                  <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider mb-1.5">Hasil Ekstrak PDF — Nama Barang + Qty</p>
+                  <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider mb-1.5">Hasil Ekstrak PDF \u2014 Nama Barang + Qty</p>
                   <div className="text-[12px] font-mono text-slate-700 space-y-0.5 leading-relaxed">
                     {parseLinesFromText(uploadText).map((line, idx) => {
                       const parsed = parseLine(line);
@@ -521,7 +521,7 @@ export default function InputPage() {
                     <input type="date" value={tanggalPengeluaran}
                       onChange={(e) => setTanggalPengeluaran(e.target.value)}
                       className="mt-1.5 w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-800" />
-                    <p className="text-[10px] text-slate-400 mt-1">Tanggal di PDF tidak dipakai. Isi tanggal sesi pengeluaran di sini.</p>
+                    <p className="text-[10px] text-slate-400 mt-1">Format: dd/mm/yyyy. Kolom keterangan di sheet tetap KOSONG.</p>
                   </div>
                 )}
                 {(validationResult.matched || []).length > 0 && ambCount === 0 && (

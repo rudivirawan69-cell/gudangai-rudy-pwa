@@ -5,6 +5,7 @@
  * - Nomor urut PDF, header kolom, TGL di PDF = diabaikan
  * - Qty 25.00 → 25 ; 2.00 → 2
  * - Tidak menebak: fuzzy/ambigu wajib konfirmasi user
+ * - PDF 2-kolom: angka di atas, nama di bawah → merge by row index
  */
 
 import { matchByAlias, searchMaster } from './master';
@@ -67,6 +68,12 @@ export async function ocrImage(source, onProgress) {
   }
 }
 
+/**
+ * Extract text layer from PDF, handling 2-column layout:
+ * PDF rekap order has numbers (NO, Pack, FROZEN, qty) in upper rows
+ * and product names in lower rows. We extract BOTH sections
+ * then merge them by row index.
+ */
 async function extractTextLayer(doc) {
   const allLines = [];
   for (let p = 1; p <= doc.numPages; p++) {
@@ -74,7 +81,7 @@ async function extractTextLayer(doc) {
     const content = await page.getTextContent();
     const items = content.items || [];
 
-    // Build rows by Y-coordinate with generous tolerance to merge columns
+    // Build rows by Y-coordinate
     const rows = [];
     for (const it of items) {
       const str = (it.str || '').replace(/\s+/g, ' ').trim();
@@ -83,7 +90,6 @@ async function extractTextLayer(doc) {
       const x = tr[4] || 0;
       const y = tr[5] || 0;
       const h = Math.abs(tr[3] || tr[0] || 12) || 12;
-      // Use larger tolerance to ensure all columns on same row merge
       const tol = Math.max(8, h * 0.85);
       let row = null;
       for (const r of rows) {
@@ -130,6 +136,9 @@ export async function extractTextFromPdf(file, onProgress) {
   const alphaLen = (text.match(/[A-Za-z\u00C0-\u024F]/g) || []).length;
   const needOcr = !text || text.length < 40 || alphaLen < 20;
   if (!needOcr) {
+    // Try to merge 2-column layout
+    const merged = tryMergeTwoColumnPdf(text);
+    if (merged) text = merged;
     onProgress?.('Teks digital ditemukan');
     return { text, method: 'text' };
   }
@@ -146,6 +155,69 @@ export async function extractTextFromPdf(file, onProgress) {
     throw new Error('OCR gagal: ' + (err.message || err));
   }
   return { text: text || '', method: 'text' };
+}
+
+/**
+ * Detect and merge 2-column PDF layout:
+ * Upper section = NO Pack FROZEN qty qty
+ * Lower section = product names (after KETERANGAN/FROZEN & KERING header)
+ * Merge them 1:1 by order.
+ */
+function tryMergeTwoColumnPdf(text) {
+  const lines = text.split(/\r?\n/);
+
+  // Find qty rows (pattern: NO Pack FROZEN qty qty) and name rows
+  const qtyRows = [];
+  const nameRows = [];
+  let inNameSection = false;
+  const NAME_SECTION_MARKERS = [
+    /keterangan/i, /frozen.*kering/i, /^nama\s*barang/i,
+  ];
+  const QTY_ROW_RE = /^\d{1,4}\s+(?:pack|pcs|pail|ekor|kg|box|unit)\s+(?:frozen|chilled|dry|kering)\s+[\d.]+/i;
+  const HEADER_SKIP = /^(no\.?|unit|er\s*area|chinese\s*food|traditional|cv\.|pt\.|selera\s*bogatama|periode|tanggal|september|total|kode|barang|pasuruan)/i;
+  const PRODUCT_NAME_RE = /[A-Za-z\u00C0-\u024F]{3,}/;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+
+    // Check if we hit the name section marker
+    if (NAME_SECTION_MARKERS.some((re) => re.test(trimmed))) {
+      inNameSection = true;
+      continue;
+    }
+
+    if (!inNameSection) {
+      // Upper section: look for qty rows
+      if (QTY_ROW_RE.test(trimmed)) {
+        // Extract the LAST number as TOTAL qty
+        const nums = [...trimmed.matchAll(/(\d+(?:\.\d+)?)/g)];
+        if (nums.length >= 2) {
+          const totalQty = parseFloat(nums[nums.length - 1][1]);
+          qtyRows.push(totalQty);
+        }
+      }
+    } else {
+      // Lower section: look for product names
+      if (HEADER_SKIP.test(trimmed)) continue;
+      if (/^[\d.\s,|]+$/.test(trimmed)) continue;
+      if (PRODUCT_NAME_RE.test(trimmed)) {
+        nameRows.push(trimmed);
+      }
+    }
+  }
+
+  // If we found matching qty+name pairs, merge them
+  if (qtyRows.length > 0 && nameRows.length > 0 && Math.abs(qtyRows.length - nameRows.length) <= 3) {
+    const merged = [];
+    const count = Math.min(qtyRows.length, nameRows.length);
+    for (let i = 0; i < count; i++) {
+      merged.push(`${nameRows[i]} ${qtyRows[i]}`);
+    }
+    return merged.join('\n');
+  }
+
+  return null;
 }
 
 export async function extractTextFromImage(file, onProgress) {
@@ -169,10 +241,6 @@ const SKIP_LINE_RE =
 const UNIT_ONLY_RE =
   /^(pack|pcs|ekor|kg|box|pail|unit|liter|porsi|frozen|chilled|dry|btl|botol|bal|dus)$/i;
 
-/** Continuation / qty-only row: optional NO + Pack/FROZEN + numbers (TOTAL = last) */
-const CONTINUATION_RE =
-  /^(?:\d{1,4}\s+)?(?:(?:pack|pcs|pail|ekor|kg|box|unit|frozen|chilled|dry)\s*)+[\d.\s,|]*$/i;
-
 export function normalizeQty(n) {
   const x = Number(n);
   if (!Number.isFinite(x) || x <= 0) return 0;
@@ -180,7 +248,6 @@ export function normalizeQty(n) {
   return Math.round(x * 1000) / 1000;
 }
 
-/** Format qty for display: 25.00→"25", 2.00→"2", 0.5→"0.5" */
 export function formatQtyDisplay(n) {
   const q = normalizeQty(n);
   return String(q);
@@ -221,20 +288,16 @@ export function parseLine(line) {
     qty = normalizeQty(parseFloat(totalMark[1].replace(',', '.')));
     nameSource = withoutParen.replace(totalMark[0], ' ').replace(/\s+/g, ' ').trim();
   } else {
-    // Extract ALL numbers from the line
     const numMatches = [...withoutParen.matchAll(/(\d+(?:[.,]\d+)?)/g)];
     if (numMatches.length) {
-      // TOTAL QTY = the LAST number on the line (PDF format: ... PO_CV PO_PT TOTAL)
+      // TOTAL QTY = LAST number on the line
       const last = numMatches[numMatches.length - 1];
       qty = normalizeQty(parseFloat(String(last[1]).replace(',', '.')));
-      // Name = everything BEFORE the first number cluster at the end
-      // Find where the trailing number sequence starts
+      // Find where trailing number cluster starts
       let nameEnd = last.index;
-      // Walk backwards to find earliest number in the trailing cluster
       for (let j = numMatches.length - 2; j >= 0; j--) {
         const prev = numMatches[j];
         const gapText = withoutParen.slice(prev.index + prev[0].length, numMatches[j + 1].index).trim();
-        // If the gap between consecutive numbers is only whitespace, units, or empty → part of trailing numbers
         if (!gapText || /^[\s.,|]+$/.test(gapText) || /^(?:pack|pcs|ekor|kg|box|pail|unit|liter|porsi|frozen|chilled|dry)$/i.test(gapText)) {
           nameEnd = prev.index;
         } else {
@@ -254,7 +317,7 @@ export function parseLine(line) {
     .replace(/\b(?:pack|pcs|ekor|kg|box|pail|unit|liter|porsi|frozen|chilled|dry)\s*$/i, '')
     .trim();
   let name = cleanName(nameSource);
-  if (!name || name.length < 3) return null;
+  if (!name || name.length < 2) return null;
   if (UNIT_ONLY_RE.test(name)) return null;
   if (name.length > 80 || (name.match(/\s/g) || []).length > 12) return null;
   if (/^(periode|tanggal|barang|keterangan)$/i.test(name)) return null;
@@ -306,39 +369,22 @@ export function parseLinesFromText(text) {
     if (UNIT_ONLY_RE.test(line)) continue;
     if (/no\s+keterangan\s+unit/i.test(line)) continue;
     if (/rekap\s*order/i.test(line) && line.length < 50) continue;
+    if (/frozen\s*&\s*kering/i.test(line)) continue;
 
-    // Standalone Pack/FROZEN qty → attach to previous product if qty missing
+    // Standalone Pack/FROZEN qty → skip (already merged by tryMergeTwoColumnPdf)
+    const CONTINUATION_RE = /^(?:\d{1,4}\s+)?(?:(?:pack|pcs|pail|ekor|kg|box|unit|frozen|chilled|dry)\s*)+[\d.\s,|]*$/i;
     if (CONTINUATION_RE.test(line) && cleanName(line).length < 3) {
-      if (productLines.length) {
-        const prev = productLines[productLines.length - 1];
-        const prevParsed = parseLine(prev);
-        if (prevParsed && !(prevParsed.qty > 0)) {
-          productLines[productLines.length - 1] = `${prev} ${line}`;
-        }
-      }
       continue;
     }
 
+    // Merge trailing number-only lines
     while (i + 1 < expanded.length) {
       const nxt = expanded[i + 1];
       if (!nxt) break;
       if (HEADER_RE.test(nxt) || SKIP_LINE_RE.test(nxt)) break;
       const pureNum = /^[\d.\s,|]+$/.test(nxt);
-      const cont = CONTINUATION_RE.test(nxt);
-      const numTail =
-        pureNum ||
-        cont ||
-        (/^\d/.test(nxt) && !/[A-Za-z\xC0-\xFF]{3,}/.test(nxt) && nxt.length < 40);
+      const numTail = pureNum || (/^\d/.test(nxt) && !/[A-Za-z\xC0-\xFF]{3,}/.test(nxt) && nxt.length < 30);
       if (numTail) {
-        line = `${line} ${nxt}`;
-        i += 1;
-        continue;
-      }
-      const nxtHasPackQty =
-        /\b(?:pack|pcs|pail|ekor|kg|box|unit|frozen|chilled)\b/i.test(nxt) &&
-        /\d+(?:[.,]\d+)?/.test(nxt) &&
-        cleanName(nxt).length < 4;
-      if (nxtHasPackQty) {
         line = `${line} ${nxt}`;
         i += 1;
         continue;
@@ -346,32 +392,10 @@ export function parseLinesFromText(text) {
       break;
     }
 
-    if (line.length > 160) {
-      const inner = line
-        .split(/(?=\s\d{1,4}(?:[.)]\s+|\s+)(?=[A-Za-z\xC0-\xFF]))/)
-        .map((s) => s.trim())
-        .filter(Boolean);
-      if (inner.length >= 2) {
-        for (const piece of inner) {
-          const p = parseLine(piece);
-          if (
-            p &&
-            p.name &&
-            p.name.length >= 3 &&
-            !/^(barang|keterangan|total|unit|size|satuan|periode|tanggal)$/i.test(p.name) &&
-            (p.name.match(/\s/g) || []).length <= 10
-          ) {
-            productLines.push(piece);
-          }
-        }
-        continue;
-      }
-    }
-
     const parsed = parseLine(line);
     if (!parsed) continue;
     if (/^frozen$/i.test(parsed.name)) continue;
-    if (parsed.name.length < 3) continue;
+    if (parsed.name.length < 2) continue;
     if (/^(barang|keterangan|total|unit|size|satuan|periode|tanggal)$/i.test(parsed.name)) continue;
     if ((parsed.name.match(/\s/g) || []).length > 10) continue;
 
@@ -455,7 +479,7 @@ export function summarizeValidation(results) {
     unmatched: (results?.unmatched || []).length,
     matchedItems: matched.map((m) => ({
       kode: m.kode, nama: m.nama, qty: m.qty, satuan: m.satuan,
-      keterangan: m.keterangan || 'Validasi PDF',
+      keterangan: '',
     })),
   };
 }
