@@ -65,6 +65,7 @@ export default function InputPage() {
   const [confirmedFromUpload, setConfirmedFromUpload] = useState(false);
   const [pdfBusy, setPdfBusy] = useState(false);
   const [pdfFileName, setPdfFileName] = useState('');
+  const [tanggalPengeluaran, setTanggalPengeluaran] = useState(() => new Date().toISOString().slice(0, 10));
   const [listening, setListening] = useState(false);
   const [voiceError, setVoiceError] = useState('');
   const [voiceHint, setVoiceHint] = useState('');
@@ -165,7 +166,7 @@ export default function InputPage() {
           setUploadText(text);
           const res = runValidateFromText(text, entity);
           const n = (res.matched?.length || 0) + (res.ambiguous?.length || 0) + (res.unmatched?.length || 0);
-          setVoiceHint(`PDF: ${file.name} · ${n} baris terdeteksi. Review Match / Ambigu.`);
+          setVoiceHint(`PDF: ${file.name} · ${n} baris barang. Review Match / Ambigu.`);
         }
       } else if (file.type.startsWith('text/') || /\.(txt|csv)$/i.test(file.name)) {
         const text = await file.text();
@@ -191,15 +192,24 @@ export default function InputPage() {
   }, [uploadText, entity, runValidateFromText]);
 
   const handleApplyValidated = (applyItems) => {
+    const tgl = (tanggalPengeluaran || '').trim();
+    const ketTgl = tgl ? `Tgl pengeluaran: ${tgl}` : '';
     const merged = [...items];
     for (const ni of applyItems) {
       if (!ni.kode) continue;
       const existing = merged.find((m) => m.kode === ni.kode);
-      if (existing) existing.qty = Math.round((Number(existing.qty) + Number(ni.qty)) * 1000) / 1000;
-      else merged.push({
-        kode: ni.kode, nama: ni.nama, satuan: ni.satuan, divisi: ni.divisi, qty: ni.qty,
-        keterangan: '', source: 'pdf', nameFromPdf: ni.nameFromPdf, matchType: ni.matchType,
-      });
+      if (existing) {
+        existing.qty = Math.round((Number(existing.qty) + Number(ni.qty)) * 1000) / 1000;
+        if (ketTgl && !String(existing.keterangan || '').includes('Tgl pengeluaran')) {
+          existing.keterangan = [existing.keterangan, ketTgl].filter(Boolean).join(' · ').slice(0, 200);
+        }
+      } else {
+        merged.push({
+          kode: ni.kode, nama: ni.nama, satuan: ni.satuan, divisi: ni.divisi, qty: ni.qty,
+          keterangan: ketTgl, source: 'pdf', nameFromPdf: ni.nameFromPdf, matchType: ni.matchType,
+          tanggalPengeluaran: tgl || undefined,
+        });
+      }
     }
     setItems(merged);
     setConfirmedFromUpload(true);
@@ -379,13 +389,13 @@ export default function InputPage() {
 
       {showUpload && (
         <div className="fixed inset-0 z-[60] bg-black/50 flex items-end justify-center" onClick={() => setShowUpload(false)}>
-          <div className="bg-white rounded-t-2xl w-full max-w-lg max-h-[90vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
-            <div className="p-4 border-b">
+          <div className="bg-white rounded-t-2xl w-full max-w-lg h-[96vh] max-h-[96vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="p-4 border-b shrink-0">
               <div className="flex justify-between mb-2">
                 <h3 className="text-sm font-semibold text-gray-800">Validasi PDF — Alias Mapping ({entity})</h3>
                 <button type="button" onClick={() => setShowUpload(false)} className="p-2"><X className="w-5 h-5 text-gray-400" /></button>
               </div>
-              <p className="text-[11px] text-gray-400 mb-3">Unggah PDF rekap / teks. Sistem menampilkan <b>nama + qty</b>, validasi alias, item ambigu wajib dipilih (tidak menebak).</p>
+              <p className="text-[11px] text-gray-400 mb-3">Hanya <b>nama barang</b> + <b>total qty</b> yang divalidasi. No urut &amp; tgl di PDF diabaikan. Qty 25.00 → 25. Ambigu wajib dipilih (tidak menebak).</p>
               <input ref={fileRef} type="file" accept="text/plain,text/csv,application/pdf,image/*" className="hidden" onChange={handleFileText} />
               <button type="button" onClick={() => fileRef.current?.click()} disabled={pdfBusy}
                 className="w-full mb-3 py-2.5 rounded-xl border-2 border-dashed border-cyan-300 bg-cyan-50/50 text-cyan-700 text-xs font-semibold flex items-center justify-center gap-1.5 disabled:opacity-50">
@@ -395,7 +405,7 @@ export default function InputPage() {
               {(voiceHint || voiceError) && <p className={`text-[11px] mb-2 ${voiceError ? 'text-red-600' : 'text-cyan-700'}`}>{voiceError || voiceHint}</p>}
               <textarea value={uploadText} onChange={(e) => { setUploadText(e.target.value); setValidationResult(null); }}
                 placeholder={'Ayam Fillet Dada 50\nNugget Katsu 30\nIce Cream INDOLAKTO 5'}
-                rows={6} className="w-full px-4 py-3 bg-gray-50 rounded-xl border text-sm font-mono resize-none focus:outline-none focus:border-blue-400" />
+                rows={5} className="w-full px-4 py-3 bg-gray-50 rounded-xl border text-sm font-mono resize-none focus:outline-none focus:border-blue-400" />
               <button type="button" onClick={handleValidateText} disabled={!uploadText.trim()}
                 className="w-full mt-3 py-3 rounded-xl bg-[#0b2a55] text-white text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-40 min-h-[48px]">
                 <Eye className="w-4 h-4" /> Validasi & Match Alias
@@ -425,7 +435,7 @@ export default function InputPage() {
                       <div className="min-w-0 flex-1">
                         <p className="text-xs font-mono text-emerald-700 font-bold">{m.kode}</p>
                         <p className="text-[14px] font-semibold text-gray-800">{m.nama}</p>
-                        <p className="text-[11px] text-gray-400">PDF: &ldquo;{m.nameFromPdf}&rdquo; · {m.matchType}</p>
+                        <p className="text-[11px] text-gray-400">PDF: &ldquo;{m.nameFromPdf}&rdquo; · qty {m.qty} · {m.matchType}</p>
                       </div>
                       <span className="text-lg font-bold text-emerald-700 tabular-nums">{m.qty}</span>
                     </div>
@@ -476,6 +486,15 @@ export default function InputPage() {
                   </div>
                 ))}
 
+                {validationResult && (
+                  <div className="mb-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                    <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Tanggal pengeluaran (ke sheet)</label>
+                    <input type="date" value={tanggalPengeluaran}
+                      onChange={(e) => setTanggalPengeluaran(e.target.value)}
+                      className="mt-1.5 w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-800" />
+                    <p className="text-[10px] text-slate-400 mt-1">Tanggal di PDF tidak dipakai. Isi tanggal sesi pengeluaran di sini.</p>
+                  </div>
+                )}
                 {validationResult.matched.length > 0 && ambCount === 0 && (
                   <button type="button" onClick={() => handleApplyValidated(validationResult.matched)}
                     className="w-full py-3.5 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 text-white text-sm font-bold flex items-center justify-center gap-2 shadow-lg min-h-[52px]">
