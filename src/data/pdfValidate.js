@@ -209,28 +209,47 @@ export function parseLine(line) {
   if (HEADER_RE.test(trimmed)) return null;
   if (SKIP_LINE_RE.test(trimmed)) return null;
   if (/periode\s*:/i.test(trimmed) || /tanggal\s*:/i.test(trimmed)) return null;
-  if (/^[\d.\s,]+$/.test(trimmed)) return null;
+  if (/^[\d.\s,|]+$/.test(trimmed)) return null;
   if (UNIT_ONLY_RE.test(trimmed)) return null;
 
-  let clean = trimmed.replace(/^\d{1,3}[\.)]\s+/, '').replace(/^\d{1,3}\s+(?=[A-Za-z])/, '').trim();
-  if (!clean || HEADER_RE.test(clean)) return null;
+  let clean = trimmed
+    .replace(/^\d{1,4}[\.)]\s+/, '')
+    .replace(/^\d{1,4}\s+(?=[A-Za-zÀ-ÿ])/, '')
+    .trim();
+  if (!clean || HEADER_RE.test(clean) || SKIP_LINE_RE.test(clean)) return null;
 
   const withoutParen = clean.replace(/\([^)]*\)/g, ' ').replace(/\s+/g, ' ').trim();
-  const numMatches = [...withoutParen.matchAll(/\b(\d+(?:[.,]\d+)?)\b/g)];
-  if (!numMatches.length) return null;
 
-  const last = numMatches[numMatches.length - 1];
-  const qty = normalizeQty(parseFloat(last[1].replace(',', '.')));
-  if (!(qty > 0)) return null;
+  let qty = 0;
+  let nameSource = withoutParen;
+  const totalMark = withoutParen.match(/\btotal\s*[:=]?\s*(\d+(?:[.,]\d+)?)/i);
+  if (totalMark) {
+    qty = normalizeQty(parseFloat(totalMark[1].replace(',', '.')));
+    nameSource = withoutParen.replace(totalMark[0], ' ').replace(/\s+/g, ' ').trim();
+  } else {
+    const numMatches = [...withoutParen.matchAll(/(\d+(?:[.,]\d+)?)/g)];
+    if (numMatches.length) {
+      const last = numMatches[numMatches.length - 1];
+      qty = normalizeQty(parseFloat(String(last[1]).replace(',', '.')));
+      nameSource = withoutParen.slice(0, last.index).trim();
+      nameSource = nameSource
+        .replace(/(\d+(?:[.,]\d+)?\s*)+$/g, '')
+        .replace(/\b(?:pack|pcs|ekor|kg|box|pail|unit|liter|porsi|frozen|chilled|dry)\s*$/i, '')
+        .replace(/(\d+(?:[.,]\d+)?\s*)+$/g, '')
+        .trim();
+    }
+  }
 
-  let namePart = withoutParen.slice(0, last.index).trim();
-  namePart = namePart.replace(/\b(?:pack|pcs|ekor|kg|box|pail|unit|liter|porsi|frozen|chilled)\s*$/i, '').trim();
-  let name = cleanName(namePart);
-  if (!name || name.length < 2) return null;
+  nameSource = nameSource
+    .replace(/\b(?:pack|pcs|ekor|kg|box|pail|unit|liter|porsi|frozen|chilled|dry)\s*$/i, '')
+    .trim();
+  let name = cleanName(nameSource);
+  if (!name || name.length < 3) return null;
   if (UNIT_ONLY_RE.test(name)) return null;
   if (name.length > 80 || (name.match(/\s/g) || []).length > 12) return null;
+  if (/^(periode|tanggal|barang|keterangan)$/i.test(name)) return null;
 
-  return { name, qty };
+  return { name, qty: qty > 0 ? qty : 0, needsQty: !(qty > 0) };
 }
 
 export function parseLinesFromText(text) {
