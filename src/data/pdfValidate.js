@@ -68,31 +68,58 @@ export async function ocrImage(source, onProgress) {
 }
 
 async function extractTextLayer(doc) {
-  const parts = [];
+  const allLines = [];
   for (let p = 1; p <= doc.numPages; p++) {
     const page = await doc.getPage(p);
     const content = await page.getTextContent();
     const items = content.items || [];
+
+    const eolLines = [];
+    let buf = '';
+    for (const it of items) {
+      const str = it.str || '';
+      buf += str;
+      if (it.hasEOL) {
+        const line = buf.replace(/\s+/g, ' ').trim();
+        if (line) eolLines.push(line);
+        buf = '';
+      }
+    }
+    if (buf.trim()) eolLines.push(buf.replace(/\s+/g, ' ').trim());
+
     const rows = [];
     for (const it of items) {
       const str = (it.str || '').replace(/\s+/g, ' ').trim();
       if (!str) continue;
-      const x = it.transform ? it.transform[4] : 0;
-      const y = it.transform ? it.transform[5] : 0;
-      const yKey = Math.round(y / 3) * 3;
-      let row = rows.find((r) => r.yKey === yKey);
-      if (!row) { row = { yKey, y, cells: [] }; rows.push(row); }
+      const tr = it.transform || [1, 0, 0, 1, 0, 0];
+      const x = tr[4] || 0;
+      const y = tr[5] || 0;
+      const h = Math.abs(tr[3] || tr[0] || 12) || 12;
+      const tol = Math.max(5, h * 0.65);
+      let row = null;
+      for (const r of rows) {
+        if (Math.abs(r.y - y) <= tol) { row = r; break; }
+      }
+      if (!row) {
+        row = { y, cells: [] };
+        rows.push(row);
+      }
       row.cells.push({ x, str });
     }
     rows.sort((a, b) => b.y - a.y);
+    const yLines = [];
     for (const row of rows) {
       row.cells.sort((a, b) => a.x - b.x);
       const line = row.cells.map((c) => c.str).join(' ').replace(/\s+/g, ' ').trim();
-      if (line) parts.push(line);
+      if (line) yLines.push(line);
     }
-    parts.push('');
+
+    const chosen = (yLines.length >= eolLines.length && yLines.length >= 3) ? yLines
+      : (eolLines.length >= 3 ? eolLines : (yLines.length ? yLines : eolLines));
+    allLines.push(...chosen);
+    allLines.push('');
   }
-  return parts.join('\n').trim();
+  return allLines.join('\n').trim();
 }
 
 async function ocrPdfDocument(doc, onProgress) {
@@ -150,7 +177,10 @@ export async function extractTextFromPdfString(file, onProgress) {
 }
 
 const HEADER_RE =
-  /^(no\.?|keterangan|nama\s*barang|barang|size|satuan|unit|total|po\s*cv|po\s*pt|tgl|tanggal|outlet|halaman|page|rekap|order|cv\.|pt\.|frozen\s*food|cold\s*storage)/i;
+  /^(no\.?|keterangan|nama\s*barang|barang|size|satuan|unit|total|po\s*cv|po\s*pt|tgl|tanggal|outlet|halaman|page|rekap|order|cv\.|pt\.|frozen\s*food|cold\s*storage|periode|area\s*gudang|chinese\s*food|traditional\s*food|selera\s*bogatama|rasyuka)/i;
+
+const SKIP_LINE_RE =
+  /^(periode|tanggal|tgl|halaman|page|rekap\s*order|area\s*gudang|chinese\s*food|traditional|selera\s*bogatama|cv\.?\s*selera|pt\.?\s*rasyuka|food\s*specialist)/i;
 
 const UNIT_ONLY_RE =
   /^(pack|pcs|ekor|kg|box|pail|unit|liter|porsi|frozen|chilled|dry|btl|botol|bal|dus)$/i;
@@ -177,6 +207,8 @@ export function parseLine(line) {
   const trimmed = String(line || '').trim();
   if (!trimmed || trimmed.length < 2) return null;
   if (HEADER_RE.test(trimmed)) return null;
+  if (SKIP_LINE_RE.test(trimmed)) return null;
+  if (/periode\s*:/i.test(trimmed) || /tanggal\s*:/i.test(trimmed)) return null;
   if (/^[\d.\s,]+$/.test(trimmed)) return null;
   if (UNIT_ONLY_RE.test(trimmed)) return null;
 
@@ -185,9 +217,7 @@ export function parseLine(line) {
 
   const withoutParen = clean.replace(/\([^)]*\)/g, ' ').replace(/\s+/g, ' ').trim();
   const numMatches = [...withoutParen.matchAll(/\b(\d+(?:[.,]\d+)?)\b/g)];
-  if (!numMatches.length) {
-    return null;
-  }
+  if (!numMatches.length) return null;
 
   const last = numMatches[numMatches.length - 1];
   const qty = normalizeQty(parseFloat(last[1].replace(',', '.')));
@@ -198,6 +228,7 @@ export function parseLine(line) {
   let name = cleanName(namePart);
   if (!name || name.length < 2) return null;
   if (UNIT_ONLY_RE.test(name)) return null;
+  if (name.length > 80 || (name.match(/\s/g) || []).length > 12) return null;
 
   return { name, qty };
 }
@@ -209,21 +240,35 @@ export function parseLinesFromText(text) {
     .map((l) => l.trim())
     .filter(Boolean);
 
+  const expanded = [];
+  for (const line of raw) {
+    if (!line) continue;
+    let chunks = line.split(/(?=\b\d{1,3}(?:[\.)]\s+|\s+)[A-Za-zÀ-ÿ])/);
+    chunks = chunks.map((c) => c.trim()).filter(Boolean);
+    if (chunks.length >= 2) {
+      for (const s of chunks) expanded.push(s);
+    } else {
+      expanded.push(line);
+    }
+  }
+
   const merged = [];
-  for (let i = 0; i < raw.length; i++) {
-    let line = raw[i];
+  for (let i = 0; i < expanded.length; i++) {
+    let line = expanded[i];
     if (HEADER_RE.test(line)) continue;
+    if (SKIP_LINE_RE.test(line)) continue;
+    if (/periode\s*:/i.test(line) || /tanggal\s*:/i.test(line)) continue;
     if (/^[\d.\s,]+$/.test(line)) continue;
 
     const hasQty = /\b\d+(?:[.,]\d+)?\b/.test(line);
-    const next = raw[i + 1] || '';
+    const next = expanded[i + 1] || '';
     const nextLooksLikeQtyRow =
       next &&
       /^(pack|pcs|pail|ekor|kg|box|unit|frozen|chilled)/i.test(next) &&
       /\d+(?:[.,]\d+)?/.test(next);
 
-    while (i + 1 < raw.length) {
-      const nxt = raw[i + 1];
+    while (i + 1 < expanded.length) {
+      const nxt = expanded[i + 1];
       if (!nxt) break;
       const pureNum = /^[\d.\s,|]+$/.test(nxt);
       const unitQty = /^(pack|pcs|pail|ekor|kg|box|unit|frozen|chilled)\b/i.test(nxt) && /\d+(?:[.,]\d+)?/.test(nxt);
