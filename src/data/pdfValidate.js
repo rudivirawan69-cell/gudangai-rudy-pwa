@@ -1,9 +1,9 @@
 /**
- * PDF/Text Validation — parse rekap order / nota lines and match to master + aliases.
- * Rules:
- *  - Never auto-guess ambiguous items (must user-pick)
- *  - Qty = TOTAL column (last numeric after Pack/Ekor) when present
- *  - Do not treat "(0.5 kg)" inside name as unit/qty
+ * PDF/Text Validation — REKAP ORDER / nota
+ * - Hanya baca: NAMA BARANG + TOTAL qty
+ * - Nomor urut PDF, header kolom, TGL di PDF = diabaikan
+ * - Qty 25.00 → 25 ; 2.00 → 2
+ * - Tidak menebak: fuzzy/ambigu wajib konfirmasi user
  */
 
 import { matchByAlias, searchMaster } from './master';
@@ -25,7 +25,7 @@ async function loadPdfJs() {
   return pdfjsLibPromise;
 }
 
-/** Extract plain text from a PDF File/Blob (client-side). */
+/** Extract plain text from PDF with row grouping by Y. */
 export async function extractTextFromPdf(file) {
   if (!file) throw new Error('File kosong');
   const buf = await file.arrayBuffer();
@@ -36,101 +36,134 @@ export async function extractTextFromPdf(file) {
     const page = await doc.getPage(p);
     const content = await page.getTextContent();
     const items = content.items || [];
-    const linesMap = new Map();
+    const rows = [];
     for (const it of items) {
-      const str = (it.str || '').trim();
+      const str = (it.str || '').replace(/\s+/g, ' ').trim();
       if (!str) continue;
-      const y = it.transform ? Math.round(it.transform[5]) : 0;
-      const key = String(y);
-      if (!linesMap.has(key)) linesMap.set(key, []);
-      linesMap.get(key).push({ x: it.transform ? it.transform[4] : 0, str });
+      const x = it.transform ? it.transform[4] : 0;
+      const y = it.transform ? it.transform[5] : 0;
+      const yKey = Math.round(y / 3) * 3;
+      let row = rows.find((r) => r.yKey === yKey);
+      if (!row) {
+        row = { yKey, y, cells: [] };
+        rows.push(row);
+      }
+      row.cells.push({ x, str });
     }
-    const sortedY = [...linesMap.keys()].map(Number).sort((a, b) => b - a);
-    for (const y of sortedY) {
-      const row = linesMap
-        .get(String(y))
-        .sort((a, b) => a.x - b.x)
-        .map((c) => c.str)
-        .join(' ')
-        .replace(/\s+/g, ' ')
-        .trim();
-      if (row) parts.push(row);
+    rows.sort((a, b) => b.y - a.y);
+    for (const row of rows) {
+      row.cells.sort((a, b) => a.x - b.x);
+      const line = row.cells.map((c) => c.str).join(' ').replace(/\s+/g, ' ').trim();
+      if (line) parts.push(line);
     }
     parts.push('');
   }
   return parts.join('\n').trim();
 }
 
-/** Split raw text into candidate item lines (skip headers/footers). */
-export function parseLinesFromText(text) {
-  if (!text) return [];
-  return String(text)
-    .split(/\r?\n/)
-    .map((l) => l.trim())
-    .filter((l) => {
-      if (!l || l.length < 2) return false;
-      if (/^(no|keterangan|total|unit|outlet|halaman|page|rekap|order|cv\.|pt\.)/i.test(l)) return false;
-      if (/^[\d.\s]+$/.test(l)) return false;
-      return true;
-    });
+const HEADER_RE =
+  /^(no\.?|keterangan|nama\s*barang|size|satuan|unit|total|po\s*cv|po\s*pt|tgl|tanggal|outlet|halaman|page|rekap|order|cv\.|pt\.|frozen\s*food|cold\s*storage)/i;
+
+const UNIT_ONLY_RE =
+  /^(pack|pcs|ekor|kg|box|pail|unit|liter|porsi|frozen|chilled|dry|btl|botol|bal|dus)$/i;
+
+/** Normalize qty: 25.00 → 25, 2.50 stays 2.5 */
+export function normalizeQty(n) {
+  const x = Number(n);
+  if (!Number.isFinite(x) || x <= 0) return 0;
+  if (Math.abs(x - Math.round(x)) < 1e-9) return Math.round(x);
+  return Math.round(x * 1000) / 1000;
+}
+
+function cleanName(raw) {
+  let s = String(raw || '')
+    .replace(/["\u201C\u201D']/g, ' ')
+    .replace(/\([^)]*\b(?:kg|pcs|pack|ekor|gr|g|ml|liter|ltr)\b[^)]*\)/gi, ' ')
+    .replace(/\b(?:pack|pcs|ekor|kg|box|pail|unit|liter|porsi|frozen|chilled)\b/gi, ' ')
+    .replace(/\b\d+(?:[.,]\d+)?\b/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return s;
 }
 
 /**
- * Parse one line → { name, qty }.
- * Prefer last standalone number as TOTAL qty (rekap order).
- * Ignore numbers inside parentheses like (0.5 kg) / (10 pcs).
+ * Parse one logical item line → { name, qty } | null
+ * Prefer last numeric token as TOTAL (kolom TOTAL di rekap).
  */
 export function parseLine(line) {
   const trimmed = String(line || '').trim();
-  if (!trimmed) return null;
+  if (!trimmed || trimmed.length < 2) return null;
+  if (HEADER_RE.test(trimmed)) return null;
+  if (/^[\d.\s,]+$/.test(trimmed)) return null;
+  if (UNIT_ONLY_RE.test(trimmed)) return null;
 
-  let clean = trimmed.replace(/^\d+[\.)]\s+/, '').trim();
-  clean = clean.replace(/\([^)]*\b(?:kg|pcs|pack|ekor|gr|g|ml|liter)\b[^)]*\)/gi, ' ').trim();
+  let clean = trimmed.replace(/^\d{1,3}[\.)]\s+/, '').replace(/^\d{1,3}\s+(?=[A-Za-z])/, '').trim();
+  if (!clean || HEADER_RE.test(clean)) return null;
 
-  const tabParts = clean.split('\t').map((s) => s.trim()).filter(Boolean);
-  if (tabParts.length >= 2) {
-    const last = tabParts[tabParts.length - 1].replace(/,/g, '.');
-    const num = parseFloat(last.replace(/[^\d.\-]/g, ''));
-    if (!isNaN(num) && num > 0 && /^[\d.,]+$/.test(tabParts[tabParts.length - 1].replace(/\s/g, ''))) {
-      return { name: tabParts.slice(0, -1).join(' ').trim(), qty: num };
-    }
+  const withoutParen = clean.replace(/\([^)]*\)/g, ' ').replace(/\s+/g, ' ').trim();
+
+  const numMatches = [...withoutParen.matchAll(/\b(\d+(?:[.,]\d+)?)\b/g)];
+  if (!numMatches.length) {
+    const nameOnly = cleanName(withoutParen);
+    if (nameOnly.length < 2) return null;
+    return { name: nameOnly, qty: 1 };
   }
 
-  const wide = clean.split(/\s{2,}/).map((s) => s.trim()).filter(Boolean);
-  if (wide.length >= 2) {
-    const last = wide[wide.length - 1].replace(/,/g, '.');
-    const num = parseFloat(last.replace(/[^\d.\-]/g, ''));
-    if (!isNaN(num) && num > 0 && /^[\d.,]+$/.test(wide[wide.length - 1].replace(/\s/g, ''))) {
-      let nameParts = wide.slice(0, -1);
-      if (/^(pack|pcs|ekor|kg|box|unit|pail)$/i.test(nameParts[nameParts.length - 1] || '')) {
-        nameParts = nameParts.slice(0, -1);
+  const last = numMatches[numMatches.length - 1];
+  const qty = normalizeQty(parseFloat(last[1].replace(',', '.')));
+  if (!(qty > 0)) return null;
+
+  let namePart = withoutParen.slice(0, last.index).trim();
+  namePart = namePart.replace(/\b(?:pack|pcs|ekor|kg|box|pail|unit|liter|porsi|frozen|chilled)\s*$/i, '').trim();
+  let name = cleanName(namePart);
+  if (!name || name.length < 2) return null;
+  if (UNIT_ONLY_RE.test(name)) return null;
+
+  return { name, qty };
+}
+
+/**
+ * Merge broken multi-line PDF rows: name on one line, "Pail FROZEN 2.00 2.00" on next.
+ */
+export function parseLinesFromText(text) {
+  if (!text) return [];
+  const raw = String(text)
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean);
+
+  const merged = [];
+  for (let i = 0; i < raw.length; i++) {
+    let line = raw[i];
+    if (HEADER_RE.test(line)) continue;
+    if (/^[\d.\s,]+$/.test(line)) continue;
+
+    const hasQty = /\b\d+(?:[.,]\d+)?\b/.test(line);
+    const next = raw[i + 1] || '';
+    const nextLooksLikeQtyRow =
+      next &&
+      /^(pack|pcs|pail|ekor|kg|box|unit|frozen|chilled)/i.test(next) &&
+      /\d+(?:[.,]\d+)?/.test(next);
+
+    if (!hasQty && nextLooksLikeQtyRow) {
+      line = `${line} ${next}`;
+      i += 1;
+    } else if (hasQty === false && next && /\b\d+(?:[.,]\d+)?\b/.test(next) && !HEADER_RE.test(next)) {
+      const nextParsed = parseLine(next);
+      if (nextParsed && cleanName(next).length < 8) {
+        line = `${line} ${next}`;
+        i += 1;
       }
-      return { name: nameParts.join(' ').trim(), qty: num };
     }
-  }
 
-  const unitQty = clean.match(
-    /^(.+?)\s+(?:pack|pcs|ekor|kg|box|pail|unit|liter|porsi)?\s*(\d+(?:[.,]\d+)?)\s*$/i
-  );
-  if (unitQty) {
-    return {
-      name: unitQty[1].replace(/\b(?:pack|pcs|ekor|kg|box|pail|unit|liter|porsi)\b/gi, '').replace(/\s+/g, ' ').trim(),
-      qty: parseFloat(unitQty[2].replace(',', '.')) || 1,
-    };
-  }
+    const parsed = parseLine(line);
+    if (!parsed) continue;
+    if (/^frozen$/i.test(parsed.name)) continue;
+    if (parsed.name.length < 3) continue;
 
-  const allNums = [...clean.matchAll(/\b(\d+(?:[.,]\d+)?)\b/g)];
-  if (allNums.length) {
-    const last = allNums[allNums.length - 1];
-    const qty = parseFloat(last[1].replace(',', '.')) || 1;
-    const name = (clean.slice(0, last.index) + clean.slice(last.index + last[0].length))
-      .replace(/\b(?:pack|pcs|ekor|kg|box|pail|unit|liter|porsi)\b/gi, '')
-      .replace(/\s+/g, ' ')
-      .trim();
-    if (name) return { name, qty };
+    merged.push(line);
   }
-
-  return { name: clean, qty: 1 };
+  return merged;
 }
 
 function checkAmbiguity(name) {
@@ -141,11 +174,6 @@ function checkAmbiguity(name) {
   return null;
 }
 
-/**
- * Validate lines against master + aliases.
- * NEVER auto-guess: fuzzy multi → ambiguous; critical aliases → ambiguous.
- * Only exact/alias unique matches go to matched without user action.
- */
 export function validateItems(linesOrText, entity) {
   const lines = Array.isArray(linesOrText)
     ? linesOrText
@@ -204,7 +232,7 @@ export function validateItems(linesOrText, entity) {
         satuan: fuzzy[0].satuan,
         divisi: fuzzy[0].divisi,
         matchType: 'fuzzy',
-        warning: 'Perkiraan tunggal — konfirmasi dulu',
+        warning: 'Perkiraan tunggal \u2014 konfirmasi dulu',
         candidates: fuzzy,
         status: 'ambiguous',
       });
@@ -218,17 +246,12 @@ export function validateItems(linesOrText, entity) {
         satuan: fuzzy[0].satuan,
         divisi: fuzzy[0].divisi,
         matchType: 'fuzzy-multi',
-        warning: `${fuzzy.length} kandidat — pilih yang benar`,
+        warning: `${fuzzy.length} kandidat \u2014 pilih yang benar`,
         candidates: fuzzy.slice(0, 6),
         status: 'ambiguous',
       });
     } else {
-      unmatched.push({
-        line,
-        nameFromPdf: name,
-        qty,
-        status: 'unmatched',
-      });
+      unmatched.push({ line, nameFromPdf: name, qty, status: 'unmatched' });
     }
   }
 
@@ -283,4 +306,4 @@ export async function scanBarcodeFromVideo(videoEl) {
   return { ok: false, error: 'BarcodeDetector tidak didukung di browser ini' };
 }
 
-export { checkAmbiguity };
+export { checkAmbiguity, cleanName };
