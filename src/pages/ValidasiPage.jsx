@@ -32,7 +32,27 @@ export default function ValidasiPage() {
       setResults([]);
       return;
     }
-    setResults(validateItems(entity, rows));
+    const result = validateItems(rows, entity);
+    const flat = [
+      ...(result.matched || []).map((r) => ({
+        ...r,
+        status: 'matched',
+        nama: r.nameFromPdf,
+        namaMaster: r.nama,
+        item: r,
+      })),
+      ...(result.ambiguous || []).map((r) => ({
+        ...r,
+        status: 'ambiguous',
+        nama: r.nameFromPdf,
+      })),
+      ...(result.unmatched || []).map((r) => ({
+        ...r,
+        status: 'unmatched',
+        nama: r.nameFromPdf,
+      })),
+    ];
+    setResults(flat);
     setError('');
   }, [entity]);
 
@@ -238,11 +258,11 @@ export default function ValidasiPage() {
               {r.status === 'matched' ? <CheckCircle2 className="w-4 h-4 text-emerald-500 mt-0.5 shrink-0" /> : r.status === 'ambiguous' ? <AlertTriangle className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" /> : <XCircle className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />}
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-gray-800 truncate">{r.nama}</p>
-                <p className="text-[11px] text-gray-400">Qty {r.qty} · {r.raw}</p>
+                <p className="text-[11px] text-gray-400">Qty {r.qty} · {r.raw || r.line || ''}</p>
                 {r.status === 'matched' && <p className="text-[11px] text-emerald-700 mt-0.5">→ {r.kode} · {r.namaMaster} ({r.satuan}) · {r.matchType}</p>}
                 {r.status === 'ambiguous' && (
                   <div className="mt-1.5 space-y-1">
-                    <p className="text-[10px] text-amber-700">Pilih yang benar:</p>
+                    <p className="text-[10px] text-amber-700">Pilih yang benar (tidak menebak):</p>
                     {(r.candidates || []).map((c) => (
                       <button key={c.kode} onClick={() => pickCandidate(idx, c)} className="block w-full text-left text-xs px-2 py-1.5 rounded-lg bg-amber-50 text-gray-700">{c.kode} — {c.nama}</button>
                     ))}
@@ -256,12 +276,15 @@ export default function ValidasiPage() {
         ))}
       </div>
 
-      {summary.matched > 0 && (
+      {summary.matched > 0 && summary.ambiguous === 0 && (
         <button onClick={sendAsKeluar} disabled={submitting}
           className="w-full py-3 rounded-xl bg-gradient-to-r from-orange-500 to-red-500 text-white text-sm font-bold flex items-center justify-center gap-2 shadow-lg disabled:opacity-60">
           {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
           Kirim {summary.matched} item sebagai Barang Keluar ({entity})
         </button>
+      )}
+      {summary.matched > 0 && summary.ambiguous > 0 && (
+        <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">Selesaikan item Ambigu terlebih dahulu sebelum kirim.</p>
       )}
 
       {submitMsg && (
