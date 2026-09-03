@@ -1,4 +1,4 @@
-// Master data 189 items + Alias-based search
+ // Master data 189 items + Alias-based search
 import aliasConfig from './alias-config.json';
 
 const MASTER_CV = [
