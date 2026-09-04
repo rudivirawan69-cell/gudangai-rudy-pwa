@@ -90,7 +90,6 @@ function formatTglHeader() {
 /** TSV kolom B–I (mulai baris 6 sheet purchase order). */
 function buildSheetTSV(items) {
   const tgl = formatTglKedatangan();
-  // Gabung by nama: satu baris bisa punya PO CV + PO PT
   const map = new Map();
   items.forEach((it) => {
     const key = String(it.nama || it.kode).trim().toLowerCase();
@@ -108,8 +107,6 @@ function buildSheetTSV(items) {
     else row.poPT += Number(it.qty) || 0;
   });
   const rows = Array.from(map.values()).filter((r) => r.poCV + r.poPT > 0);
-  // Header opsional untuk paste manual — data saja cocok B6:I
-  // B=NO C=NAMA D=SIZE E=SATUAN F=PO CV G=PO PT H=TOTAL I=TGL
   return rows
     .map((r, idx) => {
       const total = r.poCV + r.poPT;
@@ -175,7 +172,7 @@ function ItemCard({ item, onUpdate, onRemove, editable }) {
 export default function POPage() {
   const stockCV = useStock('CV');
   const stockPT = useStock('PT');
-  const [tab, setTab] = useState('cs'); // cs | produksi
+  const [tab, setTab] = useState('cs');
   const [csItems, setCsItems] = useState([]);
   const [prodItems, setProdItems] = useState([]);
   const [csGenerated, setCsGenerated] = useState(false);
@@ -260,65 +257,66 @@ export default function POPage() {
         2 jalur: <b>PO CS</b> (beli cold storage) · <b>PO Produksi</b> (prioritas proses)
       </p>
 
-      {/* Tabs 2 kolom */}
-      <div className="grid grid-cols-2 gap-2 mb-3">
-        <button
-          type="button"
-          onClick={() => setTab('cs')}
-          className={`rounded-xl px-3 py-3 flex items-center gap-2 border-2 transition-all ${
-            tab === 'cs'
-              ? 'border-cyan-500 bg-cyan-50 shadow-sm'
-              : 'border-gray-100 bg-white'
-          }`}
-        >
-          <Snowflake className={`w-5 h-5 ${tab === 'cs' ? 'text-cyan-600' : 'text-gray-400'}`} />
-          <div className="text-left min-w-0">
-            <p className={`text-xs font-bold ${tab === 'cs' ? 'text-cyan-800' : 'text-gray-700'}`}>PO CS</p>
-            <p className="text-[9px] text-gray-400 truncate">Cold Storage · ke sheet PO</p>
-          </div>
-        </button>
-        <button
-          type="button"
-          onClick={() => setTab('produksi')}
-          className={`rounded-xl px-3 py-3 flex items-center gap-2 border-2 transition-all ${
-            tab === 'produksi'
-              ? 'border-orange-500 bg-orange-50 shadow-sm'
-              : 'border-gray-100 bg-white'
-          }`}
-        >
-          <ChefHat className={`w-5 h-5 ${tab === 'produksi' ? 'text-orange-600' : 'text-gray-400'}`} />
-          <div className="text-left min-w-0">
-            <p className={`text-xs font-bold ${tab === 'produksi' ? 'text-orange-800' : 'text-gray-700'}`}>PO Produksi</p>
-            <p className="text-[9px] text-gray-400 truncate">Prioritas proses dapur</p>
-          </div>
-        </button>
-      </div>
-
-      {/* Summary card */}
-      <div className={`rounded-2xl p-4 mb-3 text-white bg-gradient-to-br ${
-        tab === 'cs' ? 'from-cyan-700 to-[#0b2a55]' : 'from-orange-600 to-amber-800'
-      }`}>
-        <div className="flex items-center gap-3 mb-3">
-          <ShoppingCart className="w-6 h-6 text-white/90" />
-          <div>
-            <p className="text-sm font-bold">
-              {tab === 'cs' ? 'Rekomendasi PO · Divisi CS' : 'Prioritas · Team Produksi'}
-            </p>
-            <p className="text-[11px] text-white/70">
-              {tab === 'cs'
-                ? 'Stok kritis CS → generate ke purchase order'
-                : 'Item non-CS / non-rekanan yang harus diproses dulu'}
-            </p>
-          </div>
+      {/* Sticky header: tabs + rekomendasi PO */}
+      <div className="sticky top-0 z-20 -mx-0.5 px-0.5 pt-0.5 pb-3 mb-1 bg-slate-100/95 backdrop-blur-md">
+        <div className="grid grid-cols-2 gap-2 mb-2.5">
+          <button
+            type="button"
+            onClick={() => setTab('cs')}
+            className={`rounded-xl px-3 py-3 flex items-center gap-2 border-2 transition-all ${
+              tab === 'cs'
+                ? 'border-cyan-500 bg-cyan-50 shadow-sm'
+                : 'border-gray-100 bg-white'
+            }`}
+          >
+            <Snowflake className={`w-5 h-5 ${tab === 'cs' ? 'text-cyan-600' : 'text-gray-400'}`} />
+            <div className="text-left min-w-0">
+              <p className={`text-xs font-bold ${tab === 'cs' ? 'text-cyan-800' : 'text-gray-700'}`}>PO CS</p>
+              <p className="text-[9px] text-gray-400 truncate">Cold Storage · ke sheet PO</p>
+            </div>
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab('produksi')}
+            className={`rounded-xl px-3 py-3 flex items-center gap-2 border-2 transition-all ${
+              tab === 'produksi'
+                ? 'border-orange-500 bg-orange-50 shadow-sm'
+                : 'border-gray-100 bg-white'
+            }`}
+          >
+            <ChefHat className={`w-5 h-5 ${tab === 'produksi' ? 'text-orange-600' : 'text-gray-400'}`} />
+            <div className="text-left min-w-0">
+              <p className={`text-xs font-bold ${tab === 'produksi' ? 'text-orange-800' : 'text-gray-700'}`}>PO Produksi</p>
+              <p className="text-[9px] text-gray-400 truncate">Prioritas proses dapur</p>
+            </div>
+          </button>
         </div>
-        <div className="flex gap-4">
-          <div className="flex-1">
-            <p className="text-white/50 text-[10px] uppercase">Item Kritis</p>
-            <p className="text-2xl font-bold">{loading ? '…' : activeList.length}</p>
+
+        <div className={`rounded-2xl p-4 text-white bg-gradient-to-br shadow-lg ${
+          tab === 'cs' ? 'from-cyan-700 to-[#0b2a55]' : 'from-orange-600 to-amber-800'
+        }`}>
+          <div className="flex items-center gap-3 mb-3">
+            <ShoppingCart className="w-6 h-6 text-white/90" />
+            <div>
+              <p className="text-sm font-bold">
+                {tab === 'cs' ? 'Rekomendasi PO · Divisi CS' : 'Prioritas · Team Produksi'}
+              </p>
+              <p className="text-[11px] text-white/70">
+                {tab === 'cs'
+                  ? 'Stok kritis CS → generate ke purchase order'
+                  : 'Item non-CS / non-rekanan yang harus diproses dulu'}
+              </p>
+            </div>
           </div>
-          <div className="flex-1">
-            <p className="text-white/50 text-[10px] uppercase">Total Kurang</p>
-            <p className="text-2xl font-bold">{loading ? '…' : totalKurang.toLocaleString('id-ID')}</p>
+          <div className="flex gap-4">
+            <div className="flex-1">
+              <p className="text-white/50 text-[10px] uppercase">Item Kritis</p>
+              <p className="text-2xl font-bold">{loading ? '…' : activeList.length}</p>
+            </div>
+            <div className="flex-1">
+              <p className="text-white/50 text-[10px] uppercase">Total Kurang</p>
+              <p className="text-2xl font-bold">{loading ? '…' : totalKurang.toLocaleString('id-ID')}</p>
+            </div>
           </div>
         </div>
       </div>
@@ -362,7 +360,6 @@ export default function POPage() {
         </>
       )}
 
-      {/* Sticky bottom actions — selalu terlihat di atas nav */}
       <div className="fixed bottom-[4.25rem] left-0 right-0 z-40 px-3 pointer-events-none">
         <div className="max-w-lg mx-auto pointer-events-auto space-y-2">
           {!generated ? (
