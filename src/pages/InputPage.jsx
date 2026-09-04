@@ -108,21 +108,38 @@ export default function InputPage() {
       const ambCount = validation.ambiguous?.length || 0;
       const unCount = validation.unmatched?.length || 0;
 
+      // Auto-add matched yang bersih (tanpa ambigu)
       if (matchedCount > 0 && ambCount === 0) {
-        mergeMatchedIntoCart((validation.matched || []).map((r) => ({ ...r, namaMaster: r.nama, kode: r.kode, satuan: r.satuan, qty: r.qty })));
-        setPdfResults([]);
-        setPdfInfo({ method, rowCount: rows.length, autoAdded: matchedCount, unmatched: unCount });
-        setError(unCount > 0
-          ? `${matchedCount} item masuk keranjang. ${unCount} tidak cocok diabaikan.`
-          : `${matchedCount} item cocok — langsung masuk keranjang.`);
+        mergeMatchedIntoCart((validation.matched || []).map((r) => ({
+          ...r, namaMaster: r.nama, kode: r.kode, satuan: r.satuan, qty: r.qty,
+        })));
+      }
+
+      // Sisakan ambigu + unmatched untuk review manual (tampil seperti keranjang)
+      const needReview = [
+        ...(validation.ambiguous || []).map((r) => ({ ...r, status: 'ambiguous', nama: r.nameFromPdf })),
+        ...(validation.unmatched || []).map((r) => ({ ...r, status: 'unmatched', nama: r.nameFromPdf })),
+      ];
+      // Jika masih ada ambigu, tampilkan juga matched agar user bisa konfirmasi
+      const reviewList = ambCount > 0 ? flat : needReview;
+
+      setPdfResults(reviewList);
+      setPdfInfo({
+        method,
+        rowCount: rows.length,
+        autoAdded: (matchedCount > 0 && ambCount === 0) ? matchedCount : 0,
+        unmatched: unCount,
+        ambiguous: ambCount,
+      });
+
+      if (matchedCount > 0 && ambCount === 0 && unCount === 0) {
+        setError(`${matchedCount} item cocok — langsung masuk keranjang.`);
+      } else if (matchedCount > 0 && ambCount === 0 && unCount > 0) {
+        setError(`${matchedCount} item masuk keranjang. ${unCount} perlu direvisi manual / diabaikan.`);
+      } else if (ambCount > 0) {
+        setError(`${matchedCount} cocok, ${ambCount} ambigu, ${unCount} tidak cocok — pilih atau abaikan.`);
       } else {
-        setPdfResults(flat);
-        setPdfInfo({ method, rowCount: rows.length, autoAdded: 0, unmatched: unCount, ambiguous: ambCount });
-        setError(ambCount > 0
-          ? `${matchedCount} cocok, ${ambCount} ambigu — pilih yang benar.`
-          : matchedCount === 0
-            ? 'Tidak ada item yang cocok dengan master. Periksa alias atau pilih manual.'
-            : '');
+        setError('Tidak ada item yang cocok. Cari manual di bawah atau abaikan.');
       }
     } catch (err) {
       setError(err.message || 'Gagal membaca file');
@@ -136,7 +153,17 @@ export default function InputPage() {
     setPdfResults((prev) => prev.map((r, i) => i === idx ? {
       ...r, status: 'matched', matchType: 'manual', item,
       kode: item.kode, namaMaster: item.nama, satuan: item.satuan, candidates: undefined,
+      searchQ: undefined, searchHits: undefined,
     } : r));
+  };
+
+  const skipReviewItem = (idx) => {
+    setPdfResults((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const onReviewSearch = (idx, q) => {
+    const hits = q.length >= 1 ? searchMaster(entity, q).slice(0, 6) : [];
+    setPdfResults((prev) => prev.map((r, i) => i === idx ? { ...r, searchQ: q, searchHits: hits } : r));
   };
 
   const addReviewedToCart = () => {
@@ -256,7 +283,7 @@ export default function InputPage() {
             <div className={`text-xs px-3 py-2 rounded-lg border ${
               /masuk keranjang|langsung masuk/i.test(error)
                 ? 'bg-emerald-50 text-emerald-800 border-emerald-100'
-                : /ambigu|tidak cocok|tidak ada/i.test(error)
+                : /ambigu|tidak cocok|tidak ada|revisi|pilih/i.test(error)
                   ? 'bg-amber-50 text-amber-800 border-amber-100'
                   : 'bg-slate-50 text-slate-700 border-slate-100'
             }`}>{error}</div>
@@ -265,12 +292,15 @@ export default function InputPage() {
           {pdfInfo && pdfInfo.autoAdded > 0 && pdfResults.length === 0 && (
             <div className="rounded-xl bg-emerald-50 border border-emerald-100 px-3 py-2.5 flex items-center gap-2 text-sm text-emerald-800">
               <CheckCircle2 className="w-4 h-4 shrink-0" />
-              <span><strong>{pdfInfo.autoAdded}</strong> item dari PDF masuk keranjang{pdfInfo.unmatched > 0 ? ` · ${pdfInfo.unmatched} diabaikan` : ''}</span>
+              <span><strong>{pdfInfo.autoAdded}</strong> item dari PDF masuk keranjang</span>
             </div>
           )}
 
           {pdfResults.length > 0 && (
             <div className="space-y-3">
+              <div className="rounded-xl bg-amber-50 border border-amber-100 px-3 py-2 text-xs text-amber-800">
+                Review item yang perlu diperbaiki. Cocok otomatis sudah di keranjang.
+              </div>
               <div className="grid grid-cols-3 gap-2">
                 <div className="rounded-xl bg-emerald-50 border border-emerald-100 p-3 text-center">
                   <p className="text-lg font-bold text-emerald-600">{pdfSummary.matched}</p>
@@ -310,6 +340,27 @@ export default function InputPage() {
                                 {c.kode} — {c.nama}
                               </button>
                             ))}
+                            <button type="button" onClick={() => skipReviewItem(idx)}
+                              className="text-[10px] text-gray-400 underline mt-1">Abaikan item ini</button>
+                          </div>
+                        )}
+                        {r.status === 'unmatched' && (
+                          <div className="mt-1.5 space-y-1.5">
+                            <p className="text-[10px] text-red-600">Tidak cocok — cari di master atau abaikan:</p>
+                            <input
+                              value={r.searchQ || ''}
+                              onChange={(e) => onReviewSearch(idx, e.target.value)}
+                              placeholder="Cari nama / kode master..."
+                              className="w-full px-2 py-1.5 text-xs bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:border-cyan-400"
+                            />
+                            {(r.searchHits || []).map((c) => (
+                              <button key={c.kode} type="button" onClick={() => pickCandidate(idx, c)}
+                                className="block w-full text-left text-xs px-2 py-1.5 rounded-lg bg-emerald-50 text-gray-700">
+                                {c.kode} — {c.nama}
+                              </button>
+                            ))}
+                            <button type="button" onClick={() => skipReviewItem(idx)}
+                              className="text-[10px] text-gray-400 underline">Abaikan item ini</button>
                           </div>
                         )}
                       </div>
@@ -326,10 +377,23 @@ export default function InputPage() {
               )}
               {pdfSummary.ambiguous > 0 && (
                 <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
-                  Selesaikan item Ambigu terlebih dahulu sebelum tambah ke keranjang.
+                  Selesaikan item Ambigu (pilih kandidat) atau abaikan, lalu tambah ke keranjang.
                 </p>
               )}
-              <button type="button" onClick={dismissPdfSheet} className="w-full py-2 text-xs text-gray-500">Tutup</button>
+              <div className="flex gap-2">
+                <button type="button" onClick={() => {
+                  const matched = pdfResults.filter((r) => r.status === 'matched');
+                  if (matched.length) {
+                    mergeMatchedIntoCart(matched.map((r) => ({
+                      ...r, namaMaster: r.namaMaster || r.nama, kode: r.kode, satuan: r.satuan, qty: r.qty || 1,
+                    })));
+                  }
+                  setPdfResults([]);
+                  setError(matched.length ? `${matched.length} item ditambahkan, sisanya diabaikan.` : 'Review ditutup.');
+                }} className="flex-1 py-2.5 rounded-xl bg-white border border-gray-200 text-xs font-medium text-gray-600">
+                  Abaikan sisa & tutup
+                </button>
+              </div>
             </div>
           )}
         </div>
