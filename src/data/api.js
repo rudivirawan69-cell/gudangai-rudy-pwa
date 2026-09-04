@@ -2,7 +2,7 @@
  * GudangAI RUDY — API layer for Backend V6.4.4+OUTBOX
  * Protocol:
  *  - Auth: body/query field `secret` = Script Properties API_SECRET
- *  - Write: POST action=addTransaction
+ *  - Write: POST action=addTransaction | addTransactionBatch
  *  - Stock: GET action=getAllStock (prefer GET di mobile)
  *  - Health: GET action=status
  */
@@ -49,12 +49,17 @@ function deviceId() {
   return id;
 }
 
+let _idSeq = 0;
 function newIds() {
-  const uuid = crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(16).slice(2);
+  _idSeq += 1;
+  const uuid = crypto.randomUUID
+    ? crypto.randomUUID()
+    : (Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
+  const stamp = Date.now().toString(36) + '-' + _idSeq.toString(36);
   return {
-    requestId: 'REQ-' + uuid,
-    transactionId: 'TX-RUDY-' + uuid,
-    nonce: 'NC-' + uuid,
+    requestId: 'REQ-' + uuid + '-' + stamp,
+    transactionId: 'TX-RUDY-' + uuid + '-' + stamp,
+    nonce: 'NC-' + uuid + '-' + stamp,
   };
 }
 
@@ -133,7 +138,6 @@ export async function healthCheck() {
   try {
     let data = null;
     let lastErr = null;
-    // GET dulu (lebih stabil di mobile)
     try {
       data = await getJson('status');
     } catch (e) {
@@ -257,7 +261,7 @@ const SHEET_MAP = {
   barangRusak: 'Barang Rusak',
 };
 
-async function submitTransaction(action, entity, items) {
+async function submitTransaction(action, entity, items, options = {}) {
   const url = getApiUrl();
   const typeMap = { barangMasuk: 'masuk', barangKeluar: 'keluar', barangRusak: 'rusak' };
   if (!url) {
@@ -273,28 +277,30 @@ async function submitTransaction(action, entity, items) {
   const sheet = SHEET_MAP[action];
   if (!sheet) return { success: false, offline: false, error: 'Aksi tidak dikenal' };
 
-  const written = [];
-  const errors = [];
+  const tanggal = options.tanggal || '';
 
-  for (const it of items) {
-    const ids = newIds();
-    const payload = {
-      action: 'addTransaction',
-      sheet,
-      entitas: entity,
-      kodeBarang: String(it.kode || '').trim(),
-      qty: (function () {
-        const n = Number(it.qty);
-        return Number.isFinite(n) ? Math.round(n * 1000) / 1000 : 0;
-      })(),
-      keterangan: String(it.keterangan || '').trim(),
-      requestId: ids.requestId,
-      transactionId: ids.transactionId,
-      nonce: ids.nonce,
-    };
-
+  // Coba batch 1 request (cepat untuk PDF banyak item) — butuh Code.gs terbaru
+  if (items.length > 1) {
     try {
-      const data = await postJson(payload);
+      const batchIds = newIds();
+      const batchPayload = {
+        action: 'addTransactionBatch',
+        sheet,
+        entitas: entity,
+        tanggal: tanggal || undefined,
+        requestId: batchIds.requestId,
+        transactionId: batchIds.transactionId,
+        nonce: batchIds.nonce,
+        items: items.map((it) => ({
+          kodeBarang: String(it.kode || '').trim(),
+          qty: (function () {
+            const n = Number(it.qty);
+            return Number.isFinite(n) ? Math.round(n * 1000) / 1000 : 0;
+          })(),
+          keterangan: String(it.keterangan || '').trim(),
+        })),
+      };
+      const data = await postJson(batchPayload);
       if (data && data.code === 'UNAUTHORIZED') {
         return {
           success: false,
@@ -302,41 +308,104 @@ async function submitTransaction(action, entity, items) {
           error: 'Unauthorized — isi API Secret di Atur (Script Properties API_SECRET)',
         };
       }
-      if (data && (data.available || /tidak dikenal|UNKNOWN_ACTION|not found/i.test(String(data.error || '')))) {
+      if (data && (data.success === true || data.status === 'APPLIED' || data.status === 'OK')) {
         return {
-          success: false,
+          success: true,
           offline: false,
-          error: 'Backend tidak mendukung addTransaction. Deploy Code.gs v6.4.4 Web App + URL/Secret di Atur.',
+          written: data.written != null ? data.written : items.length,
+          details: data.details || [],
+          batch: true,
         };
       }
-      if (data && (data.success === true || data.status === 'APPLIED' || data.status === 'OK')) {
-        written.push({
-          kode: payload.kodeBarang,
-          qty: data.qty != null ? data.qty : payload.qty,
-          row: data.row,
-          status: data.status,
-        });
-      } else {
-        const msg = data?.error || data?.code || 'Gagal menulis transaksi';
-        errors.push(payload.kodeBarang + ': ' + msg);
+      if (!(data && (data.available || /tidak dikenal|UNKNOWN_ACTION|not found/i.test(String(data.error || ''))))) {
+        if (data && data.written > 0) {
+          return {
+            success: false,
+            offline: false,
+            written: data.written,
+            error: data.error || 'Sebagian gagal (batch)',
+            details: data.details || [],
+          };
+        }
       }
     } catch (err) {
       const msg = err.message || '';
-      const isNetwork =
-        !navigator.onLine || /Failed to fetch|NetworkError|Load failed|Timeout|HTTP 5/i.test(msg);
-      if (isNetwork) {
-        const rest = items.slice(written.length);
-        const id = enqueue(typeMap[action], entity, rest).id;
-        return {
-          success: true,
-          offline: true,
-          id,
-          written: written.length,
-          error: msg,
-        };
+      if (!navigator.onLine || /Failed to fetch|NetworkError|Load failed|Timeout|HTTP 5/i.test(msg)) {
+        const id = enqueue(typeMap[action], entity, items).id;
+        return { success: true, offline: true, id, written: 0, error: msg };
       }
-      errors.push(payload.kodeBarang + ': ' + msg);
     }
+  }
+
+  // Parallel single-item posts (concurrency 6)
+  const CONCURRENCY = 6;
+  const written = [];
+  const errors = [];
+  let idx = 0;
+
+  async function worker() {
+    while (idx < items.length) {
+      const i = idx++;
+      const it = items[i];
+      const ids = newIds();
+      const payload = {
+        action: 'addTransaction',
+        sheet,
+        entitas: entity,
+        kodeBarang: String(it.kode || '').trim(),
+        qty: (function () {
+          const n = Number(it.qty);
+          return Number.isFinite(n) ? Math.round(n * 1000) / 1000 : 0;
+        })(),
+        keterangan: String(it.keterangan || '').trim(),
+        tanggal: tanggal || undefined,
+        requestId: ids.requestId,
+        transactionId: ids.transactionId,
+        nonce: ids.nonce,
+      };
+      try {
+        const data = await postJson(payload);
+        if (data && data.code === 'UNAUTHORIZED') {
+          errors.push(payload.kodeBarang + ': Unauthorized');
+          return;
+        }
+        if (data && (data.success === true || data.status === 'APPLIED' || data.status === 'OK')) {
+          written.push({
+            kode: payload.kodeBarang,
+            qty: data.qty != null ? data.qty : payload.qty,
+            row: data.row,
+            status: data.status,
+          });
+        } else {
+          const msg = data?.error || data?.code || 'Gagal menulis transaksi';
+          errors.push(payload.kodeBarang + ': ' + msg);
+        }
+      } catch (err) {
+        const msg = err.message || '';
+        if (!navigator.onLine || /Failed to fetch|NetworkError|Load failed|Timeout|HTTP 5/i.test(msg)) {
+          const rest = items.slice(i);
+          const id = enqueue(typeMap[action], entity, rest).id;
+          errors.push('NETWORK:' + id);
+          idx = items.length;
+          return;
+        }
+        errors.push(payload.kodeBarang + ': ' + msg);
+      }
+    }
+  }
+
+  const workers = Array.from({ length: Math.min(CONCURRENCY, items.length) }, () => worker());
+  await Promise.all(workers);
+
+  const netErr = errors.find((e) => e.startsWith('NETWORK:'));
+  if (netErr) {
+    return {
+      success: true,
+      offline: true,
+      id: netErr.split(':')[1],
+      written: written.length,
+      error: 'Jaringan terputus — sisa di antrian offline',
+    };
   }
 
   if (written.length === items.length) {
@@ -354,9 +423,9 @@ async function submitTransaction(action, entity, items) {
   return { success: false, offline: false, error: errors.join('; ') || 'Gagal menulis ke backend' };
 }
 
-export const submitBarangMasuk = (entity, items) => submitTransaction('barangMasuk', entity, items);
-export const submitBarangKeluar = (entity, items) => submitTransaction('barangKeluar', entity, items);
-export const submitBarangRusak = (entity, items) => submitTransaction('barangRusak', entity, items);
+export const submitBarangMasuk = (entity, items, options) => submitTransaction('barangMasuk', entity, items, options || {});
+export const submitBarangKeluar = (entity, items, options) => submitTransaction('barangKeluar', entity, items, options || {});
+export const submitBarangRusak = (entity, items, options) => submitTransaction('barangRusak', entity, items, options || {});
 
 export function getPendingQueue() {
   return JSON.parse(localStorage.getItem('gudangai_queue') || '[]').filter((e) => !e.synced);
