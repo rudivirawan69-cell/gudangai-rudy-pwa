@@ -1,4 +1,4 @@
-const CACHE_NAME = 'gudangai-v2';
+const CACHE_NAME = 'gudangai-v3';
 const STATIC_ASSETS = ['/', '/index.html'];
 
 self.addEventListener('install', (event) => {
@@ -30,24 +30,25 @@ self.addEventListener('fetch', (event) => {
   if (isNavOrApp) {
     event.respondWith(
       fetch(event.request)
-        .then((response) => {
-          const clone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
-          return response;
+        .then((res) => {
+          const copy = res.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+          return res;
         })
-        .catch(() => caches.match(event.request))
+        .catch(() => caches.match(event.request).then((c) => c || caches.match('/index.html')))
     );
     return;
   }
 
   event.respondWith(
-    caches.match(event.request).then((cached) => {
-      if (cached) return cached;
-      return fetch(event.request).then((response) => {
-        const clone = response.clone();
-        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
-        return response;
-      });
-    })
+    caches.match(event.request).then(
+      (cached) =>
+        cached ||
+        fetch(event.request).then((res) => {
+          const copy = res.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+          return res;
+        })
+    )
   );
 });
