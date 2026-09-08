@@ -1,11 +1,12 @@
 /**
- * BACKEND GudangAI-69 V6.4.7+IDEMPOTENT
+ * BACKEND GudangAI-69 V6.4.8+SYNC
  * Anti double-write: CacheService by requestId (6 jam)
  * DEPLOY: paste → New version → Deploy (Anyone)
  */
-var SPREADSHEET_ID_FALLBACK = '1lJwqvSNZUNBO4ZH-PgVZsgd5Cf57UgCjGJIRD05IeCw';
-var VERSION = '6.4.7+IDEMPOTENT';
-var TITLE = 'BACKEND GudangAI-69 V6.4.7';
+// Spreadsheet utama Cold Storage (selaras dengan README & data operasional)
+var SPREADSHEET_ID_FALLBACK = '1YAJKGm5JHQH_eYrDMeZEorfGTHhHxu9L4t4pYp7rqww';
+var VERSION = '6.4.8+SYNC';
+var TITLE = 'BACKEND GudangAI-69 V6.4.8';
 var TZ = 'Asia/Jakarta';
 var PO_SHEET_NAMES = ['purchase order', 'Purchase Order', 'Purchase order', 'PO', 'PURCHASE ORDER'];
 var PO_DATA_START_ROW = 6;
