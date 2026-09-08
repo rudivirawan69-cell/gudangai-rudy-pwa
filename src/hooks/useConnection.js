@@ -106,19 +106,29 @@ export function useConnection({ pollMs = 90000 } = {}) {
     if (!getApiUrl()) return undefined;
     const onVis = () => {
       if (document.visibilityState === 'visible' && navigator.onLine) {
-        checkHealth({ quiet: true });
+        checkHealth({ quiet: true }).then((r) => {
+          if (r?.ok) syncQueue();
+        });
       }
     };
     document.addEventListener('visibilitychange', onVis);
     const id = setInterval(() => {
-      if (navigator.onLine) checkHealth({ quiet: true });
-    }, pollMs);
-    if (navigator.onLine) checkHealth({ quiet: false });
+      if (navigator.onLine) {
+        checkHealth({ quiet: true }).then((r) => {
+          if (r?.ok) syncQueue();
+        });
+      }
+    }, Math.min(pollMs, 45000));
+    if (navigator.onLine) {
+      checkHealth({ quiet: false }).then((r) => {
+        if (r?.ok) syncQueue();
+      });
+    }
     return () => {
       document.removeEventListener('visibilitychange', onVis);
       clearInterval(id);
     };
-  }, [pollMs, checkHealth]);
+  }, [pollMs, checkHealth, syncQueue]);
 
   const status =
     !getApiUrl()
