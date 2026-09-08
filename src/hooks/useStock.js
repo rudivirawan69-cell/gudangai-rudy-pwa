@@ -3,7 +3,7 @@ import { fetchStock } from '../data/api';
 
 /**
  * Stok live — stabil: jangan kosongkan list saat error singkat.
- * Refresh jarang (90s) agar tidak terasa putus-putus.
+ * Refresh lebih sering + paksa refresh setelah transaksi berhasil.
  */
 export function useStock(entity) {
   const [items, setItems] = useState([]);
@@ -51,25 +51,47 @@ export function useStock(entity) {
   useEffect(() => {
     const onVis = () => {
       if (document.visibilityState === 'visible' && navigator.onLine) {
-        refresh({ force: false });
+        refresh({ force: true });
       }
     };
+    // Poll lebih sering (45 detik) agar mendekati real-time tanpa membebani
     const id = setInterval(() => {
       if (navigator.onLine) refresh({ force: false });
-    }, 90000);
+    }, 45000);
+
+    // Paksa refresh segera setelah transaksi / sync antrian
+    const onStockRefresh = () => {
+      refresh({ force: true });
+    };
+    window.addEventListener('gudangai-stock-refresh', onStockRefresh);
     document.addEventListener('visibilitychange', onVis);
     window.addEventListener('online', () => refresh({ force: true }));
+
     return () => {
       clearInterval(id);
       document.removeEventListener('visibilitychange', onVis);
+      window.removeEventListener('gudangai-stock-refresh', onStockRefresh);
     };
   }, [refresh]);
 
   const getStats = useCallback(() => {
     const total = items.length;
-    const safe = items.filter((i) => i.stok > 20).length;
-    const warning = items.filter((i) => i.stok > 5 && i.stok <= 20).length;
-    const danger = items.filter((i) => i.stok > 0 && i.stok <= 5).length;
+    // Gunakan stockAman bila tersedia; fallback ke ambang tetap
+    const safe = items.filter((i) => {
+      const aman = Number(i.stockAman) || 0;
+      if (aman > 0) return i.stok >= aman;
+      return i.stok > 20;
+    }).length;
+    const warning = items.filter((i) => {
+      const aman = Number(i.stockAman) || 0;
+      if (aman > 0) return i.stok > 0 && i.stok < aman && i.stok > Math.max(5, Math.floor(aman * 0.25));
+      return i.stok > 5 && i.stok <= 20;
+    }).length;
+    const danger = items.filter((i) => {
+      const aman = Number(i.stockAman) || 0;
+      if (aman > 0) return i.stok > 0 && i.stok <= Math.max(5, Math.floor(aman * 0.25));
+      return i.stok > 0 && i.stok <= 5;
+    }).length;
     const zero = items.filter((i) => i.stok === 0).length;
     const totalStok = items.reduce((s, i) => s + (i.stok || 0), 0);
     return { total, safe, warning, danger, zero, totalStok };
