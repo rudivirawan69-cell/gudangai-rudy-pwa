@@ -2,6 +2,10 @@
 
 Dashboard stok & operasional Cold Storage Nasi Goreng 69.
 
+**Production URL:** https://gudangai-rudy-pwa-k9b7.vercel.app/
+
+**Version:** 0.1.1 (frontend) · Backend Code.gs V6.4.8+SYNC
+
 ## Setup Lokal
 
 ```bash
@@ -30,10 +34,16 @@ Spreadsheet ID yang digunakan: `1YAJKGm5JHQH_eYrDMeZEorfGTHhHxu9L4t4pYp7rqww`
 - Antrian offline disinkronkan lebih agresif saat online / tab aktif.
 - Status Aman / Menipis / Kritis mengikuti kolom Stock Aman dari spreadsheet bila tersedia.
 - Fallback demo acak hanya dipakai jika URL API belum diatur atau perangkat benar-benar offline.
+- Health check stabil (GET status + fallback POST).
+- Idempotensi requestId di backend mencegah double-write.
+
+## Ikon PWA
+
+Ikon di-manifest mengarah ke raw GitHub (icon-192.png & icon-512.png) agar selalu tersedia. Untuk same-origin permanen, salin kedua file ke folder `public/` pada deploy berikutnya.
 
 ## Vercel
 
-Project sudah disiapkan. Setelah semua file ter-push, hubungkan repo di Vercel Dashboard jika belum otomatis.
+Project terhubung ke repositori ini. Setiap push ke `main` memicu production deploy.
 
 ## Default Login
 
