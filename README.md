@@ -48,3 +48,4 @@ Project terhubung ke repositori ini. Setiap push ke `main` memicu production dep
 ## Default Login
 
 PIN: `6969`
+koneksi kan dengan OPENAI_API_KEY
