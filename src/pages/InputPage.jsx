@@ -6,11 +6,11 @@ import {
   QrCode, Bell, Camera, X,
 } from 'lucide-react';
 import {
-  extractTextFromPdf, parseLinesFromText, validateItems,
+  extractTextFromPdf, parseLinesFromText, validateItems, applyStockAwareFallback,
   detectEntityFromText, scanBarcodeFromVideo,
 } from '../data/pdfValidate';
 import {
-  submitBarangMasuk, submitBarangKeluar, submitBarangRusak,
+  submitBarangMasuk, submitBarangKeluar, submitBarangRusak, fetchStock,
   saveToHistory,
   pushNotification, getNotifications, markNotificationsRead, unreadNotificationCount,
 } from '../data/api';
@@ -29,6 +29,8 @@ export default function InputPage() {
   const [busy, setBusy] = useState(false);
   const [statusBanner, setStatusBanner] = useState('');
   const [accuracy, setAccuracy] = useState(null);
+  const [validationRows, setValidationRows] = useState([]);
+  const [pendingManualRow, setPendingManualRow] = useState(null);
   const [cart, setCart] = useState([]);
   const [submitting, setSubmitting] = useState(false);
   const [tanggal, setTanggal] = useState(() => new Date().toISOString().slice(0, 10));
@@ -61,6 +63,13 @@ export default function InputPage() {
   };
 
   const addToCart = (item, qty = 1) => {
+    if (pendingManualRow) {
+      resolveValidationRow(pendingManualRow, item);
+      setPendingManualRow(null);
+      setQuery('');
+      setHits([]);
+      return;
+    }
     setCart((prev) => {
       const i = prev.findIndex((c) => c.kode === item.kode);
       if (i >= 0) {
@@ -84,11 +93,21 @@ export default function InputPage() {
         const satuan = it.satuan || it.item?.satuan;
         const idx = next.findIndex((c) => c.kode === kode);
         if (idx >= 0) next[idx] = { ...next[idx], qty: +(next[idx].qty + qty).toFixed(2) };
-        else next.push({ kode, nama, satuan, qty, keterangan: '' });
+        else next.push({ kode, nama, satuan, qty, keterangan: it.keterangan || '' });
       }
       return next;
     });
   }, []);
+
+  const resolveValidationRow = (row, item) => {
+    if (!item) return;
+    mergeMatchedIntoCart([{ kode: item.kode, nama: item.nama, satuan: item.satuan, qty: row.qty, keterangan: `Validasi manual: ${row.nameFromPdf}` }]);
+    setValidationRows((prev) => prev.map((x) => x.key === row.key ? { ...x, status: 'MATCH_MANUAL', kode: item.kode, nama: item.nama, candidates: [] } : x));
+    setAccuracy((prev) => {
+      if (!prev || row.status === 'MATCH_MANUAL') return prev;
+      return { ...prev, pct: Math.round(((prev.matched + 1) / prev.total) * 100), matched: prev.matched + 1, skipped: Math.max(0, prev.skipped - 1) };
+    });
+  };
 
   const updateQty = (idx, delta) => {
     setCart((prev) => prev.map((c, i) => (i === idx ? { ...c, qty: Math.max(0.01, +(c.qty + delta).toFixed(2)) } : c)));
@@ -187,20 +206,26 @@ export default function InputPage() {
         return;
       }
       const validation = validateItems(rows, useEntity);
-      const matched = validation.matched || [];
+      const stock = await fetchStock(useEntity, { allowDemo: false });
+      const matched = applyStockAwareFallback(validation.matched || [], useEntity, stock);
       const amb = validation.ambiguous || [];
       const un = validation.unmatched || [];
       const total = matched.length + amb.length + un.length;
       const acc = total ? Math.round((matched.length / total) * 100) : 0;
       setAccuracy({ pct: acc, matched: matched.length, skipped: un.length + amb.length, total });
+      setValidationRows([
+        ...matched.map((r, i) => ({ key: `m-${i}-${r.kode}`, nameFromPdf: r.nameFromPdf, qty: r.qty, status: r.fallback ? 'FALLBACK' : 'MATCH', kode: r.kode, nama: r.nama, candidates: [], note: r.fallback || '' })),
+        ...amb.map((r, i) => ({ key: `a-${i}-${r.nameFromPdf}`, nameFromPdf: r.nameFromPdf, qty: r.qty, status: 'AMBIGU', kode: r.kode || '', nama: r.nama || '', candidates: r.candidates || [], note: r.warning || 'Pilih master yang benar.' })),
+        ...un.map((r, i) => ({ key: `u-${i}-${r.nameFromPdf}`, nameFromPdf: r.nameFromPdf, qty: r.qty, status: 'TIDAK DITEMUKAN', kode: '', nama: '', candidates: searchMaster(useEntity, r.nameFromPdf).slice(0, 4), note: 'Validasi manual diperlukan.' })),
+      ]);
       if (matched.length) {
         mergeMatchedIntoCart(matched.map((r) => ({
-          kode: r.kode, namaMaster: r.nama, nama: r.nama, satuan: r.satuan, qty: r.qty,
+          kode: r.kode, namaMaster: r.nama, nama: r.nama, satuan: r.satuan, qty: r.qty, keterangan: r.fallback || '',
         })));
       }
       setStatusBanner(
         matched.length
-          ? ('Validasi ' + acc + '% · ' + matched.length + ' item masuk keranjang' + ((un.length || amb.length) ? (' · ' + (un.length + amb.length) + ' dilewati') : ''))
+          ? ('Validasi ' + acc + '% · ' + matched.length + ' item masuk keranjang' + ((un.length || amb.length) ? (' · ' + (un.length + amb.length) + ' menunggu validasi manual') : ''))
           : 'Tidak ada nama yang cocok di master/alias.'
       );
     } catch (err) {
@@ -333,6 +358,21 @@ export default function InputPage() {
         <div className="rounded-2xl bg-white border border-slate-100 px-3 py-2.5 text-[12px] text-slate-600">
           Akurasi validasi <b className="text-violet-700">{accuracy.pct}%</b> · cocok {accuracy.matched}/{accuracy.total}
           {accuracy.skipped ? ' · dilewati ' + accuracy.skipped : ''}
+        </div>
+      )}
+      {validationRows.length > 0 && (
+        <div className="rounded-2xl bg-white border border-slate-100 p-3 space-y-2 shadow-sm">
+          <div className="flex items-center justify-between"><p className="text-[11px] font-semibold text-slate-600">Detail validasi PDF</p><span className="text-[10px] text-slate-400">Semua baris dipertahankan</span></div>
+          <div className="space-y-2 max-h-72 overflow-y-auto">
+            {validationRows.map((row) => (
+              <div key={row.key} className="rounded-xl bg-slate-50 border border-slate-100 p-2.5">
+                <div className="flex items-start justify-between gap-2"><div className="min-w-0"><p className="text-[11px] font-semibold text-slate-700 truncate">{row.nameFromPdf}</p><p className="text-[10px] text-slate-400">Qty {row.qty} · {row.kode || 'Belum ada kode'}</p></div><span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${row.status === 'MATCH' ? 'bg-emerald-100 text-emerald-700' : row.status === 'FALLBACK' ? 'bg-amber-100 text-amber-700' : row.status === 'MATCH_MANUAL' ? 'bg-teal-100 text-teal-700' : 'bg-rose-100 text-rose-700'}`}>{row.status}</span></div>
+                {row.note && <p className="text-[10px] text-amber-700 mt-1">{row.note}</p>}
+                {row.candidates?.length > 0 && <div className="flex flex-wrap gap-1.5 mt-2">{row.candidates.map((candidate) => <button key={candidate.kode} type="button" onClick={() => resolveValidationRow(row, candidate)} className="text-[10px] px-2 py-1 rounded-lg bg-white border border-teal-200 text-teal-700 font-semibold">Pilih {candidate.kode} · {candidate.nama}</button>)}</div>}
+                {row.status !== 'MATCH' && row.status !== 'FALLBACK' && row.status !== 'MATCH_MANUAL' && <button type="button" onClick={() => { setPendingManualRow(row); setQuery(row.nameFromPdf); setHits(searchMaster(entity, row.nameFromPdf).slice(0, 8)); }} className="mt-2 text-[10px] px-2 py-1 rounded-lg bg-teal-50 border border-teal-200 text-teal-700 font-semibold">Cari & validasi manual</button>}
+              </div>
+            ))}
+          </div>
         </div>
       )}
       {statusBanner && <div className="text-[11px] px-3 py-2.5 rounded-xl bg-white/90 border border-slate-100 text-slate-600">{statusBanner}</div>}

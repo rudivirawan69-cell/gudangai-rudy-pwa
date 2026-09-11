@@ -360,6 +360,68 @@ export function validateItems(rows, entity) {
   return { matched, ambiguous, unmatched };
 }
 
+function similarityTokens(a, b) {
+  const stop = new Set(['dan', 'yang', 'pcs', 'pack', 'gram', 'kg', 'promo']);
+  const left = new Set(String(a || '').toLowerCase().replace(/[^a-z0-9 ]/g, ' ').split(/\s+/).filter((x) => x.length > 2 && !stop.has(x)));
+  const right = new Set(String(b || '').toLowerCase().replace(/[^a-z0-9 ]/g, ' ').split(/\s+/).filter((x) => x.length > 2 && !stop.has(x)));
+  if (!left.size || !right.size) return 0;
+  let common = 0;
+  left.forEach((token) => { if (right.has(token)) common += 1; });
+  return common / Math.max(left.size, right.size);
+}
+
+function relatedProductGroup(name) {
+  const n = String(name || '').toLowerCase();
+  if (/daging.*slice|slice.*daging/.test(n)) return 'daging-slice';
+  if (/sosis/.test(n)) return 'sosis';
+  if (/bakso\s*ikan/.test(n)) return 'bakso-ikan';
+  return null;
+}
+
+/**
+ * When a matched item is empty, keep the source mapping explainable but choose
+ * an in-entity sibling with stock for the validation cart when one exists.
+ * No cross-entity code is ever returned. If no sibling is available, retain
+ * the original code so the backend can create a shortage HOLD rather than
+ * silently dropping the source row.
+ */
+export function applyStockAwareFallback(matched, entity, stockItems = []) {
+  const master = getMasterByEntity(entity);
+  const stockByCode = new Map((stockItems || []).filter((x) => x?.kode).map((x) => [x.kode, Number(x.stok) || 0]));
+  const groups = new Map();
+  master.forEach((item) => {
+    const group = relatedProductGroup(item.nama);
+    if (group) groups.set(group, [...(groups.get(group) || []), item]);
+  });
+
+  return (matched || []).map((row) => {
+    const currentStock = stockByCode.get(row.kode);
+    if (currentStock == null || currentStock > 0) return { ...row, stock: currentStock, fallback: null };
+    const group = relatedProductGroup(row.nama);
+    const candidates = (groups.get(group) || [])
+      .filter((item) => item.kode !== row.kode && (stockByCode.get(item.kode) || 0) > 0)
+      .sort((a, b) => {
+        const scoreA = similarityTokens(row.nama, a.nama);
+        const scoreB = similarityTokens(row.nama, b.nama);
+        return scoreB - scoreA || (stockByCode.get(b.kode) || 0) - (stockByCode.get(a.kode) || 0);
+      });
+    const alternative = candidates[0];
+    if (!alternative) return { ...row, stock: currentStock, fallback: null, shortage: true };
+    const available = stockByCode.get(alternative.kode) || 0;
+    return {
+      ...row,
+      originalKode: row.kode,
+      originalNama: row.nama,
+      kode: alternative.kode,
+      nama: alternative.nama,
+      satuan: alternative.satuan,
+      item: alternative,
+      stock: available,
+      fallback: `Stok ${row.nama} kosong; dialihkan ke ${alternative.nama} (${alternative.kode}) dalam entitas ${entity}.`,
+    };
+  });
+}
+
 function tokenOverlap(a, b) {
   const ta = new Set(a.split(/\s+/).filter((t) => t.length > 2));
   const tb = new Set(b.split(/\s+/).filter((t) => t.length > 2));

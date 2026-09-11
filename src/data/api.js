@@ -109,9 +109,10 @@ export function getConnectionStatus() {
 function mapStockItem(it, entity) {
   return { kode: it.kode, nama: it.nama || '', satuan: it.satuan || '', divisi: it.divisi || '', stok: Number(it.stockAkhir != null ? it.stockAkhir : it.stok) || 0, stockAman: Number(it.stockAman != null ? it.stockAman : it.aman) || 0, lastUpdate: new Date().toISOString(), entitas: it.entitas || entity };
 }
-export async function fetchStock(entity) {
+export async function fetchStock(entity, options = {}) {
+  const allowDemo = options.allowDemo !== false;
   const url = getApiUrl();
-  if (!url) { const { getMasterByEntity } = await import('./master.js'); return generateDemoStock(getMasterByEntity(entity)); }
+  if (!url) { const { getMasterByEntity } = await import('./master.js'); return allowDemo ? generateDemoStock(getMasterByEntity(entity)) : []; }
   try {
     let data;
     try { data = await getJson('getAllStock', { entitas: entity }); } catch { try { data = await postJson({ action: 'getAllStock', entitas: entity, requestId: newIds().requestId }); } catch { data = null; } }
@@ -121,7 +122,7 @@ export async function fetchStock(entity) {
   } catch (err) {
     if (/Unauthorized|API Secret|URL API/i.test(String(err.message || ''))) throw err;
     const { getMasterByEntity } = await import('./master.js');
-    return generateDemoStock(getMasterByEntity(entity));
+    return allowDemo ? generateDemoStock(getMasterByEntity(entity)) : [];
   }
 }
 export async function getStatusPO() {

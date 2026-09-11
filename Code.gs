@@ -5,7 +5,7 @@
  * DEPLOY: paste → New version → Deploy (Anyone)
  */
 var SPREADSHEET_ID_FALLBACK = '1YAJKGm5JHQH_eYrDMeZEorfGTHhHxu9L4t4pYp7rqww';
-var VERSION = '6.4.9+STATUS-PO-DASH';
+var VERSION = '6.4.10+STATUS-PO-DASH-FIX';
 var TITLE = 'BACKEND GudangAI-69 V6.4.9';
 var TZ = 'Asia/Jakarta';
 var PO_SHEET_NAMES = ['purchase order', 'Purchase Order', 'Purchase order', 'PO', 'PURCHASE ORDER'];
@@ -275,8 +275,8 @@ function updateStock_(ss, entitas, kode, qty, isKeluar, isMasuk, isRusak) {
   var newStock = current, qtyWritten = qty, adjusted = false, note = '';
   if (isMasuk) newStock = current + qty;
   else if (isKeluar || isRusak) {
-    if (current <= 0) { qtyWritten = 0; newStock = 0; adjusted = true; note = '(STOK HABIS)'; }
-    else if (qty > current) { qtyWritten = current; newStock = 0; adjusted = true; note = '(DISESUAIKAN)'; }
+    if (current <= 0) { qtyWritten = 0; newStock = 0; adjusted = true; note = '[STOCK KURANG - HOLD] Order: ' + qty + '; stok tersedia: 0; kekurangan: ' + qty + '; Qty belum direalisasikan.'; }
+    else if (qty > current) { qtyWritten = 0; newStock = current; adjusted = true; note = '[STOCK KURANG - HOLD] Order: ' + qty + '; stok tersedia: ' + current + '; kekurangan: ' + (qty - current) + '; Qty belum direalisasikan.'; }
     else { newStock = current - qty; qtyWritten = qty; }
   } else { newStock = Math.max(0, current - qty); qtyWritten = Math.min(qty, current); }
   sheet.getRange(targetRow, iQ + 1).setValue(newStock);
@@ -503,7 +503,7 @@ function writeStatusPOToDashboard_(ss, statusData) {
 
         var targetCol = c + 1;
         try {
-          dash.getRange(r + 1, targetCol + 1).setValue(labelMap[m].value);
+          writeAdjacentDashboardValue_(dash, r + 1, targetCol, labelMap[m].value);
           writes++;
         } catch (e) {}
       }
@@ -516,6 +516,9 @@ function writeStatusPOToDashboard_(ss, statusData) {
       }
     }
   }
+
+  var section5 = writeDashboardSection5_(dash, summary, poAktif, poKonfirmasi, poCV, poPT, itemAktif);
+  if (section5.writes > 0) writes += section5.writes;
 
   if (writes === 0) {
     try {
@@ -542,6 +545,45 @@ function writeStatusPOToDashboard_(ss, statusData) {
       itemAktif: itemAktif
     }
   };
+}
+
+function writeAdjacentDashboardValue_(dash, row, labelCol, value) {
+  var targetCol = labelCol + 1;
+  try {
+    var merged = dash.getRange(row, labelCol).getMergedRanges();
+    if (merged && merged.length) targetCol = merged[0].getLastColumn() + 1;
+    if (targetCol <= dash.getMaxColumns()) dash.getRange(row, targetCol).setValue(value);
+  } catch (e) {}
+}
+
+function writeDashboardSection5_(dash, summary, poAktif, poKonfirmasi, poCV, poPT, itemAktif) {
+  var values = dash.getDataRange().getValues();
+  var anchorRow = -1, anchorCol = -1;
+  for (var r = 0; r < values.length; r++) {
+    for (var c = 0; c < values[r].length; c++) {
+      var text = norm_(values[r][c]);
+      if (text.indexOf('status po') >= 0 || text === '5') { anchorRow = r + 1; anchorCol = c + 1; break; }
+    }
+    if (anchorRow > 0) break;
+  }
+  if (anchorRow < 0) return { writes: 0 };
+  var rows = [
+    ['Status PO', 'Aktif', poAktif, 'Konfirmasi', poKonfirmasi],
+    ['Item', 'CV', poCV, 'PT', poPT],
+    ['Status item', 'Menunggu', num_(summary.itemMenunggu), 'Sebagian', num_(summary.itemSebagian)],
+    ['Status item', 'Selesai', num_(summary.itemSelesai), 'Total item', num_(summary.totalItem)],
+    ['Sisa aktif', itemAktif, 'Terakhir sync', Utilities.formatDate(new Date(), TZ, 'dd/MM HH:mm'), '']
+  ];
+  var writes = 0;
+  for (var i = 0; i < rows.length; i++) {
+    for (var j = 0; j < rows[i].length; j++) {
+      try {
+        var col = anchorCol + j;
+        if (col <= dash.getMaxColumns()) { dash.getRange(anchorRow + i + 1, col).setValue(rows[i][j]); writes++; }
+      } catch (e) {}
+    }
+  }
+  return { writes: writes };
 }
 
 function updateDashboardStatusPO_() {
