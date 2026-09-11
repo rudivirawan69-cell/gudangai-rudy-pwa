@@ -1,16 +1,18 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import {
-  Search, FileText, Trash2, Send, Loader2,
-  CheckCircle2, XCircle, AlertTriangle, Plus, Minus,
+  Search, Trash2, Send, Loader2,
+  Plus, Minus,
   PackagePlus, PackageMinus, AlertOctagon, Mic, Upload,
+  QrCode, Bell, Camera, X,
 } from 'lucide-react';
 import {
   extractTextFromPdf, parseLinesFromText, validateItems,
-  summarizeValidation, detectEntityFromText,
+  detectEntityFromText, scanBarcodeFromVideo,
 } from '../data/pdfValidate';
 import {
   submitBarangMasuk, submitBarangKeluar, submitBarangRusak,
-  saveToHistory, fetchStock,
+  saveToHistory,
+  pushNotification, getNotifications, markNotificationsRead, unreadNotificationCount,
 } from '../data/api';
 import { searchMaster } from '../data/master';
 
@@ -23,18 +25,35 @@ const TX_TYPES = [
 export default function InputPage() {
   const [entity, setEntity] = useState('CV');
   const [txType, setTxType] = useState('keluar');
-  const [mode, setMode] = useState('manual');
+  const [mode, setMode] = useState('search');
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
+  const [statusBanner, setStatusBanner] = useState('');
+  const [accuracy, setAccuracy] = useState(null);
   const [cart, setCart] = useState([]);
   const [submitting, setSubmitting] = useState(false);
-  const [submitMsg, setSubmitMsg] = useState(null);
   const [tanggal, setTanggal] = useState(() => new Date().toISOString().slice(0, 10));
   const [query, setQuery] = useState('');
   const [hits, setHits] = useState([]);
-  const [pdfResults, setPdfResults] = useState([]);
-  const [pdfInfo, setPdfInfo] = useState(null);
+  const [listening, setListening] = useState(false);
+  const [showNotif, setShowNotif] = useState(false);
+  const [notifs, setNotifs] = useState([]);
+  const [unread, setUnread] = useState(0);
+  const [camOn, setCamOn] = useState(false);
+  const [camErr, setCamErr] = useState('');
   const fileRef = useRef(null);
+  const videoRef = useRef(null);
+  const streamRef = useRef(null);
+  const recogRef = useRef(null);
+
+  useEffect(() => {
+    const refresh = () => {
+      setNotifs(getNotifications());
+      setUnread(unreadNotificationCount());
+    };
+    refresh();
+    window.addEventListener('gudangai-notif', refresh);
+    return () => window.removeEventListener('gudangai-notif', refresh);
+  }, []);
 
   const onSearch = (q) => {
     setQuery(q);
@@ -83,220 +102,183 @@ export default function InputPage() {
   };
   const removeFromCart = (idx) => setCart((prev) => prev.filter((_, i) => i !== idx));
 
+  const stopCam = () => {
+    try { streamRef.current?.getTracks()?.forEach((t) => t.stop()); } catch (_) {}
+    streamRef.current = null;
+    setCamOn(false);
+  };
+
+  const startCam = async () => {
+    setCamErr('');
+    setMode('qr');
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+      streamRef.current = stream;
+      setCamOn(true);
+      setTimeout(() => { if (videoRef.current) videoRef.current.srcObject = stream; }, 50);
+    } catch (err) {
+      setCamErr(err.message || 'Kamera tidak tersedia');
+      setCamOn(false);
+    }
+  };
+
+  const scanOnce = async () => {
+    if (!videoRef.current) return;
+    const res = await scanBarcodeFromVideo(videoRef.current);
+    if (res.ok && res.value) {
+      const found = searchMaster(entity, res.value);
+      if (found.length) {
+        addToCart(found[0], 1);
+        setStatusBanner('QR: ' + found[0].nama + ' masuk keranjang');
+        stopCam();
+      } else {
+        setQuery(res.value);
+        onSearch(res.value);
+        setMode('search');
+        stopCam();
+      }
+    } else {
+      setCamErr(res.error || 'Tidak terdeteksi');
+    }
+  };
+
+  const startVoice = () => {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) {
+      setStatusBanner('Browser ini belum mendukung suara. Gunakan Chrome.');
+      return;
+    }
+    try { recogRef.current?.stop(); } catch (_) {}
+    const rec = new SR();
+    rec.lang = 'id-ID';
+    rec.interimResults = false;
+    rec.maxAlternatives = 1;
+    rec.onresult = (ev) => {
+      const text = ev.results?.[0]?.[0]?.transcript || '';
+      setListening(false);
+      if (!text) return;
+      setMode('search');
+      onSearch(text);
+      setStatusBanner('Suara: ' + text);
+    };
+    rec.onerror = () => { setListening(false); setStatusBanner('Suara gagal. Coba lagi.'); };
+    rec.onend = () => setListening(false);
+    recogRef.current = rec;
+    setListening(true);
+    rec.start();
+  };
+
   const onFile = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setBusy(true);
-    setError('');
-    setPdfResults([]);
-    setPdfInfo(null);
-    setSubmitMsg(null);
-    setMode('pdf');
+    setStatusBanner('');
+    setAccuracy(null);
     try {
-      const result = await extractTextFromPdf(file, (msg) => setError(msg));
+      const result = await extractTextFromPdf(file, () => {});
       const text = typeof result === 'string' ? result : (result?.text || '');
       const lines = result?.lines || [];
-      const method = result?.method || 'text';
       const detected = detectEntityFromText(text);
       const useEntity = detected || entity;
       if (detected && detected !== entity) setEntity(detected);
-
-      if (text.trim().length < 3 && !lines.length) {
-        setError('PDF kosong / OCR gagal membaca teks.');
-        return;
-      }
-
       const rows = parseLinesFromText(text, lines);
       if (!rows.length) {
-        setError('Tidak ada baris barang terdeteksi. Pastikan PDF adalah REKAP ORDER dengan kolom KETERANGAN + TOTAL.');
-        setPdfInfo({ method, rowCount: 0, autoAdded: 0 });
+        setStatusBanner('Tidak ada baris barang terdeteksi.');
         return;
       }
-
       const validation = validateItems(rows, useEntity);
-      const flat = [
-        ...(validation.matched || []).map((r) => ({ ...r, status: 'matched', nama: r.nameFromPdf, namaMaster: r.nama, item: r.item || r })),
-        ...(validation.ambiguous || []).map((r) => ({ ...r, status: 'ambiguous', nama: r.nameFromPdf })),
-        ...(validation.unmatched || []).map((r) => ({ ...r, status: 'unmatched', nama: r.nameFromPdf })),
-      ];
-
-      const matchedCount = validation.matched?.length || 0;
-      const ambCount = validation.ambiguous?.length || 0;
-      const unCount = validation.unmatched?.length || 0;
-
-      const SUBSTITUTE = { 'CV-0008': 'CV-0084', 'CV-0084': 'CV-0008' };
-      let matchedRows = validation.matched || [];
-      if (matchedRows.length && txType === 'keluar') {
-        try {
-          const stockList = await fetchStock(useEntity);
-          const byKode = Object.fromEntries((stockList || []).map((s) => [s.kode, Number(s.stok) || 0]));
-          matchedRows = matchedRows.map((r) => {
-            const st = byKode[r.kode];
-            if (st != null && st <= 0 && SUBSTITUTE[r.kode]) {
-              const alt = SUBSTITUTE[r.kode];
-              const altSt = byKode[alt];
-              if (altSt != null && altSt > 0) {
-                const altItem = (stockList || []).find((s) => s.kode === alt);
-                return {
-                  ...r,
-                  kode: alt,
-                  nama: altItem?.nama || r.nama,
-                  namaMaster: altItem?.nama || r.nama,
-                  satuan: altItem?.satuan || r.satuan,
-                  matchType: (r.matchType || 'alias') + '+stok-fallback',
-                  note: `Stok ${r.kode} habis → pakai ${alt}`,
-                };
-              }
-            }
-            return r;
-          });
-        } catch (_) {}
+      const matched = validation.matched || [];
+      const amb = validation.ambiguous || [];
+      const un = validation.unmatched || [];
+      const total = matched.length + amb.length + un.length;
+      const acc = total ? Math.round((matched.length / total) * 100) : 0;
+      setAccuracy({ pct: acc, matched: matched.length, skipped: un.length + amb.length, total });
+      if (matched.length) {
+        mergeMatchedIntoCart(matched.map((r) => ({
+          kode: r.kode, namaMaster: r.nama, nama: r.nama, satuan: r.satuan, qty: r.qty,
+        })));
       }
-
-      if (matchedRows.length > 0 && ambCount === 0) {
-        mergeMatchedIntoCart(
-          matchedRows.map((r) => ({
-            ...r,
-            namaMaster: r.namaMaster || r.nama,
-            kode: r.kode,
-            satuan: r.satuan,
-            qty: r.qty,
-          }))
-        );
-      }
-
-      const needReview = [
-        ...(validation.ambiguous || []).map((r) => ({ ...r, status: 'ambiguous', nama: r.nameFromPdf })),
-        ...(validation.unmatched || []).map((r) => ({ ...r, status: 'unmatched', nama: r.nameFromPdf })),
-      ];
-      const reviewList = ambCount > 0 ? flat : needReview;
-
-      setPdfResults(reviewList);
-      setPdfInfo({
-        method,
-        rowCount: rows.length,
-        autoAdded: matchedRows.length > 0 && ambCount === 0 ? matchedRows.length : 0,
-        unmatched: unCount,
-        ambiguous: ambCount,
-      });
-
-      if (matchedRows.length > 0 && ambCount === 0 && unCount === 0) {
-        setError(`${matchedRows.length} item cocok — langsung masuk keranjang.`);
-      } else if (matchedRows.length > 0 && ambCount === 0 && unCount > 0) {
-        setError(`${matchedRows.length} item masuk keranjang. ${unCount} perlu direvisi manual / diabaikan.`);
-      } else if (ambCount > 0) {
-        setError(`${matchedCount} cocok, ${ambCount} ambigu, ${unCount} tidak cocok — pilih atau abaikan.`);
-      } else {
-        setError('Tidak ada item yang cocok. Cari manual di bawah atau abaikan.');
-      }
+      setStatusBanner(
+        matched.length
+          ? ('Validasi ' + acc + '% · ' + matched.length + ' item masuk keranjang' + ((un.length || amb.length) ? (' · ' + (un.length + amb.length) + ' dilewati') : ''))
+          : 'Tidak ada nama yang cocok di master/alias.'
+      );
     } catch (err) {
-      setError(err.message || 'Gagal membaca file');
+      setStatusBanner(err.message || 'Gagal membaca PDF');
     } finally {
       setBusy(false);
       if (fileRef.current) fileRef.current.value = '';
     }
   };
 
-  const pickCandidate = (idx, item) => {
-    setPdfResults((prev) =>
-      prev.map((r, i) =>
-        i === idx
-          ? {
-              ...r,
-              status: 'matched',
-              matchType: 'manual',
-              item,
-              kode: item.kode,
-              namaMaster: item.nama,
-              satuan: item.satuan,
-              candidates: undefined,
-              searchQ: undefined,
-              searchHits: undefined,
-            }
-          : r
-      )
-    );
-  };
-
-  const skipReviewItem = (idx) => {
-    setPdfResults((prev) => prev.filter((_, i) => i !== idx));
-  };
-
-  const onReviewSearch = (idx, q) => {
-    const h = q.length >= 1 ? searchMaster(entity, q).slice(0, 6) : [];
-    setPdfResults((prev) => prev.map((r, i) => (i === idx ? { ...r, searchQ: q, searchHits: h } : r)));
-  };
-
-  const addReviewedToCart = () => {
-    const summary = summarizeValidation(pdfResults);
-    if (!summary.matchedItems.length) return;
-    mergeMatchedIntoCart(summary.matchedItems);
-    setPdfResults([]);
-    setPdfInfo((info) => ({ ...(info || {}), autoAdded: summary.matched }));
-    setError(`${summary.matched} item ditambahkan ke keranjang.`);
-  };
-
-  const submitCart = async () => {
-    if (!cart.length) return;
+  const submitCart = () => {
+    if (!cart.length || submitting) return;
     setSubmitting(true);
-    setSubmitMsg(null);
-    try {
-      const payload = cart.map((c) => ({
-        kode: c.kode,
-        qty: c.qty,
-        keterangan: (c.keterangan || '').slice(0, 200),
-      }));
-      const submitFn =
-        txType === 'masuk' ? submitBarangMasuk : txType === 'rusak' ? submitBarangRusak : submitBarangKeluar;
-      const res = await submitFn(entity, payload, { tanggal });
-      saveToHistory({
-        type: txType,
-        entity,
-        tanggal,
-        items: cart.map((c) => ({ kode: c.kode, nama: c.nama, qty: c.qty, keterangan: c.keterangan })),
-        ...res,
-      });
-      setSubmitMsg(res);
-      if (res.success) {
-        setCart([]);
-        setPdfResults([]);
-        setPdfInfo(null);
-      }
-    } catch (err) {
-      setSubmitMsg({ success: false, error: err.message });
-    } finally {
+    const snapshot = cart.map((c) => ({
+      kode: c.kode, nama: c.nama, qty: c.qty, keterangan: (c.keterangan || '').slice(0, 200),
+    }));
+    const submitFn = txType === 'masuk' ? submitBarangMasuk : txType === 'rusak' ? submitBarangRusak : submitBarangKeluar;
+    submitFn(entity, snapshot, { tanggal })
+      .then((res) => {
+        saveToHistory({ type: txType, entity, tanggal, items: snapshot, ...res });
+        if (res.success) {
+          setCart([]);
+          pushNotification({ type: 'ok', title: 'Kirim berhasil', body: (res.written || snapshot.length) + ' item ' + txType + ' ' + entity + ' tercatat.' });
+        } else {
+          pushNotification({ type: res.offline ? 'warn' : 'err', title: res.offline ? 'Disimpan antrian' : 'Kirim bermasalah', body: res.error || 'Cek Atur → Offline & Sync' });
+        }
+      })
+      .catch((err) => {
+        pushNotification({ type: 'err', title: 'Kirim gagal', body: err.message || 'Error jaringan' });
+      })
+      .finally(() => setSubmitting(false));
+    setTimeout(() => {
       setSubmitting(false);
-    }
+      setStatusBanner('Pengiriman berjalan di belakang layar. Cek lonceng 🔔');
+    }, 5000);
   };
 
-  const pdfSummary = summarizeValidation(pdfResults);
   const typeLabel = txType === 'masuk' ? 'Masuk' : txType === 'rusak' ? 'Rusak' : 'Keluar';
-  const submitGradient =
-    txType === 'masuk'
-      ? 'from-emerald-500 to-teal-600'
-      : txType === 'rusak'
-        ? 'from-rose-500 to-red-600'
-        : 'from-teal-500 to-emerald-600';
+  const submitGradient = txType === 'masuk' ? 'from-emerald-500 to-teal-600' : txType === 'rusak' ? 'from-rose-500 to-red-600' : 'from-teal-500 to-emerald-600';
 
   return (
     <div className="pb-28 animate-fade-in space-y-3">
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-bold text-slate-800">Input Transaksi</p>
+        <button type="button" onClick={() => { setShowNotif((v) => !v); markNotificationsRead(); setUnread(0); }}
+          className="relative w-10 h-10 rounded-full bg-white border border-slate-100 flex items-center justify-center text-slate-600" aria-label="Notifikasi">
+          <Bell className="w-5 h-5" />
+          {unread > 0 && (
+            <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-rose-500 text-white text-[9px] font-bold flex items-center justify-center">{unread > 9 ? '9+' : unread}</span>
+          )}
+        </button>
+      </div>
+
+      {showNotif && (
+        <div className="rounded-2xl bg-white border border-slate-100 shadow-sm p-3 max-h-52 overflow-y-auto">
+          {notifs.length === 0 ? (
+            <p className="text-[11px] text-slate-400 text-center py-3">Belum ada notifikasi</p>
+          ) : (
+            <ul className="space-y-2">
+              {notifs.slice(0, 12).map((n) => (
+                <li key={n.id} className="text-[11px] border-b border-slate-50 pb-2 last:border-0">
+                  <p className={`font-semibold ${n.type === 'ok' ? 'text-emerald-700' : n.type === 'err' ? 'text-rose-700' : 'text-amber-700'}`}>{n.title}</p>
+                  <p className="text-slate-500">{n.body}</p>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+
       <div className="grid grid-cols-3 gap-2.5">
         {TX_TYPES.map(({ id, label, icon: Icon, active, iconBg, iconIdle }) => {
           const on = txType === id;
           return (
-            <button
-              key={id}
-              type="button"
-              onClick={() => setTxType(id)}
-              className={`relative rounded-2xl border bg-white px-2 py-3.5 flex flex-col items-center gap-2 transition active:scale-[0.98] ${
-                on ? active : 'border-slate-100 shadow-sm'
-              }`}
-            >
-              <div className={`w-11 h-11 rounded-2xl flex items-center justify-center ${on ? iconBg : iconIdle}`}>
-                <Icon className="w-5 h-5" />
-              </div>
+            <button key={id} type="button" onClick={() => setTxType(id)}
+              className={`relative rounded-2xl border bg-white px-2 py-3.5 flex flex-col items-center gap-2 ${on ? active : 'border-slate-100 shadow-sm'}`}>
+              <div className={`w-11 h-11 rounded-2xl flex items-center justify-center ${on ? iconBg : iconIdle}`}><Icon className="w-5 h-5" /></div>
               <span className={`text-[12px] font-semibold ${on ? 'text-slate-800' : 'text-slate-500'}`}>{label}</span>
-              {on && <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-orange-400" />}
             </button>
           );
         })}
@@ -304,332 +286,123 @@ export default function InputPage() {
 
       <div className="flex gap-2 p-1 bg-slate-100/80 rounded-2xl">
         {['CV', 'PT'].map((e) => (
-          <button
-            key={e}
-            type="button"
-            onClick={() => {
-              setEntity(e);
-              setHits([]);
-              setQuery('');
-            }}
-            className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition ${
-              entity === e
-                ? 'bg-gradient-to-r from-cyan-500 to-violet-600 text-white shadow-md'
-                : 'text-slate-500'
-            }`}
-          >
-            {e}
-          </button>
+          <button key={e} type="button" onClick={() => { setEntity(e); setHits([]); setQuery(''); }}
+            className={`flex-1 py-2.5 rounded-xl text-sm font-bold ${entity === e ? 'bg-gradient-to-r from-cyan-500 to-violet-600 text-white shadow-md' : 'text-slate-500'}`}>{e}</button>
         ))}
       </div>
 
       <div className="grid grid-cols-3 gap-2">
-        <button
-          type="button"
-          onClick={() => setMode('manual')}
-          className={`rounded-2xl border px-2 py-3 flex flex-col items-center gap-1.5 ${
-            mode === 'manual' ? 'border-cyan-200 bg-cyan-50/80' : 'border-slate-100 bg-white'
-          }`}
-        >
-          <Search className={`w-4 h-4 ${mode === 'manual' ? 'text-cyan-600' : 'text-slate-400'}`} />
-          <span className={`text-[11px] font-semibold ${mode === 'manual' ? 'text-cyan-800' : 'text-slate-500'}`}>
-            Cari Master
-          </span>
+        <button type="button" onClick={startCam} className={`rounded-2xl border px-2 py-3 flex flex-col items-center gap-1.5 ${mode === 'qr' ? 'border-cyan-200 bg-cyan-50/80' : 'border-slate-100 bg-white'}`}>
+          <QrCode className="w-4 h-4 text-cyan-600" />
+          <span className="text-[11px] font-semibold text-slate-600">QR / Kamera</span>
         </button>
-        <button
-          type="button"
-          onClick={() => setError('Fitur suara segera hadir.')}
-          className="rounded-2xl border border-slate-100 bg-white px-2 py-3 flex flex-col items-center gap-1.5 opacity-90"
-        >
-          <Mic className="w-4 h-4 text-violet-500" />
-          <span className="text-[11px] font-semibold text-slate-500">Suara</span>
+        <button type="button" onClick={startVoice} className={`rounded-2xl border px-2 py-3 flex flex-col items-center gap-1.5 ${listening ? 'border-violet-300 bg-violet-50' : 'border-slate-100 bg-white'}`}>
+          <Mic className={`w-4 h-4 ${listening ? 'text-violet-600' : 'text-violet-500'}`} />
+          <span className="text-[11px] font-semibold text-slate-600">{listening ? 'Mendengar…' : 'Suara'}</span>
         </button>
-        <button
-          type="button"
-          onClick={() => {
-            setMode('pdf');
-            fileRef.current?.click();
-          }}
-          className={`rounded-2xl border px-2 py-3 flex flex-col items-center gap-1.5 ${
-            mode === 'pdf' ? 'border-cyan-200 bg-cyan-50/80' : 'border-slate-100 bg-white'
-          }`}
-        >
-          <Upload className={`w-4 h-4 ${mode === 'pdf' ? 'text-cyan-600' : 'text-cyan-500'}`} />
-          <span className={`text-[11px] font-semibold ${mode === 'pdf' ? 'text-cyan-800' : 'text-slate-500'}`}>
-            PDF / Validasi
-          </span>
+        <button type="button" onClick={() => fileRef.current?.click()} className="rounded-2xl border border-slate-100 bg-white px-2 py-3 flex flex-col items-center gap-1.5">
+          <Upload className="w-4 h-4 text-cyan-500" />
+          <span className="text-[11px] font-semibold text-slate-600">PDF / Validasi</span>
         </button>
       </div>
 
       <input ref={fileRef} type="file" accept="application/pdf,image/*" className="hidden" onChange={onFile} />
 
+      {camOn && (
+        <div className="rounded-2xl overflow-hidden bg-black relative">
+          <video ref={videoRef} autoPlay playsInline className="w-full h-48 object-cover" />
+          <div className="absolute bottom-2 left-0 right-0 flex justify-center gap-2">
+            <button type="button" onClick={scanOnce} className="px-3 py-1.5 rounded-full bg-white text-xs font-bold flex items-center gap-1"><Camera className="w-3.5 h-3.5" /> Scan</button>
+            <button type="button" onClick={stopCam} className="px-3 py-1.5 rounded-full bg-black/60 text-white text-xs font-bold flex items-center gap-1"><X className="w-3.5 h-3.5" /> Tutup</button>
+          </div>
+        </div>
+      )}
+      {camErr && <p className="text-[11px] text-amber-700 bg-amber-50 rounded-xl px-3 py-2">{camErr}</p>}
+
       <div className="rounded-2xl bg-white border border-slate-100 px-3 py-2.5 flex items-center gap-3 shadow-sm">
         <label className="text-[11px] text-slate-400 shrink-0 font-medium">Tanggal</label>
-        <input
-          type="date"
-          value={tanggal}
-          onChange={(e) => setTanggal(e.target.value)}
-          className="flex-1 text-sm font-semibold text-slate-800 bg-slate-50 border border-slate-100 rounded-xl px-2.5 py-1.5 focus:outline-none focus:border-cyan-400"
-        />
+        <input type="date" value={tanggal} onChange={(e) => setTanggal(e.target.value)} className="flex-1 text-sm font-semibold text-slate-800 bg-slate-50 border border-slate-100 rounded-xl px-2.5 py-1.5 focus:outline-none" />
       </div>
 
-      {mode === 'manual' && (
-        <div className="rounded-2xl bg-white border border-slate-100 p-3 space-y-2 shadow-sm">
-          <input
-            value={query}
-            onChange={(e) => onSearch(e.target.value)}
-            placeholder={`Cari barang ${entity}…`}
-            className="w-full px-3 py-2.5 bg-slate-50 rounded-xl border border-slate-100 text-sm focus:outline-none focus:border-cyan-400"
-          />
-          {hits.length > 0 && (
-            <div className="space-y-1 max-h-48 overflow-y-auto">
-              {hits.map((h) => (
-                <button
-                  key={h.kode}
-                  type="button"
-                  onClick={() => addToCart(h)}
-                  className="w-full text-left text-xs px-3 py-2.5 rounded-xl bg-slate-50 hover:bg-emerald-50 text-slate-700 flex items-center gap-2"
-                >
-                  <Plus className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                  <span className="font-semibold text-emerald-700">{h.kode}</span>
-                  <span className="truncate">{h.nama}</span>
-                  <span className="ml-auto text-slate-400 shrink-0">{h.satuan}</span>
-                </button>
-              ))}
-            </div>
-          )}
+      {busy && (
+        <div className="rounded-2xl bg-cyan-50 border border-cyan-100 px-3 py-3 flex items-center gap-2 text-sm text-cyan-800">
+          <Loader2 className="w-4 h-4 animate-spin shrink-0" /> Memvalidasi PDF…
         </div>
       )}
+      {accuracy && (
+        <div className="rounded-2xl bg-white border border-slate-100 px-3 py-2.5 text-[12px] text-slate-600">
+          Akurasi validasi <b className="text-violet-700">{accuracy.pct}%</b> · cocok {accuracy.matched}/{accuracy.total}
+          {accuracy.skipped ? ' · dilewati ' + accuracy.skipped : ''}
+        </div>
+      )}
+      {statusBanner && <div className="text-[11px] px-3 py-2.5 rounded-xl bg-white/90 border border-slate-100 text-slate-600">{statusBanner}</div>}
 
-      {mode === 'pdf' && (
-        <div className="space-y-2">
-          {busy && (
-            <div className="rounded-2xl bg-cyan-50 border border-cyan-100 px-3 py-3 flex items-center gap-2 text-sm text-cyan-800">
-              <Loader2 className="w-4 h-4 animate-spin shrink-0" />
-              Membaca & validasi PDF…
-            </div>
-          )}
-          {error && (
-            <div
-              className={`text-xs px-3 py-2.5 rounded-xl border ${
-                /masuk keranjang|langsung masuk|cocok/i.test(error)
-                  ? 'bg-emerald-50 text-emerald-800 border-emerald-100'
-                  : /ambigu|tidak cocok|tidak ada|revisi|pilih/i.test(error)
-                    ? 'bg-amber-50 text-amber-800 border-amber-100'
-                    : 'bg-slate-50 text-slate-700 border-slate-100'
-              }`}
-            >
-              {error}
-            </div>
-          )}
-          {pdfInfo && pdfInfo.autoAdded > 0 && pdfResults.length === 0 && (
-            <div className="rounded-xl bg-emerald-50 border border-emerald-100 px-3 py-2.5 flex items-center gap-2 text-sm text-emerald-800">
-              <CheckCircle2 className="w-4 h-4 shrink-0" />
-              <span>
-                <strong>{pdfInfo.autoAdded}</strong> item dari PDF masuk keranjang
-                {pdfInfo.rowCount ? ` · ${pdfInfo.rowCount} baris` : ''}
-              </span>
-            </div>
-          )}
-          {pdfResults.length > 0 && (
-            <div className="space-y-2">
-              <div className="grid grid-cols-3 gap-2">
-                <div className="rounded-xl bg-emerald-50 border border-emerald-100 p-2.5 text-center">
-                  <p className="text-lg font-bold text-emerald-600">{pdfSummary.matched}</p>
-                  <p className="text-[10px] text-emerald-600">Cocok</p>
-                </div>
-                <div className="rounded-xl bg-amber-50 border border-amber-100 p-2.5 text-center">
-                  <p className="text-lg font-bold text-amber-600">{pdfSummary.ambiguous}</p>
-                  <p className="text-[10px] text-amber-600">Ambigu</p>
-                </div>
-                <div className="rounded-xl bg-red-50 border border-red-100 p-2.5 text-center">
-                  <p className="text-lg font-bold text-red-600">{pdfSummary.unmatched}</p>
-                  <p className="text-[10px] text-red-600">Tidak cocok</p>
-                </div>
-              </div>
-              <div className="space-y-2 max-h-64 overflow-y-auto">
-                {pdfResults.map((r, idx) => (
-                  <div
-                    key={idx}
-                    className={`bg-white rounded-xl border p-3 ${
-                      r.status === 'matched'
-                        ? 'border-emerald-100'
-                        : r.status === 'ambiguous'
-                          ? 'border-amber-200'
-                          : 'border-red-100'
-                    }`}
-                  >
-                    <div className="flex items-start gap-2">
-                      {r.status === 'matched' ? (
-                        <CheckCircle2 className="w-4 h-4 text-emerald-500 mt-0.5 shrink-0" />
-                      ) : r.status === 'ambiguous' ? (
-                        <AlertTriangle className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
-                      ) : (
-                        <XCircle className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-slate-800 truncate">{r.nama}</p>
-                        <p className="text-[11px] text-slate-400">Qty {r.qty}</p>
-                        {r.status === 'matched' && (
-                          <p className="text-[11px] text-emerald-700 mt-0.5">
-                            → {r.kode} · {r.namaMaster} ({r.satuan}) · {r.matchType}
-                          </p>
-                        )}
-                        {r.status === 'ambiguous' && (
-                          <div className="mt-1.5 space-y-1">
-                            <p className="text-[10px] text-amber-700">Pilih yang benar:</p>
-                            {(r.candidates || []).map((c) => (
-                              <button
-                                key={c.kode}
-                                type="button"
-                                onClick={() => pickCandidate(idx, c)}
-                                className="block w-full text-left text-xs px-2 py-1.5 rounded-lg bg-amber-50 text-slate-700"
-                              >
-                                {c.kode} — {c.nama}
-                              </button>
-                            ))}
-                            <button type="button" onClick={() => skipReviewItem(idx)} className="text-[10px] text-slate-400 underline mt-1">
-                              Abaikan item ini
-                            </button>
-                          </div>
-                        )}
-                        {r.status === 'unmatched' && (
-                          <div className="mt-1.5 space-y-1.5">
-                            <p className="text-[10px] text-red-600">Tidak cocok — cari di master atau abaikan:</p>
-                            <input
-                              value={r.searchQ || ''}
-                              onChange={(e) => onReviewSearch(idx, e.target.value)}
-                              placeholder="Cari nama / kode master..."
-                              className="w-full px-2 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:border-cyan-400"
-                            />
-                            {(r.searchHits || []).map((c) => (
-                              <button
-                                key={c.kode}
-                                type="button"
-                                onClick={() => pickCandidate(idx, c)}
-                                className="block w-full text-left text-xs px-2 py-1.5 rounded-lg bg-slate-50 text-slate-700"
-                              >
-                                {c.kode} — {c.nama}
-                              </button>
-                            ))}
-                            <button type="button" onClick={() => skipReviewItem(idx)} className="text-[10px] text-slate-400 underline mt-1">
-                              Abaikan item ini
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              {pdfSummary.matched > 0 && (
-                <button
-                  type="button"
-                  onClick={addReviewedToCart}
-                  className="w-full py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold"
-                >
-                  Tambah {pdfSummary.matched} item yang sudah cocok ke keranjang
-                </button>
-              )}
-            </div>
-          )}
-        </div>
-      )}
+      <div className="rounded-2xl bg-white border border-slate-100 p-3 space-y-2 shadow-sm">
+        <div className="flex items-center gap-2 text-[11px] font-semibold text-slate-500"><Search className="w-3.5 h-3.5" /> Cari nama barang</div>
+        <input value={query} onChange={(e) => onSearch(e.target.value)} placeholder={`Cari barang ${entity}…`} className="w-full px-3 py-2.5 bg-slate-50 rounded-xl border border-slate-100 text-sm focus:outline-none" />
+        {hits.length > 0 && (
+          <div className="space-y-1 max-h-48 overflow-y-auto">
+            {hits.map((h) => (
+              <button key={h.kode} type="button" onClick={() => addToCart(h)} className="w-full text-left text-xs px-3 py-2.5 rounded-xl bg-slate-50 text-slate-700 flex items-center gap-2">
+                <Plus className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                <span className="font-semibold text-emerald-700">{h.kode}</span>
+                <span className="truncate">{h.nama}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
 
       {cart.length > 0 && (
         <div className="space-y-2">
           <div className="flex items-center justify-between px-0.5">
-            <h3 className="text-sm font-semibold text-slate-800">Keranjang ({cart.length})</h3>
-            <button type="button" onClick={() => setCart([])} className="text-xs text-rose-500 flex items-center gap-1 font-medium">
-              <Trash2 className="w-3.5 h-3.5" /> Kosongkan
-            </button>
+            <h3 className="text-sm font-semibold text-slate-800">Keranjang validasi ({cart.length})</h3>
+            <button type="button" onClick={() => setCart([])} className="text-xs text-rose-500 flex items-center gap-1 font-medium"><Trash2 className="w-3.5 h-3.5" /> Kosongkan</button>
           </div>
-          <div className="space-y-2 max-h-[50vh] overflow-y-auto">
+          <div className="space-y-2 max-h-[46vh] overflow-y-auto">
             {cart.map((c, idx) => (
               <div key={c.kode + idx} className="rounded-2xl bg-white border border-slate-100 px-3.5 py-3 shadow-sm">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0 flex-1">
                     <p className="text-[11px] font-semibold text-cyan-700">{c.kode}</p>
-                    <p className="text-[13px] font-bold text-slate-800 truncate leading-snug">{c.nama}</p>
-                    <p className="text-[10px] text-slate-400 mt-0.5">{c.satuan || 'Pack'}</p>
+                    <p className="text-[13px] font-bold text-slate-800 truncate">{c.nama}</p>
                   </div>
-                  <button type="button" onClick={() => removeFromCart(idx)} className="text-slate-300 p-1 active:text-rose-500">
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                  <button type="button" onClick={() => removeFromCart(idx)} className="text-slate-300 p-1"><Trash2 className="w-4 h-4" /></button>
                 </div>
                 <div className="mt-2.5 grid grid-cols-[1fr_1.4fr] gap-2">
                   <div>
                     <p className="text-[9px] uppercase tracking-wider text-slate-400 font-semibold mb-1">Qty</p>
                     <div className="flex items-center gap-1">
-                      <button
-                        type="button"
-                        onClick={() => updateQty(idx, -1)}
-                        className="w-8 h-8 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center"
-                      >
-                        <Minus className="w-3.5 h-3.5 text-slate-500" />
-                      </button>
-                      <input
-                        type="number"
-                        step="0.01"
-                        value={c.qty}
-                        onChange={(e) => setQtyValue(idx, e.target.value)}
-                        className="flex-1 min-w-0 text-center text-sm font-bold border border-slate-100 rounded-xl py-1.5 bg-slate-50"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => updateQty(idx, 1)}
-                        className="w-8 h-8 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center"
-                      >
-                        <Plus className="w-3.5 h-3.5 text-slate-500" />
-                      </button>
+                      <button type="button" onClick={() => updateQty(idx, -1)} className="w-8 h-8 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center"><Minus className="w-3.5 h-3.5 text-slate-500" /></button>
+                      <input type="number" step="0.01" value={c.qty} onChange={(e) => setQtyValue(idx, e.target.value)} className="flex-1 min-w-0 text-center text-sm font-bold border border-slate-100 rounded-xl py-1.5 bg-slate-50" />
+                      <button type="button" onClick={() => updateQty(idx, 1)} className="w-8 h-8 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center"><Plus className="w-3.5 h-3.5 text-slate-500" /></button>
                     </div>
                   </div>
                   <div>
                     <p className="text-[9px] uppercase tracking-wider text-slate-400 font-semibold mb-1">Keterangan</p>
-                    <input
-                      value={c.keterangan}
-                      onChange={(e) => updateKet(idx, e.target.value)}
-                      placeholder="Opsional"
-                      className="w-full text-[12px] px-2.5 py-2 bg-slate-50 border border-slate-100 rounded-xl"
-                    />
+                    <input value={c.keterangan} onChange={(e) => updateKet(idx, e.target.value)} placeholder="Isi manual" className="w-full text-[12px] px-2.5 py-2 bg-slate-50 border border-slate-100 rounded-xl" />
                   </div>
                 </div>
               </div>
             ))}
           </div>
-
-          {submitMsg && (
-            <div
-              className={`text-xs px-3 py-2.5 rounded-xl border ${
-                submitMsg.success ? 'bg-emerald-50 text-emerald-800 border-emerald-100' : 'bg-red-50 text-red-700 border-red-100'
-              }`}
-            >
-              {submitMsg.success
-                ? `Berhasil menulis ${submitMsg.written || cart.length} item${submitMsg.offline ? ' (sebagian offline)' : ''}.`
-                : submitMsg.error || 'Gagal mengirim'}
-            </div>
-          )}
-
-          <div className="fixed bottom-[4.25rem] left-0 right-0 z-40 px-3 pointer-events-none">
-            <div className="max-w-lg mx-auto pointer-events-auto">
-              <button
-                type="button"
-                onClick={submitCart}
-                disabled={submitting || !cart.length}
-                className={`w-full py-3.5 rounded-2xl bg-gradient-to-r ${submitGradient} text-white text-sm font-bold flex items-center justify-center gap-2 shadow-xl disabled:opacity-50 active:scale-[0.99]`}
-              >
-                {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                Kirim {cart.length} item · {typeLabel} ({entity})
-              </button>
-            </div>
-          </div>
         </div>
       )}
 
-      {cart.length === 0 && !busy && mode === 'manual' && !query && (
-        <p className="text-center text-[12px] text-slate-400 py-6">
-          Pilih tipe transaksi, cari master atau unggah PDF untuk mengisi keranjang.
-        </p>
+      {cart.length === 0 && !busy && (
+        <p className="text-center text-[12px] text-slate-400 py-4">Unggah PDF, scan QR, suara, atau cari nama barang.</p>
+      )}
+
+      {cart.length > 0 && (
+        <div className="fixed bottom-[4.25rem] left-0 right-0 z-40 px-3 pointer-events-none">
+          <div className="max-w-lg mx-auto pointer-events-auto">
+            <button type="button" onClick={submitCart} disabled={submitting}
+              className={`w-full py-3.5 rounded-2xl bg-gradient-to-r ${submitGradient} text-white text-sm font-bold flex items-center justify-center gap-2 shadow-xl disabled:opacity-70`}>
+              {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+              {submitting ? 'Mengirim… max 5 dtk' : `Kirim ${cart.length} item · ${typeLabel} (${entity})`}
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );
