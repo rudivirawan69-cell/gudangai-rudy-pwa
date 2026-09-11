@@ -1,8 +1,8 @@
 {
   "name": "GudangAI RUDY — Warehouse Control",
   "short_name": "GudangAI RUDY",
-  "description": "Dashboard stok & operasional Cold Storage Nasi Goreng 69",
-  "start_url": "/",
+  "description": "Dashboard stok & operasional Cold Storage Nasi Goreng 69 · V6.4.4+STATUS-PO",
+  "start_url": "/?v=0.1.2",
   "display": "standalone",
   "background_color": "#f0f4f8",
   "theme_color": "#0b2a55",
@@ -11,13 +11,13 @@
   "orientation": "portrait-primary",
   "icons": [
     {
-      "src": "https://raw.githubusercontent.com/rudivirawan69-cell/gudangai-rudy-pwa/main/icon-192.png",
+      "src": "/icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "https://raw.githubusercontent.com/rudivirawan69-cell/gudangai-rudy-pwa/main/icon-512.png",
+      "src": "/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
