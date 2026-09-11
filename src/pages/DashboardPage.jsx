@@ -1,11 +1,13 @@
 import { useMemo, useState, useEffect, useCallback } from 'react';
 import { useStock } from '../hooks/useStock';
 import { useAuth } from '../hooks/useAuth';
-import { getPendingQueue, getStatusPO } from '../data/api';
+import {
+  getPendingQueue, getStatusPO, getNotifications, markNotificationsRead, unreadNotificationCount,
+} from '../data/api';
 import { DIVISIONS } from '../data/master';
 import {
   AlertTriangle, ShieldCheck, WifiOff, ChevronRight, RefreshCw,
-  Snowflake, FileText, Package
+  Snowflake, FileText, Package, Bell
 } from 'lucide-react';
 
 function statusChip(stok) {
@@ -252,6 +254,29 @@ export default function DashboardPage({ onNavigate }) {
   const [poData, setPoData] = useState(null);
   const [poLoading, setPoLoading] = useState(true);
   const [poError, setPoError] = useState(null);
+  const [showNotif, setShowNotif] = useState(false);
+  const [notifs, setNotifs] = useState([]);
+  const [unread, setUnread] = useState(0);
+
+  const refreshNotifications = useCallback(() => {
+    setNotifs(getNotifications());
+    setUnread(unreadNotificationCount());
+  }, []);
+
+  useEffect(() => {
+    refreshNotifications();
+    window.addEventListener('gudangai-notif', refreshNotifications);
+    return () => window.removeEventListener('gudangai-notif', refreshNotifications);
+  }, [refreshNotifications]);
+
+  const toggleNotifications = () => {
+    const next = !showNotif;
+    setShowNotif(next);
+    if (next) {
+      markNotificationsRead();
+      setUnread(0);
+    }
+  };
 
   const loadStatusPO = useCallback(async () => {
     setPoLoading(true);
@@ -296,14 +321,14 @@ export default function DashboardPage({ onNavigate }) {
 
   return (
     <div className="pb-3 animate-fade-in space-y-3">
-      <div className="bg-gradient-to-br from-[#0b2a55] via-[#0f3a73] to-[#164e8a] rounded-2xl p-4 shadow-xl relative overflow-hidden animate-slide-up">
-        <div className="absolute top-0 right-0 w-36 h-36 bg-cyan-400/15 rounded-full blur-3xl pointer-events-none" />
+      <div className="bg-gradient-to-br from-[#063b3a] via-[#075e54] to-[#0a766b] rounded-2xl p-4 shadow-xl relative overflow-visible animate-slide-up">
+        <div className="absolute top-0 right-0 w-36 h-36 bg-teal-300/20 rounded-full blur-3xl pointer-events-none" />
         <div className="relative z-10">
           <div className="flex items-start justify-between gap-2 mb-3">
             <div className="min-w-0">
               <div className="flex items-center gap-2 mb-1">
-                <Snowflake className="w-4 h-4 text-cyan-300 shrink-0" />
-                <span className="text-[11px] text-cyan-200/90 font-medium tracking-wide">GudangAI RUDY</span>
+                <Snowflake className="w-4 h-4 text-teal-200 shrink-0" />
+                <span className="text-[11px] text-teal-100/90 font-medium tracking-wide">GudangAI RUDY</span>
                 <span
                   className={`inline-flex items-center gap-1 text-[9px] font-semibold px-1.5 py-0.5 rounded-full ${
                     isOnline ? 'bg-emerald-400/20 text-emerald-200' : 'bg-red-400/20 text-red-200'
@@ -314,27 +339,27 @@ export default function DashboardPage({ onNavigate }) {
                 </span>
               </div>
               <h1 className="text-xl font-bold text-white leading-tight tracking-tight">{greeting},</h1>
-              <p className="text-base font-semibold text-cyan-100/95 truncate">{user?.name || 'Rudi Virawan'}</p>
-              <p className="text-[11px] text-blue-100/70 mt-0.5 capitalize">{dateLabel}</p>
+              <p className="text-base font-semibold text-teal-50/95 truncate">{user?.name || 'Rudi Virawan'}</p>
+              <p className="text-[11px] text-teal-100/70 mt-0.5 capitalize">{dateLabel}</p>
               {lastRefresh && (
-                <p className="text-[10px] text-blue-200/50 mt-0.5">
+                <p className="text-[10px] text-teal-100/60 mt-0.5">
                   Stok disinkron {lastRefresh.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
                 </p>
               )}
             </div>
-            <button
-              type="button"
-              onClick={() => {
-                stockCV.refresh();
-                stockPT.refresh();
-                loadStatusPO();
-              }}
-              disabled={loading}
-              className="w-9 h-9 rounded-xl bg-white/10 border border-white/15 flex items-center justify-center text-white/80 active:scale-95 shrink-0"
-              aria-label="Refresh"
-            >
-              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-            </button>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <div className="relative">
+                <button type="button" onClick={toggleNotifications} className="w-9 h-9 rounded-xl bg-white/10 border border-white/15 flex items-center justify-center text-white/90 active:scale-95" aria-label="Notifikasi">
+                  <Bell className="w-4 h-4" />
+                  {unread > 0 && <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-rose-500 text-white text-[9px] font-bold flex items-center justify-center">{unread > 9 ? '9+' : unread}</span>}
+                </button>
+                {showNotif && <div className="absolute right-0 top-11 z-50 w-64 rounded-2xl bg-white border border-slate-100 shadow-xl p-3 text-left">
+                  <div className="flex items-center justify-between mb-2"><p className="text-xs font-bold text-slate-800">Notifikasi</p><span className="text-[10px] text-slate-400">Terbaru</span></div>
+                  {notifs.length === 0 ? <p className="text-[11px] text-slate-400 text-center py-3">Belum ada notifikasi</p> : <ul className="space-y-2 max-h-56 overflow-y-auto">{notifs.slice(0, 12).map((n) => <li key={n.id} className="text-[11px] border-b border-slate-50 pb-2 last:border-0"><p className={`font-semibold ${n.type === 'ok' ? 'text-emerald-700' : n.type === 'err' ? 'text-rose-700' : 'text-amber-700'}`}>{n.title}</p><p className="text-slate-500">{n.body}</p></li>)}</ul>}
+                </div>}
+              </div>
+              <button type="button" onClick={() => { stockCV.refresh(); stockPT.refresh(); loadStatusPO(); }} disabled={loading} className="w-9 h-9 rounded-xl bg-white/10 border border-white/15 flex items-center justify-center text-white/80 active:scale-95" aria-label="Refresh"><RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /></button>
+            </div>
           </div>
 
           <div className="grid grid-cols-3 gap-2">

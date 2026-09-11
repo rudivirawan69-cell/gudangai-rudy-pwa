@@ -51,7 +51,7 @@ class ErrorBoundary extends Component {
   }
 }
 
-/** Nav unified with Input page: cyan → violet elegant */
+/** Nav unified with the teal-green cold-storage theme. */
 const TABS = [
   { id: 'dashboard', label: 'Beranda', icon: LayoutDashboard },
   { id: 'stok', label: 'Stok', icon: Package },
@@ -207,25 +207,25 @@ function AppShell() {
                   type="button"
                   onClick={() => goTab(tab.id)}
                   className={`nav-btn flex-1 flex flex-col items-center pt-2 pb-1 relative ${
-                    isActive ? 'text-cyan-700' : 'text-slate-400'
+                    isActive ? 'text-teal-700' : 'text-slate-400'
                   }`}
                 >
                   <div
                     className={`nav-icon-wrap p-1.5 rounded-xl transition-colors ${
-                      isActive ? 'bg-gradient-to-br from-cyan-50 to-violet-50 text-cyan-700' : ''
+                      isActive ? 'bg-gradient-to-br from-teal-50 to-emerald-50 text-teal-700' : ''
                     } ${isActive ? 'animate-nav-pop' : ''}`}
                   >
                     <Icon className={`w-5 h-5 ${isActive ? 'stroke-[2.25]' : 'stroke-[1.5]'}`} />
                   </div>
                   <span
                     className={`text-[10px] mt-0.5 tracking-wide transition-all duration-250 ${
-                      isActive ? 'font-semibold text-cyan-800' : 'font-medium'
+                      isActive ? 'font-semibold text-teal-800' : 'font-medium'
                     }`}
                   >
                     {tab.label}
                   </span>
                   {isActive && (
-                    <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-8 h-0.5 rounded-full bg-gradient-to-r from-cyan-400 to-violet-500" />
+                    <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-8 h-0.5 rounded-full bg-gradient-to-r from-teal-400 to-emerald-500" />
                   )}
                 </button>
               );
