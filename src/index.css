@@ -2,6 +2,9 @@
 
 :root {
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --navy: #0b2a55;
+  --cyan: #22d3ee;
+  --violet: #8b5cf6;
   font-family: Inter, system-ui, -apple-system, sans-serif;
   color-scheme: light;
 }
@@ -9,21 +12,72 @@
 html, body, #root {
   height: 100%;
   margin: 0;
-  background: #f1f5f9;
+  background: #0a1628;
   -webkit-tap-highlight-color: transparent;
 }
 
-/* Safe area for notched phones */
+/* Full-screen atmospheric background (GudangAI cold storage) */
+.app-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  background:
+    radial-gradient(ellipse 80% 50% at 50% 0%, rgba(34, 211, 238, 0.18), transparent 55%),
+    radial-gradient(ellipse 60% 40% at 80% 100%, rgba(139, 92, 246, 0.12), transparent 50%),
+    linear-gradient(165deg, #06101f 0%, #0b2a55 38%, #0c3d6e 72%, #0a1a30 100%);
+  background-color: #0a1628;
+}
+.app-bg::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(34, 211, 238, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(34, 211, 238, 0.04) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: linear-gradient(to bottom, rgba(0,0,0,0.5), transparent 70%);
+  pointer-events: none;
+}
+.app-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(to bottom, transparent 0%, rgba(6, 16, 31, 0.35) 50%, rgba(6, 16, 31, 0.75) 100%);
+  pointer-events: none;
+}
+
+/* Optional photo layer when public/bg-gudangai.jpg is present */
+.app-bg-photo {
+  position: absolute;
+  inset: 0;
+  background-image: url("/bg-gudangai.jpg");
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.app-shell {
+  position: relative;
+  z-index: 1;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
 .safe-bottom {
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
-/* Card base */
 .card {
-  background: white;
+  background: rgba(255, 255, 255, 0.92);
   border-radius: 1rem;
-  border: 1px solid rgb(241 245 249);
-  box-shadow: 0 1px 2px rgb(15 23 42 / 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.65);
+  box-shadow: 0 4px 24px rgb(6 16 31 / 0.12);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
 .card-interactive {
   transition: transform 0.15s var(--ease-out), box-shadow 0.2s ease;
@@ -32,7 +86,14 @@ html, body, #root {
   transform: scale(0.96);
 }
 
-/* Page transitions */
+.nav-glass {
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-top: 1px solid rgba(255, 255, 255, 0.7);
+  box-shadow: 0 -8px 32px rgb(6 16 31 / 0.12);
+}
+
 @keyframes pageIn {
   from { opacity: 0.01; }
   to { opacity: 1; }
@@ -59,14 +120,10 @@ html, body, #root {
   60% { transform: scale(1.08); }
   100% { transform: scale(1); opacity: 1; }
 }
-@keyframes colorWash {
-  from { background-position: 0% 50%; }
-  to { background-position: 100% 50%; }
-}
 
 .animate-page-in {
   animation: pageIn 0.28s ease-out forwards;
-  opacity: 1; /* fallback if animation skipped */
+  opacity: 1;
 }
 .animate-slide-up { animation: slideUp 0.34s var(--ease-out) forwards; }
 .animate-fade-in { animation: fadeIn 0.28s ease-out forwards; }
@@ -74,7 +131,6 @@ html, body, #root {
 .animate-soft-pulse { animation: softPulse 2s ease-in-out infinite; }
 .animate-nav-pop { animation: navPop 0.32s var(--ease-out) forwards; }
 
-/* Mode selector */
 .mode-active-masuk {
   background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
   border-color: #6ee7b7;
@@ -101,7 +157,6 @@ html, body, #root {
   box-shadow: 0 0 0 3px rgba(255,255,255,0.9);
 }
 
-/* Sheet / modal slide */
 @keyframes sheetUp {
   from { transform: translateY(100%); opacity: 0.6; }
   to { transform: translateY(0); opacity: 1; }
@@ -116,10 +171,7 @@ html, body, #root {
   .animate-slide-up,
   .animate-fade-in,
   .animate-nav-pop,
-  .sheet-panel,
-  .mode-active-masuk,
-  .mode-active-keluar,
-  .mode-active-rusak {
+  .sheet-panel {
     animation: none !important;
   }
 }
