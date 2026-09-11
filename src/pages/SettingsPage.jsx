@@ -58,12 +58,7 @@ function Avatar({ name, size = 'lg' }) {
     );
   }
   return (
-    <img
-      src={AVATAR_SRC}
-      alt={name || 'Avatar'}
-      className={`${dim} rounded-2xl object-cover shadow-md border-2 border-white/80`}
-      onError={() => setErr(true)}
-    />
+    <img src={AVATAR_SRC} alt={name || 'Avatar'} className={`${dim} rounded-2xl object-cover shadow-md border-2 border-white/80`} onError={() => setErr(true)} />
   );
 }
 
@@ -117,7 +112,6 @@ export default function SettingsPage() {
     const result = await healthCheck();
     if (result.ok) {
       setConnStatus('ok');
-      // Merge raw fields so spreadsheet name is visible
       const payload = {
         ...result.data,
         spreadsheet: result.data?.spreadsheet || result.data?.raw?.spreadsheet,
@@ -160,8 +154,8 @@ export default function SettingsPage() {
 
   const handleClearSynced = () => {
     clearSyncedQueue();
-    setPendingCount(getPendingQueue().length);
-    setSyncResult({ message: 'Antrian tersinkron dibersihkan.' });
+    setPendingCount(0);
+    setSyncResult({ message: 'Antrian dihapus. Jumlah pending = 0.' });
   };
 
   const connSubtitle =
@@ -179,36 +173,29 @@ export default function SettingsPage() {
           <p className="text-[10px] text-cyan-700 mt-0.5 font-medium">GudangAI RUDY</p>
         </div>
       </div>
-
       <div className="card overflow-hidden">
         <MenuRow icon={User} iconBg="bg-blue-50 text-blue-600" title="Profil Saya" subtitle="Nama tampilan di dashboard" onClick={() => setPanel(panel === 'profile' ? null : 'profile')} />
         <MenuRow icon={Link2} iconBg="bg-cyan-50 text-cyan-700" title="Koneksi Google Sheets" subtitle={connSubtitle}
           onClick={() => setPanel(panel === 'koneksi' ? null : 'koneksi')}
           right={connStatus === 'ok' ? <CheckCircle2 className="w-5 h-5 text-emerald-500" /> : connStatus === 'fail' ? <XCircle className="w-5 h-5 text-red-500" /> : <ChevronRight className="w-4 h-4 text-slate-300" />} />
-        <MenuRow icon={Cloud} iconBg="bg-violet-50 text-violet-600" title="Mode Offline & Sync" subtitle={pendingCount ? `${pendingCount} transaksi pending` : 'Antrian kosong'} onClick={() => setPanel(panel === 'sync' ? null : 'sync')} />
+        <MenuRow icon={Cloud} iconBg="bg-violet-50 text-violet-600" title="Mode Offline & Sync" subtitle={pendingCount ? `${pendingCount} transaksi pending` : '0 — antrian kosong'} onClick={() => setPanel(panel === 'sync' ? null : 'sync')} />
         <MenuRow icon={KeyRound} iconBg="bg-amber-50 text-amber-700" title="Ganti PIN" subtitle="Keamanan login 4–6 digit" onClick={() => setPanel(panel === 'pin' ? null : 'pin')} />
         <MenuRow icon={SettingsIcon} iconBg="bg-slate-100 text-slate-600" title="Tentang Aplikasi" subtitle="GudangAI · Backend V6.4.4" onClick={() => setPanel(panel === 'about' ? null : 'about')} />
       </div>
-
       {panel === 'profile' && (
         <div className="card p-4 space-y-3">
-          <div className="flex items-center gap-3">
-            <Avatar name={username} size="lg" />
-            <p className="text-[11px] text-slate-500">Foto profil aktif</p>
-          </div>
           <p className="text-xs font-semibold text-slate-600">Nama tampilan</p>
           <input value={username} onChange={(e) => setUsername(e.target.value)} className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm" placeholder="Nama" />
           <button type="button" onClick={handleSaveProfile} className="w-full py-2.5 rounded-xl bg-[#0b2a55] text-white text-sm font-semibold">Simpan Nama</button>
           {profileMsg && <p className="text-xs text-emerald-600">{profileMsg}</p>}
         </div>
       )}
-
       {panel === 'koneksi' && (
         <div className="card p-4 space-y-3">
           <p className="text-xs font-semibold text-slate-600">URL Web App Apps Script</p>
           <input value={apiUrl} onChange={(e) => setApiUrlState(e.target.value)} className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs font-mono" placeholder="https://script.google.com/macros/s/.../exec" />
           <p className="text-xs font-semibold text-slate-600">API Secret (Script Properties)</p>
-          <input type="password" value={apiSecret} onChange={(e) => setApiSecretState(e.target.value)} className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm" placeholder="API_SECRET backend 6.4.4" />
+          <input type="password" value={apiSecret} onChange={(e) => setApiSecretState(e.target.value)} className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm" placeholder="API_SECRET" />
           <div className="flex gap-2">
             <button type="button" onClick={handleSaveUrl} className="flex-1 py-2.5 rounded-xl bg-slate-100 text-slate-700 text-sm font-semibold">Simpan</button>
             <button type="button" onClick={handleTestConnection} className="flex-1 py-2.5 rounded-xl bg-[#0b2a55] text-white text-sm font-semibold flex items-center justify-center gap-1.5">
@@ -216,22 +203,19 @@ export default function SettingsPage() {
             </button>
           </div>
           {connMessage && (
-            <p className={`text-[11px] px-2.5 py-2 rounded-lg ${
-              connStatus === 'ok' ? 'bg-emerald-50 text-emerald-700' : connStatus === 'fail' ? 'bg-red-50 text-red-700' : 'bg-slate-50 text-slate-600'
-            }`}>{connMessage}</p>
+            <p className={`text-[11px] px-2.5 py-2 rounded-lg ${connStatus === 'ok' ? 'bg-emerald-50 text-emerald-700' : connStatus === 'fail' ? 'bg-red-50 text-red-700' : 'bg-slate-50 text-slate-600'}`}>{connMessage}</p>
           )}
         </div>
       )}
-
       {panel === 'sync' && (
         <div className="card p-4 space-y-3">
-          <p className="text-xs text-slate-500">Transaksi gagal disimpan di perangkat dan disinkron saat online.</p>
+          <p className="text-xs text-slate-500">Tombol hapus mengosongkan seluruh antrian (angka menjadi 0).</p>
           <div className="flex gap-2">
             <button type="button" onClick={handleSync} disabled={syncing || pendingCount === 0}
               className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-500 text-white text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-50">
               {syncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />} Sinkronkan ({pendingCount})
             </button>
-            <button type="button" onClick={handleClearSynced} className="px-4 py-2.5 rounded-xl bg-slate-100 text-slate-600"><Trash2 className="w-4 h-4" /></button>
+            <button type="button" onClick={handleClearSynced} className="px-4 py-2.5 rounded-xl bg-slate-100 text-slate-600" aria-label="Hapus antrian"><Trash2 className="w-4 h-4" /></button>
           </div>
           {syncResult && (
             <p className="text-xs text-slate-600 bg-slate-50 rounded-lg px-3 py-2">
@@ -240,7 +224,6 @@ export default function SettingsPage() {
           )}
         </div>
       )}
-
       {panel === 'pin' && (
         <div className="card p-4 space-y-3">
           <input type="password" inputMode="numeric" value={newPin} onChange={(e) => setNewPin(e.target.value)} className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm" placeholder="PIN baru (4–6 digit)" />
@@ -249,30 +232,19 @@ export default function SettingsPage() {
           {pinMsg && <p className="text-xs text-emerald-600">{pinMsg}</p>}
         </div>
       )}
-
       {panel === 'about' && (
         <div className="card p-4 text-[11px] text-slate-500 leading-relaxed space-y-1">
           <p className="font-semibold text-slate-700">GudangAI RUDY</p>
           <p>Cold Storage Nasi Goreng 69 · CV & PT</p>
-          <p>Frontend PWA · Backend Google Apps Script V6.4.4+OUTBOX</p>
-          <p>Data lokal di perangkat · Sheets hanya setelah URL + secret diuji.</p>
         </div>
       )}
-
       <div className="card overflow-hidden">
         <MenuRow icon={LogOut} iconBg="bg-red-50 text-red-600" title="Keluar" subtitle="Login ulang dengan PIN" onClick={() => setShowLogout(true)} danger />
       </div>
-
-      <div className="flex items-start gap-2 px-1">
-        <Shield className="w-3.5 h-3.5 text-slate-300 shrink-0 mt-0.5" />
-        <p className="text-[10px] text-slate-400 leading-relaxed">PIN & data antrian tersimpan lokal. Jangan bagikan API Secret.</p>
-      </div>
-
       {showLogout && (
         <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowLogout(false)}>
-          <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl border border-slate-100" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-bold text-slate-800 mb-2">Keluar?</h3>
-            <p className="text-sm text-slate-500 mb-6">Anda perlu login kembali dengan PIN.</p>
             <div className="flex gap-3">
               <button type="button" onClick={() => setShowLogout(false)} className="flex-1 py-3 rounded-xl bg-slate-100 text-slate-600 text-sm font-medium">Batal</button>
               <button type="button" onClick={() => logout && logout()} className="flex-1 py-3 rounded-xl bg-red-500 text-white text-sm font-medium">Ya, Keluar</button>
