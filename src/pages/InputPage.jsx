@@ -33,6 +33,7 @@ export default function InputPage() {
   const [pendingManualRow, setPendingManualRow] = useState(null);
   const [cart, setCart] = useState([]);
   const [submitting, setSubmitting] = useState(false);
+  const submittingRef = useRef(false);
   const [tanggal, setTanggal] = useState(() => new Date().toISOString().slice(0, 10));
   const [query, setQuery] = useState('');
   const [hits, setHits] = useState([]);
@@ -213,6 +214,10 @@ export default function InputPage() {
       const total = matched.length + amb.length + un.length;
       const acc = total ? Math.round((matched.length / total) * 100) : 0;
       setAccuracy({ pct: acc, matched: matched.length, skipped: un.length + amb.length, total });
+
+      // Collect fallback notifications
+      const fallbackItems = matched.filter((r) => r.fallback);
+
       setValidationRows([
         ...matched.map((r, i) => ({ key: `m-${i}-${r.kode}`, nameFromPdf: r.nameFromPdf, qty: r.qty, status: r.fallback ? 'FALLBACK' : 'MATCH', kode: r.kode, nama: r.nama, candidates: [], note: r.fallback || '' })),
         ...amb.map((r, i) => ({ key: `a-${i}-${r.nameFromPdf}`, nameFromPdf: r.nameFromPdf, qty: r.qty, status: 'AMBIGU', kode: r.kode || '', nama: r.nama || '', candidates: r.candidates || [], note: r.warning || 'Pilih master yang benar.' })),
@@ -220,9 +225,22 @@ export default function InputPage() {
       ]);
       if (matched.length) {
         mergeMatchedIntoCart(matched.map((r) => ({
-          kode: r.kode, namaMaster: r.nama, nama: r.nama, satuan: r.satuan, qty: r.qty, keterangan: r.fallback || '',
+          kode: r.kode, namaMaster: r.nama, nama: r.nama, satuan: r.satuan, qty: r.qty,
+          // FIX: Fallback otomatis TIDAK ditulis ke keterangan Spreadsheet
+          // Kolom keterangan hanya untuk input manual operator
+          keterangan: '',
         })));
       }
+
+      // FIX: Fallback notifications terpisah — hanya di PWA, bukan di Spreadsheet
+      if (fallbackItems.length) {
+        pushNotification({
+          type: 'warn',
+          title: 'Fallback terdeteksi',
+          body: fallbackItems.map((f) => `${f.nameFromPdf} → ${f.nama} (${f.kode})`).join('; '),
+        });
+      }
+
       setStatusBanner(
         matched.length
           ? ('Validasi ' + acc + '% · ' + matched.length + ' item masuk keranjang' + ((un.length || amb.length) ? (' · ' + (un.length + amb.length) + ' menunggu validasi manual') : ''))
@@ -237,8 +255,10 @@ export default function InputPage() {
   };
 
   const submitCart = () => {
-    if (!cart.length || submitting) return;
+    // FIX: Guard double-submit with ref (survives across renders)
+    if (!cart.length || submitting || submittingRef.current) return;
     setSubmitting(true);
+    submittingRef.current = true;
     const snapshot = cart.map((c) => ({
       kode: c.kode, nama: c.nama, qty: c.qty, keterangan: (c.keterangan || '').slice(0, 200),
     }));
@@ -256,11 +276,13 @@ export default function InputPage() {
       .catch((err) => {
         pushNotification({ type: 'err', title: 'Kirim gagal', body: err.message || 'Error jaringan' });
       })
-      .finally(() => setSubmitting(false));
-    setTimeout(() => {
-      setSubmitting(false);
-      setStatusBanner('Pengiriman berjalan di belakang layar. Cek lonceng 🔔');
-    }, 5000);
+      .finally(() => {
+        // FIX: Reset submitting HANYA di .finally — tidak pakai setTimeout terpisah
+        setSubmitting(false);
+        submittingRef.current = false;
+      });
+    // FIX: REMOVED rogue setTimeout that was resetting submitting after 5s
+    // which caused race condition allowing double-submit
   };
 
   const typeLabel = txType === 'masuk' ? 'Masuk' : txType === 'rusak' ? 'Rusak' : 'Keluar';
@@ -413,7 +435,7 @@ export default function InputPage() {
                   <div>
                     <p className="text-[9px] uppercase tracking-wider text-slate-400 font-semibold mb-1">Qty</p>
                     <div className="flex items-center gap-1">
-                      <button type="button" onClick={() => updateQty(idx, -1)} className="w-8 h-8 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center"><Minus className="w-3.5 h-3.5 text-slate-500" /></button>
+                     <button type="button" onClick={() => updateQty(idx, -1)} className="w-8 h-8 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center"><Minus className="w-3.5 h-3.5 text-slate-500" /></button>
                       <input type="number" step="0.01" value={c.qty} onChange={(e) => setQtyValue(idx, e.target.value)} className="flex-1 min-w-0 text-center text-sm font-bold border border-slate-100 rounded-xl py-1.5 bg-slate-50" />
                       <button type="button" onClick={() => updateQty(idx, 1)} className="w-8 h-8 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center"><Plus className="w-3.5 h-3.5 text-slate-500" /></button>
                     </div>
@@ -439,7 +461,7 @@ export default function InputPage() {
             <button type="button" onClick={submitCart} disabled={submitting}
               className={`w-full py-3.5 rounded-2xl bg-gradient-to-r ${submitGradient} text-white text-sm font-bold flex items-center justify-center gap-2 shadow-xl disabled:opacity-70`}>
               {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-              {submitting ? 'Mengirim… max 5 dtk' : `Kirim ${cart.length} item · ${typeLabel} (${entity})`}
+              {submitting ? 'Mengirim…' : `Kirim ${cart.length} item · ${typeLabel} (${entity})`}
             </button>
           </div>
         </div>

@@ -1,4 +1,4 @@
-/** GudangAI RUDY — API layer V6.4.9 input-perf */
+/** GudangAI RUDY — API layer V6.4.10 fix-duplicate */
 const RETRY_COUNT = 2;
 const RETRY_BASE_MS = 400;
 const REQUEST_TIMEOUT_MS = 12000;
@@ -224,11 +224,18 @@ async function submitTransaction(action, entity, items, options = {}) {
         pushNotification({ type: 'ok', title: 'Kirim berhasil', body: (todo.length + alreadyDone) + ' item tercatat.' });
         return { success: true, written: todo.length + alreadyDone, skipped: alreadyDone, remaining: [], details: batchRes.details || [] };
       }
-    } catch (_) {}
+    } catch (batchErr) {
+      // FIX: Log batch failure for debugging
+      console.warn('[GudangAI] Batch failed, will retry serial:', batchErr?.message || batchErr);
+      // FIX: Wait a moment before serial fallback to let batch settle on server
+      await delay(1500);
+    }
   }
   const written = []; const errors = []; const failedItems = [];
   for (let i = 0; i < todo.length; i++) {
     const it = todo[i];
+    // FIX: Re-check isApplied before each serial item
+    // This catches items that batch actually processed on server but response timed out
     if (isApplied(it.clientItemId)) continue;
     try {
       const res = await submitOneItem(sheet, entity, it, tanggal);
