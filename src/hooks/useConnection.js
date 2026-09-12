@@ -1,11 +1,17 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { getApiUrl, healthCheck, syncPendingQueue } from '../data/api';
+import { getApiUrl, healthCheck } from '../data/api';
 
 /**
  * Connection state — stabil, minim noise di banner.
- * - Tidak emit "retry" di setiap poll (itu yang terasa "putus-putus")
+ * - Tidak emit "retry" di setiap poll
  * - Hanya flag error setelah 2 gagal beruntun
  * - Poll lebih jarang (default 90s)
+ *
+ * PENTING (anti-duplikat, 12 Sep 2026):
+ * JANGAN memanggil syncPendingQueue otomatis di sini.
+ * Antrian write hanya boleh dieksekusi setelah user review di
+ * Atur → Antrian Sinkronisasi → "Kirim & Eksekusi Semua".
+ * Auto-sync setelah batch timeout menyebabkan baris dobel di spreadsheet.
  */
 export function useConnection({ pollMs = 90000 } = {}) {
   const [online, setOnline] = useState(
@@ -36,7 +42,6 @@ export function useConnection({ pollMs = 90000 } = {}) {
       setApiOk(false);
       return { ok: false, offline: true };
     }
-    // Hindari spam health jika baru sukses < 20 detik
     if (quiet && lastOkAt.current && Date.now() - lastOkAt.current < 20000) {
       return { ok: true, cached: true };
     }
@@ -52,7 +57,6 @@ export function useConnection({ pollMs = 90000 } = {}) {
         return result;
       }
       failStreak.current += 1;
-      // Hanya anggap putus setelah 2 gagal beruntun
       if (failStreak.current >= 2) {
         setApiOk(false);
         setMessage(result.error || 'Backend tidak merespons');
@@ -71,22 +75,15 @@ export function useConnection({ pollMs = 90000 } = {}) {
     }
   }, [emit]);
 
+  // Placeholder: sync hanya lewat SyncQueuePage (eksplisit). Tidak auto.
   const syncQueue = useCallback(async () => {
-    if (!navigator.onLine || !getApiUrl()) return null;
-    setSyncing(true);
-    try {
-      return await syncPendingQueue();
-    } finally {
-      setSyncing(false);
-    }
+    return { synced: 0, failed: 0, skipped: true, reason: 'manual-review-only' };
   }, []);
 
   useEffect(() => {
     const on = () => {
       setOnline(true);
-      checkHealth({ quiet: false }).then((r) => {
-        if (r?.ok) syncQueue();
-      });
+      checkHealth({ quiet: false });
     };
     const off = () => {
       setOnline(false);
@@ -100,35 +97,25 @@ export function useConnection({ pollMs = 90000 } = {}) {
       window.removeEventListener('online', on);
       window.removeEventListener('offline', off);
     };
-  }, [checkHealth, syncQueue, emit]);
+  }, [checkHealth, emit]);
 
   useEffect(() => {
     if (!getApiUrl()) return undefined;
     const onVis = () => {
       if (document.visibilityState === 'visible' && navigator.onLine) {
-        checkHealth({ quiet: true }).then((r) => {
-          if (r?.ok) syncQueue();
-        });
+        checkHealth({ quiet: true });
       }
     };
     document.addEventListener('visibilitychange', onVis);
     const id = setInterval(() => {
-      if (navigator.onLine) {
-        checkHealth({ quiet: true }).then((r) => {
-          if (r?.ok) syncQueue();
-        });
-      }
+      if (navigator.onLine) checkHealth({ quiet: true });
     }, Math.min(pollMs, 45000));
-    if (navigator.onLine) {
-      checkHealth({ quiet: false }).then((r) => {
-        if (r?.ok) syncQueue();
-      });
-    }
+    if (navigator.onLine) checkHealth({ quiet: false });
     return () => {
       document.removeEventListener('visibilitychange', onVis);
       clearInterval(id);
     };
-  }, [pollMs, checkHealth, syncQueue]);
+  }, [pollMs, checkHealth]);
 
   const status =
     !getApiUrl()
