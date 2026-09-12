@@ -151,6 +151,16 @@ export default function SyncQueuePage({ onBack }) {
         </div>
       </div>
 
+      {total > 0 && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-[11px] text-amber-900 leading-relaxed">
+          <p className="font-semibold">Cek spreadsheet terlebih dahulu.</p>
+          <p className="mt-0.5 text-amber-800/90">
+            Jika item sudah tertulis di sheet (batch sebelumnya mungkin sukses meski timeout),
+            tekan ikon sampah untuk menghapus dari antrian. Jangan kirim ulang — akan dobel.
+          </p>
+        </div>
+      )}
+
       {total === 0 ? (
         <div className="card p-6 text-center space-y-2">
           <CheckCircle2 className="w-10 h-10 text-emerald-500 mx-auto" />
