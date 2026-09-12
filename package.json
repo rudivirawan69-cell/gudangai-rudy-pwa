@@ -1,14 +1,16 @@
 {
   "name": "gudangai-pwa",
   "private": true,
-  "version": "0.1.2",
+  "version": "0.1.4",
   "type": "module",
   "scripts": {
+    "prebuild": "node scripts/write-icons.mjs",
     "dev": "vite",
     "build": "vite build",
     "lint": "oxlint src scripts",
     "validate:aliases": "node scripts/validate_alias_config.mjs alias-config.json",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "icons": "node scripts/write-icons.mjs"
   },
   "dependencies": {
     "@vercel/speed-insights": "^2.0.0",
