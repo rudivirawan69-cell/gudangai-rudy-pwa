@@ -1,4 +1,4 @@
-/** GudangAI RUDY — API layer V6.4.11 anti-double-write */
+/** GudangAI RUDY — API layer V6.4.12 write-once (no auto-retry on writes) */
 const RETRY_COUNT = 2;
 const RETRY_BASE_MS = 400;
 const REQUEST_TIMEOUT_MS = 12000;
@@ -61,13 +61,17 @@ async function fetchWithRetry(url, options = {}, retries = RETRY_COUNT) {
   emitConn({ state: 'failed', error: (lastError && lastError.message) || 'Gagal' });
   throw lastError;
 }
-async function postJson(payload) {
+async function postJson(payload, { retries = RETRY_COUNT } = {}) {
   const url = getApiUrl();
   if (!url) throw new Error('URL API belum diatur');
   const body = JSON.stringify({ schemaVersion: SCHEMA_VERSION, secret: getApiSecret() || undefined, client: { app: 'gudangai-rudy-pwa', deviceId: deviceId() }, ...payload });
-  const res = await fetchWithRetry(url, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body, redirect: 'follow' });
+  const res = await fetchWithRetry(url, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body, redirect: 'follow' }, retries);
   const text = await res.text();
   try { return JSON.parse(text); } catch { throw new Error('Respons bukan JSON: ' + text.slice(0, 120)); }
+}
+/** Write-once: never auto-retry POST transaksi. 1 request = 1 attempt. Timeout/hilang respons → UNKNOWN, enqueue. */
+async function postJsonWrite(payload) {
+  return postJson(payload, { retries: 1 });
 }
 async function getJson(action, extraParams = {}) {
   const url = getApiUrl();
@@ -193,7 +197,7 @@ async function submitOneItem(sheet, entity, it, tanggal) {
   const cid = item.clientItemId;
   if (isApplied(cid)) return { success: true, skipped: true, kode: item.kode, clientItemId: cid };
   const payload = { action: 'addTransaction', sheet, entitas: entity, kodeBarang: String(item.kode || '').trim(), qty: Number(item.qty) || 0, keterangan: String(item.keterangan || '').trim(), tanggal: tanggal || undefined, requestId: cid, transactionId: 'TX-' + cid, nonce: 'NC-' + cid };
-  const data = await postJson(payload);
+  const data = await postJsonWrite(payload);
   if (data && data.code === 'UNAUTHORIZED') return { success: false, unauthorized: true, kode: item.kode, clientItemId: cid, error: 'Unauthorized' };
   if (data && (data.status === 'DUPLICATE' || data.idempotent === true)) { markApplied(cid); return { success: true, skipped: true, kode: item.kode, clientItemId: cid }; }
   if (data && (data.success === true || data.status === 'APPLIED' || data.status === 'OK')) { markApplied(cid); return { success: true, kode: payload.kodeBarang, qty: data.qty != null ? data.qty : payload.qty, row: data.row, clientItemId: cid }; }
@@ -227,7 +231,7 @@ async function submitTransaction(action, entity, items, options = {}) {
         keterangan: String(it.keterangan || '').trim(),
         requestId: it.clientItemId,
       }));
-      const batchRes = await postJson({
+      const batchRes = await postJsonWrite({
         action: 'addTransactionBatch',
         sheet,
         entitas: entity,
