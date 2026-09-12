@@ -2,7 +2,7 @@
   "name": "GudangAI RUDY — Warehouse Control",
   "short_name": "GudangAI RUDY",
   "description": "Dashboard stok & operasional Cold Storage Nasi Goreng 69 · V6.4.13",
-  "start_url": "/?v=0.1.3",
+  "start_url": "/?v=0.1.4",
   "display": "standalone",
   "background_color": "#0b2a55",
   "theme_color": "#0b2a55",
@@ -15,6 +15,12 @@
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any"
+    },
+    {
+      "src": "/icon.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
     },
     {
       "src": "/icon-192.png",
