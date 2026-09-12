@@ -1,4 +1,4 @@
-/** GudangAI RUDY — API layer V6.4.10 fix-duplicate */
+/** GudangAI RUDY — API layer V6.4.11 anti-double-write */
 const RETRY_COUNT = 2;
 const RETRY_BASE_MS = 400;
 const REQUEST_TIMEOUT_MS = 12000;
@@ -213,35 +213,90 @@ async function submitTransaction(action, entity, items, options = {}) {
   const todo = normalized.filter((it) => !isApplied(it.clientItemId));
   const alreadyDone = normalized.length - todo.length;
   if (!todo.length) return { success: true, written: alreadyDone, skipped: alreadyDone, remaining: [], message: 'Semua item sudah tercatat.' };
+
+  // ========== BATCH PATH (hanya untuk kirim langsung dari Input, bukan dari Antrian) ==========
+  // Aturan ketat anti-duplikat (12 Sep 2026):
+  // Jika batch berhasil jelas → markApplied + selesai.
+  // Jika batch gagal / timeout / respons tidak jelas → JANGAN serial-ulang.
+  // Masukkan ke antrian agar user review di SyncQueuePage. Hindari double-write ke spreadsheet.
   if (!fromQueue && todo.length >= 1) {
     try {
-      const batchItems = todo.map((it) => ({ kodeBarang: String(it.kode || '').trim(), qty: Number(it.qty) || 0, keterangan: String(it.keterangan || '').trim(), requestId: it.clientItemId }));
-      const batchRes = await postJson({ action: 'addTransactionBatch', sheet, entitas: entity, tanggal: tanggal || undefined, items: batchItems, requestId: 'BATCH-' + (todo[0].clientItemId || Date.now()) });
-      if (batchRes && batchRes.code === 'UNAUTHORIZED') return { success: false, error: 'Unauthorized — isi API Secret di Atur', remaining: todo };
+      const batchItems = todo.map((it) => ({
+        kodeBarang: String(it.kode || '').trim(),
+        qty: Number(it.qty) || 0,
+        keterangan: String(it.keterangan || '').trim(),
+        requestId: it.clientItemId,
+      }));
+      const batchRes = await postJson({
+        action: 'addTransactionBatch',
+        sheet,
+        entitas: entity,
+        tanggal: tanggal || undefined,
+        items: batchItems,
+        requestId: 'BATCH-' + (todo[0].clientItemId || Date.now()),
+      });
+      if (batchRes && batchRes.code === 'UNAUTHORIZED') {
+        return { success: false, error: 'Unauthorized — isi API Secret di Atur', remaining: todo };
+      }
       if (batchRes && (batchRes.success === true || batchRes.status === 'APPLIED') && !batchRes.error) {
         todo.forEach((it) => markApplied(it.clientItemId));
         try { window.dispatchEvent(new CustomEvent('gudangai-stock-refresh')); } catch (_) {}
         pushNotification({ type: 'ok', title: 'Kirim berhasil', body: (todo.length + alreadyDone) + ' item tercatat.' });
         return { success: true, written: todo.length + alreadyDone, skipped: alreadyDone, remaining: [], details: batchRes.details || [] };
       }
+      // Batch merespons tapi bukan success jelas → treat as ambiguous, jangan serial
+      console.warn('[GudangAI] Batch response not clear success, enqueue for review:', batchRes);
+      enqueue(typeMap[action], entity, todo, { tanggal });
+      pushNotification({
+        type: 'warn',
+        title: 'Perlu tinjau antrian',
+        body: todo.length + ' item masuk Antrian Sinkronisasi. Buka Atur → Sinkronisasi untuk cek sebelum kirim ulang.',
+      });
+      return {
+        success: false,
+        remaining: todo,
+        written: alreadyDone,
+        queued: true,
+        error: 'Respons batch tidak jelas. Item dimasukkan ke Antrian Sinkronisasi agar tidak dobel.',
+      };
     } catch (batchErr) {
-      // FIX: Log batch failure for debugging
-      console.warn('[GudangAI] Batch failed, will retry serial:', batchErr?.message || batchErr);
-      // FIX: Wait a moment before serial fallback to let batch settle on server
-      await delay(1500);
+      // Timeout / network / non-JSON → kemungkinan batch sudah menulis di server.
+      // JANGAN serial. Enqueue agar user review di SyncQueuePage.
+      console.warn('[GudangAI] Batch failed/timeout — enqueue instead of serial to prevent double-write:', batchErr?.message || batchErr);
+      enqueue(typeMap[action], entity, todo, { tanggal });
+      pushNotification({
+        type: 'warn',
+        title: 'Perlu tinjau antrian',
+        body: todo.length + ' item masuk Antrian Sinkronisasi (batch timeout). Buka Atur → Sinkronisasi sebelum kirim ulang.',
+      });
+      return {
+        success: false,
+        remaining: todo,
+        written: alreadyDone,
+        queued: true,
+        offline: !navigator.onLine,
+        error: 'Batch timeout/gagal. Item dimasukkan ke Antrian agar tidak dobel di spreadsheet.',
+      };
     }
   }
-  const written = []; const errors = []; const failedItems = [];
+
+  // ========== SERIAL PATH (hanya dari Antrian / fromQueue, atau single-item edge) ==========
+  const written = [];
+  const errors = [];
+  const failedItems = [];
   for (let i = 0; i < todo.length; i++) {
     const it = todo[i];
-    // FIX: Re-check isApplied before each serial item
-    // This catches items that batch actually processed on server but response timed out
     if (isApplied(it.clientItemId)) continue;
     try {
       const res = await submitOneItem(sheet, entity, it, tanggal);
-      if (res.unauthorized) return { success: false, written: written.length + alreadyDone, remaining: todo.slice(i), error: 'Unauthorized — isi API Secret di Atur' };
+      if (res.unauthorized) {
+        return { success: false, written: written.length + alreadyDone, remaining: todo.slice(i), error: 'Unauthorized — isi API Secret di Atur' };
+      }
       if (res.success) written.push(res);
-      else { errors.push((res.kode || '?') + ': ' + (res.error || 'gagal')); failedItems.push(it); }
+      else {
+        errors.push((res.kode || '?') + ': ' + (res.error || 'gagal'));
+        failedItems.push(it);
+      }
     } catch (err) {
       const msg = err.message || '';
       const isNetwork = !navigator.onLine || /Failed to fetch|NetworkError|Timeout|HTTP 5/i.test(msg);
@@ -250,7 +305,8 @@ async function submitTransaction(action, entity, items, options = {}) {
         if (!fromQueue) enqueue(typeMap[action], entity, rest, { tanggal });
         return { success: written.length > 0, offline: true, remaining: rest, written: written.length + alreadyDone, error: 'Jaringan terputus — sisa antrian.' };
       }
-      errors.push((it.kode || '?') + ': ' + msg); failedItems.push(it);
+      errors.push((it.kode || '?') + ': ' + msg);
+      failedItems.push(it);
     }
   }
   const stillPending = failedItems.filter((it) => !isApplied(it.clientItemId));
