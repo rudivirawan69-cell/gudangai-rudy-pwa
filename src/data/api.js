@@ -1,9 +1,9 @@
-/** GudangAI RUDY — API layer V6.4.14 write-once + longer write timeout + soft queue notif (anti-duplikat) */
+/** GudangAI RUDY — API layer V6.4.15 write-once + write timeout 90s (batch 70–80 item) + soft queue notif (anti-duplikat) */
 const RETRY_COUNT = 2;
 const RETRY_BASE_MS = 400;
 const REQUEST_TIMEOUT_MS = 12000;
-/** Write path: beri server waktu lebih lama menulis sheet sebelum client abort (hindari false timeout → antrian). */
-const WRITE_TIMEOUT_MS = 28000;
+/** Write path: timeout 90 detik agar batch besar (70–80 item) sempat selesai di server sebelum client abort. UI tombol tetap lepas ~4 detik. */
+const WRITE_TIMEOUT_MS = 90000;
 const SCHEMA_VERSION = '1.0';
 const APPLIED_KEY = 'gudangai_applied';
 const QUEUE_KEY = 'gudangai_queue';
