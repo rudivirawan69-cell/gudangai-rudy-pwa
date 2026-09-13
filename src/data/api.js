@@ -132,15 +132,11 @@ export async function fetchStock(entity, options = {}) {
   }
 }
 export async function getStatusPO() {
-  const url = getApiUrl();
-  if (!url) return { success: false, error: 'URL API belum diatur' };
   try {
-    let data;
-    try { data = await getJson('getStatusPO'); } catch { data = await postJson({ action: 'getStatusPO', requestId: newIds().requestId }); }
-    if (data && data.code === 'UNAUTHORIZED') return { success: false, error: 'Unauthorized — isi API Secret di Atur' };
-    return data || { success: false, error: 'Respons kosong' };
+    const data = await getJson('getStatusPO');
+    return data || { success: false, error: 'Respons status PO kosong' };
   } catch (err) {
-    return { success: false, error: err.message || 'Gagal mengambil Status PO' };
+    return { success: false, error: err?.message || 'Gagal mengambil status PO' };
   }
 }
 export async function getDashboardData() {
@@ -220,11 +216,6 @@ async function submitTransaction(action, entity, items, options = {}) {
   const alreadyDone = normalized.length - todo.length;
   if (!todo.length) return { success: true, written: alreadyDone, skipped: alreadyDone, remaining: [], message: 'Semua item sudah tercatat.' };
 
-  // ========== BATCH PATH (hanya untuk kirim langsung dari Input, bukan dari Antrian) ==========
-  // Aturan ketat anti-duplikat (12 Sep 2026):
-  // Jika batch berhasil jelas → markApplied + selesai.
-  // Jika batch gagal / timeout / respons tidak jelas → JANGAN serial-ulang.
-  // Masukkan ke antrian agar user review di SyncQueuePage. Hindari double-write ke spreadsheet.
   if (!fromQueue && todo.length >= 1) {
     try {
       const batchItems = todo.map((it) => ({
@@ -247,10 +238,8 @@ async function submitTransaction(action, entity, items, options = {}) {
       if (batchRes && (batchRes.success === true || batchRes.status === 'APPLIED') && !batchRes.error) {
         todo.forEach((it) => markApplied(it.clientItemId));
         try { window.dispatchEvent(new CustomEvent('gudangai-stock-refresh')); } catch (_) {}
-        // Notifikasi sukses ditangani di InputPage agar label tipe (Masuk/Keluar/Rusak) konsisten.
         return { success: true, written: todo.length + alreadyDone, skipped: alreadyDone, remaining: [], details: batchRes.details || [] };
       }
-      // Batch merespons tapi bukan success jelas → treat as ambiguous, jangan serial
       console.warn('[GudangAI] Batch response not clear success, enqueue for review:', batchRes);
       enqueue(typeMap[action], entity, todo, { tanggal });
       pushNotification({
@@ -266,8 +255,6 @@ async function submitTransaction(action, entity, items, options = {}) {
         error: 'Respons batch belum jelas. Item di Antrian verifikasi. Cek spreadsheet dulu sebelum kirim ulang.',
       };
     } catch (batchErr) {
-      // Timeout / network / non-JSON → kemungkinan besar batch sudah menulis di server (write-once).
-      // JANGAN serial. Enqueue agar user review di SyncQueuePage. Notifikasi netral, bukan "gagal".
       console.warn('[GudangAI] Batch failed/timeout — enqueue instead of serial to prevent double-write:', batchErr?.message || batchErr);
       enqueue(typeMap[action], entity, todo, { tanggal });
       pushNotification({
@@ -286,7 +273,6 @@ async function submitTransaction(action, entity, items, options = {}) {
     }
   }
 
-  // ========== SERIAL PATH (hanya dari Antrian / fromQueue, atau single-item edge) ==========
   const written = [];
   const errors = [];
   const failedItems = [];
@@ -339,12 +325,17 @@ export async function syncPendingQueue() {
     for (let i = 0; i < queue.length; i++) {
       if (queue[i].synced) continue;
       const pendingItems = (queue[i].items || []).map(ensureClientItemId).filter((it) => !isApplied(it.clientItemId));
-      if (!pendingItems.length) { queue[i] = { ...queue[i], synced: true, items: [] }; synced++; continue; }
+      if (!pendingItems.length) { queue[i].synced = true; continue; }
+      const act = actionMap[queue[i].type] || 'barangMasuk';
       try {
-        const res = await submitTransaction(actionMap[queue[i].type] || 'barangMasuk', queue[i].entity, pendingItems, { tanggal: queue[i].tanggal || '', fromQueue: true });
-        const still = (res.remaining || []).filter((it) => !isApplied(it.clientItemId));
-        if (!still.length) { queue[i] = { ...queue[i], synced: true, items: [] }; synced++; }
-        else { queue[i] = { ...queue[i], items: still, synced: false }; failed++; if (res.offline) break; }
+        const res = await submitTransaction(act, queue[i].entity, pendingItems, { tanggal: queue[i].tanggal, fromQueue: true });
+        if (res.success && (!res.remaining || !res.remaining.length)) {
+          queue[i].synced = true;
+          synced += pendingItems.length;
+        } else {
+          failed += (res.remaining || pendingItems).length;
+          if (res.offline) break;
+        }
       } catch { failed++; break; }
     }
     localStorage.setItem(QUEUE_KEY, JSON.stringify(queue.filter((e) => !e.synced && (e.items || []).length)));
@@ -397,3 +388,29 @@ export function markNotificationsRead() {
   } catch (_) {}
 }
 export function unreadNotificationCount() { return getNotifications().filter((n) => !n.read).length; }
+
+/** Generate rekomendasi PO (draft). Tidak menulis sheet. */
+export async function generatePO(payload) {
+  try {
+    const data = await postJsonWrite({
+      action: 'generatePO',
+      ...payload,
+    });
+    return data || { success: false, error: 'Respons generate PO kosong' };
+  } catch (err) {
+    return { success: false, error: err?.message || 'Gagal generate PO' };
+  }
+}
+
+/** Simpan / kirim PO final ke sheet Purchase Order. Write-once. */
+export async function submitPO(payload) {
+  try {
+    const data = await postJsonWrite({
+      action: 'submitPO',
+      ...payload,
+    });
+    return data || { success: false, error: 'Respons submit PO kosong' };
+  } catch (err) {
+    return { success: false, error: err?.message || 'Gagal menyimpan PO' };
+  }
+}
