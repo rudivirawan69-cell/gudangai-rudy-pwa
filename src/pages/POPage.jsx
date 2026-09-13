@@ -301,7 +301,7 @@ export default function POPage() {
               <FileText className="w-5 h-5 text-white/90" />
               <div>
                 <p className="text-sm font-bold">{tab === 'cs' ? 'Rekomendasi PO · Cold Storage' : 'Rekomendasi PO · Produksi'}</p>
-                <p className="text-[11px] text-white/70">Stok < stok aman → generate draft</p>
+                <p className="text-[11px] text-white/70">Stok di bawah stok aman → generate draft</p>
               </div>
             </div>
             <div className="flex gap-4">
