@@ -1,7 +1,9 @@
-/** GudangAI RUDY — API layer V6.4.13 write-once + no auto-sync queue (anti-duplikat) */
+/** GudangAI RUDY — API layer V6.4.14 write-once + longer write timeout + soft queue notif (anti-duplikat) */
 const RETRY_COUNT = 2;
 const RETRY_BASE_MS = 400;
 const REQUEST_TIMEOUT_MS = 12000;
+/** Write path: beri server waktu lebih lama menulis sheet sebelum client abort (hindari false timeout → antrian). */
+const WRITE_TIMEOUT_MS = 28000;
 const SCHEMA_VERSION = '1.0';
 const APPLIED_KEY = 'gudangai_applied';
 const QUEUE_KEY = 'gudangai_queue';
@@ -41,11 +43,11 @@ function newIds() {
   const stamp = Date.now().toString(36) + '-' + _idSeq.toString(36);
   return { requestId: 'REQ-' + uuid + '-' + stamp, transactionId: 'TX-RUDY-' + uuid + '-' + stamp, nonce: 'NC-' + uuid + '-' + stamp };
 }
-async function fetchWithRetry(url, options = {}, retries = RETRY_COUNT) {
+async function fetchWithRetry(url, options = {}, retries = RETRY_COUNT, timeoutMs = REQUEST_TIMEOUT_MS) {
   let lastError;
   for (let attempt = 1; attempt <= retries; attempt++) {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
       const res = await fetch(url, { ...options, signal: controller.signal });
       clearTimeout(timer);
@@ -61,17 +63,17 @@ async function fetchWithRetry(url, options = {}, retries = RETRY_COUNT) {
   emitConn({ state: 'failed', error: (lastError && lastError.message) || 'Gagal' });
   throw lastError;
 }
-async function postJson(payload, { retries = RETRY_COUNT } = {}) {
+async function postJson(payload, { retries = RETRY_COUNT, timeoutMs = REQUEST_TIMEOUT_MS } = {}) {
   const url = getApiUrl();
   if (!url) throw new Error('URL API belum diatur');
   const body = JSON.stringify({ schemaVersion: SCHEMA_VERSION, secret: getApiSecret() || undefined, client: { app: 'gudangai-rudy-pwa', deviceId: deviceId() }, ...payload });
-  const res = await fetchWithRetry(url, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body, redirect: 'follow' }, retries);
+  const res = await fetchWithRetry(url, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body, redirect: 'follow' }, retries, timeoutMs);
   const text = await res.text();
   try { return JSON.parse(text); } catch { throw new Error('Respons bukan JSON: ' + text.slice(0, 120)); }
 }
-/** Write-once: never auto-retry POST transaksi. 1 request = 1 attempt. Timeout/hilang respons → UNKNOWN, enqueue. */
+/** Write-once: never auto-retry POST transaksi. 1 request = 1 attempt. Timeout/hilang respons → UNKNOWN, enqueue. Timeout lebih panjang agar server sempat menulis. */
 async function postJsonWrite(payload) {
-  return postJson(payload, { retries: 1 });
+  return postJson(payload, { retries: 1, timeoutMs: WRITE_TIMEOUT_MS });
 }
 async function getJson(action, extraParams = {}) {
   const url = getApiUrl();
@@ -245,7 +247,7 @@ async function submitTransaction(action, entity, items, options = {}) {
       if (batchRes && (batchRes.success === true || batchRes.status === 'APPLIED') && !batchRes.error) {
         todo.forEach((it) => markApplied(it.clientItemId));
         try { window.dispatchEvent(new CustomEvent('gudangai-stock-refresh')); } catch (_) {}
-        pushNotification({ type: 'ok', title: 'Kirim berhasil', body: (todo.length + alreadyDone) + ' item tercatat.' });
+        // Notifikasi sukses ditangani di InputPage agar label tipe (Masuk/Keluar/Rusak) konsisten.
         return { success: true, written: todo.length + alreadyDone, skipped: alreadyDone, remaining: [], details: batchRes.details || [] };
       }
       // Batch merespons tapi bukan success jelas → treat as ambiguous, jangan serial
@@ -253,25 +255,25 @@ async function submitTransaction(action, entity, items, options = {}) {
       enqueue(typeMap[action], entity, todo, { tanggal });
       pushNotification({
         type: 'warn',
-        title: 'Perlu tinjau antrian',
-        body: todo.length + ' item masuk Antrian. Cek spreadsheet dulu — jika sudah tertulis, HAPUS dari antrian. Jangan kirim ulang agar tidak dobel.',
+        title: 'Verifikasi antrian',
+        body: todo.length + ' item masuk Antrian verifikasi. Server mungkin sudah menulis. Cek spreadsheet utama — jika sudah tertulis, HAPUS dari antrian. Jangan kirim ulang agar tidak dobel.',
       });
       return {
         success: false,
         remaining: todo,
         written: alreadyDone,
         queued: true,
-        error: 'Respons batch tidak jelas. Item di Antrian. Cek spreadsheet dulu sebelum kirim ulang.',
+        error: 'Respons batch belum jelas. Item di Antrian verifikasi. Cek spreadsheet dulu sebelum kirim ulang.',
       };
     } catch (batchErr) {
-      // Timeout / network / non-JSON → kemungkinan batch sudah menulis di server.
-      // JANGAN serial. Enqueue agar user review di SyncQueuePage.
+      // Timeout / network / non-JSON → kemungkinan besar batch sudah menulis di server (write-once).
+      // JANGAN serial. Enqueue agar user review di SyncQueuePage. Notifikasi netral, bukan "gagal".
       console.warn('[GudangAI] Batch failed/timeout — enqueue instead of serial to prevent double-write:', batchErr?.message || batchErr);
       enqueue(typeMap[action], entity, todo, { tanggal });
       pushNotification({
         type: 'warn',
-        title: 'Perlu tinjau antrian',
-        body: todo.length + ' item masuk Antrian (batch timeout). Cek spreadsheet dulu — jika sudah tertulis, HAPUS dari antrian. Jangan kirim ulang agar tidak dobel.',
+        title: 'Verifikasi antrian',
+        body: todo.length + ' item masuk Antrian (respons timeout). Server mungkin masih/sudah menulis di sheet. Cek spreadsheet utama — jika sudah tertulis, HAPUS dari antrian. Jangan kirim ulang agar tidak dobel.',
       });
       return {
         success: false,
@@ -279,7 +281,7 @@ async function submitTransaction(action, entity, items, options = {}) {
         written: alreadyDone,
         queued: true,
         offline: !navigator.onLine,
-        error: 'Batch timeout/gagal. Item dimasukkan ke Antrian. Cek spreadsheet — jika sudah ada, hapus antrian (jangan kirim ulang).',
+        error: 'Respons timeout. Item di Antrian verifikasi. Cek spreadsheet — jika sudah ada, hapus antrian (jangan kirim ulang).',
       };
     }
   }
