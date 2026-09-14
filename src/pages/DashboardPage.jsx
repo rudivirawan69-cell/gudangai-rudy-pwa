@@ -6,28 +6,28 @@ import {
 } from '../data/api';
 import { DIVISIONS } from '../data/master';
 import {
-  AlertTriangle, ShieldCheck, WifiOff, ChevronRight, RefreshCw,
-  Snowflake, FileText, Package, Bell
+  AlertTriangle, RefreshCw, FileText, Package,
 } from 'lucide-react';
-
-function statusChip(stok) {
-  if (stok <= 0) return { label: 'Habis', cls: 'bg-slate-100 text-slate-600' };
-  if (stok <= 5) return { label: 'Kritis', cls: 'bg-red-50 text-red-600' };
-  if (stok <= 20) return { label: 'Waspada', cls: 'bg-amber-50 text-amber-700' };
-  return { label: 'Aman', cls: 'bg-emerald-50 text-emerald-700' };
-}
 
 function DivisionStatusBars({ items }) {
   const rows = useMemo(() => {
     const map = {};
     DIVISIONS.forEach((d) => { map[d] = { divisi: d, total: 0, aman: 0, waspada: 0, kritis: 0 }; });
-    items.forEach((it) => {
-      const d = it.divisi || 'CS';
+    (items || []).forEach((it) => {
+      const d = String(it.divisi || 'CS').trim() || 'CS';
       if (!map[d]) map[d] = { divisi: d, total: 0, aman: 0, waspada: 0, kritis: 0 };
       map[d].total += 1;
-      if (it.stok <= 5) map[d].kritis += 1;
-      else if (it.stok <= 20) map[d].waspada += 1;
-      else map[d].aman += 1;
+      const stok = Number(it.stok) || 0;
+      const aman = Number(it.stockAman ?? it.aman ?? 0);
+      if (aman > 0) {
+        if (stok <= 0 || stok <= Math.max(5, Math.floor(aman * 0.25))) map[d].kritis += 1;
+        else if (stok < aman) map[d].waspada += 1;
+        else map[d].aman += 1;
+      } else {
+        if (stok <= 5) map[d].kritis += 1;
+        else if (stok <= 20) map[d].waspada += 1;
+        else map[d].aman += 1;
+      }
     });
     return Object.values(map).filter((r) => r.total > 0).sort((a, b) => b.kritis - a.kritis || b.total - a.total);
   }, [items]);
@@ -62,12 +62,11 @@ function DivisionStatusBars({ items }) {
 }
 
 function statusPOColor(status) {
-  if (status === 'Selesai') return { bg: 'bg-emerald-50/80', text: 'text-emerald-700', bar: 'bg-emerald-500', border: 'border-emerald-100/80' };
-  if (status === 'Sebagian') return { bg: 'bg-amber-50/80', text: 'text-amber-700', bar: 'bg-amber-400', border: 'border-amber-100/80' };
-  return { bg: 'bg-slate-50/80', text: 'text-slate-600', bar: 'bg-slate-300', border: 'border-slate-100/80' };
+  if (status === 'Selesai') return { bg: 'bg-emerald-50/80', text: 'text-emerald-700', bar: 'bg-emerald-500' };
+  if (status === 'Sebagian') return { bg: 'bg-amber-50/80', text: 'text-amber-700', bar: 'bg-amber-400' };
+  return { bg: 'bg-slate-50/80', text: 'text-slate-600', bar: 'bg-slate-300' };
 }
 
-/** Status PO — soft list style with large donut chart */
 function StatusPOCard({ data, loading, error, onRefresh }) {
   if (loading) {
     return (
@@ -84,12 +83,10 @@ function StatusPOCard({ data, loading, error, onRefresh }) {
         <div className="space-y-2">
           <div className="skeleton h-3 rounded-full" />
           <div className="skeleton h-14 rounded-xl" />
-          <div className="skeleton h-14 rounded-xl" />
         </div>
       </div>
     );
   }
-
   if (error) {
     return (
       <div className="rounded-2xl bg-white border border-amber-100 shadow-sm p-4 animate-slide-up">
@@ -106,7 +103,6 @@ function StatusPOCard({ data, loading, error, onRefresh }) {
       </div>
     );
   }
-
   if (!data || !data.success) {
     return (
       <div className="rounded-2xl bg-white border border-slate-100 shadow-sm p-4 animate-slide-up">
@@ -134,7 +130,6 @@ function StatusPOCard({ data, loading, error, onRefresh }) {
   const totalKonfirmasi = summary.totalKonfirmasi || 0;
   const progressPct = totalItem > 0 ? Math.round(((selesai + sebagian * 0.5) / totalItem) * 100) : 0;
 
-  // Donut geometry
   const size = 148;
   const stroke = 16;
   const r = (size - stroke) / 2;
@@ -143,7 +138,6 @@ function StatusPOCard({ data, loading, error, onRefresh }) {
   const segMenunggu = (menunggu / totalSeg) * c;
   const segSebagian = (sebagian / totalSeg) * c;
   const segSelesai = (selesai / totalSeg) * c;
-  const offsetMenunggu = 0;
   const offsetSebagian = segMenunggu;
   const offsetSelesai = segMenunggu + segSebagian;
 
@@ -161,24 +155,18 @@ function StatusPOCard({ data, loading, error, onRefresh }) {
             </p>
           </div>
         </div>
-        <button
-          type="button"
-          onClick={onRefresh}
-          className="w-8 h-8 rounded-full bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-500 active:scale-95 shrink-0"
-          aria-label="Refresh PO"
-        >
+        <button type="button" onClick={onRefresh} className="w-8 h-8 rounded-full bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-500 active:scale-95 shrink-0" aria-label="Refresh PO">
           <RefreshCw className="w-3.5 h-3.5" />
         </button>
       </div>
 
-      {/* Large Donut Chart */}
       <div className="flex items-center justify-center gap-5 mb-4">
         <div className="relative shrink-0" style={{ width: size, height: size }}>
           <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="-rotate-90">
             <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#f1f5f9" strokeWidth={stroke} />
             {menunggu > 0 && (
               <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#94a3b8" strokeWidth={stroke}
-                strokeDasharray={`${segMenunggu} ${c - segMenunggu}`} strokeDashoffset={-offsetMenunggu} strokeLinecap="butt" />
+                strokeDasharray={`${segMenunggu} ${c - segMenunggu}`} strokeDashoffset={0} strokeLinecap="butt" />
             )}
             {sebagian > 0 && (
               <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#fbbf24" strokeWidth={stroke}
@@ -194,7 +182,6 @@ function StatusPOCard({ data, loading, error, onRefresh }) {
             <span className="text-[10px] text-slate-400 mt-0.5 font-medium">Progress</span>
           </div>
         </div>
-
         <div className="flex flex-col gap-2.5 min-w-0">
           <div className="flex items-center gap-2">
             <span className="w-3 h-3 rounded-full bg-slate-400 shrink-0" />
@@ -264,15 +251,17 @@ function StatusPOCard({ data, loading, error, onRefresh }) {
 }
 
 export default function DashboardPage() {
-  const { stockCV, stockPT, loading, lastSync, error: stockError, refresh } = useStock();
+  const stockCV = useStock('CV');
+  const stockPT = useStock('PT');
   const { user } = useAuth();
   const [poData, setPoData] = useState(null);
   const [poLoading, setPoLoading] = useState(true);
   const [poError, setPoError] = useState(null);
-  const [notifs, setNotifs] = useState([]);
-  const [unread, setUnread] = useState(0);
 
-  const allItems = useMemo(() => [...(stockCV || []), ...(stockPT || [])], [stockCV, stockPT]);
+  const allItems = useMemo(
+    () => [...(stockCV.items || []), ...(stockPT.items || [])],
+    [stockCV.items, stockPT.items]
+  );
 
   const stats = useMemo(() => {
     const total = allItems.length;
@@ -280,9 +269,16 @@ export default function DashboardPage() {
     allItems.forEach((it) => {
       const s = Number(it.stok) || 0;
       totalUnit += s;
-      if (s <= 5) kritis += 1;
-      else if (s <= 20) waspada += 1;
-      else aman += 1;
+      const a = Number(it.stockAman ?? it.aman ?? 0);
+      if (a > 0) {
+        if (s <= 0 || s <= Math.max(5, Math.floor(a * 0.25))) kritis += 1;
+        else if (s < a) waspada += 1;
+        else aman += 1;
+      } else {
+        if (s <= 5) kritis += 1;
+        else if (s <= 20) waspada += 1;
+        else aman += 1;
+      }
     });
     return { total, aman, waspada, kritis, totalUnit };
   }, [allItems]);
@@ -311,23 +307,19 @@ export default function DashboardPage() {
     return () => clearInterval(t);
   }, [loadPO]);
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const n = await getNotifications();
-        setNotifs(Array.isArray(n) ? n : []);
-        setUnread(unreadNotificationCount());
-      } catch {}
-    })();
-  }, []);
-
   const pending = getPendingQueue().length;
+  const loading = stockCV.loading || stockPT.loading;
+  const lastSync = stockCV.lastRefresh || stockPT.lastRefresh;
+  const now = new Date();
+  const dateLabel = now.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
   return (
     <div className="pb-6 animate-fade-in space-y-3">
       <div className="rounded-2xl bg-gradient-to-br from-[#0b2a55] to-[#164e8a] text-white p-4 shadow-lg">
-        <p className="text-[11px] text-cyan-200/80">Senin, 14 September 2026</p>
-        <p className="text-[10px] text-cyan-100/70 mt-0.5">Stok disinkron {lastSync || '—'}</p>
+        <p className="text-[11px] text-cyan-200/80 capitalize">{dateLabel}</p>
+        <p className="text-[10px] text-cyan-100/70 mt-0.5">
+          Stok disinkron {lastSync ? lastSync.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '—'}
+        </p>
         <div className="grid grid-cols-3 gap-2 mt-3">
           <div className="bg-white/10 rounded-xl p-2.5 text-center">
             <p className="text-[10px] text-cyan-100/80">TOTAL SKU</p>
