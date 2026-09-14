@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
-import { Snowflake } from 'lucide-react';
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -45,10 +44,14 @@ export default function LoginPage() {
         <div className="app-bg-login" />
       </div>
       <div className="app-shell min-h-dvh flex flex-col items-center justify-center px-6">
-        {/* Logo */}
+        {/* Logo Rocket */}
         <div className="mb-8 animate-fade-in relative z-10">
-          <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-cyan-400 to-blue-500 flex items-center justify-center shadow-[0_0_40px_rgba(34,211,238,0.3)] mb-4 mx-auto">
-            <Snowflake className="w-10 h-10 text-white" />
+          <div className="w-24 h-24 rounded-2xl overflow-hidden shadow-[0_0_40px_rgba(34,211,238,0.35)] mb-4 mx-auto border border-white/20 bg-white/5">
+            <img
+              src="/icon-512.png"
+              alt="GudangAI RUDY"
+              className="w-full h-full object-cover"
+            />
           </div>
           <h1 className="text-white text-2xl font-bold tracking-tight text-center drop-shadow-lg">
             GudangAI <span className="text-cyan-300 font-extrabold">RUDY</span>
