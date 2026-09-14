@@ -49,7 +49,7 @@ function getAman(item) {
 }
 
 function buildCritical(list, entity, predicate) {
-  return list
+  return (list || [])
     .filter((i) => {
       if (i.kode?.startsWith('BB')) return false;
       if (predicate && !predicate(i.divisi)) return false;
@@ -90,7 +90,6 @@ function formatTglHeader() {
   return `${String(d.getDate()).padStart(2, '0')} ${months[d.getMonth()]} ${d.getFullYear()}`;
 }
 
-/** Merge CV + PT by normalized nama into final table rows. Qty 0 discarded. */
 function buildFinalRows(items) {
   const map = new Map();
   items.forEach((it) => {
@@ -149,7 +148,9 @@ function ItemCard({ item, onUpdate, onRemove }) {
 }
 
 export default function POPage() {
-  const { stockCV, stockPT, loading } = useStock();
+  const stockCV = useStock('CV');
+  const stockPT = useStock('PT');
+  const loading = stockCV.loading || stockPT.loading;
   const [tab, setTab] = useState('cs');
   const [phase, setPhase] = useState('idle');
   const [draftItems, setDraftItems] = useState([]);
@@ -157,26 +158,26 @@ export default function POPage() {
   const [submitMsg, setSubmitMsg] = useState('');
 
   const criticalCS = useMemo(() => {
-    const cv = buildCritical(stockCV || [], 'CV', isCS);
-    const pt = buildCritical(stockPT || [], 'PT', isCS);
+    const cv = buildCritical(stockCV.items || [], 'CV', isCS);
+    const pt = buildCritical(stockPT.items || [], 'PT', isCS);
     return [...cv, ...pt].sort((a, b) => b.qty - a.qty);
-  }, [stockCV, stockPT]);
+  }, [stockCV.items, stockPT.items]);
 
   const criticalProduksi = useMemo(() => {
-    const cv = buildCritical(stockCV || [], 'CV', isProduksi);
-    const pt = buildCritical(stockPT || [], 'PT', isProduksi);
+    const cv = buildCritical(stockCV.items || [], 'CV', isProduksi);
+    const pt = buildCritical(stockPT.items || [], 'PT', isProduksi);
     return [...cv, ...pt].sort((a, b) => b.qty - a.qty);
-  }, [stockCV, stockPT]);
+  }, [stockCV.items, stockPT.items]);
 
   const activeCritical = tab === 'cs' ? criticalCS : criticalProduksi;
-
   const finalRows = useMemo(() => buildFinalRows(draftItems), [draftItems]);
 
-  const generate = () => {
-    setDraftItems(activeCritical.map((i) => ({ ...i })));
+  const generate = useCallback(() => {
+    const src = tab === 'cs' ? criticalCS : criticalProduksi;
+    setDraftItems(src.map((i) => ({ ...i })));
     setPhase('review');
     setSubmitMsg('');
-  };
+  }, [tab, criticalCS, criticalProduksi]);
 
   const updateQty = (id, qty) => {
     setDraftItems((prev) => prev.map((i) => (i.id === id ? { ...i, qty: Math.max(0, qty) } : i)));
@@ -186,13 +187,8 @@ export default function POPage() {
     setDraftItems((prev) => prev.filter((i) => i.id !== id));
   };
 
-  const goFinal = () => {
-    setPhase('final');
-  };
-
-  const goReview = () => {
-    setPhase('review');
-  };
+  const goFinal = () => setPhase('final');
+  const goReview = () => setPhase('review');
 
   const handleSubmit = async () => {
     if (submitting || finalRows.length === 0) return;
@@ -241,7 +237,6 @@ export default function POPage() {
       <h2 className="text-lg font-bold text-gray-800 mb-0.5">Purchase Order</h2>
       <p className="text-xs text-gray-400 mb-3">Buat rekomendasi PO berdasarkan stok aman.</p>
 
-      {/* Tabs tipe PO */}
       <div className="grid grid-cols-2 gap-2 mb-3">
         <button
           type="button"
@@ -271,14 +266,12 @@ export default function POPage() {
         </button>
       </div>
 
-      {/* ===== IDLE ===== */}
       {phase === 'idle' && (
         <div className="text-center py-10 text-gray-400 text-sm">
           {loading ? 'Memuat stok...' : activeCritical.length === 0 ? 'Tidak ada item di bawah stok aman.' : `${activeCritical.length} item siap generate.`}
         </div>
       )}
 
-      {/* ===== REVIEW ===== */}
       {phase === 'review' && (
         <>
           <p className="text-xs text-gray-500 mb-2">Revisi qty jika perlu, lalu tinjau hasil.</p>
@@ -294,7 +287,6 @@ export default function POPage() {
         </>
       )}
 
-      {/* ===== FINAL ===== */}
       {phase === 'final' && (
         <>
           <div className="mb-3">
@@ -306,37 +298,20 @@ export default function POPage() {
           ) : (
             <div className="space-y-2 mb-4">
               {finalRows.map((r, idx) => (
-                <div
-                  key={idx}
-                  className="rounded-xl bg-white/95 border border-slate-100 shadow-sm px-3 py-2.5"
-                >
+                <div key={idx} className="rounded-xl bg-white/95 border border-slate-100 shadow-sm px-3 py-2.5">
                   <div className="flex items-start gap-2 mb-1.5">
                     <span className="text-[10px] font-bold text-slate-400 tabular-nums w-5 shrink-0 pt-0.5">
                       {String(idx + 1).padStart(2, '0')}
                     </span>
-                    <p className="text-[13px] font-semibold text-slate-800 leading-snug flex-1 min-w-0">
-                      {r.nama}
-                    </p>
-                    <span className="text-[13px] font-bold text-[#0b2a55] tabular-nums shrink-0">
-                      {r.total}
-                    </span>
+                    <p className="text-[13px] font-semibold text-slate-800 leading-snug flex-1 min-w-0">{r.nama}</p>
+                    <span className="text-[13px] font-bold text-[#0b2a55] tabular-nums shrink-0">{r.total}</span>
                   </div>
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1 pl-7 text-[10px] text-slate-500">
-                    <span>
-                      Size <b className="text-slate-700 font-medium">{r.size || '—'}</b>
-                    </span>
-                    <span>
-                      Sat. <b className="text-slate-700 font-medium">{r.satuan}</b>
-                    </span>
-                    <span>
-                      CV <b className="text-cyan-700 font-semibold tabular-nums">{r.poCV || 0}</b>
-                    </span>
-                    <span>
-                      PT <b className="text-violet-700 font-semibold tabular-nums">{r.poPT || 0}</b>
-                    </span>
-                    <span className="text-slate-400">
-                      Kedatangan <b className="text-slate-600 font-medium">{r.tgl}</b>
-                    </span>
+                    <span>Size <b className="text-slate-700 font-medium">{r.size || '—'}</b></span>
+                    <span>Sat. <b className="text-slate-700 font-medium">{r.satuan}</b></span>
+                    <span>CV <b className="text-cyan-700 font-semibold tabular-nums">{r.poCV || 0}</b></span>
+                    <span>PT <b className="text-violet-700 font-semibold tabular-nums">{r.poPT || 0}</b></span>
+                    <span className="text-slate-400">Kedatangan <b className="text-slate-600 font-medium">{r.tgl}</b></span>
                   </div>
                 </div>
               ))}
@@ -350,23 +325,17 @@ export default function POPage() {
         </>
       )}
 
-      {/* ===== SAVED ===== */}
       {phase === 'saved' && (
         <div className="text-center py-10">
           <CheckCircle className="w-14 h-14 text-emerald-500 mx-auto mb-3" />
           <p className="text-gray-800 font-bold mb-1">PO berhasil disimpan</p>
           <p className="text-xs text-gray-400 mb-4">{submitMsg || 'Data telah dikirim ke sheet Purchase Order.'}</p>
-          <button
-            type="button"
-            onClick={resetAll}
-            className="px-5 py-2.5 rounded-xl bg-gray-100 text-gray-700 text-sm font-medium"
-          >
+          <button type="button" onClick={resetAll} className="px-5 py-2.5 rounded-xl bg-gray-100 text-gray-700 text-sm font-medium">
             Buat PO baru
           </button>
         </div>
       )}
 
-      {/* Bottom actions */}
       {phase !== 'saved' && (
         <div className="fixed bottom-[4.25rem] left-0 right-0 z-40 px-3 pointer-events-none">
           <div className="max-w-lg mx-auto pointer-events-auto space-y-2">
@@ -376,61 +345,30 @@ export default function POPage() {
                 onClick={generate}
                 disabled={loading || activeCritical.length === 0}
                 className={`w-full py-3.5 rounded-xl text-white text-sm font-bold flex items-center justify-center gap-2 shadow-xl disabled:opacity-50 ${
-                  tab === 'cs'
-                    ? 'bg-gradient-to-r from-cyan-600 to-[#0b2a55]'
-                    : 'bg-gradient-to-r from-orange-500 to-amber-700'
+                  tab === 'cs' ? 'bg-gradient-to-r from-cyan-600 to-[#0b2a55]' : 'bg-gradient-to-r from-orange-500 to-amber-700'
                 }`}
               >
                 <FileText className="w-4 h-4" />
                 Generate Rekomendasi PO
               </button>
             )}
-
             {phase === 'review' && (
               <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={resetAll}
-                  className="flex-1 py-3 rounded-xl bg-white border border-gray-200 text-gray-700 text-sm font-medium shadow flex items-center justify-center gap-1"
-                >
+                <button type="button" onClick={resetAll} className="flex-1 py-3 rounded-xl bg-white border border-gray-200 text-gray-700 text-sm font-medium shadow flex items-center justify-center gap-1">
                   <ArrowLeft className="w-4 h-4" /> Batal
                 </button>
-                <button
-                  type="button"
-                  onClick={goFinal}
-                  disabled={draftItems.length === 0}
-                  className={`flex-[1.4] py-3 rounded-xl text-white text-sm font-bold shadow disabled:opacity-50 ${
-                    tab === 'cs' ? 'bg-cyan-600' : 'bg-orange-600'
-                  }`}
-                >
+                <button type="button" onClick={goFinal} disabled={draftItems.length === 0} className={`flex-[1.4] py-3 rounded-xl text-white text-sm font-bold shadow disabled:opacity-50 ${tab === 'cs' ? 'bg-cyan-600' : 'bg-orange-600'}`}>
                   Tinjau Hasil PO
                 </button>
               </div>
             )}
-
             {phase === 'final' && (
               <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={goReview}
-                  disabled={submitting}
-                  className="flex-1 py-3 rounded-xl bg-white border border-gray-200 text-gray-700 text-sm font-medium shadow flex items-center justify-center gap-1"
-                >
+                <button type="button" onClick={goReview} disabled={submitting} className="flex-1 py-3 rounded-xl bg-white border border-gray-200 text-gray-700 text-sm font-medium shadow flex items-center justify-center gap-1">
                   <ArrowLeft className="w-4 h-4" /> Revisi
                 </button>
-                <button
-                  type="button"
-                  onClick={handleSubmit}
-                  disabled={submitting || finalRows.length === 0}
-                  className={`flex-[1.4] py-3 rounded-xl text-white text-sm font-bold shadow disabled:opacity-50 flex items-center justify-center gap-2 ${
-                    tab === 'cs' ? 'bg-[#0b2a55]' : 'bg-orange-700'
-                  }`}
-                >
-                  {submitting ? (
-                    <><Loader2 className="w-4 h-4 animate-spin" /> Menyimpan...</>
-                  ) : (
-                    <><Save className="w-4 h-4" /> Simpan / Kirim PO</>
-                  )}
+                <button type="button" onClick={handleSubmit} disabled={submitting || finalRows.length === 0} className={`flex-[1.4] py-3 rounded-xl text-white text-sm font-bold shadow disabled:opacity-50 flex items-center justify-center gap-2 ${tab === 'cs' ? 'bg-[#0b2a55]' : 'bg-orange-700'}`}>
+                  {submitting ? (<><Loader2 className="w-4 h-4 animate-spin" /> Menyimpan...</>) : (<><Save className="w-4 h-4" /> Simpan / Kirim PO</>)}
                 </button>
               </div>
             )}
