@@ -134,6 +134,17 @@ function MergedItemCard({ row, onChangeCV, onChangePT, onChangeTgl, onRemove }) 
         </button>
       </div>
 
+      {/* Tgl kedatangan di AWAL kartu — per item (sesuai sisa stok), bukan 1 tanggal global */}
+      <div className="mb-2.5 rounded-lg bg-slate-50 border border-slate-200 px-2.5 py-2">
+        <label className="text-[10px] font-semibold text-slate-600 uppercase tracking-wide">Tgl kedatangan</label>
+        <input
+          type="date"
+          value={row.tglKedatangan || ''}
+          onChange={(e) => onChangeTgl(row.id, e.target.value)}
+          className="w-full mt-1 text-sm font-bold text-slate-800 border border-slate-200 rounded-lg py-2 px-2 bg-white focus:outline-none focus:ring-2 focus:ring-cyan-400/40"
+        />
+      </div>
+
       <div className="grid grid-cols-2 gap-2 mb-2">
         <div className="rounded-lg bg-white/80 border border-cyan-100 p-2">
           <p className="text-[10px] font-semibold text-cyan-700 mb-1">PO CV</p>
@@ -153,20 +164,9 @@ function MergedItemCard({ row, onChangeCV, onChangePT, onChangeTgl, onRemove }) 
         </div>
       </div>
 
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex-1">
-          <label className="text-[10px] text-gray-500 font-medium">Tgl kedatangan</label>
-          <input
-            type="date"
-            value={row.tglKedatangan || ''}
-            onChange={(e) => onChangeTgl(row.id, e.target.value)}
-            className="w-full mt-0.5 text-xs font-semibold border border-gray-200 rounded-lg py-2 px-2 bg-white"
-          />
-        </div>
-        <div className="text-right shrink-0 pt-4">
-          <p className="text-[10px] text-gray-400">Total PO</p>
-          <p className="text-lg font-bold text-slate-800 tabular-nums">{row.poCV + row.poPT}</p>
-        </div>
+      <div className="flex items-center justify-end">
+        <p className="text-[10px] text-gray-400 mr-2">Total PO</p>
+        <p className="text-lg font-bold text-slate-800 tabular-nums">{row.poCV + row.poPT}</p>
       </div>
     </div>
   );
@@ -303,6 +303,7 @@ export default function POPage({ onBack }) {
     setSubmitMsg('');
   };
 
+  /** Hanya saat Kirim: tulis ke sheet purchase order — tiap item bawa tglKedatangan sendiri. */
   const handleSubmit = async () => {
     const active = mergedRows.filter((r) => r.poCV + r.poPT > 0);
     if (submitting || active.length === 0) return;
@@ -340,14 +341,13 @@ export default function POPage({ onBack }) {
       const payload = {
         tipe: tab === 'cs' ? 'CS' : 'PRODUKSI',
         tanggal: today.iso,
-        tglKedatangan: active[0]?.tglKedatangan || defaultArrival,
         items,
         requestId: `PO-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       };
       const res = await submitPO(payload);
       if (res && (res.success === true || res.status === 'OK' || res.status === 'APPLIED' || res.status === 'COMMITTED')) {
         setPhase('saved');
-        setSubmitMsg('PO berhasil disimpan.');
+        setSubmitMsg('PO berhasil disimpan ke sheet purchase order.');
       } else {
         setSubmitMsg(res?.error || 'Gagal menyimpan PO. Coba lagi.');
       }
@@ -388,7 +388,7 @@ export default function POPage({ onBack }) {
         )}
         <div className="min-w-0 flex-1">
           <h1 className="text-base font-bold text-slate-900">Purchase Order</h1>
-          <p className="text-[11px] text-slate-500">Rekomendasi → edit → kirim</p>
+          <p className="text-[11px] text-slate-500">Edit qty & tgl per item → Kirim ke sheet</p>
         </div>
         <button type="button" onClick={() => { refresh(); setInitialized(false); }} className="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-500" aria-label="Refresh">
           <RefreshCw className="w-4 h-4" />
@@ -413,7 +413,7 @@ export default function POPage({ onBack }) {
       ) : (
         <>
           <div className="flex items-center justify-between px-1">
-            <p className="text-xs text-slate-500">{activeCount} item rekomendasi</p>
+            <p className="text-xs text-slate-500">{activeCount} item · tgl kedatangan per item</p>
             <button type="button" onClick={regenerate} className="text-xs font-semibold text-cyan-600">Regenerate</button>
           </div>
 
