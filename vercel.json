@@ -1,7 +1,7 @@
 {
   "framework": "vite",
-  "installCommand": "npm install --prefer-offline --no-audit --no-fund",
-  "buildCommand": "npm run build",
+  "installCommand": "npm install",
+  "buildCommand": "npx vite build",
   "outputDirectory": "dist",
   "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
 }
