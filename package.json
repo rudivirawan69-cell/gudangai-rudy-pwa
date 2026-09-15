@@ -3,8 +3,11 @@
   "private": true,
   "version": "0.1.4",
   "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
-    "prebuild": "node scripts/write-icons.mjs",
+    "prebuild": "node scripts/write-icons.mjs || true",
     "dev": "vite",
     "build": "vite build",
     "lint": "oxlint src scripts",
