@@ -1,6 +1,6 @@
 {
   "framework": "vite",
-  "installCommand": "npm ci --prefer-offline --no-audit --no-fund",
+  "installCommand": "npm install --prefer-offline --no-audit --no-fund",
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
