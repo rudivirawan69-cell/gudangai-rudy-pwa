@@ -1,10 +1,12 @@
 /**
  * pdfValidate.js — PDF/image text extraction + master validation
  * Tuned for REKAP ORDER warehouse PDFs (CV. SELERA BOGATAMA / PT. RASYUKA)
- * + 2-column merge + ambiguity rules (YAKINIKU/LOWFAT, CIDEA, saos promo)
+ * + 2-column merge + ambiguity rules (YAKINIKU/LOWFAT only for unresolved)
  * Acuan ketat validasi PDF (12 Sep 2026): strip NO urut, size, outlet noise
+ * V6.5.4: deterministic resolver BEFORE alias matching; parenthesis context preserved
  */
 import { matchByAlias, getMasterByEntity } from './master';
+import { resolvePdfNameDeterministic, normalizeOcr } from './pdfDeterministicRules';
 
 let pdfjsLib = null;
 async function loadPdfjs() {
@@ -86,11 +88,10 @@ function tryMergeTwoColumnPdf(text) {
   return null;
 }
 
+/** Ambiguity only for unresolved cases. Bakso Ikan and Saos Lada Hitam handled by deterministic rules. */
 function checkAmbiguity(name) {
   const lower = String(name || '').toLowerCase();
   if (/daging\s*slice/i.test(lower) && !/yakiniku|lowfat/i.test(lower)) return 'YAKINIKU atau LOWFAT?';
-  if (/bakso\s*ikan/i.test(lower) && !/cidea/i.test(lower) && !/good\s*eat/i.test(lower)) return 'Bakso Ikan biasa atau CIDEA?';
-  if (/saos\s*lada\s*hitam/i.test(lower) && !/promo/i.test(lower)) return 'Saos Lada Hitam biasa atau PROMO?';
   return null;
 }
 
@@ -259,14 +260,22 @@ export function parseLinesFromText(text, preLines) {
         }
       }
     }
-    name = stripLeadingNoAndNormalize(name);
-    if (name.length < 2) continue;
-    if (/^(total|sub\s*total|grand\s*total|jumlah|qty|unit)$/i.test(name)) continue;
-    if (isNoiseName(name)) continue;
-    const key = `${name.toLowerCase()}|${qty}`;
+    const rawNameOriginal = String(name || '').trim();
+    const normalizedName = stripLeadingNoAndNormalize(rawNameOriginal);
+    if (normalizedName.length < 2 && rawNameOriginal.length < 2) continue;
+    if (/^(total|sub\s*total|grand\s*total|jumlah|qty|unit)$/i.test(normalizedName || rawNameOriginal)) continue;
+    if (isNoiseName(normalizedName || rawNameOriginal)) continue;
+    const key = `${(normalizedName || rawNameOriginal).toLowerCase()}|${qty}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    rows.push({ name, qty, raw: line, line, satuanHint: satuanHint || undefined });
+    rows.push({
+      name: normalizedName || rawNameOriginal,
+      nameOriginal: rawNameOriginal,
+      qty,
+      raw: line,
+      line,
+      satuanHint: satuanHint || undefined,
+    });
   }
   return rows;
 }
@@ -275,33 +284,39 @@ export function validateItems(rows, entity) {
   const matched = [];
   const ambiguous = [];
   const unmatched = [];
+  const master = getMasterByEntity(entity) || [];
   for (const row of rows) {
-    const result = matchByAlias(entity, row.name);
+    const rawNameOriginal = row.nameOriginal || row.name;
+    const deterministic = resolvePdfNameDeterministic(entity, rawNameOriginal, master);
+    let result = deterministic;
+    if (!result) {
+      const normalizedForFallback = stripLeadingNoAndNormalize(rawNameOriginal);
+      result = matchByAlias(entity, normalizedForFallback || row.name);
+    }
     if (result) {
-      const warn = checkAmbiguity(row.name);
+      const warn = deterministic ? null : checkAmbiguity(rawNameOriginal);
       if (warn) {
-        const candidates = getMasterByEntity(entity).filter((it) => {
+        const candidates = master.filter((it) => {
           const n = it.nama.toLowerCase();
-          const nameL = row.name.toLowerCase();
+          const nameL = String(rawNameOriginal).toLowerCase();
           return n.includes(nameL) || nameL.includes(n) || tokenOverlap(nameL, n) >= 0.4;
         }).slice(0, 6);
-        ambiguous.push({ nameFromPdf: row.name, candidates: candidates.length ? candidates : [result.item], qty: row.qty, raw: row.raw, line: row.line, warning: warn, kode: result.item.kode, nama: result.item.nama, satuan: result.item.satuan });
+        ambiguous.push({ nameFromPdf: rawNameOriginal, candidates: candidates.length ? candidates : [result.item], qty: row.qty, raw: row.raw, line: row.line, warning: warn, kode: result.item.kode, nama: result.item.nama, satuan: result.item.satuan });
       } else {
-        matched.push({ nameFromPdf: row.name, nama: result.item.nama, kode: result.item.kode, satuan: result.item.satuan, divisi: result.item.divisi, matchType: result.matchType, qty: row.qty, raw: row.raw, line: row.line, item: result.item });
+        matched.push({ nameFromPdf: rawNameOriginal, nama: result.item.nama, kode: result.item.kode, satuan: result.item.satuan, divisi: result.item.divisi, matchType: result.matchType, qty: row.qty, raw: row.raw, line: row.line, item: result.item });
       }
     } else {
-      const master = getMasterByEntity(entity);
-      const nameL = row.name.toLowerCase().trim().replace(/\s*\([^)]*\)\s*/g, ' ').replace(/["\u201C\u201D']/g, '').replace(/[-\u2013\u2014]+/g, ' ').replace(/\s+/g, ' ').trim();
+      const nameL = String(rawNameOriginal || '').toLowerCase().trim().replace(/\s*\([^)]*\)\s*/g, ' ').replace(/["\u201C\u201D']/g, '').replace(/[-\u2013\u2014]+/g, ' ').replace(/\s+/g, ' ').trim();
       const candidates = master.filter((item) => {
         const n = item.nama.toLowerCase();
         return n.includes(nameL) || nameL.includes(n) || tokenOverlap(nameL, n) >= 0.6;
       });
       if (candidates.length === 1) {
-        matched.push({ nameFromPdf: row.name, nama: candidates[0].nama, kode: candidates[0].kode, satuan: candidates[0].satuan, divisi: candidates[0].divisi, matchType: 'fuzzy-single', qty: row.qty, raw: row.raw, line: row.line, item: candidates[0] });
+        matched.push({ nameFromPdf: rawNameOriginal, nama: candidates[0].nama, kode: candidates[0].kode, satuan: candidates[0].satuan, divisi: candidates[0].divisi, matchType: 'fuzzy-single', qty: row.qty, raw: row.raw, line: row.line, item: candidates[0] });
       } else if (candidates.length > 1) {
-        ambiguous.push({ nameFromPdf: row.name, candidates: candidates.slice(0, 6), qty: row.qty, raw: row.raw, line: row.line });
+        ambiguous.push({ nameFromPdf: rawNameOriginal, candidates: candidates.slice(0, 6), qty: row.qty, raw: row.raw, line: row.line });
       } else {
-        unmatched.push({ nameFromPdf: row.name, qty: row.qty, raw: row.raw, line: row.line });
+        unmatched.push({ nameFromPdf: rawNameOriginal, qty: row.qty, raw: row.raw, line: row.line });
       }
     }
   }
@@ -385,4 +400,4 @@ export async function scanBarcodeFromVideo(video) {
   }
 }
 
-export { checkAmbiguity, tryMergeTwoColumnPdf };
+export { checkAmbiguity, tryMergeTwoColumnPdf, stripLeadingNoAndNormalize };
