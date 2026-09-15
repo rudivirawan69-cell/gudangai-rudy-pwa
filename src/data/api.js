@@ -9,7 +9,7 @@ const APPLIED_KEY = 'gudangai_applied';
 const QUEUE_KEY = 'gudangai_queue';
 const APPLIED_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const NOTIF_KEY = 'gudangai_notif';
-const DEFAULT_API_URL = 'https://script.google.com/macros/s/AKfycbxovv4rFIIpuA1KHwrUCjKluMAvH8H9LvUmFBRL-UoFb-Am66NvfOjQVPMsp7BNB0ikhQ/exec';
+const DEFAULT_API_URL = 'https://script.google.com/macros/s/AKfycbwtSr7cdBKhvJOwwkSZ9GUf1ebuHOM8CsKXo1I6r8v0Z_gi4_ElrDK9oez8LX5DAB1INw/exec';
 let _syncLock = false;
 function emitConn(detail) { try { window.dispatchEvent(new CustomEvent('gudangai-conn', { detail })); } catch (_) {} }
 export function getApiUrl() {
