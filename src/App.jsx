@@ -69,6 +69,12 @@ function ConnectionBanner() {
   useEffect(() => {
     const onConn = (e) => {
       const d = e.detail || {};
+      // write_unknown = long POST / batch timeout — not a disconnect
+      if (d.state === 'write_unknown') {
+        setFlash('Menunggu respons server…');
+        setTimeout(() => setFlash(''), 4000);
+        return;
+      }
       if (d.state === 'recovered') {
         setFlash('Koneksi stabil');
         setTimeout(() => setFlash(''), 1800);
@@ -113,10 +119,13 @@ function ConnectionBanner() {
 
   if (flash) {
     const isErr = flash.length > 20 || /gagal|error|fail/i.test(flash);
+    const isWait = /Menunggu respons/i.test(flash);
     return (
       <div
         className={`${base} ${
-          isErr
+          isWait
+            ? 'bg-slate-500/25 border-slate-300/30 text-slate-50'
+            : isErr
             ? 'bg-amber-500/25 border-amber-300/30 text-amber-50'
             : 'bg-emerald-500/25 border-emerald-300/30 text-emerald-50'
         }`}
@@ -141,11 +150,50 @@ function AppShell() {
   const [pageKey, setPageKey] = useState(0);
   const [showSyncQueue, setShowSyncQueue] = useState(false);
 
-  const goTab = (id) => {
-    if (id === activeTab) return;
+  const goTab = (id, push = true) => {
+    if (id === activeTab && !showSyncQueue) return;
+    setShowSyncQueue(false);
     setActiveTab(id);
     setPageKey((k) => k + 1);
+    if (push && typeof history !== 'undefined') {
+      try {
+        history.pushState({ tab: id }, '', `#${id}`);
+      } catch (_) {}
+    }
   };
+
+  // Android system Back: step through tab history instead of leaving the PWA.
+  useEffect(() => {
+    const onPop = (e) => {
+      const state = e.state;
+      if (state && state.sync) {
+        setShowSyncQueue(true);
+        return;
+      }
+      if (state && state.tab) {
+        setShowSyncQueue(false);
+        setActiveTab(state.tab);
+        setPageKey((k) => k + 1);
+        return;
+      }
+      // No more in-app history → stay on dashboard (do not exit app abruptly)
+      setShowSyncQueue(false);
+      setActiveTab('dashboard');
+      setPageKey((k) => k + 1);
+      try {
+        if (typeof history !== 'undefined') {
+          history.pushState({ tab: 'dashboard' }, '', '#dashboard');
+        }
+      } catch (_) {}
+    };
+    window.addEventListener('popstate', onPop);
+    try {
+      if (typeof history !== 'undefined' && !history.state?.tab) {
+        history.replaceState({ tab: activeTab }, '', `#${activeTab}`);
+      }
+    } catch (_) {}
+    return () => window.removeEventListener('popstate', onPop);
+  }, [activeTab]);
 
   if (!user) {
     return <LoginPage />;
@@ -164,7 +212,12 @@ function AppShell() {
           <main className="flex-1 px-3.5 pt-3.5 pb-6 max-w-lg mx-auto w-full overflow-y-auto">
             <ErrorBoundary>
               <SyncQueuePage
-                onBack={() => setShowSyncQueue(false)}
+                onBack={() => {
+                  setShowSyncQueue(false);
+                  try {
+                    history.pushState({ tab: activeTab }, '', `#${activeTab}`);
+                  } catch (_) {}
+                }}
               />
             </ErrorBoundary>
           </main>
@@ -192,7 +245,12 @@ function AppShell() {
       case 'settings':
         return (
           <SettingsPage
-            onOpenSyncQueue={() => setShowSyncQueue(true)}
+            onOpenSyncQueue={() => {
+              setShowSyncQueue(true);
+              try {
+                history.pushState({ tab: activeTab, sync: true }, '', '#sync');
+              } catch (_) {}
+            }}
           />
         );
       default:
