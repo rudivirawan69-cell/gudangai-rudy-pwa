@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import {
   getApiUrl, setApiUrl, getApiSecret, setApiSecret,
-  healthCheck, getPendingQueue, clearSyncedQueue,
+  healthCheck, getPendingQueue,
 } from '../data/api';
 import {
   Wifi, CheckCircle2, XCircle, Loader2, Link2, KeyRound, User,
@@ -11,6 +11,14 @@ import {
 import { AVATAR_DATA_URL } from '../assets/imageAssets';
 
 const AVATAR_SRC = AVATAR_DATA_URL;
+const QUEUE_KEY = 'gudangai_queue';
+
+/** Hapus seluruh antrian offline (pending = 0). */
+function clearSyncedQueue() {
+  try {
+    localStorage.setItem(QUEUE_KEY, '[]');
+  } catch (_) {}
+}
 
 function formatConnLabel(data) {
   if (!data) return 'OK';
@@ -73,7 +81,6 @@ export default function SettingsPage({ onOpenSyncQueue }) {
   const [confirmPin, setConfirmPin] = useState('');
   const [pinMsg, setPinMsg] = useState('');
   const [profileMsg, setProfileMsg] = useState('');
-  const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState(null);
   const [pendingCount, setPendingCount] = useState(0);
   const [panel, setPanel] = useState(null);
@@ -163,7 +170,6 @@ export default function SettingsPage({ onOpenSyncQueue }) {
 
   return (
     <div className="pb-6 animate-fade-in space-y-3">
-      {/* Profile header — more colorful */}
       <div className="card p-4 flex items-center gap-3 bg-gradient-to-r from-cyan-50/90 via-white to-violet-50/80 border border-cyan-100/60">
         <Avatar name={user?.name || 'Rudi Virawan'} size="lg" />
         <div className="min-w-0 flex-1">
@@ -173,7 +179,6 @@ export default function SettingsPage({ onOpenSyncQueue }) {
         </div>
       </div>
 
-      {/* Individual menu cards with spacing */}
       <div className="card">
         <MenuRow icon={User} iconBg="bg-blue-100 text-blue-600" title="Profil Saya" subtitle="Nama tampilan di dashboard" onClick={() => setPanel(panel === 'profile' ? null : 'profile')} />
       </div>
@@ -189,7 +194,7 @@ export default function SettingsPage({ onOpenSyncQueue }) {
         <MenuRow icon={KeyRound} iconBg="bg-amber-100 text-amber-700" title="Ganti PIN" subtitle="Keamanan login 4–6 digit" onClick={() => setPanel(panel === 'pin' ? null : 'pin')} />
       </div>
       <div className="card">
-        <MenuRow icon={SettingsIcon} iconBg="bg-slate-200 text-slate-600" title="Tentang Aplikasi" subtitle="GudangAI · Backend V6.4.4" onClick={() => setPanel(panel === 'about' ? null : 'about')} />
+        <MenuRow icon={SettingsIcon} iconBg="bg-slate-200 text-slate-600" title="Tentang Aplikasi" subtitle="GudangAI · Backend V6.5.4" onClick={() => setPanel(panel === 'about' ? null : 'about')} />
       </div>
       {panel === 'profile' && (
         <div className="card p-4 space-y-3">
