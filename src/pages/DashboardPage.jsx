@@ -61,6 +61,70 @@ function DivisionStatusBars({ items }) {
   );
 }
 
+/** Normalisasi respons getStatusPO — terima beberapa bentuk field dari Apps Script. */
+function normalizeStatusPO(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  const ok = raw.success === true || raw.status === 'OK' || raw.status === 'ok' || raw.status === 'APPLIED';
+  if (!ok && raw.code === 'UNAUTHORIZED') {
+    return { success: false, error: raw.error || 'Unauthorized — isi API Secret di Atur' };
+  }
+  if (!ok) {
+    return { success: false, error: raw.error || 'Gagal memuat Status PO' };
+  }
+
+  const itemsRaw = raw.items || raw.data?.items || raw.list || raw.poItems || [];
+  const items = (Array.isArray(itemsRaw) ? itemsRaw : []).map((it, idx) => {
+    const statusRaw = String(it.status || it.Status || it.statusPO || it.keteranganStatus || '').trim();
+    let status = statusRaw || 'Menunggu';
+    const low = status.toLowerCase();
+    if (low.includes('sebagian')) status = 'Sebagian';
+    else if (low.includes('selesai') || low === 'datang' || (low.includes('datang') && !low.includes('belum'))) status = 'Selesai';
+    else if (low.includes('belum') || low.includes('menunggu') || low.includes('aktif')) status = 'Menunggu';
+    return {
+      itemNo: it.itemNo || it.no || it.No || idx + 1,
+      nama: it.nama || it.Nama || it.name || it.barang || '—',
+      size: it.size || it.ukuran || it.Size || '',
+      satuan: it.satuan || it.Satuan || 'Pack',
+      tglRencana: it.tglRencana || it.tglKedatangan || it.tanggal || it.Tgl || '',
+      qtyPO: Number(it.qtyPO ?? it.qty ?? it.Qty ?? it.jumlah ?? 0) || 0,
+      qtyDatang: Number(it.qtyDatang ?? it.datang ?? it.qtyMasuk ?? 0) || 0,
+      status,
+    };
+  });
+
+  const summaryRaw = raw.summary || raw.data?.summary || raw.rekap || {};
+  let menunggu = Number(summaryRaw.itemMenunggu ?? summaryRaw.menunggu ?? summaryRaw.pending ?? summaryRaw.belum ?? 0) || 0;
+  let sebagian = Number(summaryRaw.itemSebagian ?? summaryRaw.sebagian ?? summaryRaw.partial ?? 0) || 0;
+  let selesai = Number(summaryRaw.itemSelesai ?? summaryRaw.selesai ?? summaryRaw.done ?? summaryRaw.datang ?? 0) || 0;
+
+  if (items.length && menunggu + sebagian + selesai === 0) {
+    for (const it of items) {
+      if (it.status === 'Selesai') selesai += 1;
+      else if (it.status === 'Sebagian') sebagian += 1;
+      else menunggu += 1;
+    }
+  }
+
+  const totalItem = Number(summaryRaw.totalItem ?? summaryRaw.total ?? 0) || items.length || (menunggu + sebagian + selesai);
+  const totalAktif = Number(summaryRaw.totalAktif ?? summaryRaw.aktif ?? 0) || (menunggu + sebagian);
+  const totalKonfirmasi = Number(summaryRaw.totalKonfirmasi ?? summaryRaw.konfirmasi ?? 0) || selesai;
+
+  return {
+    success: true,
+    noPO: raw.noPO || raw.no_po || raw.nomorPO || raw.poNumber || summaryRaw.noPO || '',
+    weekLabel: raw.weekLabel || raw.minggu || summaryRaw.weekLabel || '',
+    items,
+    summary: {
+      totalItem,
+      itemMenunggu: menunggu,
+      itemSebagian: sebagian,
+      itemSelesai: selesai,
+      totalAktif,
+      totalKonfirmasi,
+    },
+  };
+}
+
 function statusPOColor(status) {
   if (status === 'Selesai') return { bg: 'bg-emerald-50/80', text: 'text-emerald-700', bar: 'bg-emerald-500' };
   if (status === 'Sebagian') return { bg: 'bg-amber-50/80', text: 'text-amber-700', bar: 'bg-amber-400' };
@@ -106,15 +170,21 @@ function StatusPOCard({ data, loading, error, onRefresh }) {
   if (!data || !data.success) {
     return (
       <div className="rounded-2xl bg-white border border-slate-100 shadow-sm p-4 animate-slide-up">
-        <div className="flex items-center gap-2 mb-2">
-          <div className="w-9 h-9 rounded-full bg-violet-100 flex items-center justify-center">
-            <FileText className="w-4 h-4 text-violet-600" />
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2">
+            <div className="w-9 h-9 rounded-full bg-violet-100 flex items-center justify-center">
+              <FileText className="w-4 h-4 text-violet-600" />
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-slate-800">Status Purchase Order</h3>
+              <p className="text-[10px] text-slate-400">Belum ada data PO aktif</p>
+            </div>
           </div>
-          <div>
-            <h3 className="text-sm font-semibold text-slate-800">Status Purchase Order</h3>
-            <p className="text-[10px] text-slate-400">Belum ada data PO aktif</p>
-          </div>
+          <button type="button" onClick={onRefresh} className="text-[11px] text-cyan-700 font-medium">Muat ulang</button>
         </div>
+        <p className="text-[11px] text-slate-500 bg-slate-50 rounded-xl px-3 py-2.5">
+          Pastikan sheet <b>purchase order</b> terisi & API Secret benar di Atur.
+        </p>
       </div>
     );
   }
@@ -207,6 +277,12 @@ function StatusPOCard({ data, loading, error, onRefresh }) {
         </div>
       </div>
 
+      {totalItem === 0 && (
+        <p className="text-[11px] text-slate-500 bg-slate-50 border border-slate-100 rounded-xl px-3 py-2.5 mb-3">
+          Belum ada baris Status PO minggu ini. Cek sheet <b>purchase order</b> / jalankan refresh dashboard di Apps Script.
+        </p>
+      )}
+
       <div className="flex justify-between mb-3 px-0.5 text-[10px] text-slate-400">
         <span>Konfirmasi <b className="text-slate-600">{Number(totalKonfirmasi).toLocaleString('id-ID')}</b></span>
         <span>Sisa aktif <b className="text-slate-600">{Number(totalAktif).toLocaleString('id-ID')}</b></span>
@@ -288,10 +364,13 @@ export default function DashboardPage() {
     setPoError(null);
     try {
       const res = await getStatusPO();
-      if (res && res.success) setPoData(res);
-      else {
+      const norm = normalizeStatusPO(res);
+      if (norm && norm.success) {
+        setPoData(norm);
+        setPoError(null);
+      } else {
         setPoData(null);
-        setPoError(res?.error || 'Gagal memuat Status PO');
+        setPoError(norm?.error || res?.error || 'Gagal memuat Status PO');
       }
     } catch (err) {
       setPoError(err?.message || 'Gagal memuat Status PO');
@@ -311,7 +390,6 @@ export default function DashboardPage() {
   const loading = stockCV.loading || stockPT.loading;
   const lastSync = stockCV.lastRefresh || stockPT.lastRefresh;
 
-  // Sapaan + pengingat sesuai waktu (WIB)
   const hour = new Date().getHours();
   const firstName = (user?.name || 'Rudi').split(' ')[0];
   let greeting = 'Selamat malam';
@@ -329,7 +407,6 @@ export default function DashboardPage() {
 
   return (
     <div className="pb-6 animate-fade-in space-y-3">
-      {/* Kotak atas SKU: sapaan + pengingat pink + ringkasan SKU */}
       <div className="rounded-2xl border border-white/20 bg-white/10 backdrop-blur-sm p-3 shadow-sm space-y-2.5">
         <div className="px-0.5">
           <p className="text-sm font-semibold text-white">
