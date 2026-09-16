@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { getTransactionHistory } from '../data/api';
 import {
   Clock, ArrowUpRight, ArrowDownRight, Search,
-  AlertTriangle, Package, WifiOff, CheckCircle2, TrendingUp
+  AlertTriangle, Package, WifiOff, CheckCircle2, TrendingUp, LayoutGrid, List
 } from 'lucide-react';
 
 function typeMeta(type) {
@@ -87,15 +87,19 @@ export default function RiwayatPage() {
   return (
     <div className="pb-2 animate-fade-in space-y-3">
       <div className="flex items-center justify-between gap-2">
-        <div>
-          <h1 className="text-lg font-bold text-white drop-shadow-sm">Riwayat</h1>
-          <p className="text-[11px] text-cyan-100/80">
-            {stats.total} transaksi · {stats.itemsCount} baris item · lokal perangkat
+        <div className="min-w-0">
+          <h1 className="text-base font-black text-white drop-shadow-sm tracking-tight">Riwayat Log</h1>
+          <p className="text-[11px] text-cyan-100/90 font-medium">
+            {stats.total} transaksi · {stats.itemsCount} baris item
           </p>
         </div>
-        <button type="button" onClick={() => setDense((v) => !v)}
-          className="text-[10px] font-semibold px-2.5 py-1.5 rounded-lg border border-white/30 bg-white/15 text-white backdrop-blur-sm hover:bg-white/25 transition-colors">
-          {dense ? 'Grid padat' : 'List longgar'}
+        <button
+          type="button"
+          onClick={() => setDense((v) => !v)}
+          className="px-3 py-1.5 rounded-xl bg-slate-900 text-white text-[11px] font-extrabold shadow-sm flex items-center gap-1.5 active:scale-95 transition shrink-0"
+        >
+          {dense ? <LayoutGrid className="w-3.5 h-3.5" /> : <List className="w-3.5 h-3.5" />}
+          <span>{dense ? 'Grid padat' : 'List longgar'}</span>
         </button>
       </div>
 
@@ -130,7 +134,7 @@ export default function RiwayatPage() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
           <input value={search} onChange={(e) => setSearch(e.target.value)}
             placeholder="Cari kode, nama, keterangan…"
-            className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200/80 bg-white/95 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-cyan-400 shadow-sm" />
+            className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-200/80 bg-white/95 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-cyan-400 shadow-sm" />
         </div>
 
         <div className="flex justify-center gap-1.5 flex-wrap">
@@ -167,23 +171,6 @@ export default function RiwayatPage() {
           <p className="text-[11px] text-slate-400 leading-relaxed max-w-xs mx-auto">
             Transaksi dari Input (manual, PDF, atau Suara) tersimpan di sini setelah dikirim — termasuk offline.
           </p>
-          <div className="grid grid-cols-3 gap-2 pt-2 text-left">
-            <div className="rounded-lg bg-slate-50 p-2">
-              <Package className="w-3.5 h-3.5 text-slate-500 mb-1" />
-              <p className="text-[10px] font-medium text-slate-700">Input item</p>
-              <p className="text-[9px] text-slate-400">Masuk / keluar / rusak</p>
-            </div>
-            <div className="rounded-lg bg-slate-50 p-2">
-              <TrendingUp className="w-3.5 h-3.5 text-slate-500 mb-1" />
-              <p className="text-[10px] font-medium text-slate-700">Grafik terisi</p>
-              <p className="text-[9px] text-slate-400">Otomatis 7 hari</p>
-            </div>
-            <div className="rounded-lg bg-slate-50 p-2">
-              <CheckCircle2 className="w-3.5 h-3.5 text-slate-500 mb-1" />
-              <p className="text-[10px] font-medium text-slate-700">Status kirim</p>
-              <p className="text-[9px] text-slate-400">OK / offline / gagal</p>
-            </div>
-          </div>
         </div>
       ) : dense ? (
         <div className="space-y-3">
