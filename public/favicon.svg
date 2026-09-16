@@ -1,18 +1,22 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
   <defs>
-    <linearGradient id="rGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#f97316"/>
-      <stop offset="50%" stop-color="#22d3ee"/>
-      <stop offset="100%" stop-color="#1e3a8a"/>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#7ee7f0"/>
+      <stop offset="55%" stop-color="#22d3ee"/>
+      <stop offset="100%" stop-color="#0891b2"/>
     </linearGradient>
   </defs>
-  <rect width="32" height="32" rx="6" fill="#0b2a55"/>
-  <!-- Simplified R -->
-  <path d="M8 6 h8 a6 6 0 0 1 0 12 h-4 v8 h-4 z M12 10 h4 a2 2 0 0 1 0 4 h-4 z" fill="url(#rGrad)"/>
-  <!-- Simplified rocket -->
-  <g transform="translate(18,4) scale(0.45)">
-    <path d="M10 2 L14 10 L18 11 L15 14 L16 20 L10 17 L4 20 L5 14 L2 11 L6 10 Z" fill="#fff" stroke="#22d3ee" stroke-width="1"/>
-    <circle cx="10" cy="9" r="2" fill="#0ea5e9"/>
-    <path d="M8 20 L10 28 L12 20" fill="#f97316"/>
+  <rect width="64" height="64" rx="14" fill="#05202b"/>
+  <g fill="none" stroke="url(#g)" stroke-width="2.4" stroke-linejoin="round">
+    <ellipse cx="24" cy="20" rx="11" ry="4.2"/>
+    <path d="M13 20 v18 c0 2.4 4.9 4.2 11 4.2 s11-1.8 11-4.2 V20"/>
+    <path d="M13 26 c0 2.4 4.9 4.2 11 4.2 s11-1.8 11-4.2"/>
+    <path d="M13 32.5 c0 2.4 4.9 4.2 11 4.2 s11-1.8 11-4.2"/>
+  </g>
+  <g transform="translate(30,16)">
+    <path d="M10 10 v-4.2 a6.2 6.2 0 0 1 12.4 0 V10" fill="none" stroke="url(#g)" stroke-width="2.6" stroke-linecap="round"/>
+    <circle cx="16.2" cy="20.2" r="10.4" fill="#05202b" stroke="url(#g)" stroke-width="2.6"/>
+    <path d="M20.6 16.6 a6.4 6.4 0 1 0 0 7.2" fill="none" stroke="url(#g)" stroke-width="2.4" stroke-linecap="round"/>
+    <path d="M20.6 20.2 h-5.2" stroke="url(#g)" stroke-width="2.4" stroke-linecap="round"/>
   </g>
 </svg>
