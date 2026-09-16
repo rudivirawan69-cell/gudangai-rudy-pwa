@@ -1,5 +1,5 @@
-const CACHE_NAME = 'gudangai-v4';
-const STATIC_ASSETS = ['/', '/index.html'];
+const CACHE_NAME = 'gudangai-v5';
+const STATIC_ASSETS = ['/', '/index.html', '/favicon.svg', '/icon.svg', '/logo-app.svg', '/manifest.json'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -21,8 +21,6 @@ self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
   const url = new URL(event.request.url);
 
-  // Jangan pernah cache panggilan API (Google Apps Script / backend)
-  // agar stok selalu real-time dan tidak stale.
   const isApi =
     url.hostname.includes('script.google.com') ||
     url.hostname.includes('googleusercontent.com') ||
