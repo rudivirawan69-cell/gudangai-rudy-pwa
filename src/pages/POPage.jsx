@@ -84,6 +84,10 @@ function buildMergedRows(items, defaultTglIso) {
         poCV: 0,
         poPT: 0,
         total: 0,
+        stokCV: 0,
+        stokPT: 0,
+        amanCV: 0,
+        amanPT: 0,
         tglKedatangan: defaultTglIso || dateParts(2).iso,
       });
     }
@@ -91,11 +95,15 @@ function buildMergedRows(items, defaultTglIso) {
     if (it.entity === 'CV') {
       row.poCV += qty;
       row.kodeCV = it.kode || row.kodeCV;
+      row.stokCV = Number(it.stok) || row.stokCV;
+      row.amanCV = Number(it.aman) || row.amanCV;
       if (it.size) row.size = it.size;
       if (it.divisi) row.divisi = it.divisi;
     } else {
       row.poPT += qty;
       row.kodePT = it.kode || row.kodePT;
+      row.stokPT = Number(it.stok) || row.stokPT;
+      row.amanPT = Number(it.aman) || row.amanPT;
       if (!row.size && it.size) row.size = it.size;
     }
     row.total = row.poCV + row.poPT;
@@ -104,53 +112,63 @@ function buildMergedRows(items, defaultTglIso) {
 }
 
 function MergedItemCard({ row, onChangeCV, onChangePT, onChangeTgl, onRemove }) {
-  const accent = row.poCV > 0 && row.poPT > 0
-    ? 'border-l-violet-500 bg-violet-50/40'
-    : row.poCV > 0
-      ? 'border-l-cyan-500 bg-cyan-50/30'
-      : 'border-l-orange-400 bg-orange-50/30';
   return (
-    <div className={`rounded-xl border border-gray-100 border-l-4 ${accent} shadow-sm p-3 touch-manipulation`}>
-      <div className="flex items-start justify-between gap-2 mb-2">
+    <div className="rounded-2xl bg-white border border-slate-100 shadow-sm p-3.5 touch-manipulation">
+      <div className="flex items-start justify-between gap-2 mb-2.5">
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold text-gray-800 leading-snug">{row.nama}</p>
-          <p className="text-[10px] text-gray-400 mt-0.5">
+          <p className="text-[15px] font-bold text-slate-800 leading-snug">{row.nama}</p>
+          <p className="text-[11px] text-slate-400 mt-0.5 font-medium">
             {row.size ? `${row.size} · ` : ''}{row.satuan}
             {row.kodeCV ? ` · CV ${row.kodeCV}` : ''}
             {row.kodePT ? ` · PT ${row.kodePT}` : ''}
           </p>
+          <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1.5 text-[10px] font-semibold">
+            {row.kodeCV ? (
+              <span className="text-cyan-700">
+                CV: stok <b className="tabular-nums">{row.stokCV ?? '—'}</b>
+                {row.amanCV > 0 ? <> · aman <b className="tabular-nums">{row.amanCV}</b></> : null}
+              </span>
+            ) : null}
+            {row.kodePT ? (
+              <span className="text-orange-700">
+                PT: stok <b className="tabular-nums">{row.stokPT ?? '—'}</b>
+                {row.amanPT > 0 ? <> · aman <b className="tabular-nums">{row.amanPT}</b></> : null}
+              </span>
+            ) : null}
+          </div>
         </div>
         <button type="button" aria-label={`Hapus ${row.nama}`} onClick={() => onRemove(row.id)}
-          className="min-w-[40px] min-h-[40px] flex items-center justify-center text-red-400 rounded-lg active:bg-red-50">
+          className="min-w-[40px] min-h-[40px] flex items-center justify-center text-red-400 rounded-xl bg-red-50 active:bg-red-100 shrink-0">
           <Trash2 className="w-4 h-4" />
         </button>
       </div>
-      <div className="mb-2.5 rounded-lg bg-slate-50 border border-slate-200 px-2.5 py-2">
-        <label className="text-[10px] font-semibold text-slate-600 uppercase tracking-wide">Tgl kedatangan</label>
+      <div className="rounded-xl bg-slate-50 border border-slate-100 p-2.5 mb-2.5">
+        <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">Tgl kedatangan</label>
         <input type="date" value={row.tglKedatangan || ''} onChange={(e) => onChangeTgl(row.id, e.target.value)}
-          className="w-full mt-1 text-sm font-bold text-slate-800 border border-slate-200 rounded-lg py-2 px-2 bg-white focus:outline-none focus:ring-2 focus:ring-cyan-400/40" />
+          className="w-full mt-1 text-sm font-bold text-slate-800 border border-slate-200 rounded-xl py-2 px-2.5 bg-white focus:outline-none focus:border-cyan-400" />
       </div>
       <div className="grid grid-cols-2 gap-2 mb-2">
-        <div className="rounded-lg bg-white/80 border border-cyan-100 p-2">
-          <p className="text-[10px] font-semibold text-cyan-700 mb-1">PO CV</p>
+        <div className="rounded-xl bg-white border border-cyan-100 p-2.5">
+          <p className="text-[10px] font-bold text-cyan-700 mb-1.5">PO CV</p>
           <div className="flex items-center gap-1">
-            <button type="button" onClick={() => onChangeCV(row.id, Math.max(0, row.poCV - 1))} className="w-8 h-8 rounded-lg bg-cyan-50 flex items-center justify-center"><Minus className="w-3.5 h-3.5" /></button>
-            <input type="number" min="0" inputMode="numeric" value={row.poCV} onChange={(e) => onChangeCV(row.id, Math.max(0, Number(e.target.value) || 0))} onFocus={(e) => e.target.select()} className="flex-1 min-w-0 text-center text-sm font-bold border border-gray-200 rounded-lg py-1.5" />
-            <button type="button" onClick={() => onChangeCV(row.id, row.poCV + 1)} className="w-8 h-8 rounded-lg bg-cyan-50 flex items-center justify-center"><Plus className="w-3.5 h-3.5" /></button>
+            <button type="button" onClick={() => onChangeCV(row.id, Math.max(0, row.poCV - 1))} className="w-8 h-8 rounded-lg bg-cyan-50 flex items-center justify-center text-cyan-700"><Minus className="w-3.5 h-3.5" /></button>
+            <input type="number" min="0" inputMode="numeric" value={row.poCV} onChange={(e) => onChangeCV(row.id, Math.max(0, Number(e.target.value) || 0))} onFocus={(e) => e.target.select()} className="flex-1 min-w-0 text-center text-sm font-bold border border-slate-200 rounded-lg py-1.5 text-slate-800" />
+            <button type="button" onClick={() => onChangeCV(row.id, row.poCV + 1)} className="w-8 h-8 rounded-lg bg-cyan-50 flex items-center justify-center text-cyan-700"><Plus className="w-3.5 h-3.5" /></button>
           </div>
         </div>
-        <div className="rounded-lg bg-white/80 border border-orange-100 p-2">
-          <p className="text-[10px] font-semibold text-orange-700 mb-1">PO PT</p>
+        <div className="rounded-xl bg-white border border-orange-100 p-2.5">
+          <p className="text-[10px] font-bold text-orange-700 mb-1.5">PO PT</p>
           <div className="flex items-center gap-1">
-            <button type="button" onClick={() => onChangePT(row.id, Math.max(0, row.poPT - 1))} className="w-8 h-8 rounded-lg bg-orange-50 flex items-center justify-center"><Minus className="w-3.5 h-3.5" /></button>
-            <input type="number" min="0" inputMode="numeric" value={row.poPT} onChange={(e) => onChangePT(row.id, Math.max(0, Number(e.target.value) || 0))} onFocus={(e) => e.target.select()} className="flex-1 min-w-0 text-center text-sm font-bold border border-gray-200 rounded-lg py-1.5" />
-            <button type="button" onClick={() => onChangePT(row.id, row.poPT + 1)} className="w-8 h-8 rounded-lg bg-orange-50 flex items-center justify-center"><Plus className="w-3.5 h-3.5" /></button>
+            <button type="button" onClick={() => onChangePT(row.id, Math.max(0, row.poPT - 1))} className="w-8 h-8 rounded-lg bg-orange-50 flex items-center justify-center text-orange-700"><Minus className="w-3.5 h-3.5" /></button>
+            <input type="number" min="0" inputMode="numeric" value={row.poPT} onChange={(e) => onChangePT(row.id, Math.max(0, Number(e.target.value) || 0))} onFocus={(e) => e.target.select()} className="flex-1 min-w-0 text-center text-sm font-bold border border-slate-200 rounded-lg py-1.5 text-slate-800" />
+            <button type="button" onClick={() => onChangePT(row.id, row.poPT + 1)} className="w-8 h-8 rounded-lg bg-orange-50 flex items-center justify-center text-orange-700"><Plus className="w-3.5 h-3.5" /></button>
           </div>
         </div>
       </div>
       <div className="flex items-center justify-end">
-        <p className="text-[10px] text-gray-400 mr-2">Total PO</p>
-        <p className="text-lg font-bold text-slate-800 tabular-nums">{row.poCV + row.poPT}</p>
+        <p className="text-[11px] text-slate-400 font-medium">
+          Total PO <span className="text-base font-bold text-slate-800 tabular-nums ml-1">{row.poCV + row.poPT}</span>
+        </p>
       </div>
     </div>
   );
@@ -328,24 +346,24 @@ export default function POPage({ onBack }) {
     <div className="pb-24 animate-fade-in space-y-3">
       <div className="flex items-center gap-3">
         {onBack && (
-          <button type="button" onClick={onBack} className="w-10 h-10 rounded-xl bg-white/90 border border-slate-200 flex items-center justify-center text-slate-600" aria-label="Kembali">
+          <button type="button" onClick={onBack} className="w-10 h-10 rounded-xl bg-white border border-slate-100 shadow-sm flex items-center justify-center text-slate-600" aria-label="Kembali">
             <ArrowLeft className="w-5 h-5" />
           </button>
         )}
         <div className="min-w-0 flex-1">
           <h1 className="text-base font-bold text-white drop-shadow-sm">Purchase Order</h1>
-          <p className="text-[11px] text-cyan-100/80">Edit qty & tgl per item → Kirim ke sheet</p>
+          <p className="text-[11px] text-cyan-100/90 font-medium">Edit qty & tgl per item → Kirim ke sheet</p>
         </div>
-        <button type="button" onClick={() => { refresh(); setInitialized(false); }} className="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-500" aria-label="Refresh">
+        <button type="button" onClick={() => { refresh(); setInitialized(false); }} className="w-10 h-10 rounded-xl bg-white border border-slate-100 shadow-sm flex items-center justify-center text-slate-500" aria-label="Refresh">
           <RefreshCw className="w-4 h-4" />
         </button>
       </div>
 
       <div className="flex gap-2">
-        <button type="button" onClick={() => switchTab('cs')} className={`flex-1 py-2.5 rounded-xl text-sm font-semibold flex items-center justify-center gap-1.5 ${tab === 'cs' ? 'bg-cyan-500 text-white shadow' : 'bg-white border border-slate-200 text-slate-600'}`}>
+        <button type="button" onClick={() => switchTab('cs')} className={`flex-1 py-2.5 rounded-xl text-sm font-bold flex items-center justify-center gap-1.5 border transition-all ${tab === 'cs' ? 'bg-cyan-500 text-white border-cyan-500 shadow-sm' : 'bg-white border-slate-100 text-slate-600 shadow-sm'}`}>
           <Snowflake className="w-4 h-4" /> PO CS
         </button>
-        <button type="button" onClick={() => switchTab('produksi')} className={`flex-1 py-2.5 rounded-xl text-sm font-semibold flex items-center justify-center gap-1.5 ${tab === 'produksi' ? 'bg-orange-500 text-white shadow' : 'bg-white border border-slate-200 text-slate-600'}`}>
+        <button type="button" onClick={() => switchTab('produksi')} className={`flex-1 py-2.5 rounded-xl text-sm font-bold flex items-center justify-center gap-1.5 border transition-all ${tab === 'produksi' ? 'bg-orange-500 text-white border-orange-500 shadow-sm' : 'bg-white border-slate-100 text-slate-600 shadow-sm'}`}>
           <ChefHat className="w-4 h-4" /> PO Produksi
         </button>
       </div>
@@ -354,9 +372,9 @@ export default function POPage({ onBack }) {
         <SkeletonCards />
       ) : (
         <>
-          <div className="flex items-center justify-between px-1">
-            <p className="text-xs text-cyan-100/85">{activeCount} item · tgl kedatangan per item</p>
-            <button type="button" onClick={regenerate} className="text-xs font-semibold text-cyan-200 underline-offset-2 hover:underline">Regenerate</button>
+          <div className="flex items-center justify-between rounded-xl bg-white border border-slate-100 shadow-sm px-3 py-2">
+            <p className="text-xs font-semibold text-slate-600">{activeCount} item · tgl kedatangan per item</p>
+            <button type="button" onClick={regenerate} className="text-xs font-bold text-cyan-600">Regenerate</button>
           </div>
 
           <div className="space-y-2">
@@ -374,7 +392,7 @@ export default function POPage({ onBack }) {
                 className="w-full py-3.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-500 text-white text-sm font-semibold flex items-center justify-center gap-2 shadow-lg disabled:opacity-50">
                 {submitting ? (<><Loader2 className="w-4 h-4 animate-spin" /> Menyimpan…</>) : (<><Send className="w-4 h-4" /> Kirim PO ({activeCount})</>)}
               </button>
-              {submitMsg && <p className="text-center text-xs text-cyan-100/80 mt-2">{submitMsg}</p>}
+              {submitMsg && <p className="text-center text-xs text-slate-500 mt-2">{submitMsg}</p>}
             </div>
           )}
         </>
