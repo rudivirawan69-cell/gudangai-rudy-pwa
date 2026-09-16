@@ -190,7 +190,13 @@ function SkeletonCards() {
 }
 
 export default function POPage({ onBack }) {
-  const { stockCV, stockPT, loading, refresh } = useStock();
+  const stockCV = useStock('CV');
+  const stockPT = useStock('PT');
+  const loading = stockCV.loading || stockPT.loading;
+  const refresh = () => {
+    try { stockCV.refresh({ force: true }); } catch (_) {}
+    try { stockPT.refresh({ force: true }); } catch (_) {}
+  };
   const [tab, setTab] = useState('cs');
   const [phase, setPhase] = useState('review');
   const [draftItems, setDraftItems] = useState([]);
@@ -209,19 +215,26 @@ export default function POPage({ onBack }) {
   ].sort((a, b) => b.qty - a.qty), [stockCV.items, stockPT.items]);
 
   const activeCritical = tab === 'cs' ? criticalCS : criticalProduksi;
-  const defaultArrival = dateParts(2).iso;
+  const defaultArrival = useMemo(() => dateParts(2).iso, []);
   const [mergedRows, setMergedRows] = useState([]);
   const activeCount = mergedRows.filter((r) => r.poCV + r.poPT > 0).length;
 
+  // Init sekali setelah stok siap — jangan depend array identity agar tidak macet
   useEffect(() => {
     if (loading) return;
-    if (!initialized) {
+    if (initialized) return;
+    try {
       const draft = activeCritical.map((i) => ({ ...i }));
       setDraftItems(draft);
       setMergedRows(buildMergedRows(draft, defaultArrival));
       setInitialized(true);
+    } catch (err) {
+      console.error('[POPage] init failed', err);
+      setDraftItems([]);
+      setMergedRows([]);
+      setInitialized(true);
     }
-  }, [loading, activeCritical, initialized, defaultArrival]);
+  }, [loading, initialized, tab, defaultArrival, activeCritical]);
 
   const regenerate = useCallback(() => {
     const draft = activeCritical.map((i) => ({ ...i }));
