@@ -65,16 +65,12 @@ function dateParts(offsetDays = 0) {
     long: `${String(d.getDate()).padStart(2,'0')} ${monthsLong[d.getMonth()]} ${d.getFullYear()}`,
   };
 }
-/** Merge by nama (bukan kode) agar CV+PT item sama jadi 1 kotak seperti sheet utama. */
 function buildMergedRows(items, defaultTglIso) {
   const map = new Map();
   for (const it of items) {
     const qty = Number(it.qty) || 0;
     if (qty <= 0) continue;
-    const key = String(it.nama || it.kode || '')
-      .trim()
-      .toLowerCase()
-      .replace(/\s+/g, ' ');
+    const key = String(it.nama || it.kode || '').trim().toLowerCase().replace(/\s+/g, ' ');
     if (!key) continue;
     if (!map.has(key)) {
       map.set(key, {
@@ -124,27 +120,16 @@ function MergedItemCard({ row, onChangeCV, onChangePT, onChangeTgl, onRemove }) 
             {row.kodePT ? ` · PT ${row.kodePT}` : ''}
           </p>
         </div>
-        <button
-          type="button"
-          aria-label={`Hapus ${row.nama}`}
-          onClick={() => onRemove(row.id)}
-          className="min-w-[40px] min-h-[40px] flex items-center justify-center text-red-400 rounded-lg active:bg-red-50"
-        >
+        <button type="button" aria-label={`Hapus ${row.nama}`} onClick={() => onRemove(row.id)}
+          className="min-w-[40px] min-h-[40px] flex items-center justify-center text-red-400 rounded-lg active:bg-red-50">
           <Trash2 className="w-4 h-4" />
         </button>
       </div>
-
-      {/* Tgl kedatangan di AWAL kartu — per item (sesuai sisa stok), bukan 1 tanggal global */}
       <div className="mb-2.5 rounded-lg bg-slate-50 border border-slate-200 px-2.5 py-2">
         <label className="text-[10px] font-semibold text-slate-600 uppercase tracking-wide">Tgl kedatangan</label>
-        <input
-          type="date"
-          value={row.tglKedatangan || ''}
-          onChange={(e) => onChangeTgl(row.id, e.target.value)}
-          className="w-full mt-1 text-sm font-bold text-slate-800 border border-slate-200 rounded-lg py-2 px-2 bg-white focus:outline-none focus:ring-2 focus:ring-cyan-400/40"
-        />
+        <input type="date" value={row.tglKedatangan || ''} onChange={(e) => onChangeTgl(row.id, e.target.value)}
+          className="w-full mt-1 text-sm font-bold text-slate-800 border border-slate-200 rounded-lg py-2 px-2 bg-white focus:outline-none focus:ring-2 focus:ring-cyan-400/40" />
       </div>
-
       <div className="grid grid-cols-2 gap-2 mb-2">
         <div className="rounded-lg bg-white/80 border border-cyan-100 p-2">
           <p className="text-[10px] font-semibold text-cyan-700 mb-1">PO CV</p>
@@ -163,7 +148,6 @@ function MergedItemCard({ row, onChangeCV, onChangePT, onChangeTgl, onRemove }) 
           </div>
         </div>
       </div>
-
       <div className="flex items-center justify-end">
         <p className="text-[10px] text-gray-400 mr-2">Total PO</p>
         <p className="text-lg font-bold text-slate-800 tabular-nums">{row.poCV + row.poPT}</p>
@@ -219,7 +203,6 @@ export default function POPage({ onBack }) {
   const [mergedRows, setMergedRows] = useState([]);
   const activeCount = mergedRows.filter((r) => r.poCV + r.poPT > 0).length;
 
-  // Init sekali setelah stok siap — jangan depend array identity agar tidak macet
   useEffect(() => {
     if (loading) return;
     if (initialized) return;
@@ -248,30 +231,10 @@ export default function POPage({ onBack }) {
     const out = [];
     for (const r of rows) {
       if (r.poCV > 0 && r.kodeCV) {
-        out.push({
-          id: `CV-${r.kodeCV}`,
-          kode: r.kodeCV,
-          nama: r.nama,
-          size: r.size || '',
-          satuan: r.satuan,
-          divisi: r.divisi || '',
-          entity: 'CV',
-          qty: r.poCV,
-          tglKedatangan: r.tglKedatangan,
-        });
+        out.push({ id: `CV-${r.kodeCV}`, kode: r.kodeCV, nama: r.nama, size: r.size || '', satuan: r.satuan, divisi: r.divisi || '', entity: 'CV', qty: r.poCV, tglKedatangan: r.tglKedatangan });
       }
       if (r.poPT > 0 && r.kodePT) {
-        out.push({
-          id: `PT-${r.kodePT}`,
-          kode: r.kodePT,
-          nama: r.nama,
-          size: r.size || '',
-          satuan: r.satuan,
-          divisi: r.divisi || '',
-          entity: 'PT',
-          qty: r.poPT,
-          tglKedatangan: r.tglKedatangan,
-        });
+        out.push({ id: `PT-${r.kodePT}`, kode: r.kodePT, nama: r.nama, size: r.size || '', satuan: r.satuan, divisi: r.divisi || '', entity: 'PT', qty: r.poPT, tglKedatangan: r.tglKedatangan });
       }
     }
     setDraftItems(out);
@@ -316,7 +279,6 @@ export default function POPage({ onBack }) {
     setSubmitMsg('');
   };
 
-  /** Hanya saat Kirim: tulis ke sheet purchase order — tiap item bawa tglKedatangan sendiri. */
   const handleSubmit = async () => {
     const active = mergedRows.filter((r) => r.poCV + r.poPT > 0);
     if (submitting || active.length === 0) return;
@@ -327,36 +289,13 @@ export default function POPage({ onBack }) {
       const items = [];
       for (const r of active) {
         if (r.poCV > 0 && r.kodeCV) {
-          items.push({
-            kode: r.kodeCV,
-            nama: r.nama,
-            size: r.size || '',
-            satuan: r.satuan,
-            entity: 'CV',
-            qty: r.poCV,
-            divisi: r.divisi || '',
-            tglKedatangan: r.tglKedatangan || defaultArrival,
-          });
+          items.push({ kode: r.kodeCV, nama: r.nama, size: r.size || '', satuan: r.satuan, entity: 'CV', qty: r.poCV, divisi: r.divisi || '', tglKedatangan: r.tglKedatangan || defaultArrival });
         }
         if (r.poPT > 0 && r.kodePT) {
-          items.push({
-            kode: r.kodePT,
-            nama: r.nama,
-            size: r.size || '',
-            satuan: r.satuan,
-            entity: 'PT',
-            qty: r.poPT,
-            divisi: r.divisi || '',
-            tglKedatangan: r.tglKedatangan || defaultArrival,
-          });
+          items.push({ kode: r.kodePT, nama: r.nama, size: r.size || '', satuan: r.satuan, entity: 'PT', qty: r.poPT, divisi: r.divisi || '', tglKedatangan: r.tglKedatangan || defaultArrival });
         }
       }
-      const payload = {
-        tipe: tab === 'cs' ? 'CS' : 'PRODUKSI',
-        tanggal: today.iso,
-        items,
-        requestId: `PO-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      };
+      const payload = { tipe: tab === 'cs' ? 'CS' : 'PRODUKSI', tanggal: today.iso, items, requestId: `PO-${Date.now()}-${Math.random().toString(36).slice(2, 8)}` };
       const res = await submitPO(payload);
       if (res && (res.success === true || res.status === 'OK' || res.status === 'APPLIED' || res.status === 'COMMITTED')) {
         setPhase('saved');
@@ -378,14 +317,8 @@ export default function POPage({ onBack }) {
           <CheckCircle className="w-12 h-12 text-emerald-500 mx-auto" />
           <p className="text-base font-bold text-slate-800">PO berhasil disimpan</p>
           <p className="text-xs text-slate-500">{submitMsg}</p>
-          <button type="button" onClick={() => { setPhase('review'); setInitialized(false); setSubmitMsg(''); }} className="mt-2 px-4 py-2.5 rounded-xl bg-[#0b2a55] text-white text-sm font-semibold">
-            Buat PO baru
-          </button>
-          {onBack && (
-            <button type="button" onClick={onBack} className="block w-full mt-1 px-4 py-2 rounded-xl border border-slate-200 text-sm text-slate-600">
-              Kembali
-            </button>
-          )}
+          <button type="button" onClick={() => { setPhase('review'); setInitialized(false); setSubmitMsg(''); }} className="mt-2 px-4 py-2.5 rounded-xl bg-[#0b2a55] text-white text-sm font-semibold">Buat PO baru</button>
+          {onBack && (<button type="button" onClick={onBack} className="block w-full mt-1 px-4 py-2 rounded-xl border border-slate-200 text-sm text-slate-600">Kembali</button>)}
         </div>
       </div>
     );
@@ -400,8 +333,8 @@ export default function POPage({ onBack }) {
           </button>
         )}
         <div className="min-w-0 flex-1">
-          <h1 className="text-base font-bold text-slate-900">Purchase Order</h1>
-          <p className="text-[11px] text-slate-500">Edit qty & tgl per item → Kirim ke sheet</p>
+          <h1 className="text-base font-bold text-white drop-shadow-sm">Purchase Order</h1>
+          <p className="text-[11px] text-cyan-100/80">Edit qty & tgl per item → Kirim ke sheet</p>
         </div>
         <button type="button" onClick={() => { refresh(); setInitialized(false); }} className="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-500" aria-label="Refresh">
           <RefreshCw className="w-4 h-4" />
@@ -409,14 +342,10 @@ export default function POPage({ onBack }) {
       </div>
 
       <div className="flex gap-2">
-        <button type="button" onClick={() => switchTab('cs')} className={`flex-1 py-2.5 rounded-xl text-sm font-semibold flex items-center justify-center gap-1.5 ${
-          tab === 'cs' ? 'bg-cyan-500 text-white shadow' : 'bg-white border border-slate-200 text-slate-600'
-        }`}>
+        <button type="button" onClick={() => switchTab('cs')} className={`flex-1 py-2.5 rounded-xl text-sm font-semibold flex items-center justify-center gap-1.5 ${tab === 'cs' ? 'bg-cyan-500 text-white shadow' : 'bg-white border border-slate-200 text-slate-600'}`}>
           <Snowflake className="w-4 h-4" /> PO CS
         </button>
-        <button type="button" onClick={() => switchTab('produksi')} className={`flex-1 py-2.5 rounded-xl text-sm font-semibold flex items-center justify-center gap-1.5 ${
-          tab === 'produksi' ? 'bg-orange-500 text-white shadow' : 'bg-white border border-slate-200 text-slate-600'
-        }`}>
+        <button type="button" onClick={() => switchTab('produksi')} className={`flex-1 py-2.5 rounded-xl text-sm font-semibold flex items-center justify-center gap-1.5 ${tab === 'produksi' ? 'bg-orange-500 text-white shadow' : 'bg-white border border-slate-200 text-slate-600'}`}>
           <ChefHat className="w-4 h-4" /> PO Produksi
         </button>
       </div>
@@ -426,43 +355,26 @@ export default function POPage({ onBack }) {
       ) : (
         <>
           <div className="flex items-center justify-between px-1">
-            <p className="text-xs text-slate-500">{activeCount} item · tgl kedatangan per item</p>
-            <button type="button" onClick={regenerate} className="text-xs font-semibold text-cyan-600">Regenerate</button>
+            <p className="text-xs text-cyan-100/85">{activeCount} item · tgl kedatangan per item</p>
+            <button type="button" onClick={regenerate} className="text-xs font-semibold text-cyan-200 underline-offset-2 hover:underline">Regenerate</button>
           </div>
 
           <div className="space-y-2">
             {mergedRows.filter((r) => r.poCV + r.poPT > 0).map((row) => (
-              <MergedItemCard
-                key={row.id}
-                row={row}
-                onChangeCV={updateMergedCV}
-                onChangePT={updateMergedPT}
-                onChangeTgl={updateMergedTgl}
-                onRemove={removeMerged}
-              />
+              <MergedItemCard key={row.id} row={row} onChangeCV={updateMergedCV} onChangePT={updateMergedPT} onChangeTgl={updateMergedTgl} onRemove={removeMerged} />
             ))}
             {activeCount === 0 && (
-              <div className="card p-6 text-center text-sm text-slate-500">
-                Tidak ada item di bawah stok aman.
-              </div>
+              <div className="card p-6 text-center text-sm text-slate-500">Tidak ada item di bawah stok aman.</div>
             )}
           </div>
 
           {activeCount > 0 && (
             <div className="sticky bottom-16 pt-2">
-              <button
-                type="button"
-                onClick={handleSubmit}
-                disabled={submitting}
-                className="w-full py-3.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-500 text-white text-sm font-semibold flex items-center justify-center gap-2 shadow-lg disabled:opacity-50"
-              >
-                {submitting ? (
-                  <><Loader2 className="w-4 h-4 animate-spin" /> Menyimpan…</>
-                ) : (
-                  <><Send className="w-4 h-4" /> Kirim PO ({activeCount})</>
-                )}
+              <button type="button" onClick={handleSubmit} disabled={submitting}
+                className="w-full py-3.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-500 text-white text-sm font-semibold flex items-center justify-center gap-2 shadow-lg disabled:opacity-50">
+                {submitting ? (<><Loader2 className="w-4 h-4 animate-spin" /> Menyimpan…</>) : (<><Send className="w-4 h-4" /> Kirim PO ({activeCount})</>)}
               </button>
-              {submitMsg && <p className="text-center text-xs text-slate-500 mt-2">{submitMsg}</p>}
+              {submitMsg && <p className="text-center text-xs text-cyan-100/80 mt-2">{submitMsg}</p>}
             </div>
           )}
         </>
