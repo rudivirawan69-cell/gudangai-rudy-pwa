@@ -3,10 +3,10 @@ import { useStock } from '../hooks/useStock';
 import { DIVISIONS } from '../data/master';
 import {
   Package, RefreshCw, Search, AlertTriangle,
-  CheckCircle2, XCircle, Filter
+  CheckCircle2, XCircle, Filter, LayoutGrid, List
 } from 'lucide-react';
 
-function StockCard({ item }) {
+function StockCardList({ item }) {
   const level = item.stok === 0 ? 'zero' : item.stok <= 5 ? 'danger' : item.stok <= 20 ? 'warning' : 'safe';
   const colors = {
     safe: 'border-l-emerald-500 bg-white',
@@ -40,30 +40,96 @@ function StockCard({ item }) {
   );
 }
 
-function StokSummaryBar({
-  stats,
-  search,
-  onSearch,
-  filterStatus,
-  onFilterStatus,
-  filterDiv,
-  onFilterDiv,
-  divisions,
-  entity,
-  onEntity,
-  loading,
-  onRefresh,
-  lastRefresh,
-  resultCount,
-}) {
+function StockCardGrid({ item }) {
+  const level = item.stok === 0 ? 'zero' : item.stok <= 5 ? 'danger' : item.stok <= 20 ? 'warning' : 'safe';
+  const badgeCls = {
+    safe: 'bg-emerald-100 text-emerald-700',
+    warning: 'bg-amber-100 text-amber-700',
+    danger: 'bg-rose-100 text-rose-700',
+    zero: 'bg-slate-200 text-slate-600',
+  };
+  const label = { safe: 'Aman', warning: 'Menipis', danger: 'Kritis', zero: 'Habis' }[level];
+
   return (
-    <div className="space-y-3 mb-4">
+    <div className="bg-white rounded-[18px] border border-slate-200 p-3 shadow-sm transition-all active:scale-[0.97] space-y-2">
+      <div className="flex items-center justify-between">
+        <span className="text-[9px] font-black text-cyan-600 bg-cyan-50 px-2 py-0.5 rounded-md">
+          {item.kode?.startsWith('PT') ? 'PT' : 'CV'}
+        </span>
+        <span className={`text-[9px] font-black px-2 py-0.5 rounded-md ${badgeCls[level]}`}>{label}</span>
+      </div>
+      <div>
+        <span className="text-[10px] font-bold text-slate-400 block">{item.kode}</span>
+        <h4 className="text-xs font-black text-slate-900 leading-snug line-clamp-2 mt-0.5">{item.nama}</h4>
+        <p className="text-[10px] font-semibold text-slate-400 mt-0.5">{item.divisi} · {item.satuan}</p>
+      </div>
+      <div className="pt-1 border-t border-slate-100 flex items-center justify-between">
+        <span className="text-[10px] text-slate-400 font-bold">QTY</span>
+        <span className={`text-base font-black tabular-nums ${
+          level === 'danger' ? 'text-red-600' : level === 'warning' ? 'text-amber-600' : level === 'zero' ? 'text-slate-400' : 'text-slate-900'
+        }`}>{item.stok}</span>
+      </div>
+    </div>
+  );
+}
+
+export default function StokPage() {
+  const [entity, setEntity] = useState('CV');
+  const [search, setSearch] = useState('');
+  const [filterDiv, setFilterDiv] = useState('Semua');
+  const [filterStatus, setFilterStatus] = useState('Semua');
+  const [dense, setDense] = useState(true);
+  const { items, loading, refresh, lastRefresh, getStats } = useStock(entity);
+
+  const stats = useMemo(() => getStats(), [getStats]);
+
+  const filtered = useMemo(() => {
+    let list = items;
+    if (search) {
+      const q = search.toLowerCase();
+      list = list.filter(
+        (i) => i.kode.toLowerCase().includes(q) || i.nama.toLowerCase().includes(q) || (i.divisi || '').toLowerCase().includes(q)
+      );
+    }
+    if (filterDiv !== 'Semua') {
+      list = list.filter((i) => i.divisi === filterDiv);
+    }
+    if (filterStatus !== 'Semua') {
+      if (filterStatus === 'Kritis') list = list.filter((i) => i.stok > 0 && i.stok <= 5);
+      if (filterStatus === 'Menipis') list = list.filter((i) => i.stok > 5 && i.stok <= 20);
+      if (filterStatus === 'Aman') list = list.filter((i) => i.stok > 20);
+      if (filterStatus === 'Habis') list = list.filter((i) => i.stok === 0);
+    }
+    return list;
+  }, [items, search, filterDiv, filterStatus]);
+
+  const divisions = ['Semua', ...DIVISIONS];
+
+  return (
+    <div className="pb-4 animate-fade-in space-y-3.5">
+      <div className="flex items-center justify-between gap-2 pt-0.5">
+        <div className="min-w-0">
+          <h1 className="text-base font-black text-white drop-shadow-sm tracking-tight">Daftar Stok</h1>
+          <p className="text-[11px] text-cyan-100/90 font-medium">
+            {filtered.length} item SKU · Realtime Gudang
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setDense((v) => !v)}
+          className="px-3 py-1.5 rounded-xl bg-slate-900 text-white text-[11px] font-extrabold shadow-sm flex items-center gap-1.5 active:scale-95 transition shrink-0"
+        >
+          {dense ? <LayoutGrid className="w-3.5 h-3.5" /> : <List className="w-3.5 h-3.5" />}
+          <span>{dense ? 'Grid padat' : 'List longgar'}</span>
+        </button>
+      </div>
+
       <div className="grid grid-cols-2 gap-2">
         {['CV', 'PT'].map((e) => (
           <button
             key={e}
             type="button"
-            onClick={() => onEntity(e)}
+            onClick={() => setEntity(e)}
             className={`py-2.5 px-2 rounded-xl text-[12px] font-extrabold border transition-all duration-250 ${
               entity === e
                 ? 'bg-gradient-to-r from-[#0b2a55] to-[#164e8a] text-white border-transparent shadow-md scale-[1.01]'
@@ -106,135 +172,79 @@ function StokSummaryBar({
         </div>
       </div>
 
-      <div className="rounded-2xl bg-white border border-slate-100 shadow-sm p-3 space-y-2.5">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-          <input
-            type="text"
-            placeholder="Cari kode atau nama barang..."
-            value={search}
-            onChange={(e) => onSearch(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 bg-slate-50 rounded-xl border border-slate-100 text-sm font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-cyan-400 focus:ring-2 focus:ring-cyan-100"
-          />
-        </div>
-
-        <div className="flex gap-1.5 overflow-x-auto pb-0.5 scrollbar-none">
-          {divisions.map((d) => (
-            <button
-              key={d}
-              type="button"
-              onClick={() => onFilterDiv(d)}
-              className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-[11px] font-extrabold border transition-all duration-200 ${
-                filterDiv === d
-                  ? 'bg-[#0b2a55] text-white border-[#0b2a55] shadow-sm'
-                  : 'bg-white text-slate-600 border-slate-200 hover:border-cyan-300'
-              }`}
-            >
-              {d}
-            </button>
-          ))}
-        </div>
-
-        <div className="flex flex-wrap items-center gap-1.5">
-          <Filter className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-          {['Semua', 'Kritis', 'Menipis', 'Aman', 'Habis'].map((s) => (
-            <button
-              key={s}
-              type="button"
-              onClick={() => onFilterStatus(s)}
-              className={`px-2.5 py-1 rounded-lg text-[11px] font-extrabold border transition-all duration-200 ${
-                filterStatus === s
-                  ? s === 'Kritis'
-                    ? 'bg-red-500 text-white border-red-500'
-                    : s === 'Menipis'
-                      ? 'bg-amber-500 text-white border-amber-500'
-                      : s === 'Aman'
-                        ? 'bg-emerald-500 text-white border-emerald-500'
-                        : s === 'Habis'
-                          ? 'bg-slate-500 text-white border-slate-500'
-                          : 'bg-cyan-600 text-white border-cyan-600'
-                  : 'bg-white text-slate-600 border-slate-200 hover:border-cyan-300'
-              }`}
-            >
-              {s}
-            </button>
-          ))}
-          <div className="ml-auto flex items-center gap-2">
-            <p className="text-[11px] font-bold text-slate-500 tabular-nums">
-              {resultCount} item
-              {lastRefresh
-                ? ` · ${new Intl.DateTimeFormat('id-ID', { hour: '2-digit', minute: '2-digit' }).format(lastRefresh)}`
-                : ''}
-            </p>
-            <button
-              type="button"
-              onClick={onRefresh}
-              disabled={loading}
-              className="flex items-center gap-1 text-xs text-cyan-600 font-extrabold"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-            </button>
-          </div>
-        </div>
+      <div className="relative">
+        <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+        <input
+          type="text"
+          placeholder="Cari kode, nama barang, atau divisi..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="w-full pl-10 pr-4 py-3 bg-white text-slate-900 text-xs font-semibold rounded-2xl border border-slate-200 shadow-sm focus:outline-none focus:border-cyan-500 placeholder:text-slate-400 transition"
+        />
       </div>
-    </div>
-  );
-}
 
-export default function StokPage() {
-  const [entity, setEntity] = useState('CV');
-  const [search, setSearch] = useState('');
-  const [filterDiv, setFilterDiv] = useState('Semua');
-  const [filterStatus, setFilterStatus] = useState('Semua');
-  const { items, loading, refresh, lastRefresh, getStats } = useStock(entity);
+      <div className="flex flex-wrap items-center justify-center gap-1.5">
+        {divisions.map((d) => (
+          <button
+            key={d}
+            type="button"
+            onClick={() => setFilterDiv(d)}
+            className={`px-3 py-1.5 rounded-xl text-[11px] transition ${
+              filterDiv === d
+                ? 'font-black bg-slate-900 text-white shadow-sm'
+                : 'font-bold bg-white border border-slate-200 text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            {d}
+          </button>
+        ))}
+      </div>
 
-  const stats = useMemo(() => getStats(), [getStats]);
+      <div className="flex flex-wrap items-center justify-center gap-1.5">
+        {['Semua', 'Kritis', 'Menipis', 'Aman', 'Habis'].map((s) => (
+          <button
+            key={s}
+            type="button"
+            onClick={() => setFilterStatus(s)}
+            className={`px-2.5 py-1 rounded-xl text-[10px] transition ${
+              filterStatus === s
+                ? 'font-extrabold bg-slate-800 text-white'
+                : s === 'Kritis'
+                  ? 'font-bold bg-rose-50 text-rose-700 border border-rose-200'
+                  : s === 'Menipis'
+                    ? 'font-bold bg-amber-50 text-amber-700 border border-amber-200'
+                    : s === 'Aman'
+                      ? 'font-bold bg-emerald-50 text-emerald-700 border border-emerald-200'
+                      : 'font-bold bg-white text-slate-600 border border-slate-200'
+            }`}
+          >
+            {s === 'Semua' ? 'Semua Status' : s}
+          </button>
+        ))}
+      </div>
 
-  const filtered = useMemo(() => {
-    let list = items;
-    if (search) {
-      const q = search.toLowerCase();
-      list = list.filter(
-        (i) => i.kode.toLowerCase().includes(q) || i.nama.toLowerCase().includes(q)
-      );
-    }
-    if (filterDiv !== 'Semua') {
-      list = list.filter((i) => i.divisi === filterDiv);
-    }
-    if (filterStatus !== 'Semua') {
-      if (filterStatus === 'Kritis') list = list.filter((i) => i.stok > 0 && i.stok <= 5);
-      if (filterStatus === 'Menipis') list = list.filter((i) => i.stok > 5 && i.stok <= 20);
-      if (filterStatus === 'Aman') list = list.filter((i) => i.stok > 20);
-      if (filterStatus === 'Habis') list = list.filter((i) => i.stok === 0);
-    }
-    return list;
-  }, [items, search, filterDiv, filterStatus]);
-
-  const divisions = ['Semua', ...DIVISIONS];
-
-  return (
-    <div className="pb-4 animate-fade-in">
-      <StokSummaryBar
-        stats={stats}
-        search={search}
-        onSearch={setSearch}
-        filterStatus={filterStatus}
-        onFilterStatus={setFilterStatus}
-        filterDiv={filterDiv}
-        onFilterDiv={setFilterDiv}
-        divisions={divisions}
-        entity={entity}
-        onEntity={setEntity}
-        loading={loading}
-        onRefresh={refresh}
-        lastRefresh={lastRefresh}
-        resultCount={filtered.length}
-      />
+      <div className="flex items-center justify-between px-0.5">
+        <p className="text-[11px] font-bold text-slate-500 tabular-nums">
+          {filtered.length} item
+          {lastRefresh
+            ? ` · ${new Intl.DateTimeFormat('id-ID', { hour: '2-digit', minute: '2-digit' }).format(lastRefresh)}`
+            : ''}
+        </p>
+        <button
+          type="button"
+          onClick={refresh}
+          disabled={loading}
+          className="flex items-center gap-1 text-xs text-cyan-600 font-extrabold"
+        >
+          <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+          Refresh
+        </button>
+      </div>
 
       {loading ? (
-        <div className="space-y-2.5">
+        <div className={dense ? 'grid grid-cols-2 gap-2.5' : 'space-y-2.5'}>
           {[...Array(6)].map((_, i) => (
-            <div key={i} className="skeleton h-[72px] rounded-xl" />
+            <div key={i} className="skeleton h-[88px] rounded-xl" />
           ))}
         </div>
       ) : filtered.length === 0 ? (
@@ -242,10 +252,16 @@ export default function StokPage() {
           <Package className="w-12 h-12 text-slate-300 mx-auto mb-3" />
           <p className="text-slate-500 text-sm font-bold">Tidak ada item ditemukan</p>
         </div>
+      ) : dense ? (
+        <div className="grid grid-cols-2 gap-2.5">
+          {filtered.map((item) => (
+            <StockCardGrid key={item.kode} item={item} />
+          ))}
+        </div>
       ) : (
         <div className="space-y-2">
           {filtered.map((item) => (
-            <StockCard key={item.kode} item={item} />
+            <StockCardList key={item.kode} item={item} />
           ))}
         </div>
       )}
