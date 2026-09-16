@@ -6,6 +6,7 @@ const REQUEST_TIMEOUT_MS = 12000;
 const WRITE_TIMEOUT_MS = 90000;
 /** Chunk size for batch write: keep each POST small so 90s timeout is enough. Sequential write-once, no double. */
 const BATCH_CHUNK_SIZE = 12;
+const BATCH_MAX = 200;
 const SCHEMA_VERSION = '1.0';
 const APPLIED_KEY = 'gudangai_applied';
 const QUEUE_KEY = 'gudangai_queue';
@@ -86,8 +87,8 @@ async function getJson(action, extraParams = {}) {
   const text = await res.text();
   try { return JSON.parse(text); } catch { throw new Error('Respons bukan JSON: ' + text.slice(0, 120)); }
 }
-function generateDemoStock(masterList) {
-  return masterList.map((item) => ({ ...item, stok: Math.floor(Math.random() * 100), lastUpdate: new Date().toISOString() }));
+function generateDemoStock() {
+  return [];
 }
 export async function healthCheck() {
   if (!getApiUrl()) return { ok: false, offline: true, error: 'URL API belum diatur' };
@@ -117,19 +118,23 @@ function mapStockItem(it, entity) {
   return { kode: it.kode, nama: it.nama || '', satuan: it.satuan || '', size: it.size || it.ukuran || it.Size || '', divisi: it.divisi || '', stok: Number(it.stockAkhir != null ? it.stockAkhir : it.stok) || 0, stockAman: Number(it.stockAman != null ? it.stockAman : it.aman) || 0, lastUpdate: new Date().toISOString(), entitas: it.entitas || entity };
 }
 export async function fetchStock(entity, options = {}) {
-  const allowDemo = options.allowDemo !== false;
+  const allowDemo = options.allowDemo === true;
   const url = getApiUrl();
-  if (!url) { const { getMasterByEntity } = await import('./master.js'); return allowDemo ? generateDemoStock(getMasterByEntity(entity)) : []; }
+  if (!url) {
+    if (allowDemo) return generateDemoStock();
+    throw new Error('URL API belum diatur');
+  }
   try {
     let data;
     try { data = await getJson('getAllStock', { entitas: entity }); } catch { try { data = await postJson({ action: 'getAllStock', entitas: entity, requestId: newIds().requestId }); } catch { data = null; } }
     if (data && data.code === 'UNAUTHORIZED') throw new Error('Unauthorized — cek API Secret di Atur');
+    if (data && data.success === false) throw new Error(data.error || 'Gagal mengambil stok');
     const raw = (data && (data.items || data.stock || data.data)) || [];
     return raw.map((it) => mapStockItem(it, entity));
   } catch (err) {
     if (/Unauthorized|API Secret|URL API/i.test(String(err.message || ''))) throw err;
-    const { getMasterByEntity } = await import('./master.js');
-    return allowDemo ? generateDemoStock(getMasterByEntity(entity)) : [];
+    if (allowDemo) return generateDemoStock();
+    throw err;
   }
 }
 export async function getStatusPO() {
@@ -209,7 +214,8 @@ async function submitOneItem(sheet, entity, it, tanggal) {
   const data = await postJsonWrite(payload);
   if (data && data.code === 'UNAUTHORIZED') return { success: false, unauthorized: true, kode: item.kode, clientItemId: cid, error: 'Unauthorized' };
   if (data && (data.status === 'DUPLICATE' || data.idempotent === true)) { markApplied(cid); return { success: true, skipped: true, kode: item.kode, clientItemId: cid }; }
-  if (data && (data.success === true || data.status === 'APPLIED' || data.status === 'OK')) { markApplied(cid); return { success: true, kode: payload.kodeBarang, qty: data.qty != null ? data.qty : payload.qty, row: data.row, clientItemId: cid }; }
+  if (data && data.status === 'UNKNOWN') { return { success: false, unknown: true, kode: item.kode, clientItemId: cid, error: 'UNKNOWN' }; }
+  if (data && (data.success === true || data.status === 'APPLIED' || data.status === 'OK' || data.status === 'COMMITTED')) { markApplied(cid); return { success: true, kode: payload.kodeBarang, qty: data.qty != null ? data.qty : payload.qty, row: data.row, clientItemId: cid }; }
   return { success: false, kode: item.kode, clientItemId: cid, error: data?.error || 'Gagal menulis' };
 }
 async function submitTransaction(action, entity, items, options = {}) {
@@ -226,6 +232,9 @@ async function submitTransaction(action, entity, items, options = {}) {
   const todo = normalized.filter((it) => !isApplied(it.clientItemId));
   const alreadyDone = normalized.length - todo.length;
   if (!todo.length) return { success: true, written: alreadyDone, skipped: alreadyDone, remaining: [], message: 'Semua item sudah tercatat.' };
+  if (todo.length > BATCH_MAX) {
+    return { success: false, error: 'Maksimal ' + BATCH_MAX + ' item per pengiriman', remaining: todo, written: alreadyDone };
+  }
 
   if (!fromQueue && todo.length >= 1) {
     const chunks = [];
@@ -244,6 +253,11 @@ async function submitTransaction(action, entity, items, options = {}) {
         });
         const batchRes = await postJsonWrite({ action: 'addTransactionBatch', sheet, entitas: entity, tanggal: tanggal || undefined, transactions, batchId, requestId: batchId, queueApproved: true });
         if (batchRes && batchRes.code === 'UNAUTHORIZED') { unauthorized = true; remainingAll.push(...chunk); break; }
+        if (batchRes && batchRes.status === 'UNKNOWN') {
+          enqueue(typeMap[action], entity, chunk, { tanggal });
+          remainingAll.push(...chunk);
+          continue;
+        }
         if (batchRes && (batchRes.success === true || batchRes.status === 'COMMITTED' || batchRes.status === 'APPLIED') && !batchRes.error) {
           chunk.forEach((it) => markApplied(it.clientItemId));
           totalWritten += Number(batchRes.successCount) || chunk.length;
