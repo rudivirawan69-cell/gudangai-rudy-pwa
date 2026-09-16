@@ -167,32 +167,11 @@ function ConnectionBanner() {
   );
 }
 
-/** Dense info grid fixed bottom-right on all pages */
-function DenseInfoGrid({ pending = 0, kritis = 0, online = true }) {
-  return (
-    <div className="fixed bottom-20 right-2 z-30 flex flex-col gap-1.5 pointer-events-none">
-      <div className="bg-white/95 backdrop-blur-md border border-slate-200/80 rounded-lg shadow-md px-2 py-1.5 min-w-[72px] text-center">
-        <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wide leading-none">Antrian</p>
-        <p className={`text-sm font-black tabular-nums leading-tight mt-0.5 ${pending > 0 ? 'text-amber-600' : 'text-slate-700'}`}>{pending}</p>
-      </div>
-      <div className="bg-white/95 backdrop-blur-md border border-slate-200/80 rounded-lg shadow-md px-2 py-1.5 min-w-[72px] text-center">
-        <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wide leading-none">Kritis</p>
-        <p className={`text-sm font-black tabular-nums leading-tight mt-0.5 ${kritis > 0 ? 'text-red-600' : 'text-slate-700'}`}>{kritis}</p>
-      </div>
-      <div className="bg-white/95 backdrop-blur-md border border-slate-200/80 rounded-lg shadow-md px-2 py-1.5 min-w-[72px] text-center">
-        <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wide leading-none">Status</p>
-        <p className={`text-[11px] font-black leading-tight mt-0.5 ${online ? 'text-emerald-600' : 'text-red-600'}`}>{online ? 'ON' : 'OFF'}</p>
-      </div>
-    </div>
-  );
-}
-
 function AppShell() {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [pageKey, setPageKey] = useState(0);
   const [showSyncQueue, setShowSyncQueue] = useState(false);
-  const { online } = useConnection({ pollMs: 90000 });
 
   const goTab = (id, push = true) => {
     if (id === activeTab && !showSyncQueue) return;
@@ -310,9 +289,6 @@ function AppShell() {
             {renderPage()}
           </div>
         </main>
-
-        {/* Dense grid padat - fixed bottom-right */}
-        <DenseInfoGrid pending={0} kritis={0} online={online} />
 
         <nav className="nav-glass fixed bottom-0 left-0 right-0 safe-bottom z-40">
           <div className="max-w-lg mx-auto flex gap-1 px-1.5 py-1.5">
