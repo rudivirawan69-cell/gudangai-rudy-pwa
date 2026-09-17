@@ -1,3 +1,3 @@
-BUILD 2026-09-15-17:15 WIB
-PO merge CV/PT + editable tgl kedatangan
-Commit trigger for gudangai-rudy-pwa-app.vercel.app
+BUILD 2026-09-17-20:30 WIB
+V6.6.3 backend sync — stockAkhir/stockAman map, entitas param, submitPO poCV/poPT, Status PO full shape
+PWA compatible with Code.gs V6.6.3+PO-ROW4-6-STATUS-6COL-DASH
