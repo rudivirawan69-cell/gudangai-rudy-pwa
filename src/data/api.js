@@ -1,1 +1,434 @@
-PLACEHOLDER
+/** GudangAI RUDY — API layer V6.4.15 write-once + write timeout 90s (batch 70–80 item) + soft queue notif (anti-duplikat) */
+/** BUILD_PO_FIX 2026-09-17: submitPO normalizes poCV/poPT */
+const RETRY_COUNT = 2;
+const RETRY_BASE_MS = 400;
+const REQUEST_TIMEOUT_MS = 12000;
+/** Write path: timeout 90 detik agar batch besar (70–80 item) sempat selesai di server sebelum client abort. UI tombol tetap lepas ~4 detik. */
+const WRITE_TIMEOUT_MS = 90000;
+/** Chunk size for batch write: keep each POST small so 90s timeout is enough. Sequential write-once, no double. */
+const BATCH_CHUNK_SIZE = 12;
+const BATCH_MAX = 200;
+const SCHEMA_VERSION = '1.0';
+const APPLIED_KEY = 'gudangai_applied';
+const QUEUE_KEY = 'gudangai_queue';
+const APPLIED_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const NOTIF_KEY = 'gudangai_notif';
+const DEFAULT_API_URL = 'https://script.google.com/macros/s/AKfycbwtSr7cdBKhvJOwwkSZ9GUf1ebuHOM8CsKXo1I6r8v0Z_gi4_ElrDK9oez8LX5DAB1INw/exec';
+let _syncLock = false;
+function emitConn(detail) { try { window.dispatchEvent(new CustomEvent('gudangai-conn', { detail })); } catch (_) {} }
+export function getApiUrl() {
+  const stored = (localStorage.getItem('gudangai_api_url') || '').trim();
+  if (stored) return stored;
+  localStorage.setItem('gudangai_api_url', DEFAULT_API_URL);
+  localStorage.setItem('gudangai_api_url_seeded', '1');
+  return DEFAULT_API_URL;
+}
+export function setApiUrl(url) {
+  const c = (url || '').trim();
+  if (c) localStorage.setItem('gudangai_api_url', c);
+  else localStorage.setItem('gudangai_api_url', DEFAULT_API_URL);
+}
+export function getApiSecret() { return (localStorage.getItem('gudangai_api_secret') || '').trim(); }
+export function setApiSecret(secret) {
+  const c = (secret || '').trim();
+  if (c) localStorage.setItem('gudangai_api_secret', c);
+  else localStorage.removeItem('gudangai_api_secret');
+}
+function delay(ms) { return new Promise((r) => setTimeout(r, ms)); }
+function deviceId() {
+  let id = localStorage.getItem('gudangai_device_id');
+  if (!id) { id = 'RUDY-' + (crypto.randomUUID ? crypto.randomUUID() : String(Date.now())); localStorage.setItem('gudangai_device_id', id); }
+  return id;
+}
+let _idSeq = 0;
+function newIds() {
+  _idSeq += 1;
+  const uuid = crypto.randomUUID ? crypto.randomUUID() : (Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
+  const stamp = Date.now().toString(36) + '-' + _idSeq.toString(36);
+  return { requestId: 'REQ-' + uuid + '-' + stamp, transactionId: 'TX-RUDY-' + uuid + '-' + stamp };
+}
+async function fetchWithRetry(url, options = {}, retries = RETRY_COUNT, timeoutMs = REQUEST_TIMEOUT_MS, emitFailure = true) {
+  let lastError;
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const res = await fetch(url, { ...options, signal: controller.signal });
+      clearTimeout(timer);
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      if (attempt > 1) emitConn({ state: 'recovered', attempt });
+      return res;
+    } catch (err) {
+      clearTimeout(timer);
+      lastError = err;
+      if (attempt < retries) await delay(RETRY_BASE_MS * Math.pow(1.7, attempt - 1));
+    }
+  }
+  if (emitFailure) emitConn({ state: 'failed', error: (lastError && lastError.message) || 'Gagal' });
+  throw lastError;
+}
+async function postJson(payload, { retries = RETRY_COUNT, timeoutMs = REQUEST_TIMEOUT_MS, emitFailure = true } = {}) {
+  const url = getApiUrl();
+  if (!url) throw new Error('URL API belum diatur');
+  const body = JSON.stringify({ schemaVersion: SCHEMA_VERSION, secret: getApiSecret() || undefined, client: { app: 'gudangai-rudy-pwa', deviceId: deviceId() }, ...payload });
+  const res = await fetchWithRetry(url, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body, redirect: 'follow' }, retries, timeoutMs, emitFailure);
+  const text = await res.text();
+  try { return JSON.parse(text); } catch { throw new Error('Respons bukan JSON: ' + text.slice(0, 120)); }
+}
+async function postJsonWrite(payload) {
+  return postJson(payload, { retries: 1, timeoutMs: WRITE_TIMEOUT_MS, emitFailure: false });
+}
+async function getJson(action, extraParams = {}) {
+  const url = getApiUrl();
+  if (!url) throw new Error('URL API belum diatur');
+  const secret = getApiSecret();
+  const q = new URLSearchParams({ action, ...extraParams });
+  if (secret) q.set('secret', secret);
+  const res = await fetchWithRetry(url + '?' + q.toString(), { method: 'GET', redirect: 'follow' });
+  const text = await res.text();
+  try { return JSON.parse(text); } catch { throw new Error('Respons bukan JSON: ' + text.slice(0, 120)); }
+}
+function generateDemoStock() {
+  return [];
+}
+export async function healthCheck() {
+  if (!getApiUrl()) return { ok: false, offline: true, error: 'URL API belum diatur' };
+  try {
+    let data = null; let lastErr = null;
+    try { data = await getJson('ping'); } catch (e) { lastErr = e; }
+    if (!data || (data.error && !data.success && data.status !== 'OK')) {
+      try { data = await getJson('status'); } catch (e) { lastErr = e; }
+    }
+    if (data && (data.success || data.status === 'OK' || data.ok)) return { ok: true, data };
+    return { ok: false, offline: true, error: (data && data.error) || (lastErr && lastErr.message) || 'Tidak terjangkau' };
+  } catch (err) {
+    return { ok: false, offline: true, error: err.message || 'Offline' };
+  }
+}
+export function getConnectionStatus() {
+  return { online: navigator.onLine, apiUrl: getApiUrl() };
+}
+function mapStockItem(it, entity) {
+  return {
+    kode: it.kode || it.kodeBarang || '',
+    nama: it.nama || '',
+    satuan: it.satuan || 'Pack',
+    stok: Number(it.stok != null ? it.stok : it.qty != null ? it.qty : it.sisa) || 0,
+    stokAman: Number(it.stokAman || it.min || 0) || 0,
+    size: it.size || '',
+    entity: entity || it.entity || '',
+  };
+}
+export async function fetchStock(entity, options = {}) {
+  try {
+    const data = await getJson('getAllStock', { entity: entity || '' });
+    if (!data || data.error) return { success: false, items: [], error: (data && data.error) || 'Gagal ambil stok' };
+    const list = Array.isArray(data.items) ? data.items : Array.isArray(data.data) ? data.data : Array.isArray(data) ? data : [];
+    return { success: true, items: list.map((it) => mapStockItem(it, entity)), raw: data };
+  } catch (err) {
+    if (options.allowDemo) return { success: true, items: generateDemoStock(), demo: true };
+    return { success: false, items: [], error: err.message || 'Gagal ambil stok' };
+  }
+}
+export async function getStatusPO() {
+  try {
+    let data = await getJson('getStatusPO');
+    if (!data || data.error) {
+      try { data = await postJson({ action: 'getStatusPO' }); } catch (_) {}
+    }
+    if (!data || data.error) return { success: false, items: [], error: (data && data.error) || 'Gagal Status PO' };
+    const items = Array.isArray(data.items) ? data.items : Array.isArray(data.data) ? data.data : [];
+    return { success: true, items, raw: data };
+  } catch (err) {
+    return { success: false, items: [], error: err.message || 'Gagal Status PO' };
+  }
+}
+export async function getDashboardData() {
+  try {
+    const data = await getJson('getDashboard');
+    return data || { success: false };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+}
+function getAppliedMap() { try { return JSON.parse(localStorage.getItem(APPLIED_KEY) || '{}'); } catch { return {}; } }
+function pruneApplied(map) {
+  const now = Date.now();
+  const out = {};
+  for (const [k, v] of Object.entries(map || {})) { if (now - (typeof v === 'number' ? v : 0) < APPLIED_TTL_MS) out[k] = v; }
+  return out;
+}
+function isApplied(clientItemId) { return !!(clientItemId && getAppliedMap()[clientItemId]); }
+function markApplied(clientItemId) {
+  if (!clientItemId) return;
+  const map = pruneApplied(getAppliedMap());
+  map[clientItemId] = Date.now();
+  localStorage.setItem(APPLIED_KEY, JSON.stringify(map));
+}
+export function markItemApplied(clientItemId) { markApplied(clientItemId); }
+function ensureClientItemId(it) {
+  if (it.clientItemId) return it;
+  return { ...it, clientItemId: 'CI-' + (crypto.randomUUID ? crypto.randomUUID() : Date.now() + '-' + Math.random().toString(36).slice(2, 9)) };
+}
+function enqueue(type, entity, items, meta = {}) {
+  if (!items || !items.length) return;
+  const queue = JSON.parse(localStorage.getItem(QUEUE_KEY) || '[]');
+  const entry = { id: 'Q-' + Date.now(), type, entity, items: items.map(ensureClientItemId), tanggal: meta.tanggal || new Date().toISOString().slice(0, 10), createdAt: new Date().toISOString() };
+  queue.push(entry);
+  localStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
+}
+function normalizeQueue(rawQueue) {
+  if (!Array.isArray(rawQueue)) return [];
+  return rawQueue.map((e) => ({
+    ...e,
+    items: (e.items || []).map(ensureClientItemId),
+  }));
+}
+async function submitOneItem(sheet, entity, it, tanggal) {
+  const cid = it.clientItemId || ensureClientItemId(it).clientItemId;
+  if (isApplied(cid)) return { success: true, skipped: true, clientItemId: cid };
+  const ids = newIds();
+  const payload = {
+    action: 'addTransaction',
+    sheet,
+    entity,
+    tanggal: tanggal || new Date().toISOString().slice(0, 10),
+    kodeBarang: it.kode || it.kodeBarang,
+    qty: Number(it.qty) || 0,
+    keterangan: (it.keterangan || '').slice(0, 200),
+    clientItemId: cid,
+    requestId: ids.requestId,
+    transactionId: ids.transactionId,
+  };
+  const data = await postJsonWrite(payload);
+  if (data && (data.success === true || data.status === 'APPLIED' || data.status === 'OK' || data.status === 'COMMITTED')) { markApplied(cid); return { success: true, kode: payload.kodeBarang, qty: data.qty != null ? data.qty : payload.qty, row: data.row, clientItemId: cid }; }
+  return { success: false, error: (data && (data.error || data.message)) || 'Gagal tulis', clientItemId: cid, kode: payload.kodeBarang };
+}
+async function submitTransaction(action, entity, items, options = {}) {
+  const fromQueue = !!(options && options.fromQueue);
+  const tanggal = (options && options.tanggal) || new Date().toISOString().slice(0, 10);
+  const typeMap = { barangMasuk: 'masuk', barangKeluar: 'keluar', barangRusak: 'rusak' };
+  const list = (items || []).map(ensureClientItemId);
+  if (!list.length) return { success: false, error: 'Tidak ada item' };
+  const alreadyDone = list.filter((it) => isApplied(it.clientItemId)).length;
+  const todo = list.filter((it) => !isApplied(it.clientItemId));
+  if (!todo.length) return { success: true, written: alreadyDone, remaining: [], skippedAll: true };
+  // Prefer batch when not fromQueue and size allows
+  if (!fromQueue && todo.length >= 1 && todo.length <= BATCH_MAX) {
+    try {
+      const chunks = [];
+      for (let i = 0; i < todo.length; i += BATCH_CHUNK_SIZE) chunks.push(todo.slice(i, i + BATCH_CHUNK_SIZE));
+      let written = alreadyDone;
+      const remaining = [];
+      for (const chunk of chunks) {
+        const ids = newIds();
+        const batchPayload = {
+          action: 'addTransactionBatch',
+          sheet: action,
+          entity,
+          tanggal,
+          items: chunk.map((it) => ({
+            kodeBarang: it.kode || it.kodeBarang,
+            qty: Number(it.qty) || 0,
+            keterangan: (it.keterangan || '').slice(0, 200),
+            clientItemId: it.clientItemId,
+          })),
+          requestId: ids.requestId,
+          transactionId: ids.transactionId,
+        };
+        const batchRes = await postJsonWrite(batchPayload);
+        if (batchRes && (batchRes.success === true || batchRes.status === 'COMMITTED' || batchRes.status === 'APPLIED') && !batchRes.error) {
+          for (const it of chunk) markApplied(it.clientItemId);
+          written += chunk.length;
+        } else {
+          // Ambiguous / timeout / partial → enqueue remaining (write-once)
+          remaining.push(...chunk);
+        }
+      }
+      if (remaining.length && !fromQueue) {
+        enqueue(typeMap[action], entity, remaining, { tanggal });
+        pushNotification({
+          type: 'warn',
+          title: 'Sebagian antrian',
+          body: `Berhasil ${written} · antrian ${remaining.length}. Cek Atur → Sinkronisasi. Jika sudah di sheet, tekan Sukses.`
+        });
+        return { success: written > 0, written, remaining, queued: true, offline: !navigator.onLine };
+      }
+      if (!remaining.length) {
+        try { window.dispatchEvent(new CustomEvent('gudangai-stock-refresh')); } catch (_) {}
+        return { success: true, written, remaining: [] };
+      }
+      return { success: false, written, remaining, error: 'Batch sebagian gagal' };
+    } catch (err) {
+      if (!fromQueue) {
+        enqueue(typeMap[action], entity, todo, { tanggal });
+        return { success: false, written: alreadyDone, remaining: todo, queued: true, offline: true, error: err.message || 'Timeout / jaringan — masuk antrian' };
+      }
+      return { success: false, written: alreadyDone, remaining: todo, error: err.message };
+    }
+  }
+  // Serial path (fromQueue or small)
+  const written = []; const errors = []; const failedItems = [];
+  for (let i = 0; i < todo.length; i++) {
+    const it = todo[i];
+    if (isApplied(it.clientItemId)) continue;
+    try {
+      const res = await submitOneItem(action, entity, it, tanggal);
+      if (res.unauthorized) return { success: false, written: written.length + alreadyDone, remaining: todo.slice(i), error: 'Unauthorized — isi API Secret di Atur' };
+      if (res.success) written.push(res);
+      else { errors.push((res.kode || '?') + ': ' + (res.error || 'gagal')); failedItems.push(it); }
+    } catch (err) {
+      const msg = err.message || '';
+      const isNetwork = !navigator.onLine || /Failed to fetch|NetworkError|Timeout|HTTP 5/i.test(msg);
+      if (isNetwork) {
+        const rest = todo.slice(i).filter((x) => !isApplied(x.clientItemId));
+        if (!fromQueue) enqueue(typeMap[action], entity, rest, { tanggal });
+        return { success: written.length > 0, queued: true, remaining: rest, written: written.length + alreadyDone, error: 'Jaringan terputus — sisa antrian.' };
+      }
+      errors.push((it.kode || '?') + ': ' + msg);
+      failedItems.push(it);
+    }
+  }
+  const stillPending = failedItems.filter((it) => !isApplied(it.clientItemId));
+  if (!failedItems.length) {
+    try { window.dispatchEvent(new CustomEvent('gudangai-stock-refresh')); } catch (_) {}
+    return { success: true, written: written.length + alreadyDone, remaining: [], details: written };
+  }
+  if (stillPending.length && !fromQueue) enqueue(typeMap[action], entity, stillPending, { tanggal });
+  return { success: false, written: written.length + alreadyDone, remaining: stillPending, error: 'Sebagian gagal. ' + errors.join('; ') };
+}
+export const submitBarangMasuk = (entity, items, options) => submitTransaction('barangMasuk', entity, items, options || {});
+export const submitBarangKeluar = (entity, items, options) => submitTransaction('barangKeluar', entity, items, options || {});
+export const submitBarangRusak = (entity, items, options) => submitTransaction('barangRusak', entity, items, options || {});
+export function getPendingQueue() { try { return normalizeQueue(JSON.parse(localStorage.getItem(QUEUE_KEY) || '[]')); } catch { return []; } }
+export function removePendingByClientIds(ids) {
+  if (!ids || !ids.length) return;
+  try {
+    const q = JSON.parse(localStorage.getItem(QUEUE_KEY) || '[]');
+    const set = new Set(ids);
+    const next = [];
+    for (const e of q) {
+      const items = (e.items || []).filter((it) => !set.has(it.clientItemId));
+      if (items.length) next.push({ ...e, items });
+    }
+    localStorage.setItem(QUEUE_KEY, JSON.stringify(next));
+  } catch (_) {}
+}
+export function clearPendingQueue() { localStorage.setItem(QUEUE_KEY, '[]'); }
+
+/** Sync entire pending queue (fromQueue path). Write-once, no auto-serial after timeout. */
+export async function syncPendingQueue() {
+  const url = getApiUrl();
+  if (!url || !navigator.onLine) return { synced: 0, failed: 0, skipped: true };
+  if (_syncLock) return { synced: 0, failed: 0, skipped: true, reason: 'sync-in-progress' };
+  _syncLock = true;
+  try {
+    let queue = normalizeQueue(JSON.parse(localStorage.getItem(QUEUE_KEY) || '[]'));
+    let synced = 0, failed = 0;
+    const actionMap = { masuk: 'barangMasuk', keluar: 'barangKeluar', rusak: 'barangRusak' };
+    for (let i = 0; i < queue.length; i++) {
+      if (queue[i].synced) continue;
+      const pendingItems = (queue[i].items || []).map(ensureClientItemId).filter((it) => !isApplied(it.clientItemId));
+      if (!pendingItems.length) { queue[i].synced = true; continue; }
+      const act = actionMap[queue[i].type] || 'barangMasuk';
+      try {
+        const res = await submitTransaction(act, queue[i].entity, pendingItems, { tanggal: queue[i].tanggal, fromQueue: true });
+        if (res.success && (!res.remaining || !res.remaining.length)) {
+          queue[i].synced = true;
+          synced += pendingItems.length;
+        } else {
+          failed += (res.remaining || pendingItems).length;
+          if (res.offline) break;
+        }
+      } catch {
+        failed++;
+        break;
+      }
+    }
+    localStorage.setItem(QUEUE_KEY, JSON.stringify(queue.filter((e) => !e.synced && (e.items || []).length)));
+    return { synced, failed, skipped: false };
+  } finally {
+    _syncLock = false;
+  }
+}
+
+const HISTORY_KEY = 'gudangai_history';
+export function getTransactionHistory() {
+  try {
+    return JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+  } catch {
+    return [];
+  }
+}
+export function saveToHistory(entry) {
+  try {
+    const h = getTransactionHistory();
+    h.unshift({ ...entry, savedAt: new Date().toISOString() });
+    if (h.length > 500) h.length = 500;
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(h));
+  } catch (_) {}
+}
+
+export function pushNotification(n) {
+  try {
+    const t = JSON.parse(localStorage.getItem(NOTIF_KEY) || '[]');
+    t.unshift({ id: 'N-' + Date.now(), ...n, at: new Date().toISOString(), read: false });
+    if (t.length > 50) t.length = 50;
+    localStorage.setItem(NOTIF_KEY, JSON.stringify(t));
+    window.dispatchEvent(new CustomEvent('gudangai-notif'));
+  } catch (_) {}
+}
+export function getNotifications() { try { return JSON.parse(localStorage.getItem(NOTIF_KEY) || '[]'); } catch { return []; } }
+export function markNotificationsRead() {
+  try {
+    const t = getNotifications().map((n) => ({ ...n, read: true }));
+    localStorage.setItem(NOTIF_KEY, JSON.stringify(t));
+  } catch (_) {}
+}
+export function unreadNotificationCount() { return getNotifications().filter((n) => !n.read).length; }
+export async function submitPO(payload) {
+  try {
+    const rawItems = (payload && (payload.items || payload.poItems)) || [];
+    // Normalisasi kontrak production: wajib poCV/poPT agar tidak PO_ITEMS_REQUIRED.
+    const items = rawItems.map((it) => {
+      const entity = String(it.entity || it.entitas || '').toUpperCase();
+      let poCV = Number(it.poCV);
+      let poPT = Number(it.poPT);
+      if (!Number.isFinite(poCV)) poCV = 0;
+      if (!Number.isFinite(poPT)) poPT = 0;
+      const qty = Number(it.qty) || 0;
+      if (poCV <= 0 && poPT <= 0 && qty > 0) {
+        if (entity === 'PT') poPT = qty;
+        else poCV = qty;
+      }
+      return {
+        ...it,
+        kode: it.kode || it.kodeBarang || it.kodeCV || it.kodePT || '',
+        nama: it.nama || '',
+        satuan: it.satuan || 'Pack',
+        size: it.size || '',
+        entity: entity || (poCV > 0 && poPT > 0 ? 'BOTH' : poPT > 0 ? 'PT' : 'CV'),
+        entitas: entity || (poCV > 0 && poPT > 0 ? 'BOTH' : poPT > 0 ? 'PT' : 'CV'),
+        qty: (poCV + poPT) || qty,
+        poCV,
+        poPT,
+        tglKedatangan: it.tglKedatangan || it.tanggalKedatangan || '',
+      };
+    }).filter((it) => (Number(it.poCV) || 0) + (Number(it.poPT) || 0) > 0 && String(it.nama || '').trim());
+
+    if (!items.length) {
+      return { success: false, status: 'REJECTED', code: 'PO_ITEMS_REQUIRED', error: 'Final PO tidak berisi item yang valid.' };
+    }
+
+    const body = {
+      action: 'submitPO',
+      ...(payload || {}),
+      items,
+      poItems: items,
+    };
+    const data = await postJsonWrite(body);
+    return data || { success: false, error: 'Respons submit PO kosong' };
+  } catch (err) {
+    return { success: false, error: err?.message || 'Gagal menyimpan PO' };
+  }
+}
