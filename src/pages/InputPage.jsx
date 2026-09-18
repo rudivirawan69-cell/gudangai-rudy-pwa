@@ -205,10 +205,12 @@ export default function InputPage() {
       if (!serverValidation?.success) {
         setStatusBanner('Validasi server belum lolos: ' + (serverValidation?.error || serverValidation?.code || 'periksa item di keranjang'));
         pushNotification({ type: 'warn', title: 'Validasi server', body: (serverValidation?.error || 'Masih ada item yang perlu diperiksa.') });
+        setSubmitting(false); submittingRef.current = false;
         return;
       }
     } catch (validationErr) {
       setStatusBanner('Validasi server gagal: ' + (validationErr?.message || 'coba lagi'));
+      setSubmitting(false); submittingRef.current = false;
       return;
     }
     setCart((prev) => prev.filter((c) => c.status === 'flag'));
