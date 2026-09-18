@@ -13,7 +13,8 @@
     "lint": "oxlint src scripts",
     "validate:aliases": "node scripts/validate_alias_config.mjs alias-config.json",
     "preview": "vite preview",
-    "icons": "node scripts/write-icons.mjs"
+    "icons": "node scripts/write-icons.mjs",
+    "validate:p1p3": "node scripts/validate_p1p3.mjs"
   },
   "dependencies": {
     "@vercel/speed-insights": "^2.0.0",
