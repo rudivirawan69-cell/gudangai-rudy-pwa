@@ -491,6 +491,9 @@ async function submitTransaction(action, entity, items, options = {}) {
         }
       }
       if (remaining.length && !fromQueue) {
+        if (written > alreadyDone) {
+          try { window.dispatchEvent(new CustomEvent('gudangai-stock-refresh')); } catch (_) {}
+        }
         enqueue(typeMap[action], entity, remaining, { tanggal });
         const okN = written - alreadyDone;
         pushNotification({
@@ -548,6 +551,9 @@ async function submitTransaction(action, entity, items, options = {}) {
     return { success: true, written: written.length + alreadyDone, remaining: [], details: written };
   }
   if (stillPending.length && !fromQueue) enqueue(typeMap[action], entity, stillPending, { tanggal });
+  if (written.length > 0) {
+    try { window.dispatchEvent(new CustomEvent('gudangai-stock-refresh')); } catch (_) {}
+  }
   return { success: false, written: written.length + alreadyDone, remaining: stillPending, error: 'Sebagian gagal. ' + errors.join('; ') };
 }
 
