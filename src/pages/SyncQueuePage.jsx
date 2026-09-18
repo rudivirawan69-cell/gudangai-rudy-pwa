@@ -67,9 +67,11 @@ export default function SyncQueuePage({ onBack }) {
     const onCircuit = (e) => setCircuit(e.detail || getWriteCircuitState());
     window.addEventListener('gudangai-queue-changed', onQueue);
     window.addEventListener('gudangai-circuit', onCircuit);
+    const id = setInterval(() => setCircuit(getWriteCircuitState()), 1000);
     return () => {
       window.removeEventListener('gudangai-queue-changed', onQueue);
       window.removeEventListener('gudangai-circuit', onCircuit);
+      clearInterval(id);
     };
   }, [refresh]);
 
