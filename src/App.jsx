@@ -72,7 +72,7 @@ const TABS = [
 ];
 
 function ConnectionBanner() {
-  const { online, hasUrl, status, message, syncing } = useConnection({ pollMs: 90000 });
+  const { online, hasUrl, status, message, syncing } = useConnection({ pollMs: 60000 });
   const [flash, setFlash] = useState('');
   const [now, setNow] = useState(() => new Date());
 
