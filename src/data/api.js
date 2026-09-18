@@ -117,9 +117,11 @@ function recordWriteSuccess() {
 function recordWriteFailure(error) {
   const msg = String(error?.message || error || 'Write gagal').slice(0, 180);
   const s = readCircuit();
-  const nextFailures = Math.min(CIRCUIT_THRESHOLD, s.failures + 1);
+  const cooled = s.openedAt > 0 && Date.now() - s.openedAt >= CIRCUIT_COOLDOWN_MS;
+  const baseFailures = cooled ? 0 : s.failures;
+  const nextFailures = Math.min(CIRCUIT_THRESHOLD, baseFailures + 1);
   const next = nextFailures >= CIRCUIT_THRESHOLD
-    ? { failures: nextFailures, openedAt: s.openedAt || Date.now(), lastError: msg }
+    ? { failures: nextFailures, openedAt: Date.now(), lastError: msg }
     : { failures: nextFailures, openedAt: 0, lastError: msg };
   try { localStorage.setItem(CIRCUIT_KEY, JSON.stringify(next)); } catch (_) {}
   emitCircuit();
