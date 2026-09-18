@@ -1,12 +1,12 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import {
-  Search, Trash2, Send, Loader2,
+  Search, Trash2, Send, Loader2, FileText,
   Plus, Minus,
   PackagePlus, PackageMinus, AlertOctagon, Mic, Upload,
   QrCode, Bell, Camera, X, AlertTriangle, CheckCircle2,
 } from 'lucide-react';
 import {
-  extractTextFromPdf, parseLinesFromText, validateItems, applyStockAwareFallback,
+  extractTextFromPdf, extractTextFromImage, parseLinesFromText, validateItems, applyStockAwareFallback,
   detectEntityFromText, scanBarcodeFromVideo,
 } from '../data/pdfValidate';
 import {
@@ -41,6 +41,7 @@ export default function InputPage() {
   const [unread, setUnread] = useState(0);
   const [camOn, setCamOn] = useState(false);
   const [camErr, setCamErr] = useState('');
+  const [pasteText, setPasteText] = useState('');
   const [pendingManualIdx, setPendingManualIdx] = useState(null);
   const fileRef = useRef(null);
   const videoRef = useRef(null);
@@ -128,18 +129,16 @@ export default function InputPage() {
     recogRef.current = rec; setListening(true); rec.start();
   };
 
-  const onFile = async (e) => {
-    const file = e.target.files?.[0]; if (!file) return;
-    setBusy(true); setStatusBanner(''); setAccuracy(null);
+  const processImportedText = useCallback(async (text, sourceLabel = 'Dokumen') => {
+    const rawText = String(text || '').trim();
+    if (!rawText) { setStatusBanner(sourceLabel + ': teks tidak terbaca.'); return; }
+    setBusy(true); setStatusBanner(sourceLabel + ': memvalidasi…'); setAccuracy(null);
     try {
-      const result = await extractTextFromPdf(file, () => {});
-      const text = typeof result === 'string' ? result : (result?.text || '');
-      const lines = result?.lines || [];
-      const detected = detectEntityFromText(text);
+      const detected = detectEntityFromText(rawText);
       const useEntity = detected || entity;
       if (detected && detected !== entity) setEntity(detected);
-      const rows = parseLinesFromText(text, lines);
-      if (!rows.length) { setStatusBanner('Tidak ada baris barang terdeteksi.'); return; }
+      const rows = parseLinesFromText(rawText, []);
+      if (!rows.length) { setStatusBanner(sourceLabel + ': tidak ada baris barang terdeteksi.'); return; }
       const validation = validateItems(rows, useEntity);
       const stock = await fetchStock(useEntity, { allowDemo: false });
       const matched = applyStockAwareFallback(validation.matched || [], useEntity, stock);
@@ -147,22 +146,53 @@ export default function InputPage() {
       const un = validation.unmatched || [];
       const total = matched.length + amb.length + un.length;
       const acc = total ? Math.round((matched.length / total) * 100) : 0;
-      setAccuracy({ pct: acc, matched: matched.length, skipped: un.length, needPick: amb.length, total });
-      const ambFiltered = (amb || []).filter((r) => (r.candidates || []).length > 0);
+      setAccuracy({ pct: acc, matched: matched.length, skipped: un.length, needPick: amb.length, total, source: sourceLabel });
+      const ambFiltered = amb.filter((r) => (r.candidates || []).length > 0);
       mergePdfIntoCart(matched, ambFiltered, []);
       const fallbackItems = matched.filter((r) => r.fallback);
-      if (fallbackItems.length) pushNotification({ type: 'warn', title: 'Fallback stok', body: fallbackItems.map((f) => `${f.nameFromPdf} → ${f.nama}`).join('; ') });
+      if (fallbackItems.length) pushNotification({ type: 'warn', title: 'Fallback stok', body: fallbackItems.map((f) => f.nameFromPdf + ' → ' + f.nama).join('; ') });
       const parts = [];
       if (matched.length) parts.push(matched.length + ' cocok');
-      if (ambFiltered.length) parts.push(ambFiltered.length + ' pilih master');
-      if (un.length) parts.push(un.length + ' dilewati (bukan master)');
-      setStatusBanner(matched.length || ambFiltered.length
-        ? ('Validasi ' + acc + '% · ' + parts.join(' · '))
-        : (un.length ? ('Tidak ada yang cocok master · ' + un.length + ' baris dilewati') : 'Tidak ada baris barang terdeteksi.'));
-    } catch (err) { setStatusBanner(err.message || 'Gagal membaca PDF'); }
+      if (ambFiltered.length) parts.push(ambFiltered.length + ' perlu pilih master');
+      if (un.length) parts.push(un.length + ' tidak cocok');
+      setStatusBanner(matched.length || ambFiltered.length ? ('Validasi ' + acc + '% · ' + parts.join(' · ')) : 'Tidak ada item yang cocok dengan master.');
+    } catch (err) { setStatusBanner(sourceLabel + ': ' + (err.message || 'gagal memvalidasi')); }
+    finally { setBusy(false); }
+  }, [entity, mergePdfIntoCart]);
+
+  const onFile = async (e) => {
+    const file = e.target.files?.[0]; if (!file) return;
+    try {
+      if (file.type === 'application/pdf' || /\.pdf$/i.test(file.name)) {
+        setBusy(true); setStatusBanner('Membaca PDF…'); setAccuracy(null);
+        const result = await extractTextFromPdf(file, (msg) => setStatusBanner(msg));
+        await processImportedText(typeof result === 'string' ? result : (result?.text || ''), 'PDF');
+      } else if (file.type.startsWith('image/')) {
+        const result = await extractTextFromImage(file, (msg) => setStatusBanner(msg));
+        await processImportedText(result?.text || '', 'Foto');
+      } else { setStatusBanner('Format tidak didukung. Gunakan PDF atau foto.'); }
+    } catch (err) { setStatusBanner(err.message || 'Gagal membaca file'); }
     finally { setBusy(false); if (fileRef.current) fileRef.current.value = ''; }
   };
 
+  const capturePhotoAndValidate = async () => {
+    if (!videoRef.current) return;
+    try {
+      const video = videoRef.current;
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth || 1280; canvas.height = video.videoHeight || 720;
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      if (!ctx) throw new Error('Kamera tidak dapat diproses.');
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.92));
+      if (!blob) throw new Error('Foto gagal dibuat.');
+      const result = await extractTextFromImage(blob, (msg) => setStatusBanner(msg));
+      await processImportedText(result?.text || '', 'Kamera');
+      stopCam();
+    } catch (err) { setCamErr(err.message || 'Gagal mengambil foto'); }
+  };
+
+  const validatePastedText = async () => { await processImportedText(pasteText, 'Teks tempel'); };
   const submitCart = () => {
     if (submitting || submittingRef.current) return;
     const ready = cart.filter((c) => c.kode && (c.status === 'ok' || c.status === 'fallback'));
@@ -246,11 +276,19 @@ export default function InputPage() {
         </button>
       </div>
       <input ref={fileRef} type="file" accept="application/pdf,image/*" className="hidden" onChange={onFile} />
+      <button type="button" onClick={() => setMode((m) => m === 'paste' ? 'search' : 'paste')} className="w-full rounded-xl border border-violet-100 bg-violet-50 px-3 py-2 text-[11px] font-semibold text-violet-700">Tempel teks rekap / order</button>
+      {mode === 'paste' && (
+        <div className="rounded-2xl bg-white border border-violet-100 p-3 space-y-2 shadow-sm">
+          <textarea value={pasteText} onChange={(e) => setPasteText(e.target.value)} placeholder="Tempel teks rekap/order di sini…" rows={6} className="w-full resize-none text-sm text-slate-700 bg-slate-50 border border-slate-100 rounded-xl p-3 focus:outline-none" />
+          <button type="button" onClick={validatePastedText} disabled={busy || !pasteText.trim()} className="w-full py-2.5 rounded-xl bg-violet-600 text-white text-sm font-bold disabled:opacity-40">Validasi Teks</button>
+        </div>
+      )}
       {camOn && (
         <div className="rounded-2xl overflow-hidden bg-black relative">
           <video ref={videoRef} autoPlay playsInline className="w-full h-48 object-cover" />
           <div className="absolute bottom-2 left-0 right-0 flex justify-center gap-2">
-            <button type="button" onClick={scanOnce} className="px-3 py-1.5 rounded-full bg-white text-xs font-bold flex items-center gap-1"><Camera className="w-3.5 h-3.5" /> Scan</button>
+            <button type="button" onClick={scanOnce} className="px-3 py-1.5 rounded-full bg-white text-xs font-bold flex items-center gap-1"><QrCode className="w-3.5 h-3.5" /> Scan QR</button>
+            <button type="button" onClick={capturePhotoAndValidate} className="px-3 py-1.5 rounded-full bg-cyan-500 text-white text-xs font-bold flex items-center gap-1"><Camera className="w-3.5 h-3.5" /> Foto & Validasi</button>
             <button type="button" onClick={stopCam} className="px-3 py-1.5 rounded-full bg-black/60 text-white text-xs font-bold flex items-center gap-1"><X className="w-3.5 h-3.5" /> Tutup</button>
           </div>
         </div>
