@@ -12,7 +12,7 @@ import {
 import {
   submitBarangMasuk, submitBarangKeluar, submitBarangRusak, fetchStock,
   saveToHistory,
-  pushNotification, getNotifications, markNotificationsRead, unreadNotificationCount, validateImportedItems,
+  pushNotification, getNotifications, markNotificationsRead, unreadNotificationCount, validateImportedItems, getWriteCircuitState,
 } from '../data/api';
 import { searchMaster } from '../data/master';
 
@@ -43,6 +43,7 @@ export default function InputPage() {
   const [camErr, setCamErr] = useState('');
   const [pasteText, setPasteText] = useState('');
   const [pendingManualIdx, setPendingManualIdx] = useState(null);
+  const [writeCircuit, setWriteCircuit] = useState(() => getWriteCircuitState());
   const fileRef = useRef(null);
   const videoRef = useRef(null);
   const streamRef = useRef(null);
@@ -50,9 +51,16 @@ export default function InputPage() {
 
   useEffect(() => {
     const refresh = () => { setNotifs(getNotifications()); setUnread(unreadNotificationCount()); };
+
     refresh();
     window.addEventListener('gudangai-notif', refresh);
     return () => window.removeEventListener('gudangai-notif', refresh);
+  }, []);
+
+  useEffect(() => {
+    const onCircuit = (e) => setWriteCircuit(e.detail || getWriteCircuitState());
+    window.addEventListener('gudangai-circuit', onCircuit);
+    return () => window.removeEventListener('gudangai-circuit', onCircuit);
   }, []);
 
   const onSearch = (q) => { setQuery(q); setHits(q.length >= 1 ? searchMaster(entity, q).slice(0, 8) : []); };
@@ -195,6 +203,8 @@ export default function InputPage() {
   const validatePastedText = async () => { await processImportedText(pasteText, 'Teks tempel'); };
   const submitCart = async () => {
     if (submitting || submittingRef.current) return;
+    const liveCircuit = getWriteCircuitState();
+    if (liveCircuit.open) { setWriteCircuit(liveCircuit); setStatusBanner('Pengiriman dijeda sementara. Cek Antrian/Spreadsheet sebelum mencoba lagi.'); return; }
     const ready = cart.filter((c) => c.kode && (c.status === 'ok' || c.status === 'fallback'));
     const flagged = cart.filter((c) => c.status === 'flag');
     if (!ready.length) { setStatusBanner(flagged.length ? 'Masih ada item yang perlu dipilih master-nya.' : 'Keranjang kosong.'); return; }
@@ -223,6 +233,12 @@ export default function InputPage() {
         if (res.success) {
           pushNotification({ type: 'ok', title: 'Kirim berhasil', body: (res.written || snapshot.length) + ' item ' + (txType === 'masuk' ? 'Masuk' : txType === 'rusak' ? 'Rusak' : 'Keluar') + ' ' + entity + ' tercatat.' });
         } else if (res.queued) {
+          pushNotification({ type: 'warn', title: 'Sebagian masuk antrian', body: res.error || ((res.remaining || []).length + ' item masih pending. Jangan kirim ulang sebelum cek spreadsheet.') });
+          setStatusBanner('Sebagian item sudah diproses; sisanya masuk Antrian. Cek spreadsheet sebelum kirim ulang.');
+        } else if (res.paused || res.code === 'CIRCUIT_OPEN') {
+          pushNotification({ type: 'warn', title: 'Pengiriman dijeda', body: res.error || 'Terlalu banyak kegagalan jaringan. Cek Antrian/Spreadsheet.' });
+          setWriteCircuit(getWriteCircuitState());
+          setStatusBanner('Pengiriman dijeda sementara untuk mencegah duplikasi.');
         } else if (res.offline) {
           pushNotification({ type: 'warn', title: 'Disimpan antrian offline', body: res.error || 'Cek Atur → Offline & Sync' });
         } else {
@@ -316,6 +332,12 @@ export default function InputPage() {
           <Loader2 className="w-4 h-4 animate-spin shrink-0" /> Memvalidasi PDF…
         </div>
       )}
+      {writeCircuit.open && (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-[11px] text-amber-900">
+          <p className="font-bold">Pengiriman dijeda sementara</p>
+          <p className="mt-0.5 text-amber-800/90">3 kegagalan jaringan/write terakhir memicu pengaman. Tunggu {Math.ceil(writeCircuit.retryAfterMs / 1000)} detik, lalu cek Spreadsheet dan Antrian Sinkronisasi. Jangan kirim ulang item yang sudah tercatat.</p>
+        </div>
+      )}
       {accuracy && (
         <div className="rounded-2xl bg-gradient-to-r from-violet-50 to-cyan-50 border border-violet-100 px-3 py-2.5 text-[12px] text-slate-700 shadow-sm">
           Akurasi <b className="text-violet-700">{accuracy.pct}%</b>
@@ -375,7 +397,7 @@ export default function InputPage() {
         </div>
       )}
       <div className="fixed bottom-16 left-0 right-0 px-3 z-20">
-        <button type="button" onClick={submitCart} disabled={submitting || readyCount === 0} className={`w-full py-3.5 rounded-2xl bg-gradient-to-r ${submitGradient} text-white text-sm font-bold flex items-center justify-center gap-2 shadow-lg disabled:opacity-40`}>
+        <button type="button" onClick={submitCart} disabled={submitting || readyCount === 0 || writeCircuit.open} className={`w-full py-3.5 rounded-2xl bg-gradient-to-r ${submitGradient} text-white text-sm font-bold flex items-center justify-center gap-2 shadow-lg disabled:opacity-40`}>
           {submitting ? <><Loader2 className="w-4 h-4 animate-spin" /> Mengirim…</> : <><Send className="w-4 h-4" /> Kirim {typeLabel} ({readyCount})</>}
         </button>
       </div>
