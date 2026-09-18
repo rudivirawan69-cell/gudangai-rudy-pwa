@@ -1,10 +1,10 @@
-/** GudangAI RUDY — API layer V6.4.15 + V6.6.3 backend sync */
-/** BUILD_SYNC 2026-09-17: stockAkhir/stockAman map + entitas + submitPO poCV/poPT + fetchStock returns array */
+/** GudangAI RUDY — API layer V6.4.15 + V6.6.3 batch fix */
+/** BUILD_BATCH 2026-09-18: batch keluar 40-80 — sheet resmi, transactions[], queueApproved, chunk 8, timeout 120s */
 const RETRY_COUNT = 2;
 const RETRY_BASE_MS = 400;
 const REQUEST_TIMEOUT_MS = 12000;
-const WRITE_TIMEOUT_MS = 90000;
-const BATCH_CHUNK_SIZE = 12;
+const WRITE_TIMEOUT_MS = 120000;
+const BATCH_CHUNK_SIZE = 8;
 const BATCH_MAX = 200;
 const SCHEMA_VERSION = '1.0';
 const APPLIED_KEY = 'gudangai_applied';
@@ -199,60 +199,120 @@ function normalizeQueue(rawQueue) {
   if (!Array.isArray(rawQueue)) return [];
   return rawQueue.map((e) => ({ ...e, items: (e.items || []).map(ensureClientItemId) }));
 }
-async function submitOneItem(sheet, entity, it, tanggal) {
+async function submitOneItem(sheetOrAction, entity, it, tanggal) {
   const cid = it.clientItemId || ensureClientItemId(it).clientItemId;
   if (isApplied(cid)) return { success: true, skipped: true, clientItemId: cid };
-  const ids = newIds();
+  const SHEET_MAP = { barangMasuk: 'Barang masuk', barangKeluar: 'Barang keluar', barangRusak: 'Barang Rusak' };
+  const sheetName = SHEET_MAP[sheetOrAction] || sheetOrAction;
+  const entitas = String(entity || '').toUpperCase();
   const payload = {
-    action: 'addTransaction', sheet, entity,
+    action: 'addTransaction',
+    sheet: sheetName,
+    entitas: entitas,
     tanggal: tanggal || new Date().toISOString().slice(0, 10),
-    kodeBarang: it.kode || it.kodeBarang, qty: Number(it.qty) || 0,
-    keterangan: (it.keterangan || '').slice(0, 200), clientItemId: cid,
-    requestId: ids.requestId, transactionId: ids.transactionId,
+    kodeBarang: String(it.kode || it.kodeBarang || '').trim(),
+    qty: Number(it.qty) || 0,
+    keterangan: String(it.keterangan || '').trim().slice(0, 200),
+    requestId: cid,
+    transactionId: 'TX-' + cid,
+    nonce: 'NC-' + cid,
+    queueApproved: true,
   };
   const data = await postJsonWrite(payload);
+  if (data && data.code === 'UNAUTHORIZED') return { success: false, unauthorized: true, kode: payload.kodeBarang, clientItemId: cid, error: 'Unauthorized' };
+  if (data && (data.status === 'DUPLICATE' || data.idempotent === true)) { markApplied(cid); return { success: true, skipped: true, kode: payload.kodeBarang, clientItemId: cid }; }
+  if (data && data.status === 'UNKNOWN') return { success: false, unknown: true, kode: payload.kodeBarang, clientItemId: cid, error: 'UNKNOWN' };
   if (data && (data.success === true || data.status === 'APPLIED' || data.status === 'OK' || data.status === 'COMMITTED')) {
     markApplied(cid);
     return { success: true, kode: payload.kodeBarang, qty: data.qty != null ? data.qty : payload.qty, row: data.row, clientItemId: cid };
   }
   return { success: false, error: (data && (data.error || data.message)) || 'Gagal tulis', clientItemId: cid, kode: payload.kodeBarang };
 }
+
 async function submitTransaction(action, entity, items, options = {}) {
   const fromQueue = !!(options && options.fromQueue);
   const tanggal = (options && options.tanggal) || new Date().toISOString().slice(0, 10);
   const typeMap = { barangMasuk: 'masuk', barangKeluar: 'keluar', barangRusak: 'rusak' };
+  const SHEET_MAP = { barangMasuk: 'Barang masuk', barangKeluar: 'Barang keluar', barangRusak: 'Barang Rusak' };
+  const SHEET_NAME = SHEET_MAP[action] || action;
+  const entitas = String(entity || '').toUpperCase();
   const list = (items || []).map(ensureClientItemId);
   if (!list.length) return { success: false, error: 'Tidak ada item' };
   const alreadyDone = list.filter((it) => isApplied(it.clientItemId)).length;
   const todo = list.filter((it) => !isApplied(it.clientItemId));
   if (!todo.length) return { success: true, written: alreadyDone, remaining: [], skippedAll: true };
+
   if (!fromQueue && todo.length >= 1 && todo.length <= BATCH_MAX) {
     try {
       const chunks = [];
       for (let i = 0; i < todo.length; i += BATCH_CHUNK_SIZE) chunks.push(todo.slice(i, i + BATCH_CHUNK_SIZE));
       let written = alreadyDone;
       const remaining = [];
-      for (const chunk of chunks) {
-        const ids = newIds();
+      for (let ci = 0; ci < chunks.length; ci++) {
+        const chunk = chunks[ci];
+        const batchId = 'BATCH-' + (chunk[0].clientItemId || Date.now()) + '-c' + ci;
+        const transactions = chunk.map((it) => {
+          const cid = it.clientItemId;
+          return {
+            sheet: SHEET_NAME,
+            entitas: entitas,
+            kodeBarang: String(it.kode || it.kodeBarang || '').trim(),
+            qty: Number(it.qty) || 0,
+            keterangan: String(it.keterangan || '').trim().slice(0, 200),
+            tanggal: tanggal || undefined,
+            requestId: cid,
+            transactionId: 'TX-' + cid,
+            nonce: 'NC-' + cid,
+            queueApproved: true,
+          };
+        });
         const batchPayload = {
-          action: 'addTransactionBatch', sheet: action, entity, tanggal,
-          items: chunk.map((it) => ({ kodeBarang: it.kode || it.kodeBarang, qty: Number(it.qty) || 0, keterangan: (it.keterangan || '').slice(0, 200), clientItemId: it.clientItemId })),
-          requestId: ids.requestId, transactionId: ids.transactionId,
+          action: 'addTransactionBatch',
+          sheet: SHEET_NAME,
+          entitas: entitas,
+          tanggal: tanggal || undefined,
+          transactions,
+          items: transactions,
+          batchId,
+          requestId: batchId,
+          queueApproved: true,
         };
-        const batchRes = await postJsonWrite(batchPayload);
+        let batchRes = null;
+        try {
+          batchRes = await postJsonWrite(batchPayload);
+        } catch (chunkErr) {
+          remaining.push(...chunk);
+          for (let j = ci + 1; j < chunks.length; j++) remaining.push(...chunks[j]);
+          break;
+        }
+        if (batchRes && batchRes.code === 'UNAUTHORIZED') {
+          return { success: false, error: 'Unauthorized — isi API Secret di Atur', remaining: todo, written };
+        }
         if (batchRes && (batchRes.success === true || batchRes.status === 'COMMITTED' || batchRes.status === 'APPLIED') && !batchRes.error) {
-          for (const it of chunk) markApplied(it.clientItemId);
-          written += chunk.length;
-        } else remaining.push(...chunk);
+          const okCount = Number(batchRes.successCount);
+          chunk.forEach((it) => markApplied(it.clientItemId));
+          written += (Number.isFinite(okCount) && okCount > 0) ? okCount : chunk.length;
+        } else if (batchRes && batchRes.status === 'UNKNOWN') {
+          remaining.push(...chunk);
+        } else {
+          remaining.push(...chunk);
+        }
       }
       if (remaining.length && !fromQueue) {
         enqueue(typeMap[action], entity, remaining, { tanggal });
-        pushNotification({ type: 'warn', title: 'Sebagian antrian', body: `Berhasil ${written} · antrian ${remaining.length}. Cek Atur → Sinkronisasi.` });
-        return { success: written > 0, written, remaining, queued: true, offline: !navigator.onLine };
+        const okN = written - alreadyDone;
+        pushNotification({
+          type: okN > 0 ? 'ok' : 'warn',
+          title: okN > 0 ? ('Berhasil ' + okN + ' · antrian ' + remaining.length) : 'Verifikasi antrian',
+          body: okN > 0
+            ? (okN + ' item sudah di sheet. ' + remaining.length + ' di Antrian — cek spreadsheet; jika sudah tertulis tekan Sukses.')
+            : (remaining.length + ' item masuk Antrian (timeout). Cek sheet — jika sudah ada, tekan Sukses (jangan kirim ulang).'),
+        });
+        return { success: okN > 0, written, remaining, queued: true, offline: !navigator.onLine };
       }
       if (!remaining.length) {
         try { window.dispatchEvent(new CustomEvent('gudangai-stock-refresh')); } catch (_) {}
-        return { success: true, written, remaining: [] };
+        return { success: true, written, remaining: [], message: 'Semua item berhasil ditulis (chunked).' };
       }
       return { success: false, written, remaining, error: 'Batch sebagian gagal' };
     } catch (err) {
@@ -263,7 +323,10 @@ async function submitTransaction(action, entity, items, options = {}) {
       return { success: false, written: alreadyDone, remaining: todo, error: err.message };
     }
   }
-  const written = []; const errors = []; const failedItems = [];
+
+  const written = [];
+  const errors = [];
+  const failedItems = [];
   for (let i = 0; i < todo.length; i++) {
     const it = todo[i];
     if (isApplied(it.clientItemId)) continue;
@@ -292,6 +355,7 @@ async function submitTransaction(action, entity, items, options = {}) {
   if (stillPending.length && !fromQueue) enqueue(typeMap[action], entity, stillPending, { tanggal });
   return { success: false, written: written.length + alreadyDone, remaining: stillPending, error: 'Sebagian gagal. ' + errors.join('; ') };
 }
+
 export const submitBarangMasuk = (entity, items, options) => submitTransaction('barangMasuk', entity, items, options || {});
 export const submitBarangKeluar = (entity, items, options) => submitTransaction('barangKeluar', entity, items, options || {});
 export const submitBarangRusak = (entity, items, options) => submitTransaction('barangRusak', entity, items, options || {});
