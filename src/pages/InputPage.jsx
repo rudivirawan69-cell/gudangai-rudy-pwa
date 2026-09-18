@@ -3,10 +3,10 @@ import {
   Search, Trash2, Send, Loader2,
   Plus, Minus,
   PackagePlus, PackageMinus, AlertOctagon, Mic, Upload,
-  QrCode, Bell, Camera, X, AlertTriangle, CheckCircle2,
+  QrCode, Bell, Camera, X, AlertTriangle, CheckCircle2, ClipboardPaste, Image,
 } from 'lucide-react';
 import {
-  extractTextFromPdf, parseLinesFromText, validateItems, applyStockAwareFallback,
+  extractTextFromPdf, extractTextFromImage, parseLinesFromText, validateItems, applyStockAwareFallback,
   detectEntityFromText, scanBarcodeFromVideo,
 } from '../data/pdfValidate';
 import {
@@ -41,9 +41,14 @@ export default function InputPage() {
   const [unread, setUnread] = useState(0);
   const [camOn, setCamOn] = useState(false);
   const [camErr, setCamErr] = useState('');
+  const [camMode, setCamMode] = useState('qr');
+  const [showPaste, setShowPaste] = useState(false);
+  const [pasteText, setPasteText] = useState('');
   const [pendingManualIdx, setPendingManualIdx] = useState(null);
   const fileRef = useRef(null);
+  const photoRef = useRef(null);
   const videoRef = useRef(null);
+  const canvasRef = useRef(null);
   const streamRef = useRef(null);
   const recogRef = useRef(null);
 
@@ -93,6 +98,53 @@ export default function InputPage() {
     });
   }, [entity]);
 
+  const runValidationPipeline = useCallback(async (text, lines = [], sourceLabel = 'Validasi') => {
+    if (!text || !String(text).trim()) {
+      setStatusBanner('Tidak ada teks untuk divalidasi.');
+      return;
+    }
+    setBusy(true);
+    setStatusBanner('');
+    setAccuracy(null);
+    try {
+      const detected = detectEntityFromText(text);
+      const useEntity = detected || entity;
+      if (detected && detected !== entity) setEntity(detected);
+      const rows = parseLinesFromText(text, lines);
+      if (!rows.length) {
+        setStatusBanner('Tidak ada baris barang terdeteksi dari ' + sourceLabel + '.');
+        return;
+      }
+      const validation = validateItems(rows, useEntity);
+      const stock = await fetchStock(useEntity, { allowDemo: false });
+      const matched = applyStockAwareFallback(validation.matched || [], useEntity, stock);
+      const amb = validation.ambiguous || [];
+      const un = validation.unmatched || [];
+      const total = matched.length + amb.length + un.length;
+      const acc = total ? Math.round((matched.length / total) * 100) : 0;
+      setAccuracy({ pct: acc, matched: matched.length, skipped: un.length, needPick: amb.length, total });
+      const ambFiltered = (amb || []).filter((r) => (r.candidates || []).length > 0);
+      mergePdfIntoCart(matched, ambFiltered, []);
+      const fallbackItems = matched.filter((r) => r.fallback);
+      if (fallbackItems.length) {
+        pushNotification({ type: 'warn', title: 'Fallback stok', body: fallbackItems.map((f) => `${f.nameFromPdf} → ${f.nama}`).join('; ') });
+      }
+      const parts = [];
+      if (matched.length) parts.push(matched.length + ' cocok');
+      if (ambFiltered.length) parts.push(ambFiltered.length + ' pilih master');
+      if (un.length) parts.push(un.length + ' dilewati (bukan master)');
+      setStatusBanner(
+        matched.length || ambFiltered.length
+          ? (sourceLabel + ' ' + acc + '% · ' + parts.join(' · '))
+          : (un.length ? ('Tidak ada yang cocok master · ' + un.length + ' baris dilewati') : 'Tidak ada baris barang terdeteksi.')
+      );
+    } catch (err) {
+      setStatusBanner(err.message || 'Gagal memvalidasi ' + sourceLabel);
+    } finally {
+      setBusy(false);
+    }
+  }, [entity, mergePdfIntoCart]);
+
   const updateQty = (idx, delta) => setCart((prev) => prev.map((c, i) => (i === idx ? { ...c, qty: Math.max(0.01, +(c.qty + delta).toFixed(2)) } : c)));
   const setQtyValue = (idx, val) => { const n = parseFloat(String(val).replace(',', '.')); setCart((prev) => prev.map((c, i) => (i === idx ? { ...c, qty: Number.isFinite(n) && n > 0 ? +n.toFixed(2) : c.qty } : c))); };
   const updateKet = (idx, val) => setCart((prev) => prev.map((c, i) => (i === idx ? { ...c, keterangan: val } : c)));
@@ -100,8 +152,8 @@ export default function InputPage() {
   const resolveFlag = (idx, item) => { if (!item) return; setCart((prev) => prev.map((c, i) => i !== idx ? c : { ...c, kode: item.kode, nama: item.nama, satuan: item.satuan, status: 'ok', candidates: [], note: '' })); };
 
   const stopCam = () => { try { streamRef.current?.getTracks()?.forEach((t) => t.stop()); } catch (_) {} streamRef.current = null; setCamOn(false); };
-  const startCam = async () => {
-    setCamErr(''); setMode('qr');
+  const startCam = async (modeHint = 'qr') => {
+    setCamErr(''); setCamMode(modeHint); setMode(modeHint === 'photo' ? 'photo' : 'qr'); setShowPaste(false);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
       streamRef.current = stream; setCamOn(true);
@@ -132,35 +184,54 @@ export default function InputPage() {
     const file = e.target.files?.[0]; if (!file) return;
     setBusy(true); setStatusBanner(''); setAccuracy(null);
     try {
-      const result = await extractTextFromPdf(file, () => {});
-      const text = typeof result === 'string' ? result : (result?.text || '');
-      const lines = result?.lines || [];
-      const detected = detectEntityFromText(text);
-      const useEntity = detected || entity;
-      if (detected && detected !== entity) setEntity(detected);
-      const rows = parseLinesFromText(text, lines);
-      if (!rows.length) { setStatusBanner('Tidak ada baris barang terdeteksi.'); return; }
-      const validation = validateItems(rows, useEntity);
-      const stock = await fetchStock(useEntity, { allowDemo: false });
-      const matched = applyStockAwareFallback(validation.matched || [], useEntity, stock);
-      const amb = validation.ambiguous || [];
-      const un = validation.unmatched || [];
-      const total = matched.length + amb.length + un.length;
-      const acc = total ? Math.round((matched.length / total) * 100) : 0;
-      setAccuracy({ pct: acc, matched: matched.length, skipped: un.length, needPick: amb.length, total });
-      const ambFiltered = (amb || []).filter((r) => (r.candidates || []).length > 0);
-      mergePdfIntoCart(matched, ambFiltered, []);
-      const fallbackItems = matched.filter((r) => r.fallback);
-      if (fallbackItems.length) pushNotification({ type: 'warn', title: 'Fallback stok', body: fallbackItems.map((f) => `${f.nameFromPdf} → ${f.nama}`).join('; ') });
-      const parts = [];
-      if (matched.length) parts.push(matched.length + ' cocok');
-      if (ambFiltered.length) parts.push(ambFiltered.length + ' pilih master');
-      if (un.length) parts.push(un.length + ' dilewati (bukan master)');
-      setStatusBanner(matched.length || ambFiltered.length
-        ? ('Validasi ' + acc + '% · ' + parts.join(' · '))
-        : (un.length ? ('Tidak ada yang cocok master · ' + un.length + ' baris dilewati') : 'Tidak ada baris barang terdeteksi.'));
-    } catch (err) { setStatusBanner(err.message || 'Gagal membaca PDF'); }
-    finally { setBusy(false); if (fileRef.current) fileRef.current.value = ''; }
+      const isImage = (file.type || '').startsWith('image/');
+      let text = '';
+      let lines = [];
+      if (isImage) {
+        const ocr = await extractTextFromImage(file, () => {});
+        text = ocr?.text || '';
+      } else {
+        const result = await extractTextFromPdf(file, () => {});
+        text = typeof result === 'string' ? result : (result?.text || '');
+        lines = result?.lines || [];
+      }
+      await runValidationPipeline(text, lines, isImage ? 'Foto Rekap' : 'PDF');
+    } catch (err) {
+      setStatusBanner(err.message || 'Gagal membaca file');
+      setBusy(false);
+    } finally {
+      if (fileRef.current) fileRef.current.value = '';
+      if (photoRef.current) photoRef.current.value = '';
+    }
+  };
+
+  const onPasteValidate = async () => {
+    const text = String(pasteText || '').trim();
+    if (!text) { setStatusBanner('Tempel teks rekap order terlebih dahulu.'); return; }
+    setShowPaste(false);
+    await runValidationPipeline(text, [], 'Tempel Teks');
+  };
+
+  const capturePhotoFromCam = async () => {
+    if (!videoRef.current) return;
+    try {
+      const video = videoRef.current;
+      const canvas = canvasRef.current || document.createElement('canvas');
+      canvas.width = video.videoWidth || 1280;
+      canvas.height = video.videoHeight || 720;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.92));
+      if (!blob) { setCamErr('Gagal mengambil foto'); return; }
+      stopCam();
+      setBusy(true);
+      setStatusBanner('OCR foto rekap…');
+      const ocr = await extractTextFromImage(blob, () => {});
+      await runValidationPipeline(ocr?.text || '', [], 'Foto Rekap');
+    } catch (err) {
+      setCamErr(err.message || 'Gagal OCR foto');
+      setBusy(false);
+    }
   };
 
   const submitCart = () => {
@@ -235,22 +306,55 @@ export default function InputPage() {
         ))}
       </div>
       <div className="grid grid-cols-3 gap-2">
-        <button type="button" onClick={startCam} className={`rounded-2xl border px-2 py-3 flex flex-col items-center gap-1.5 ${mode === 'qr' ? 'border-cyan-200 bg-cyan-50/80' : 'border-slate-100 bg-white'}`}>
-          <QrCode className="w-4 h-4 text-cyan-600" /><span className="text-[11px] font-semibold text-slate-600">QR / Kamera</span>
+        <button type="button" onClick={() => startCam('qr')} className={`rounded-2xl border px-2 py-3 flex flex-col items-center gap-1.5 ${mode === 'qr' && camOn ? 'border-cyan-200 bg-cyan-50/80' : 'border-slate-100 bg-white'}`}>
+          <QrCode className="w-4 h-4 text-cyan-600" /><span className="text-[11px] font-semibold text-slate-600">QR / Barcode</span>
         </button>
         <button type="button" onClick={startVoice} className={`rounded-2xl border px-2 py-3 flex flex-col items-center gap-1.5 ${listening ? 'border-violet-300 bg-violet-50' : 'border-slate-100 bg-white'}`}>
           <Mic className={`w-4 h-4 ${listening ? 'text-violet-600' : 'text-violet-500'}`} /><span className="text-[11px] font-semibold text-slate-600">{listening ? 'Mendengar…' : 'Suara'}</span>
         </button>
         <button type="button" onClick={() => fileRef.current?.click()} className="rounded-2xl border border-slate-100 bg-white px-2 py-3 flex flex-col items-center gap-1.5">
-          <Upload className="w-4 h-4 text-cyan-500" /><span className="text-[11px] font-semibold text-slate-600">PDF / Validasi</span>
+          <Upload className="w-4 h-4 text-cyan-500" /><span className="text-[11px] font-semibold text-slate-600">PDF</span>
+        </button>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <button type="button" onClick={() => { setShowPaste((v) => !v); setMode('paste'); stopCam(); }} className={`rounded-2xl border px-2 py-3 flex flex-col items-center gap-1.5 ${showPaste ? 'border-violet-300 bg-violet-50/80' : 'border-slate-100 bg-white'}`}>
+          <ClipboardPaste className="w-4 h-4 text-violet-600" /><span className="text-[11px] font-semibold text-slate-600">Tempel Teks Order</span>
+        </button>
+        <button type="button" onClick={() => { startCam('photo'); }} className={`rounded-2xl border px-2 py-3 flex flex-col items-center gap-1.5 ${mode === 'photo' && camOn ? 'border-orange-200 bg-orange-50/80' : 'border-slate-100 bg-white'}`}>
+          <Image className="w-4 h-4 text-orange-500" /><span className="text-[11px] font-semibold text-slate-600">Foto Rekap Order</span>
         </button>
       </div>
       <input ref={fileRef} type="file" accept="application/pdf,image/*" className="hidden" onChange={onFile} />
+      <input ref={photoRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={onFile} />
+      <canvas ref={canvasRef} className="hidden" />
+      {showPaste && (
+        <div className="rounded-2xl bg-white border border-violet-100 p-3 space-y-2 shadow-sm">
+          <p className="text-[11px] font-semibold text-violet-700">Tempel teks rekap order (satu baris = nama + qty)</p>
+          <textarea
+            value={pasteText}
+            onChange={(e) => setPasteText(e.target.value)}
+            rows={6}
+            placeholder={"Contoh:\nBakso Ikan 12\nSaos Lada Hitam Pack 5\nK. Polong Golden Farm 8"}
+            className="w-full text-sm bg-slate-50 border border-slate-100 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-violet-400/40 resize-y"
+          />
+          <div className="flex gap-2">
+            <button type="button" onClick={onPasteValidate} disabled={busy || !pasteText.trim()} className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-violet-500 to-cyan-600 text-white text-xs font-bold disabled:opacity-40">
+              {busy ? 'Memvalidasi…' : 'Validasi Teks → Keranjang'}
+            </button>
+            <button type="button" onClick={() => { setShowPaste(false); setPasteText(''); }} className="px-3 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600">Batal</button>
+          </div>
+        </div>
+      )}
       {camOn && (
         <div className="rounded-2xl overflow-hidden bg-black relative">
           <video ref={videoRef} autoPlay playsInline className="w-full h-48 object-cover" />
-          <div className="absolute bottom-2 left-0 right-0 flex justify-center gap-2">
-            <button type="button" onClick={scanOnce} className="px-3 py-1.5 rounded-full bg-white text-xs font-bold flex items-center gap-1"><Camera className="w-3.5 h-3.5" /> Scan</button>
+          <div className="absolute bottom-2 left-0 right-0 flex justify-center gap-2 flex-wrap px-2">
+            {camMode === 'qr' ? (
+              <button type="button" onClick={scanOnce} className="px-3 py-1.5 rounded-full bg-white text-xs font-bold flex items-center gap-1"><QrCode className="w-3.5 h-3.5" /> Scan QR</button>
+            ) : (
+              <button type="button" onClick={capturePhotoFromCam} className="px-3 py-1.5 rounded-full bg-orange-500 text-white text-xs font-bold flex items-center gap-1"><Camera className="w-3.5 h-3.5" /> Ambil Foto Rekap</button>
+            )}
+            <button type="button" onClick={() => photoRef.current?.click()} className="px-3 py-1.5 rounded-full bg-white/90 text-xs font-bold flex items-center gap-1"><Image className="w-3.5 h-3.5" /> Dari Galeri</button>
             <button type="button" onClick={stopCam} className="px-3 py-1.5 rounded-full bg-black/60 text-white text-xs font-bold flex items-center gap-1"><X className="w-3.5 h-3.5" /> Tutup</button>
           </div>
         </div>
@@ -262,7 +366,7 @@ export default function InputPage() {
       </div>
       {busy && (
         <div className="rounded-2xl bg-cyan-50 border border-cyan-100 px-3 py-3 flex items-center gap-2 text-sm text-cyan-800">
-          <Loader2 className="w-4 h-4 animate-spin shrink-0" /> Memvalidasi PDF…
+          <Loader2 className="w-4 h-4 animate-spin shrink-0" /> Memvalidasi (PDF / Teks / Foto)…
         </div>
       )}
       {accuracy && (
