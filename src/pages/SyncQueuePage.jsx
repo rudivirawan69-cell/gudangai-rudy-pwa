@@ -6,6 +6,7 @@ import {
   saveToHistory,
   pushNotification,
   markItemApplied,
+  getWriteCircuitState,
 } from '../data/api';
 import {
   ArrowLeft,
@@ -53,6 +54,7 @@ export default function SyncQueuePage({ onBack }) {
   const [syncing, setSyncing] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
+  const [circuit, setCircuit] = useState(() => getWriteCircuitState());
 
   const refresh = useCallback(() => {
     const q = getPendingQueue();
@@ -61,6 +63,14 @@ export default function SyncQueuePage({ onBack }) {
 
   useEffect(() => {
     refresh();
+    const onQueue = () => refresh();
+    const onCircuit = (e) => setCircuit(e.detail || getWriteCircuitState());
+    window.addEventListener('gudangai-queue-changed', onQueue);
+    window.addEventListener('gudangai-circuit', onCircuit);
+    return () => {
+      window.removeEventListener('gudangai-queue-changed', onQueue);
+      window.removeEventListener('gudangai-circuit', onCircuit);
+    };
   }, [refresh]);
 
   const total = rows.length;
@@ -102,7 +112,7 @@ export default function SyncQueuePage({ onBack }) {
   };
 
   const handleSendAll = async () => {
-    if (total === 0 || syncing) return;
+    if (total === 0 || syncing || circuit.open) return;
     setSyncing(true);
     setResult(null);
     setError(null);
@@ -179,6 +189,13 @@ export default function SyncQueuePage({ onBack }) {
           </p>
         </div>
       </div>
+
+      {circuit.open && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-[11px] text-amber-900">
+          <p className="font-bold">Sinkronisasi dijeda sementara</p>
+          <p className="mt-0.5 text-amber-800/90">Pengaman write aktif selama {Math.ceil(circuit.retryAfterMs / 1000)} detik setelah 3 kegagalan. Jangan kirim ulang item yang sudah tercatat di spreadsheet.</p>
+        </div>
+      )}
 
       {total > 0 && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-[11px] text-amber-900 leading-relaxed">
@@ -264,7 +281,7 @@ export default function SyncQueuePage({ onBack }) {
             <button
               type="button"
               onClick={handleSendAll}
-              disabled={syncing || total === 0}
+              disabled={syncing || total === 0 || circuit.open}
               className="w-full py-3.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-500 text-white text-sm font-semibold flex items-center justify-center gap-2 shadow-lg disabled:opacity-50"
             >
               {syncing ? (
@@ -275,7 +292,7 @@ export default function SyncQueuePage({ onBack }) {
               ) : (
                 <>
                   <RefreshCw className="w-4 h-4" />
-                  Kirim & Eksekusi Semua ({total})
+                  {circuit.open ? 'Dijeda Sementara' : 'Kirim & Eksekusi Semua (' + total + ')'}
                 </>
               )}
             </button>
