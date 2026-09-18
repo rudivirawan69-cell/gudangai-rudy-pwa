@@ -12,7 +12,7 @@ import {
 import {
   submitBarangMasuk, submitBarangKeluar, submitBarangRusak, fetchStock,
   saveToHistory,
-  pushNotification, getNotifications, markNotificationsRead, unreadNotificationCount,
+  pushNotification, getNotifications, markNotificationsRead, unreadNotificationCount, validateImportedItems,
 } from '../data/api';
 import { searchMaster } from '../data/master';
 
@@ -193,15 +193,26 @@ export default function InputPage() {
   };
 
   const validatePastedText = async () => { await processImportedText(pasteText, 'Teks tempel'); };
-  const submitCart = () => {
+  const submitCart = async () => {
     if (submitting || submittingRef.current) return;
     const ready = cart.filter((c) => c.kode && (c.status === 'ok' || c.status === 'fallback'));
     const flagged = cart.filter((c) => c.status === 'flag');
     if (!ready.length) { setStatusBanner(flagged.length ? 'Masih ada item yang perlu dipilih master-nya.' : 'Keranjang kosong.'); return; }
     setSubmitting(true); submittingRef.current = true;
     const snapshot = ready.map((c) => ({ kode: c.kode, nama: c.nama, qty: c.qty, keterangan: (c.keterangan || '').slice(0, 200) }));
+    try {
+      const serverValidation = await validateImportedItems(snapshot, entity);
+      if (!serverValidation?.success) {
+        setStatusBanner('Validasi server belum lolos: ' + (serverValidation?.error || serverValidation?.code || 'periksa item di keranjang'));
+        pushNotification({ type: 'warn', title: 'Validasi server', body: (serverValidation?.error || 'Masih ada item yang perlu diperiksa.') });
+        return;
+      }
+    } catch (validationErr) {
+      setStatusBanner('Validasi server gagal: ' + (validationErr?.message || 'coba lagi'));
+      return;
+    }
     setCart((prev) => prev.filter((c) => c.status === 'flag'));
-    setStatusBanner('Mengirim ' + snapshot.length + ' item… hasil di lonceng');
+    setStatusBanner('Validasi 100% · Mengirim ' + snapshot.length + ' item… hasil di lonceng');
     const submitFn = txType === 'masuk' ? submitBarangMasuk : txType === 'rusak' ? submitBarangRusak : submitBarangKeluar;
     const releaseTimer = setTimeout(() => { setSubmitting(false); submittingRef.current = false; }, 4000);
     submitFn(entity, snapshot, { tanggal })
