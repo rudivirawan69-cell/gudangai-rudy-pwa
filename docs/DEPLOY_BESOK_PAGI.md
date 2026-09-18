@@ -1,81 +1,49 @@
-# Deploy Besok Pagi — Zero Drama Checklist
+# Deploy Besok Pagi — V6.6.4 FINAL-PREDEPLOY (Zero Drama)
 
-**Tujuan:** PWA + Code.gs V6.6.3 sinkron, tanpa revisi ulang.
-
----
-
-## A. Frontend (sudah di-push malam ini)
-
-| Item | Status |
-|------|--------|
-| Visual V6.7 (nav kotak tanpa putih, full-screen) | ✅ |
-| Performa Android (SW v6.7, lazy pages, viewport-fit) | ✅ |
-| Input: Tempel Teks Order + Foto Rekap Order | ✅ (pipeline sama PDF) |
-| API `addTransactionBatch` → backend `bulkTransaction` | ✅ sudah cocok |
-| **Tidak butuh Code.gs baru** untuk Tempel/Foto | ✅ |
-
-Setelah Vercel Ready: hard refresh / tutup-buka PWA di Android.
+**File resmi backend:** `Code_GudangAI_V6.6.4_FINAL_PREDEPLOY.gs` (attachment audited)  
+**Version string:** `6.6.4+FINAL-PREDEPLOY`  
+**Frontend:** sudah live (Tempel Teks + Foto Rekap + visual V6.7 + SW v6.7)
 
 ---
 
-## B. Backend Apps Script (besok pagi — 5–10 menit)
+## Kontrak PWA ↔ GS (sudah cocok — jangan ubah pagi)
 
-### Sumber kode (pilih SATU)
+| PWA (`api.js`) | Backend V6.6.4 |
+|----------------|----------------|
+| `action: addTransactionBatch` + `transactions` / `items` | → `bulkTransaction` |
+| `sheet`: Barang masuk / Barang keluar / Barang Rusak | Whitelist `SHEET_CONFIG` |
+| `entitas`: CV \| PT | Wajib |
+| `queueApproved: true` | Wajib untuk batch/outbox |
+| `schemaVersion: "1.0"` | Diterima |
+| `clientItemId` → requestId / transactionId / nonce | Idempotency ledger |
+| `getStatusPO` / `ping` / `getAllStock` | Endpoint ada (GET+POST) |
+| Timeout tulis 120s | Bulk `setValues` B:C + F:G |
 
-1. **File utuh** (disarankan jika ganti seluruh Code.gs):  
-   Zip `code gs V6.6.3` / file `Code_GudangAI_V6.6.3_PO_STATUS_DASHBOARD_FINAL_BULK_OPTIMIZED.gs`  
-   Version: `6.6.3+PO-ROW4-6-STATUS-6COL-DASH`
+**Tempel Teks / Foto Rekap:** hanya frontend → keranjang → `submitBarang*`. **Tidak ada endpoint GS baru.**
 
-2. **Hanya patch bulk** (jika sudah V6.6.3 tanpa optimasi batch):  
-   `docs/OPTIMIZE_bulkTransaction_V6.6.3.gs` → ganti **hanya** fungsi `bulkTransaction`
+---
 
-### Langkah exact
+## Langkah deploy (5–10 menit)
 
 1. Spreadsheet → **Extensions → Apps Script**
-2. Buka file `Code.gs`
-3. **Ganti seluruh isi** dengan file utuh V6.6.3 BULK OPTIMIZED  
-   *(atau ganti hanya `function bulkTransaction...` jika patch)*
-4. **Save**
-5. Jalankan **`setupEnvironment`** sekali (Run) — izinkan permission jika diminta
-6. **Deploy → Manage deployments → Edit (pensil) → New version → Deploy**
-7. Pastikan: **Execute as: Me**, **Who has access: Anyone**
-8. URL Web App **tidak perlu diganti** jika deployment yang sama (hanya New version)
+2. Buka `Code.gs` → select all → hapus → tempel **seluruh** isi V6.6.4 FINAL-PREDEPLOY
+3. **Save**
+4. Jalankan **`setupEnvironment`** (Run)
+5. **Deploy → Manage deployments → Edit → New version → Deploy** (Me / Anyone)
+6. Jangan buat URL deployment baru kecuali yang lama rusak
 
-### Verifikasi 2 menit
+### Verifikasi
 
-- `?action=ping` → JSON (bukan HTML error)
-- status/version mengandung **6.6.3**
-- PWA Settings: URL API + API_SECRET sama dengan Script Properties
+- `?action=ping` → JSON, version mengandung **6.6.4**
+- Settings PWA → Terhubung
+- Batch 15–20 keluar → sheet + lonceng
+- Batch 40 → &lt; ~90s
+- Status PO Beranda → data muncul
 
----
-
-## C. Uji sinkron PWA ↔ GS (urutan)
-
-| # | Uji | Hasil OK |
-|---|-----|----------|
-| 1 | Ping / status dari Settings | Terhubung, version 6.6.3 |
-| 2 | Input Tempel Teks 3–5 baris → validasi → keranjang | % akurasi, item cocok |
-| 3 | Foto Rekap (1 foto jelas) → validasi | Masuk keranjang / flag |
-| 4 | PDF validasi (seperti biasa) | ≥90% jika master lengkap |
-| 5 | Kirim batch **15–20** item keluar | Sukses / lonceng OK, sheet terisi |
-| 6 | Kirim batch **40** (setelah 5 OK) | < 60–90 detik, tidak timeout |
-| 7 | Beranda Status PO / donat | Data muncul |
-
-Jika sebagian masuk Antrian: **cek sheet dulu**. Sudah tertulis → tekan **Sukses** (jangan kirim ulang).
+Antrian: cek sheet dulu; sudah tertulis → Sukses (jangan kirim ulang).
 
 ---
 
-## D. Yang JANGAN dilakukan besok pagi
+## Yang tidak perlu pagi
 
-- Jangan ganti URL Web App kecuali deployment baru benar-benar URL berbeda
-- Jangan auto-serial ulang batch yang sudah timeout
-- Jangan overwrite Code.gs dengan versi lama (< 6.6.3)
-- Jangan hardcode API_SECRET di repo
-
----
-
-## E. Ringkas
-
-**Malam ini:** Frontend final (visual + Input Tempel/Foto + perf).  
-**Besok pagi:** Tempel Code.gs V6.6.3 → Save → `setupEnvironment` → Deploy New version → uji batch 20.  
-**Tidak ada patch Code.gs tambahan** untuk Tempel Teks / Foto Rekap.
+- Ubah URL API / patch frontend / secret di repo / file &lt; 6.6.4
