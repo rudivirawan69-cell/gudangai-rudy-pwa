@@ -3,9 +3,17 @@
 const RETRY_COUNT = 2;
 const RETRY_BASE_MS = 400;
 const REQUEST_TIMEOUT_MS = 12000;
-const WRITE_TIMEOUT_MS = 120000;
-const BATCH_CHUNK_SIZE = 8;
+const WRITE_TIMEOUT_MAX_MS = 120000;
+const BATCH_CHUNK_SIZE_BASE = 8;
+const BATCH_CHUNK_SIZE_PROMOTED = 15;
 const BATCH_MAX = 200;
+const BATCH_STABILITY_KEY = 'gudangai_batch_stability_v1';
+const CIRCUIT_KEY = 'gudangai_write_circuit_v1';
+const CIRCUIT_THRESHOLD = 3;
+const CIRCUIT_COOLDOWN_MS = 60000;
+const STOCK_CACHE_KEY = 'gudangai_stock_cache_v1';
+const STOCK_FRESH_MS = 60000;
+const STOCK_STALE_MS = 10 * 60 * 1000;
 const SCHEMA_VERSION = '1.0';
 const APPLIED_KEY = 'gudangai_applied';
 const QUEUE_KEY = 'gudangai_queue';
@@ -13,6 +21,10 @@ const APPLIED_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const NOTIF_KEY = 'gudangai_notif';
 const DEFAULT_API_URL = 'https://script.google.com/macros/s/AKfycbwtSr7cdBKhvJOwwkSZ9GUf1ebuHOM8CsKXo1I6r8v0Z_gi4_ElrDK9oez8LX5DAB1INw/exec';
 let _syncLock = false;
+let _queueRevision = 0;
+const _inflightReads = new Map();
+
+import { hydrateQueueBackup, persistQueueBackup } from './offlineStore';
 function emitConn(detail) { try { window.dispatchEvent(new CustomEvent('gudangai-conn', { detail })); } catch (_) {} }
 export function getApiUrl() {
   const stored = (localStorage.getItem('gudangai_api_url') || '').trim();
@@ -73,9 +85,116 @@ async function postJson(payload, { retries = RETRY_COUNT, timeoutMs = REQUEST_TI
   const text = await res.text();
   try { return JSON.parse(text); } catch { throw new Error('Respons bukan JSON: ' + text.slice(0, 120)); }
 }
-async function postJsonWrite(payload) {
-  return postJson(payload, { retries: 1, timeoutMs: WRITE_TIMEOUT_MS, emitFailure: false });
+function getWriteItemCount(payload) {
+  const list = payload && (payload.transactions || payload.items);
+  return Array.isArray(list) ? list.length : 1;
 }
+function getWriteTimeoutMs(payload) {
+  const count = getWriteItemCount(payload);
+  if (count <= 2) return 45000;
+  if (count <= 8) return 90000;
+  return WRITE_TIMEOUT_MAX_MS;
+}
+function readCircuit() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(CIRCUIT_KEY) || '{}');
+    return { failures: Number(raw.failures) || 0, openedAt: Number(raw.openedAt) || 0, lastError: String(raw.lastError || '') };
+  } catch (_) { return { failures: 0, openedAt: 0, lastError: '' }; }
+}
+export function getWriteCircuitState() {
+  const s = readCircuit();
+  const elapsed = s.openedAt ? Date.now() - s.openedAt : Infinity;
+  const open = s.openedAt > 0 && elapsed < CIRCUIT_COOLDOWN_MS;
+  return { ...s, open, retryAfterMs: open ? Math.max(0, CIRCUIT_COOLDOWN_MS - elapsed) : 0 };
+}
+function emitCircuit() {
+  try { window.dispatchEvent(new CustomEvent('gudangai-circuit', { detail: getWriteCircuitState() })); } catch (_) {}
+}
+function recordWriteSuccess() {
+  try { localStorage.removeItem(CIRCUIT_KEY); } catch (_) {}
+  emitCircuit();
+}
+function recordWriteFailure(error) {
+  const msg = String(error?.message || error || 'Write gagal').slice(0, 180);
+  const s = readCircuit();
+  const nextFailures = Math.min(CIRCUIT_THRESHOLD, s.failures + 1);
+  const next = nextFailures >= CIRCUIT_THRESHOLD
+    ? { failures: nextFailures, openedAt: s.openedAt || Date.now(), lastError: msg }
+    : { failures: nextFailures, openedAt: 0, lastError: msg };
+  try { localStorage.setItem(CIRCUIT_KEY, JSON.stringify(next)); } catch (_) {}
+  emitCircuit();
+  return nextFailures;
+}
+function isTransientWriteError(error) {
+  const msg = String(error?.message || error || '');
+  return !navigator.onLine || /Failed to fetch|NetworkError|Abort|Timeout|HTTP 5|503|502|504/i.test(msg);
+}
+async function postJsonWrite(payload) {
+  return postJson(payload, { retries: 1, timeoutMs: getWriteTimeoutMs(payload), emitFailure: false });
+}
+function coalescedRead(key, factory) {
+  if (_inflightReads.has(key)) return _inflightReads.get(key);
+  const p = Promise.resolve().then(factory).finally(() => _inflightReads.delete(key));
+  _inflightReads.set(key, p);
+  return p;
+}
+function readStockCache(entity) {
+  try {
+    const raw = JSON.parse(localStorage.getItem(STOCK_CACHE_KEY) || '{}');
+    const entry = raw[String(entity || 'ALL').toUpperCase()];
+    return entry && Array.isArray(entry.items) ? entry : null;
+  } catch (_) { return null; }
+}
+function writeStockCache(entity, items) {
+  try {
+    const raw = JSON.parse(localStorage.getItem(STOCK_CACHE_KEY) || '{}');
+    raw[String(entity || 'ALL').toUpperCase()] = { at: Date.now(), items: Array.isArray(items) ? items : [] };
+    localStorage.setItem(STOCK_CACHE_KEY, JSON.stringify(raw));
+  } catch (_) {}
+}
+function invalidateStockCache() {
+  try { localStorage.removeItem(STOCK_CACHE_KEY); } catch (_) {}
+}
+try {
+  if (typeof window !== 'undefined') window.addEventListener('gudangai-stock-refresh', invalidateStockCache, { passive: true });
+} catch (_) {}
+function readQueueLocal() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(QUEUE_KEY) || '[]');
+    _queueRevision = Number(localStorage.getItem(QUEUE_KEY + '_rev') || 0) || 0;
+    return { revision: _queueRevision, queue: Array.isArray(raw) ? raw : [] };
+  } catch (_) { return { revision: 0, queue: [] }; }
+}
+function commitQueueLocal(queue) {
+  const next = Math.max(_queueRevision + 1, Date.now());
+  _queueRevision = next;
+  try {
+    localStorage.setItem(QUEUE_KEY, JSON.stringify(Array.isArray(queue) ? queue : []));
+    localStorage.setItem(QUEUE_KEY + '_rev', String(next));
+  } catch (_) {}
+  void persistQueueBackup(queue, next);
+  try { window.dispatchEvent(new CustomEvent('gudangai-queue-changed', { detail: { revision: next, count: (queue || []).reduce((n, e) => n + (e.items || []).length, 0) } })); } catch (_) {}
+}
+export async function hydrateOfflineQueue() {
+  return hydrateQueueBackup(readQueueLocal, (queue, revision) => {
+    _queueRevision = revision;
+    try {
+      localStorage.setItem(QUEUE_KEY, JSON.stringify(queue || []));
+      localStorage.setItem(QUEUE_KEY + '_rev', String(revision || 0));
+    } catch (_) {}
+  });
+}
+function getBatchStability() {
+  try { return Math.max(0, Number(localStorage.getItem(BATCH_STABILITY_KEY) || 0)); } catch (_) { return 0; }
+}
+function setBatchStability(value) {
+  try { localStorage.setItem(BATCH_STABILITY_KEY, String(Math.max(0, Number(value) || 0))); } catch (_) {}
+}
+function getBatchChunkSize() {
+  return getBatchStability() >= 5 ? BATCH_CHUNK_SIZE_PROMOTED : BATCH_CHUNK_SIZE_BASE;
+}
+function recordBatchStable() { setBatchStability(getBatchStability() + 1); }
+function recordBatchUnstable() { setBatchStability(0); }
 async function getJson(action, extraParams = {}) {
   const url = getApiUrl();
   if (!url) throw new Error('URL API belum diatur');
@@ -121,29 +240,46 @@ function mapStockItem(it, entity) {
     stockValue: Number(it.stockValue || it.nilaiStok || 0) || 0,
   };
 }
-export async function fetchStock(entity, options = {}) {
+async function fetchStockNetwork(entity, options = {}) {
   const allowDemo = options.allowDemo === true;
   const url = getApiUrl();
   if (!url) {
     if (allowDemo) return generateDemoStock();
     throw new Error('URL API belum diatur');
   }
-  try {
-    let data;
-    try { data = await getJson('getAllStock', { entitas: entity || 'ALL' }); }
-    catch {
-      try { data = await postJson({ action: 'getAllStock', entitas: entity || 'ALL', requestId: newIds().requestId }); }
-      catch { data = null; }
-    }
-    if (data && data.code === 'UNAUTHORIZED') throw new Error('Unauthorized — cek API Secret di Atur');
-    if (data && data.success === false) throw new Error(data.error || 'Gagal mengambil stok');
-    const raw = (data && (data.items || data.stock || data.data)) || [];
-    return (Array.isArray(raw) ? raw : []).map((it) => mapStockItem(it, entity));
-  } catch (err) {
-    if (/Unauthorized|API Secret|URL API/i.test(String(err.message || ''))) throw err;
-    if (allowDemo) return generateDemoStock();
-    throw err;
+  let data;
+  try { data = await getJson('getAllStock', { entitas: entity || 'ALL' }); }
+  catch {
+    try { data = await postJson({ action: 'getAllStock', entitas: entity || 'ALL', requestId: newIds().requestId }); }
+    catch { data = null; }
   }
+  if (data && data.code === 'UNAUTHORIZED') throw new Error('Unauthorized — cek API Secret di Atur');
+  if (data && data.success === false) throw new Error(data.error || 'Gagal mengambil stok');
+  const raw = (data && (data.items || data.stock || data.data)) || [];
+  const items = (Array.isArray(raw) ? raw : []).map((it) => mapStockItem(it, entity));
+  writeStockCache(entity, items);
+  return items;
+}
+export async function revalidateStock(entity, options = {}) {
+  return coalescedRead('stock:' + String(entity || 'ALL').toUpperCase(), async () => {
+    try { return await fetchStockNetwork(entity, options); }
+    catch (err) {
+      if (options.allowDemo === true) return generateDemoStock();
+      throw err;
+    }
+  });
+}
+export async function fetchStock(entity, options = {}) {
+  const cached = readStockCache(entity);
+  if (cached) {
+    const age = Math.max(0, Date.now() - Number(cached.at || 0));
+    if (age < STOCK_FRESH_MS) return cached.items;
+    if (age < STOCK_STALE_MS) {
+      void revalidateStock(entity, options).catch(() => undefined);
+      return cached.items;
+    }
+  }
+  return revalidateStock(entity, options);
 }
 export async function validateImportedItems(items, entity) {
   const list = Array.isArray(items) ? items : [];
@@ -167,20 +303,22 @@ export async function getTransactionStatus(transactionId, nonce = '', sheet = ''
 }
 
 export async function getStatusPO() {
-  try {
-    let data = null;
-    try { data = await getJson('getStatusPO'); } catch (_) { data = null; }
-    if (!data || data.code === 'UNAUTHORIZED' || (data.success === false && !data.summary && !data.items)) {
-      try { data = await postJson({ action: 'getStatusPO', requestId: newIds().requestId }); }
-      catch (e2) {
-        if (data) return data;
-        return { success: false, error: e2?.message || 'Gagal mengambil status PO' };
+  return coalescedRead('statusPO', async () => {
+    try {
+      let data = null;
+      try { data = await getJson('getStatusPO'); } catch (_) { data = null; }
+      if (!data || data.code === 'UNAUTHORIZED' || (data.success === false && !data.summary && !data.items)) {
+        try { data = await postJson({ action: 'getStatusPO', requestId: newIds().requestId }); }
+        catch (e2) {
+          if (data) return data;
+          return { success: false, error: e2?.message || 'Gagal mengambil status PO' };
+        }
       }
+      return data || { success: false, error: 'Respons status PO kosong' };
+    } catch (err) {
+      return { success: false, error: err?.message || 'Gagal mengambil status PO' };
     }
-    return data || { success: false, error: 'Respons status PO kosong' };
-  } catch (err) {
-    return { success: false, error: err?.message || 'Gagal mengambil status PO' };
-  }
+  });
 }
 export async function getDashboardData() {
   try {
@@ -211,10 +349,10 @@ function ensureClientItemId(it) {
 }
 function enqueue(type, entity, items, meta = {}) {
   if (!items || !items.length) return;
-  const queue = JSON.parse(localStorage.getItem(QUEUE_KEY) || '[]');
+  const queue = getPendingQueue();
   const entry = { id: 'Q-' + Date.now(), type, entity, items: items.map(ensureClientItemId), tanggal: meta.tanggal || new Date().toISOString().slice(0, 10), createdAt: new Date().toISOString() };
   queue.push(entry);
-  localStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
+  commitQueueLocal(queue);
 }
 function normalizeQueue(rawQueue) {
   if (!Array.isArray(rawQueue)) return [];
@@ -279,12 +417,15 @@ async function submitTransaction(action, entity, items, options = {}) {
   if (!list.length) return { success: false, error: 'Tidak ada item' };
   const alreadyDone = list.filter((it) => isApplied(it.clientItemId)).length;
   const todo = list.filter((it) => !isApplied(it.clientItemId));
+  const circuit = getWriteCircuitState();
+  if (circuit.open) return { success: false, paused: true, code: 'CIRCUIT_OPEN', retryAfterMs: circuit.retryAfterMs, written: alreadyDone, remaining: todo, error: 'Pengiriman dijeda sementara setelah 3 kegagalan write. Cek Antrian/Spreadsheet.' };
   if (!todo.length) return { success: true, written: alreadyDone, remaining: [], skippedAll: true };
 
   if (!fromQueue && todo.length >= 1 && todo.length <= BATCH_MAX) {
     try {
       const chunks = [];
-      for (let i = 0; i < todo.length; i += BATCH_CHUNK_SIZE) chunks.push(todo.slice(i, i + BATCH_CHUNK_SIZE));
+      const activeChunkSize = getBatchChunkSize();
+      for (let i = 0; i < todo.length; i += activeChunkSize) chunks.push(todo.slice(i, i + activeChunkSize));
       let written = alreadyDone;
       const remaining = [];
       for (let ci = 0; ci < chunks.length; ci++) {
@@ -331,10 +472,14 @@ async function submitTransaction(action, entity, items, options = {}) {
           return { success: false, error: 'Unauthorized — isi API Secret di Atur', remaining: todo, written };
         }
         if (batchRes && (batchRes.success === true || batchRes.status === 'COMMITTED' || batchRes.status === 'APPLIED') && !batchRes.error) {
+          recordWriteSuccess();
+          recordBatchStable();
           const okCount = Number(batchRes.successCount);
           chunk.forEach((it) => markApplied(it.clientItemId));
           written += (Number.isFinite(okCount) && okCount > 0) ? okCount : chunk.length;
         } else if (batchRes && batchRes.status === 'UNKNOWN') {
+          recordBatchUnstable();
+          recordWriteFailure(batchRes.error || 'UNKNOWN');
           emitConn({ state: 'write_unknown', error: batchRes.error || 'Status batch tidak pasti', batchId });
           const reconciled = await reconcileChunk(chunk, SHEET_NAME);
           remaining.push(...reconciled.unresolved);
@@ -375,15 +520,18 @@ async function submitTransaction(action, entity, items, options = {}) {
   for (let i = 0; i < todo.length; i++) {
     const it = todo[i];
     if (isApplied(it.clientItemId)) continue;
+    if (getWriteCircuitState().open) return { success: false, paused: true, code: 'CIRCUIT_OPEN', written: written.length + alreadyDone, remaining: todo.slice(i), error: 'Pengiriman dijeda sementara setelah 3 kegagalan write.' };
     try {
       const res = await submitOneItem(action, entity, it, tanggal);
       if (res.unauthorized) return { success: false, written: written.length + alreadyDone, remaining: todo.slice(i), error: 'Unauthorized — isi API Secret di Atur' };
-      if (res.success) written.push(res);
+      if (res.success) { recordWriteSuccess(); written.push(res); }
       else { errors.push((res.kode || '?') + ': ' + (res.error || 'gagal')); failedItems.push(it); }
     } catch (err) {
       const msg = err.message || '';
       const isNetwork = !navigator.onLine || /Failed to fetch|NetworkError|Timeout|HTTP 5/i.test(msg);
       if (isNetwork) {
+        recordWriteFailure(err);
+        recordBatchUnstable();
         const rest = todo.slice(i).filter((x) => !isApplied(x.clientItemId));
         if (!fromQueue) enqueue(typeMap[action], entity, rest, { tanggal });
         return { success: written.length > 0, queued: true, remaining: rest, written: written.length + alreadyDone, error: 'Jaringan terputus — sisa antrian.' };
@@ -404,7 +552,9 @@ async function submitTransaction(action, entity, items, options = {}) {
 export const submitBarangMasuk = (entity, items, options) => submitTransaction('barangMasuk', entity, items, options || {});
 export const submitBarangKeluar = (entity, items, options) => submitTransaction('barangKeluar', entity, items, options || {});
 export const submitBarangRusak = (entity, items, options) => submitTransaction('barangRusak', entity, items, options || {});
-export function getPendingQueue() { try { return normalizeQueue(JSON.parse(localStorage.getItem(QUEUE_KEY) || '[]')); } catch { return []; } }
+export function getPendingQueue() {
+  try { return normalizeQueue(readQueueLocal().queue); } catch (_) { return []; }
+}
 export function removePendingByClientIds(ids) {
   if (!ids || !ids.length) return;
   try {
@@ -415,10 +565,10 @@ export function removePendingByClientIds(ids) {
       const items = (e.items || []).filter((it) => !set.has(it.clientItemId));
       if (items.length) next.push({ ...e, items });
     }
-    localStorage.setItem(QUEUE_KEY, JSON.stringify(next));
+    commitQueueLocal(next);
   } catch (_) {}
 }
-export function clearPendingQueue() { localStorage.setItem(QUEUE_KEY, '[]'); }
+export function clearPendingQueue() { commitQueueLocal([]); }
 export async function syncPendingQueue() {
   const url = getApiUrl();
   if (!url || !navigator.onLine) return { synced: 0, failed: 0, skipped: true };
@@ -439,7 +589,7 @@ export async function syncPendingQueue() {
         else { failed += (res.remaining || pendingItems).length; if (res.offline) break; }
       } catch { failed++; break; }
     }
-    localStorage.setItem(QUEUE_KEY, JSON.stringify(queue.filter((e) => !e.synced && (e.items || []).length)));
+    commitQueueLocal(queue.filter((e) => !e.synced && (e.items || []).length));
     return { synced, failed, skipped: false };
   } finally { _syncLock = false; }
 }
