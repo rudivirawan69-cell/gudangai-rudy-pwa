@@ -127,10 +127,6 @@ function recordWriteFailure(error) {
   emitCircuit();
   return nextFailures;
 }
-function isTransientWriteError(error) {
-  const msg = String(error?.message || error || '');
-  return !navigator.onLine || /Failed to fetch|NetworkError|Abort|Timeout|HTTP 5|503|502|504/i.test(msg);
-}
 async function postJsonWrite(payload) {
   return postJson(payload, { retries: 1, timeoutMs: getWriteTimeoutMs(payload), emitFailure: false });
 }
