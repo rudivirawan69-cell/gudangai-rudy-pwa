@@ -5,7 +5,7 @@ import { getApiUrl, healthCheck } from '../data/api';
  * Connection state — stabil, minim noise di banner.
  * - Tidak emit "retry" di setiap poll
  * - Hanya flag error setelah 2 gagal beruntun
- * - Poll lebih jarang (default 90s)
+ * - Poll lebih jarang (default 60s)
  *
  * PENTING (anti-duplikat, 12 Sep 2026):
  * JANGAN memanggil syncPendingQueue otomatis di sini.
@@ -109,7 +109,7 @@ export function useConnection({ pollMs = 90000 } = {}) {
     document.addEventListener('visibilitychange', onVis);
     const id = setInterval(() => {
       if (navigator.onLine) checkHealth({ quiet: true });
-    }, Math.min(pollMs, 45000));
+    }, Math.min(pollMs, 60000));
     if (navigator.onLine) checkHealth({ quiet: false });
     return () => {
       document.removeEventListener('visibilitychange', onVis);
