@@ -3,6 +3,7 @@ import { SpeedInsights } from '@vercel/speed-insights/react';
 import { AuthProvider, useAuth } from './hooks/useAuth';
 import LoginPage from './pages/LoginPage';
 import { useConnection } from './hooks/useConnection';
+import { hydrateOfflineQueue } from './data/api';
 import {
   LayoutDashboard,
   Package,
@@ -169,6 +170,9 @@ function ConnectionBanner() {
 
 function AppShell() {
   const { user } = useAuth();
+  useEffect(() => {
+    hydrateOfflineQueue().catch(() => undefined);
+  }, []);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [pageKey, setPageKey] = useState(0);
   const [showSyncQueue, setShowSyncQueue] = useState(false);
