@@ -145,6 +145,27 @@ export async function fetchStock(entity, options = {}) {
     throw err;
   }
 }
+export async function validateImportedItems(items, entity) {
+  const list = Array.isArray(items) ? items : [];
+  if (!list.length) return { success: false, status: 'REJECTED', code: 'ITEMS_REQUIRED', error: 'Tidak ada item untuk divalidasi.' };
+  try {
+    const data = await postJson({ action: 'validateImportedItems', entitas: String(entity || '').toUpperCase(), items: list, requestId: newIds().requestId });
+    return data || { success: false, status: 'ERROR', error: 'Respons validasi kosong' };
+  } catch (err) {
+    return { success: false, status: 'VALIDATION_UNAVAILABLE', error: err?.message || 'Validasi server tidak tersedia' };
+  }
+}
+
+export async function getTransactionStatus(transactionId, nonce = '', sheet = '') {
+  const tx = String(transactionId || '').trim();
+  if (!tx) return { success: false, status: 'REJECTED', code: 'IDENTITY_REQUIRED', error: 'transactionId wajib diisi' };
+  try {
+    return await getJson('getTransactionStatus', { transactionId: tx, nonce: nonce || tx, sheet: sheet || '' });
+  } catch (err) {
+    return { success: false, status: 'STATUS_UNAVAILABLE', error: err?.message || 'Status transaksi tidak tersedia' };
+  }
+}
+
 export async function getStatusPO() {
   try {
     let data = null;
@@ -229,6 +250,24 @@ async function submitOneItem(sheetOrAction, entity, it, tanggal) {
   return { success: false, error: (data && (data.error || data.message)) || 'Gagal tulis', clientItemId: cid, kode: payload.kodeBarang };
 }
 
+async function reconcileChunk(items, sheetName) {
+  const list = Array.isArray(items) ? items : [];
+  const applied = [], unresolved = [];
+  for (const it of list) {
+    const cid = it?.clientItemId || '';
+    if (!cid) { unresolved.push(it); continue; }
+    const st = await getTransactionStatus('TX-' + cid, 'NC-' + cid, sheetName);
+    if (st && (st.status === 'APPLIED' || st.status === 'COMMITTED' || st.code === 'READBACK_CONFIRMED' || st.code === 'READBACK_FOUND' || st.code === 'IDEMPOTENT_REPLAY')) {
+      markApplied(cid); applied.push(it);
+    } else if (st && st.status === 'NOT_FOUND') {
+      unresolved.push(it);
+    } else {
+      unresolved.push(it);
+    }
+  }
+  return { applied, unresolved };
+}
+
 async function submitTransaction(action, entity, items, options = {}) {
   const fromQueue = !!(options && options.fromQueue);
   const tanggal = (options && options.tanggal) || new Date().toISOString().slice(0, 10);
@@ -281,8 +320,11 @@ async function submitTransaction(action, entity, items, options = {}) {
         try {
           batchRes = await postJsonWrite(batchPayload);
         } catch (chunkErr) {
-          remaining.push(...chunk);
+          emitConn({ state: 'write_unknown', error: chunkErr?.message || 'Timeout', batchId });
+          const reconciled = await reconcileChunk(chunk, SHEET_NAME);
+          remaining.push(...reconciled.unresolved);
           for (let j = ci + 1; j < chunks.length; j++) remaining.push(...chunks[j]);
+          written += reconciled.applied.length;
           break;
         }
         if (batchRes && batchRes.code === 'UNAUTHORIZED') {
@@ -293,7 +335,10 @@ async function submitTransaction(action, entity, items, options = {}) {
           chunk.forEach((it) => markApplied(it.clientItemId));
           written += (Number.isFinite(okCount) && okCount > 0) ? okCount : chunk.length;
         } else if (batchRes && batchRes.status === 'UNKNOWN') {
-          remaining.push(...chunk);
+          emitConn({ state: 'write_unknown', error: batchRes.error || 'Status batch tidak pasti', batchId });
+          const reconciled = await reconcileChunk(chunk, SHEET_NAME);
+          remaining.push(...reconciled.unresolved);
+          written += reconciled.applied.length;
         } else {
           remaining.push(...chunk);
         }
