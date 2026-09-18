@@ -1,14 +1,7 @@
-import { useState, useEffect, Component } from 'react';
+import { useState, useEffect, Component, lazy, Suspense } from 'react';
 import { SpeedInsights } from '@vercel/speed-insights/react';
 import { AuthProvider, useAuth } from './hooks/useAuth';
 import LoginPage from './pages/LoginPage';
-import DashboardPage from './pages/DashboardPage';
-import StokPage from './pages/StokPage';
-import InputPage from './pages/InputPage';
-import RiwayatPage from './pages/RiwayatPage';
-import SettingsPage from './pages/SettingsPage';
-import SyncQueuePage from './pages/SyncQueuePage';
-import POPage from './pages/POPage';
 import { useConnection } from './hooks/useConnection';
 import {
   LayoutDashboard,
@@ -20,6 +13,23 @@ import {
   Wifi,
   WifiOff,
 } from 'lucide-react';
+
+/* Lazy load halaman — first paint lebih cepat di Android */
+const DashboardPage = lazy(() => import('./pages/DashboardPage'));
+const StokPage = lazy(() => import('./pages/StokPage'));
+const InputPage = lazy(() => import('./pages/InputPage'));
+const RiwayatPage = lazy(() => import('./pages/RiwayatPage'));
+const SettingsPage = lazy(() => import('./pages/SettingsPage'));
+const SyncQueuePage = lazy(() => import('./pages/SyncQueuePage'));
+const POPage = lazy(() => import('./pages/POPage'));
+
+function PageFallback() {
+  return (
+    <div className="flex items-center justify-center py-16">
+      <div className="w-8 h-8 rounded-full border-2 border-cyan-400/40 border-t-cyan-300 animate-spin" />
+    </div>
+  );
+}
 
 class ErrorBoundary extends Component {
   constructor(props) {
@@ -220,14 +230,16 @@ function AppShell() {
           <ConnectionBanner />
           <main className="flex-1 px-3.5 pt-3 pb-6 max-w-lg mx-auto w-full overflow-y-auto">
             <ErrorBoundary>
-              <SyncQueuePage
-                onBack={() => {
-                  setShowSyncQueue(false);
-                  try {
-                    history.pushState({ tab: activeTab }, '', `#${activeTab}`);
-                  } catch (_) {}
-                }}
-              />
+              <Suspense fallback={<PageFallback />}>
+                <SyncQueuePage
+                  onBack={() => {
+                    setShowSyncQueue(false);
+                    try {
+                      history.pushState({ tab: activeTab }, '', `#${activeTab}`);
+                    } catch (_) {}
+                  }}
+                />
+              </Suspense>
             </ErrorBoundary>
           </main>
         </div>
@@ -276,7 +288,9 @@ function AppShell() {
         <ConnectionBanner />
         <main className="flex-1 px-3.5 pt-3 pb-24 max-w-lg mx-auto w-full overflow-y-auto">
           <div key={pageKey} className="animate-page-in">
-            {renderPage()}
+            <Suspense fallback={<PageFallback />}>
+              {renderPage()}
+            </Suspense>
           </div>
         </main>
 
