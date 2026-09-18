@@ -1,3 +1,3 @@
-BUILD 2026-09-17-20:30 WIB
-V6.6.3 backend sync — stockAkhir/stockAman map, entitas param, submitPO poCV/poPT, Status PO full shape
-PWA compatible with Code.gs V6.6.3+PO-ROW4-6-STATUS-6COL-DASH
+BUILD 2026-09-18-11:45 WIB
+Batch barang keluar 40-80: sheet resmi (Barang keluar), transactions[], queueApproved, chunk 8, timeout 120s
+Anti-timeout + anti-double-write (write-once)
