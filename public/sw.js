@@ -6,7 +6,7 @@
  * - Aset statis (ikon, foto): cache-first
  * - Version bump setiap rilis UI agar klien Android mendapat update
  */
-const CACHE_NAME = 'gudangai-v6.7';
+const CACHE_NAME = 'gudangai-v6.7.1-p1-p3';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -14,6 +14,9 @@ const STATIC_ASSETS = [
   '/icon.svg',
   '/logo-app.svg',
   '/manifest.json',
+  '/icon-192.png',
+  '/icon-512.png',
+  '/apple-touch-icon.png',
 ];
 
 self.addEventListener('install', (event) => {
