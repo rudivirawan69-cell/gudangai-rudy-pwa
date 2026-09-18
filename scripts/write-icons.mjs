@@ -1,5 +1,4 @@
-/** Generate PWA PNG icons from scripts/icons.json (prebuild on Vercel).
- *  Skip rewrite if icons already present in public/ — saves build time. */
+/** Generate PWA PNG icons from scripts/icons.json (prebuild on Vercel). */
 import { writeFileSync, mkdirSync, readFileSync, existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -9,13 +8,6 @@ const publicDir = join(__dirname, '..', 'public');
 mkdirSync(publicDir, { recursive: true });
 
 const names = ['icon-192.png', 'icon-512.png', 'apple-touch-icon.png'];
-
-// Fast path: icons already committed → no decode/write
-if (names.every((n) => existsSync(join(publicDir, n)))) {
-  console.log('[icons] skip — already in public/');
-  process.exit(0);
-}
-
 const jsonPath = join(__dirname, 'icons.json');
 
 if (existsSync(jsonPath)) {
@@ -37,8 +29,7 @@ if (existsSync(jsonPath)) {
       console.warn('[icons] missing', p);
       continue;
     }
-    const b64 = readFileSync(p, 'utf8').trim();
-    const buf = Buffer.from(b64, 'base64');
+    const buf = Buffer.from(readFileSync(p, 'utf8').trim(), 'base64');
     writeFileSync(join(publicDir, name), buf);
     console.log('[icons]', name, buf.length, 'bytes');
   }
