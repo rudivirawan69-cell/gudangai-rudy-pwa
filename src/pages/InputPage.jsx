@@ -60,7 +60,11 @@ export default function InputPage() {
   useEffect(() => {
     const onCircuit = (e) => setWriteCircuit(e.detail || getWriteCircuitState());
     window.addEventListener('gudangai-circuit', onCircuit);
-    return () => window.removeEventListener('gudangai-circuit', onCircuit);
+    const id = setInterval(() => setWriteCircuit(getWriteCircuitState()), 1000);
+    return () => {
+      window.removeEventListener('gudangai-circuit', onCircuit);
+      clearInterval(id);
+    };
   }, []);
 
   const onSearch = (q) => { setQuery(q); setHits(q.length >= 1 ? searchMaster(entity, q).slice(0, 8) : []); };
