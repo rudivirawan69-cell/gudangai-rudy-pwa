@@ -1,33 +1,30 @@
 /**
  * ============================================================
- * BACKEND GudangAI-69 V6.6.3 — PO Status Dashboard Final
+ * BACKEND GudangAI-69 V6.6.3 — OPTIMIZED BULK (production reference)
  * ============================================================
- * Version: 6.6.3+PO-ROW4-6-STATUS-6COL-DASH
+ * Version: 6.6.3+PO-ROW4-6-STATUS-6COL-DASH+OPTIMIZED-BULK
  *
- * IMPORTANT:
- * This GitHub root Code.gs is a version pointer.
- * The full production source of truth lives in Apps Script.
+ * SOURCE OF TRUTH (full file):
+ *   docs/Code_GudangAI_V6.6.3_OPTIMIZED_BULK.gs
  *
- * To deploy:
- * 1. Open the attached file Code_GudangAI_V6.6.3_PO_STATUS_DASHBOARD_FINAL.gs
- * 2. Copy ALL content
- * 3. Paste into Apps Script project (replace existing Code.gs)
- * 4. Save → Deploy → New version (Execute as: Me, Who has access: Anyone)
+ * Deploy ke Apps Script (wajib New version):
+ *   1. Buka docs/Code_GudangAI_V6.6.3_OPTIMIZED_BULK.gs (raw / download)
+ *   2. Copy ALL → paste ke Apps Script Code.gs (replace)
+ *   3. Save → Deploy → Manage deployments → Edit → New version → Deploy
+ *      Execute as: Me | Who has access: Anyone
  *
- * Key features in V6.6.3:
- * - PO data starts row 6, date row 4, header row 5
- * - Status PO 6-column dashboard block
- * - getStatusPO() with arrival matching by No PO [ITEM : nn] + name fallback
- * - refreshDashboardPOSection_ for Minggu Ini / Minggu Lalu
- * - writePurchaseOrder_ / submitPO support
- * - Idempotency ledger + write-once safety retained
- * - Auto-month + deterministic date parse
+ * Yang baru di bulkTransaction:
+ *   - 1 lock untuk seluruh batch
+ *   - Load stok 1x (getAllStock) → map memori
+ *   - setValues bulk (B:C + F:G), flush 1x
+ *   - Shortage HOLD tetap (qty 0 + keterangan)
+ *   - Idempotency ledger + cache batchResult_
  *
- * Full file also stored under docs/ when size permits.
- * See commit history and MEMORY.md for baseline rules.
+ * Frontend (src/data/api.js) sudah selaras:
+ *   sheet resmi, transactions[], queueApproved, chunk 15, timeout 150s
+ *
+ * Urutan deploy selaras:
+ *   1) Apps Script New version dulu
+ *   2) PWA hard refresh (Vercel sudah auto dari main)
  */
-
-// PLACEHOLDER — replace with full content of
-// Code_GudangAI_V6.6.3_PO_STATUS_DASHBOARD_FINAL.gs before production use.
-// Backend version string expected by PWA health checks:
-const BACKEND_VERSION = "6.6.3+PO-ROW4-6-STATUS-6COL-DASH";
+const BACKEND_VERSION = "6.6.3+PO-ROW4-6-STATUS-6COL-DASH+OPTIMIZED-BULK";
