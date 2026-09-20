@@ -413,10 +413,12 @@ export async function syncPendingQueue() {
     return { synced, failed, remaining: remaining.length };
   } finally { _syncLock = false; }
 }
-function pushNotification(entry) {
+const HISTORY_KEY = 'gudangai_history';
+
+export function pushNotification(entry) {
   try {
     const h = JSON.parse(localStorage.getItem(NOTIF_KEY) || '[]');
-    h.unshift({ ...entry, savedAt: new Date().toISOString() });
+    h.unshift({ ...entry, id: entry.id || 'N-' + Date.now(), read: false, savedAt: new Date().toISOString() });
     localStorage.setItem(NOTIF_KEY, JSON.stringify(h.slice(0, 50)));
     try { window.dispatchEvent(new CustomEvent('gudangai-notif', { detail: entry })); } catch (_) {}
   } catch (_) {}
@@ -427,6 +429,33 @@ export function getNotifications() {
   } catch { return []; }
 }
 export function clearNotifications() { localStorage.setItem(NOTIF_KEY, '[]'); }
+export function markNotificationsRead() {
+  try {
+    const h = JSON.parse(localStorage.getItem(NOTIF_KEY) || '[]');
+    localStorage.setItem(NOTIF_KEY, JSON.stringify(h.map((n) => ({ ...n, read: true }))));
+  } catch (_) {}
+}
+export function unreadNotificationCount() {
+  try {
+    return JSON.parse(localStorage.getItem(NOTIF_KEY) || '[]').filter((n) => !n.read).length;
+  } catch { return 0; }
+}
+export function saveToHistory(entry) {
+  try {
+    const h = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+    h.unshift({
+      ...entry,
+      id: entry.id || 'H-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7),
+      savedAt: new Date().toISOString(),
+    });
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(h.slice(0, 200)));
+  } catch (_) {}
+}
+export function getTransactionHistory() {
+  try {
+    return JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+  } catch { return []; }
+}
 export async function generatePO() {
   try {
     return await postJson({ action: 'generatePO', requestId: newIds().requestId });
