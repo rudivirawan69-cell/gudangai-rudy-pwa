@@ -1,4 +1,5 @@
-BUILD 2026-09-20-19:00 WIB — V6.6.3 OPTIMIZED BULK
-Backend: Code.gs V6.6.3 + bulkTransaction (1 lock, stock map 1x, setValues bulk)
-Frontend: api.js aligned — sheet resmi, transactions[], queueApproved, chunk 15, timeout 150s
-Deploy order: 1) Apps Script paste+New version  2) PWA hard refresh (Vercel auto)
+BUILD 2026-09-21-21:00 WIB — V6.6.3 FULL SYNC
+Backend: Code.gs V6.6.3 OPTIMIZED BULK (HOLD pendek, Dashboard PC-v2, bulkTransaction)
+Frontend: api.js — sheet resmi, transactions[], queueApproved, chunk 15, timeout 150s
+Spreadsheet: COLD STORAGE SEPTEMBER '26
+Deploy: 1) Apps Script New version  2) PWA hard refresh (Vercel auto dari main)

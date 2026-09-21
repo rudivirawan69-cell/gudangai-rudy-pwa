@@ -1,33 +1,16 @@
-# Deploy alignment — V6.6.3 OPTIMIZED BULK (2026-09-20)
+# Deploy align V6.6.3 — 21 Sep 2026
 
-## Status
-- [x] Frontend api.js: sheet resmi, transactions[], queueApproved, chunk 15, timeout 150s
-- [x] Code.gs full optimized di `docs/Code_GudangAI_V6.6.3_OPTIMIZED_BULK.gs`
-- [x] Root `Code.gs` = pointer + BACKEND_VERSION
-- [ ] **Anda:** paste full Code.gs ke Apps Script + Deploy New version
-- [ ] Uji batch keluar 20 → 40 → 80 item
+## Urutan wajib
+1. Paste Code.gs OPTIMIZED BULK di Apps Script → Save
+2. Jalankan `setupConfigSheet` lalu `setupEnvironment`
+3. Cek sheet Config: VERSION harus `6.6.3+OPT-BULK+HOLD-SHORT+DASH-PC`
+4. Deploy → Manage deployments → New version → Deploy
+5. Push main (repo ini) → Vercel auto
+6. Hard refresh PWA / buka ulang APK
+7. Di Settings PWA: pastikan URL Web App = deployment terbaru + API Secret benar
 
-## Langkah Apps Script (besok)
-1. Download / buka raw: `docs/Code_GudangAI_V6.6.3_OPTIMIZED_BULK.gs`
-2. Extensions → Apps Script → ganti seluruh isi Code.gs
-3. Save
-4. Deploy → Manage deployments → pensil → **New version** → Deploy
-5. (Opsional) Pastikan URL Web App sama dengan yang di Settings PWA / DEFAULT_API_URL
-
-## Setelah deploy backend
-1. Hard refresh https://gudangai-rudy.vercel.app (atau clear site data)
-2. Tes PO (sudah lolos sebelumnya)
-3. Tes barang keluar batch 20, lalu 40–80
-4. Jika antrian: cek sheet dulu; jika sudah tertulis → Sukses (jangan kirim ulang)
-
-## Kontrak batch (frontend ↔ backend)
-| Field | Nilai |
-|-------|--------|
-| action | addTransactionBatch |
-| sheet | Barang keluar / Barang masuk / Barang Rusak |
-| entitas | CV atau PT |
-| transactions[] | kodeBarang, qty, keterangan, transactionId, nonce, queueApproved |
-| queueApproved | true |
-
-## Anti-timeout
-Backend optimized = 1 lock + setValues bulk. Frontend chunk 15 × timeout 150s.
+## Uji cepat
+- Ping / health dari Settings
+- 1 item keluar HOLD (stok kurang) → keterangan `order …, sisa … kurang …`
+- Batch 15 item keluar
+- Status PO di Beranda
