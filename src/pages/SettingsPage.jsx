@@ -194,7 +194,7 @@ export default function SettingsPage({ onOpenSyncQueue }) {
         <MenuRow icon={KeyRound} iconBg="bg-amber-100 text-amber-700" title="Ganti PIN" subtitle="Keamanan login 4–6 digit" onClick={() => setPanel(panel === 'pin' ? null : 'pin')} />
       </div>
       <div className="card">
-        <MenuRow icon={SettingsIcon} iconBg="bg-slate-200 text-slate-600" title="Tentang Aplikasi" subtitle="GudangAI · Backend V6.5.4" onClick={() => setPanel(panel === 'about' ? null : 'about')} />
+        <MenuRow icon={SettingsIcon} iconBg="bg-slate-200 text-slate-600" title="Tentang Aplikasi" subtitle="GudangAI · Backend V6.6.3" onClick={() => setPanel(panel === 'about' ? null : 'about')} />
       </div>
       {panel === 'profile' && (
         <div className="card p-4 space-y-3">
@@ -254,6 +254,7 @@ export default function SettingsPage({ onOpenSyncQueue }) {
         <div className="card p-4 text-[11px] text-slate-500 leading-relaxed space-y-1">
           <p className="font-semibold text-slate-700">GudangAI RUDY</p>
           <p>Cold Storage Nasi Goreng 69 · CV & PT</p>
+          <p>Target stabil: Backend V6.6.3 (fase 4 lulus uji)</p>
         </div>
       )}
       <div className="card border border-red-100/80">
