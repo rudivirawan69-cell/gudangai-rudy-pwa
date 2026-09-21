@@ -389,6 +389,40 @@ export function removePendingByClientIds(ids) {
   } catch (_) {}
 }
 export function clearPendingQueue() { localStorage.setItem(QUEUE_KEY, '[]'); }
+export async function syncPendingQueue() {
+  const url = getApiUrl();
+  if (!url || !navigator.onLine) return { synced: 0, failed: 0, skipped: true };
+  if (_syncLock) return { synced: 0, failed: 0, skipped: true, reason: 'sync-in-progress' };
+  _syncLock = true;
+  try {
+    let queue = normalizeQueue(JSON.parse(localStorage.getItem(QUEUE_KEY) || '[]'));
+    let synced = 0, failed = 0;
+    const actionMap = { masuk: 'barangMasuk', keluar: 'barangKeluar', rusak: 'barangRusak' };
+    for (let i = 0; i < queue.length; i++) {
+      if (queue[i].synced) continue;
+      const pendingItems = (queue[i].items || []).map(ensureClientItemId).filter((it) => !isApplied(it.clientItemId));
+      if (!pendingItems.length) { queue[i].synced = true; continue; }
+      const act = actionMap[queue[i].type] || 'barangMasuk';
+      try {
+        const res = await submitTransaction(act, queue[i].entity, pendingItems, { tanggal: queue[i].tanggal, fromQueue: true });
+        if (res.success && (!res.remaining || !res.remaining.length)) { queue[i].synced = true; synced += pendingItems.length; }
+        else { failed += (res.remaining || pendingItems).length; if (res.offline) break; }
+      } catch { failed++; break; }
+    }
+    localStorage.setItem(QUEUE_KEY, JSON.stringify(queue.filter((e) => !e.synced && (e.items || []).length)));
+    return { synced, failed, skipped: false };
+  } finally { _syncLock = false; }
+}
+const HISTORY_KEY = 'gudangai_history';
+export function getTransactionHistory() { try { return JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]'); } catch { return []; } }
+export function saveToHistory(entry) {
+  try {
+    const h = getTransactionHistory();
+    h.unshift({ ...entry, savedAt: new Date().toISOString() });
+    if (h.length > 500) h.length = 500;
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(h));
+  } catch (_) {}
+}
 export function pushNotification(n) {
   try {
     const t = JSON.parse(localStorage.getItem(NOTIF_KEY) || '[]');
