@@ -1,8 +1,8 @@
 /**
- * GudangAI RUDY — Service Worker V6.7.1
- * Cache bump to force Android clients off broken placeholder bundles.
+ * GudangAI RUDY — Service Worker V6.7.2
+ * Cache bump after full Dashboard + Input restore.
  */
-const CACHE_NAME = 'gudangai-v6.7.1';
+const CACHE_NAME = 'gudangai-v6.7.2';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
