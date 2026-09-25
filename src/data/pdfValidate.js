@@ -1,1 +1,1 @@
-see_file:/home/workdir/pwa-src/src/data/pdfValidate.js
+LOADING_FROM_LOCAL
