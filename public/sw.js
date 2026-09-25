@@ -1,12 +1,8 @@
 /**
- * GudangAI RUDY — Service Worker V6.7 (Android performance)
- * Strategi:
- * - API Google Apps Script: network-only (no-store)
- * - Navigasi + JS/CSS: network-first, fallback cache
- * - Aset statis (ikon, foto): cache-first
- * - Version bump setiap rilis UI agar klien Android mendapat update
+ * GudangAI RUDY — Service Worker V6.7.1
+ * Cache bump to force Android clients off broken placeholder bundles.
  */
-const CACHE_NAME = 'gudangai-v6.7';
+const CACHE_NAME = 'gudangai-v6.7.1';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -86,17 +82,17 @@ self.addEventListener('fetch', (event) => {
 
   if (isStaticAsset(url)) {
     event.respondWith(
-      caches.match(event.request).then(
-        (cached) =>
-          cached ||
-          fetch(event.request).then((res) => {
-            if (res && res.ok) {
-              const copy = res.clone();
-              caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
-            }
-            return res;
-          })
-      )
+      caches.open(CACHE_NAME).then(async (cache) => {
+        const cached = await cache.match(event.request);
+        if (cached) return cached;
+        try {
+          const res = await fetch(event.request);
+          if (res.ok) cache.put(event.request, res.clone());
+          return res;
+        } catch {
+          return cached || Response.error();
+        }
+      })
     );
     return;
   }
@@ -104,31 +100,23 @@ self.addEventListener('fetch', (event) => {
   if (isAppShell(event.request, url)) {
     event.respondWith(
       fetch(event.request)
-        .then((res) => {
-          if (res && res.ok) {
-            const copy = res.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+        .then(async (res) => {
+          if (res.ok) {
+            const cache = await caches.open(CACHE_NAME);
+            cache.put(event.request, res.clone());
           }
           return res;
         })
-        .catch(() =>
-          caches.match(event.request).then((c) => c || caches.match('/index.html'))
-        )
+        .catch(async () => {
+          const cache = await caches.open(CACHE_NAME);
+          return (await cache.match(event.request)) || (await cache.match('/index.html')) || Response.error();
+        })
     );
-    return;
   }
+});
 
-  event.respondWith(
-    caches.match(event.request).then(
-      (cached) =>
-        cached ||
-        fetch(event.request).then((res) => {
-          if (res && res.ok) {
-            const copy = res.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
-          }
-          return res;
-        })
-    )
-  );
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });
