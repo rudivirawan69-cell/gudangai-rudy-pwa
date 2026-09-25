@@ -1,1 +1,1 @@
-PLACEHOLDER_INPUT
+see_file:/home/workdir/pwa-src/src/pages/InputPage.jsx
