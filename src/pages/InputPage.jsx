@@ -273,11 +273,17 @@ export default function InputPage() {
 
       <div className="grid grid-cols-3 gap-2">
         {TX.map((t) => {
-          const Icon = t.icon; const on = txType === t.id;
+          const Icon = t.icon;
+          const on = txType === t.id;
+          const accent = t.id === 'masuk' ? { active: 'bg-emerald-600 border-emerald-600', icon: 'text-emerald-600', soft: 'bg-emerald-50 border-emerald-100' }
+            : t.id === 'rusak' ? { active: 'bg-rose-600 border-rose-600', icon: 'text-rose-600', soft: 'bg-rose-50 border-rose-100' }
+            : { active: 'bg-cyan-600 border-cyan-600', icon: 'text-cyan-600', soft: 'bg-cyan-50 border-cyan-100' };
           return (
             <button key={t.id} type="button" onClick={() => setTxType(t.id)}
-              className={`rounded-2xl py-3 flex flex-col items-center gap-1 border shadow-sm ${on ? 'bg-cyan-600 border-cyan-600 text-white' : 'bg-white border-slate-200 text-slate-700'}`}>
-              <Icon className={`w-6 h-6 ${on ? 'text-white' : 'text-slate-400'}`} />
+              className={`rounded-2xl py-3 flex flex-col items-center gap-1 border shadow-sm transition ${on ? accent.active + ' text-white' : 'bg-white border-slate-200 text-slate-700'}`}>
+              <span className={`w-9 h-9 rounded-xl flex items-center justify-center ${on ? 'bg-white/20' : accent.soft}`}>
+                <Icon className={`w-5 h-5 ${on ? 'text-white' : accent.icon}`} />
+              </span>
               <span className="text-xs font-semibold">{t.label}</span>
             </button>
           );
@@ -285,22 +291,33 @@ export default function InputPage() {
       </div>
 
       <div className="grid grid-cols-4 gap-2">
-        {[(['PDF', filePdfRef, Upload], ['Foto', fileImgRef, Image], ['QR', null, QrCode], ['Suara', null, Mic])].map(() => null)}
         <button type="button" onClick={() => filePdfRef.current?.click()} disabled={busy}
-          className="rounded-2xl bg-white border border-slate-200 shadow-sm py-3 flex flex-col items-center gap-1 disabled:opacity-50 text-slate-700">
-          <Upload className="w-5 h-5 text-slate-600" /><span className="text-[11px] font-semibold text-slate-700">PDF</span>
+          className="rounded-2xl bg-white border border-slate-200 shadow-sm py-3 flex flex-col items-center gap-1.5 disabled:opacity-50">
+          <span className="w-9 h-9 rounded-xl bg-violet-50 border border-violet-100 flex items-center justify-center">
+            <Upload className="w-5 h-5 text-violet-600" />
+          </span>
+          <span className="text-[11px] font-semibold text-slate-700">PDF</span>
         </button>
         <button type="button" onClick={() => fileImgRef.current?.click()} disabled={busy}
-          className="rounded-2xl bg-white border border-slate-200 shadow-sm py-3 flex flex-col items-center gap-1 disabled:opacity-50 text-slate-700">
-          <Image className="w-5 h-5 text-slate-600" /><span className="text-[11px] font-semibold text-slate-700">Foto</span>
+          className="rounded-2xl bg-white border border-slate-200 shadow-sm py-3 flex flex-col items-center gap-1.5 disabled:opacity-50">
+          <span className="w-9 h-9 rounded-xl bg-sky-50 border border-sky-100 flex items-center justify-center">
+            <Image className="w-5 h-5 text-sky-600" />
+          </span>
+          <span className="text-[11px] font-semibold text-slate-700">Foto</span>
         </button>
         <button type="button" onClick={startScan} disabled={busy || scanning}
-          className="rounded-2xl bg-white border border-slate-200 shadow-sm py-3 flex flex-col items-center gap-1 disabled:opacity-50 text-slate-700">
-          <QrCode className="w-5 h-5 text-slate-600" /><span className="text-[11px] font-semibold text-slate-700">QR</span>
+          className="rounded-2xl bg-white border border-slate-200 shadow-sm py-3 flex flex-col items-center gap-1.5 disabled:opacity-50">
+          <span className="w-9 h-9 rounded-xl bg-amber-50 border border-amber-100 flex items-center justify-center">
+            <QrCode className="w-5 h-5 text-amber-600" />
+          </span>
+          <span className="text-[11px] font-semibold text-slate-700">QR</span>
         </button>
         <button type="button" onClick={startVoice} disabled={busy}
-          className="rounded-2xl bg-white border border-slate-200 shadow-sm py-3 flex flex-col items-center gap-1 disabled:opacity-50 text-slate-700">
-          <Mic className="w-5 h-5 text-slate-600" /><span className="text-[11px] font-semibold text-slate-700">Suara</span>
+          className="rounded-2xl bg-white border border-slate-200 shadow-sm py-3 flex flex-col items-center gap-1.5 disabled:opacity-50">
+          <span className="w-9 h-9 rounded-xl bg-rose-50 border border-rose-100 flex items-center justify-center">
+            <Mic className="w-5 h-5 text-rose-600" />
+          </span>
+          <span className="text-[11px] font-semibold text-slate-700">Suara</span>
         </button>
       </div>
       <input ref={filePdfRef} type="file" accept="application/pdf" className="hidden" onChange={onPdfPick} />
