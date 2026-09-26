@@ -1,21 +1,23 @@
 /**
- * GudangAI RUDY — Service Worker V6.7.2
- * Cache bump after full Dashboard + Input restore.
+ * GudangAI RUDY — Service Worker V6.7.3 (build optimized)
+ * - API: network-only (no-store)
+ * - /assets/* hashed: cache-first immutable
+ * - App shell (html/js/css): network-first, fallback cache
  */
-const CACHE_NAME = 'gudangai-v6.7.2';
-const STATIC_ASSETS = [
+const CACHE_NAME = 'gudangai-v6.7.3';
+const PRECACHE = [
   '/',
   '/index.html',
-  '/favicon.svg',
-  '/icon.svg',
-  '/logo-app.svg',
   '/manifest.json',
+  '/favicon.svg',
+  '/icon-192.png',
+  '/icon-512.png',
 ];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) =>
-      cache.addAll(STATIC_ASSETS).catch(() => undefined)
+      cache.addAll(PRECACHE).catch(() => undefined)
     )
   );
   self.skipWaiting();
@@ -38,7 +40,11 @@ function isApiRequest(url) {
   );
 }
 
-function isStaticAsset(url) {
+function isHashedAsset(url) {
+  return url.pathname.startsWith('/assets/');
+}
+
+function isStaticMedia(url) {
   const p = url.pathname;
   return (
     p.endsWith('.svg') ||
@@ -47,7 +53,6 @@ function isStaticAsset(url) {
     p.endsWith('.jpeg') ||
     p.endsWith('.webp') ||
     p.endsWith('.woff2') ||
-    p.startsWith('/assets/') ||
     p === '/manifest.json' ||
     p === '/favicon.svg'
   );
@@ -80,7 +85,24 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  if (isStaticAsset(url)) {
+  if (isHashedAsset(url)) {
+    event.respondWith(
+      caches.open(CACHE_NAME).then(async (cache) => {
+        const cached = await cache.match(event.request);
+        if (cached) return cached;
+        try {
+          const res = await fetch(event.request);
+          if (res.ok) cache.put(event.request, res.clone());
+          return res;
+        } catch {
+          return cached || Response.error();
+        }
+      })
+    );
+    return;
+  }
+
+  if (isStaticMedia(url)) {
     event.respondWith(
       caches.open(CACHE_NAME).then(async (cache) => {
         const cached = await cache.match(event.request);
@@ -109,7 +131,11 @@ self.addEventListener('fetch', (event) => {
         })
         .catch(async () => {
           const cache = await caches.open(CACHE_NAME);
-          return (await cache.match(event.request)) || (await cache.match('/index.html')) || Response.error();
+          return (
+            (await cache.match(event.request)) ||
+            (await cache.match('/index.html')) ||
+            Response.error()
+          );
         })
     );
   }
