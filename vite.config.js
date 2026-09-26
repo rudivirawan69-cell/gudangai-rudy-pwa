@@ -2,13 +2,14 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { defineConfig } from 'vite'
 
-/** GudangAI RUDY — build production (cepat · chunk stabil · Android-friendly) */
+/** GudangAI RUDY — build production (Vite 8 / oxc compatible) */
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: { host: true, port: 5173 },
   build: {
     target: 'es2020',
-    minify: 'esbuild',
+    // Vite 8 default minify (oxc). Jangan set minify:'esbuild' + top-level esbuild{}
+    // karena Vercel tidak selalu resolve package esbuild → build gagal.
     cssMinify: true,
     sourcemap: false,
     cssCodeSplit: true,
@@ -34,10 +35,6 @@ export default defineConfig({
         },
       },
     },
-  },
-  esbuild: {
-    drop: process.env.NODE_ENV === 'production' || process.env.VERCEL ? ['console', 'debugger'] : [],
-    legalComments: 'none',
   },
   optimizeDeps: {
     include: ['react', 'react-dom', 'lucide-react'],
