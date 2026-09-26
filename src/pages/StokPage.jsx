@@ -175,32 +175,38 @@ export default function StokPage() {
         />
       </div>
 
-      <div className="flex flex-wrap items-center gap-1.5">
-        {divisions.map((d) => (
-          <button
-            key={d}
-            type="button"
-            onClick={() => setFilterDiv(d)}
-            className={`px-3 py-1.5 rounded-xl text-[11px] transition ${
-              filterDiv === d
-                ? 'font-black bg-slate-900 text-white shadow-sm'
-                : 'font-bold bg-white border border-slate-200 text-slate-700 shadow-sm'
-            }`}
-          >
-            {d}
-          </button>
-        ))}
+      <div className="rounded-2xl bg-white border border-slate-200 shadow-sm p-2.5">
+        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wide px-1 mb-2">Divisi</p>
+        <div className="grid grid-cols-4 gap-1.5">
+          {divisions.map((d) => {
+            const on = filterDiv === d;
+            return (
+              <button
+                key={d}
+                type="button"
+                onClick={() => setFilterDiv(d)}
+                className={`min-h-[2.25rem] px-1 py-1.5 rounded-xl text-[10px] leading-tight font-bold transition active:scale-[0.97] ${
+                  on
+                    ? 'bg-slate-900 text-white shadow-sm'
+                    : 'bg-slate-50 border border-slate-200 text-slate-700'
+                }`}
+              >
+                {d}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
-      <div className="flex items-center justify-between px-0.5">
-        <p className="text-[11px] font-bold text-white drop-shadow-sm tabular-nums">
+      <div className="flex items-center justify-between rounded-xl bg-white border border-slate-200 shadow-sm px-3 py-2">
+        <p className="text-[11px] font-bold text-slate-700 tabular-nums">
           {filtered.length} item
           {lastRefresh
             ? ` · ${new Intl.DateTimeFormat('id-ID', { hour: '2-digit', minute: '2-digit' }).format(lastRefresh)}`
             : ''}
         </p>
         <button type="button" onClick={refresh} disabled={loading}
-          className="flex items-center gap-1 text-xs text-cyan-200 font-extrabold drop-shadow-sm">
+          className="flex items-center gap-1 text-xs text-cyan-700 font-extrabold">
           <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
           Refresh
         </button>
