@@ -1,13 +1,12 @@
-import { useMemo, useState, useEffect, useCallback, useRef } from 'react';
+import { useMemo, useState, useEffect, useCallback } from 'react';
 import { useStock } from '../hooks/useStock';
 import { useAuth } from '../hooks/useAuth';
 import {
   getPendingQueue, getStatusPO,
 } from '../data/api';
-import { DIVISIONS } from '../data/master';
 import { AVATAR_DATA_URL } from '../assets/imageAssets';
 import {
-  AlertTriangle, RefreshCw, FileText, Package, CheckCircle2, AlertCircle, ShieldAlert,
+  AlertTriangle, RefreshCw, FileText, Package, AlertCircle, ShieldAlert,
 } from 'lucide-react';
 
 const EMAIL = 'rudivirawan69@gmail.com';
@@ -83,6 +82,95 @@ function statusPOColor(status) {
   if (/SELESAI|DATANG|COMPLETE/.test(s)) return 'text-emerald-300 bg-emerald-500/15';
   if (/SEBAGIAN|PARTIAL/.test(s)) return 'text-amber-300 bg-amber-500/15';
   return 'text-cyan-200 bg-cyan-500/15';
+}
+
+const CHART_COLORS = ['#22d3ee', '#a78bfa', '#34d399', '#fbbf24', '#fb7185', '#60a5fa'];
+
+function getStatusGroup(status) {
+  const value = String(status || '').toUpperCase();
+  if (/SELESAI|DATANG|COMPLETE/.test(value)) return 'Selesai';
+  if (/SEBAGIAN|PARTIAL/.test(value)) return 'Sebagian';
+  return 'Menunggu';
+}
+
+function DonutPOChart({ items }) {
+  const summary = useMemo(() => {
+    const groups = ['Menunggu', 'Sebagian', 'Selesai'].map((label) => ({
+      label,
+      value: items.filter((item) => getStatusGroup(item.status) === label).length,
+    }));
+    return groups;
+  }, [items]);
+  const total = summary.reduce((sum, item) => sum + item.value, 0);
+  let cursor = 0;
+  const gradient = total
+    ? summary.map((item, index) => {
+      const start = (cursor / total) * 100;
+      cursor += item.value;
+      return `${CHART_COLORS[index]} ${start}% ${(cursor / total) * 100}%`;
+    }).join(', ')
+    : 'rgba(255,255,255,.12) 0 100%';
+
+  return (
+    <section className="rounded-2xl border border-cyan-300/15 bg-slate-950/35 p-3 shadow-[0_12px_28px_rgba(0,0,0,.18)]" aria-label="Grafik donat status PO">
+      <div className="flex items-center justify-between gap-2 mb-3">
+        <div>
+          <p className="text-sm font-bold text-white">Ringkasan Status PO</p>
+          <p className="text-[10px] text-white/45">Distribusi PO aktif</p>
+        </div>
+        <span className="rounded-full bg-cyan-400/10 px-2 py-1 text-[10px] font-semibold text-cyan-200">{total} total</span>
+      </div>
+      <div className="flex items-center gap-4">
+        <div className="relative grid size-32 shrink-0 place-items-center rounded-full shadow-[0_14px_0_-5px_rgba(8,47,73,.9),0_18px_20px_rgba(0,0,0,.3)]" style={{ background: `conic-gradient(${gradient})` }}>
+          <div className="grid size-20 place-items-center rounded-full border border-white/10 bg-slate-950/90 shadow-inner">
+            <span className="text-2xl font-black text-white tabular-nums">{total}</span>
+          </div>
+        </div>
+        <div className="min-w-0 flex-1 space-y-2">
+          {summary.map((item, index) => (
+            <div key={item.label} className="flex items-center justify-between gap-2 text-[11px]">
+              <span className="flex items-center gap-2 text-white/65"><i className="size-2 rounded-full" style={{ backgroundColor: CHART_COLORS[index] }} />{item.label}</span>
+              <b className="text-white tabular-nums">{item.value}</b>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function DivisionPOChart({ items }) {
+  const data = useMemo(() => {
+    const counts = items.reduce((result, item) => {
+      const division = item.divisi || item.division || 'Tanpa divisi';
+      result[division] = (result[division] || 0) + 1;
+      return result;
+    }, {});
+    return Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 6);
+  }, [items]);
+  const max = Math.max(...data.map(([, value]) => value), 1);
+
+  return (
+    <section className="rounded-2xl border border-violet-300/15 bg-slate-950/35 p-3 shadow-[0_12px_28px_rgba(0,0,0,.18)]" aria-label="Grafik status PO per divisi">
+      <div className="mb-3">
+        <p className="text-sm font-bold text-white">Status PO per Divisi</p>
+        <p className="text-[10px] text-white/45">Jumlah PO aktif berdasarkan divisi</p>
+      </div>
+      {data.length ? (
+        <div className="space-y-2.5">
+          {data.map(([division, value], index) => (
+            <div key={division} className="grid grid-cols-[5.5rem_1fr_1.5rem] items-center gap-2 text-[10px]">
+              <span className="truncate font-semibold text-white/65" title={division}>{division}</span>
+              <div className="h-5 rounded-md bg-white/5 shadow-inner">
+                <div className="h-full rounded-md shadow-[0_4px_0_rgba(15,23,42,.55),0_5px_10px_rgba(0,0,0,.2)]" style={{ width: `${Math.max(8, (value / max) * 100)}%`, background: `linear-gradient(90deg, ${CHART_COLORS[(index + 1) % CHART_COLORS.length]}, ${CHART_COLORS[(index + 2) % CHART_COLORS.length]})` }} />
+              </div>
+              <b className="text-right text-white tabular-nums">{value}</b>
+            </div>
+          ))}
+        </div>
+      ) : <p className="text-xs text-white/40">Belum ada data divisi untuk ditampilkan.</p>}
+    </section>
+  );
 }
 
 function StatusPOCard({ data, loading, error, onRefresh }) {
@@ -204,7 +292,11 @@ export default function DashboardPage({ onNavigate }) {
         </p>
       )}
 
+      <DonutPOChart items={poData?.items || []} />
+
       <StatusPOCard data={poData} loading={poLoading} error={poError} onRefresh={loadPO} />
+
+      <DivisionPOChart items={poData?.items || []} />
 
       <div className="grid grid-cols-2 gap-2">
         <button type="button" onClick={() => onNavigate?.('input')}
