@@ -358,7 +358,7 @@ export default function POPage({ onBack }) {
   }
 
   return (
-    <div className="pb-24 animate-fade-in space-y-4">
+    <div className="pb-24 animate-fade-in space-y-4 text-slate-800">
       <div className="flex items-center gap-3">
         {onBack && (
           <button type="button" onClick={onBack} className="size-10 rounded-xl bg-white border border-slate-200 shadow-sm flex items-center justify-center text-slate-700" aria-label="Kembali">

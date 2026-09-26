@@ -27,45 +27,44 @@ function Avatar({ name, size = 'md' }) {
 }
 
 function EntityStockChart({ cvItems, ptItems }) {
-  const calc = (items) => {
-    const list = items || [];
-    const total = list.length;
-    const zero = list.filter((i) => Number(i.stok) === 0).length;
-    const low = list.filter((i) => {
-      const s = Number(i.stok) || 0;
-      const aman = Number(i.stockAman) || 0;
-      if (s === 0) return false;
-      if (aman > 0) return s < aman;
-      return s > 0 && s <= 10;
-    }).length;
-    const ok = Math.max(0, total - zero - low);
-    return { total, zero, low, ok };
-  };
-  const cv = useMemo(() => calc(cvItems), [cvItems]);
-  const pt = useMemo(() => calc(ptItems), [ptItems]);
-  const Card = ({ title, d, tone }) => (
-    <div className={`rounded-2xl border border-slate-200 bg-white p-3 shadow-sm ${tone}`}>
-      <p className="text-xs font-semibold opacity-70 mb-2">{title}</p>
-      <p className="text-2xl font-bold tabular-nums">{d.total}</p>
-      <p className="text-[11px] opacity-60 mt-1">item master</p>
-      <div className="mt-2 grid grid-cols-3 gap-1 text-[10px]">
-        <div className="rounded-lg bg-emerald-500/15 px-1.5 py-1 text-center">
-          <div className="font-bold">{d.ok}</div><div className="opacity-60">Aman</div>
-        </div>
-        <div className="rounded-lg bg-amber-500/15 px-1.5 py-1 text-center">
-          <div className="font-bold">{d.low}</div><div className="opacity-60">Menipis</div>
-        </div>
-        <div className="rounded-lg bg-rose-500/15 px-1.5 py-1 text-center">
-          <div className="font-bold">{d.zero}</div><div className="opacity-60">Habis</div>
-        </div>
-      </div>
-    </div>
-  );
+  const divisions = useMemo(() => {
+    const rows = [...(cvItems || []), ...(ptItems || [])];
+    const grouped = rows.reduce((result, item) => {
+      const division = item.divisi || item.division || 'Tanpa divisi';
+      if (!result[division]) result[division] = { total: 0, zero: 0, low: 0, ok: 0 };
+      const stock = Number(item.stok ?? item.stockAkhir ?? item.qty ?? 0) || 0;
+      const aman = Number(item.stockAman ?? item.aman ?? 0) || 0;
+      result[division].total += 1;
+      if (stock === 0) result[division].zero += 1;
+      else if (aman > 0 ? stock < aman : stock <= 10) result[division].low += 1;
+      else result[division].ok += 1;
+      return result;
+    }, {});
+    return Object.entries(grouped).sort((a, b) => b[1].total - a[1].total).slice(0, 8);
+  }, [cvItems, ptItems]);
+
   return (
-    <div className="grid grid-cols-2 gap-2">
-      <Card title="Stock CV" d={cv} tone="text-slate-800" />
-      <Card title="Stock PT" d={pt} tone="text-slate-800" />
-    </div>
+    <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm" aria-label="Grafik stock per divisi">
+      <div className="mb-3">
+        <p className="text-sm font-bold text-slate-800">Stock per Divisi</p>
+        <p className="text-[10px] text-slate-500">Kondisi item master CV dan PT</p>
+      </div>
+      <div className="flex flex-col gap-2.5">
+        {divisions.length ? divisions.map(([division, data]) => (
+          <div key={division} className="rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-2">
+            <div className="mb-1.5 flex items-center justify-between gap-2">
+              <span className="truncate text-[11px] font-bold text-slate-700">{division}</span>
+              <span className="text-xs font-black tabular-nums text-slate-900">{data.total} item</span>
+            </div>
+            <div className="grid grid-cols-3 gap-1 text-[10px] font-semibold">
+              <span className="rounded-md bg-emerald-100 px-1.5 py-1 text-center text-emerald-700">{data.ok} Aman</span>
+              <span className="rounded-md bg-amber-100 px-1.5 py-1 text-center text-amber-700">{data.low} Menipis</span>
+              <span className="rounded-md bg-rose-100 px-1.5 py-1 text-center text-rose-700">{data.zero} Habis</span>
+            </div>
+          </div>
+        )) : <p className="text-xs text-slate-400">Belum ada data stock per divisi.</p>}
+      </div>
+    </section>
   );
 }
 
@@ -118,11 +117,11 @@ function DonutPOChart({ items }) {
           <p className="text-sm font-bold text-slate-800">Ringkasan Status PO</p>
           <p className="text-[10px] text-slate-500">Distribusi PO aktif</p>
         </div>
-        <span className="rounded-full bg-cyan-400/10 px-2 py-1 text-[10px] font-semibold text-cyan-200">{total} total</span>
+        <span className="rounded-full bg-cyan-50 px-2 py-1 text-[10px] font-semibold text-cyan-700">{total} total</span>
       </div>
       <div className="flex items-center gap-4">
-        <div className="relative grid size-32 shrink-0 place-items-center rounded-full shadow-[0_14px_0_-5px_rgba(8,47,73,.9),0_18px_20px_rgba(0,0,0,.3)]" style={{ background: `conic-gradient(${gradient})` }}>
-          <div className="grid size-20 place-items-center rounded-full border border-white/10 bg-slate-950/90 shadow-inner">
+        <div className="relative grid size-32 shrink-0 place-items-center rounded-full shadow-[0_10px_0_-4px_rgba(15,23,42,.18),0_14px_18px_rgba(15,23,42,.16)]" style={{ background: `conic-gradient(${gradient})` }}>
+          <div className="grid size-20 place-items-center rounded-full border border-white bg-white shadow-inner">
             <span className="text-2xl font-black text-slate-800 tabular-nums">{total}</span>
           </div>
         </div>
@@ -179,10 +178,10 @@ function StatusPOCard({ data, loading, error, onRefresh }) {
     <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm space-y-2">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <FileText className="w-4 h-4 text-cyan-300" />
+          <FileText className="w-4 h-4 text-cyan-600" />
           <div>
-            <h3 className="text-sm font-semibold text-white">Status PO Aktif</h3>
-            <p className="text-[10px] text-white/40">
+            <h3 className="text-sm font-semibold text-slate-800">Status PO Aktif</h3>
+            <p className="text-[10px] text-slate-500">
               {loading ? 'Memuat…' : items.length ? `${items.length} baris` : 'Belum ada data'}
             </p>
           </div>
@@ -283,8 +282,6 @@ export default function DashboardPage({ onNavigate }) {
         </button>
       </div>
 
-      <EntityStockChart cvItems={stockCV.items} ptItems={stockPT.items} />
-
       {(stockCV.error || stockPT.error) && (
         <p className="text-xs text-amber-200 flex items-center gap-1 px-1">
           <AlertTriangle className="w-3.5 h-3.5" />
@@ -293,6 +290,8 @@ export default function DashboardPage({ onNavigate }) {
       )}
 
       <DonutPOChart items={poData?.items || []} />
+
+      <EntityStockChart cvItems={stockCV.items} ptItems={stockPT.items} />
 
       <StatusPOCard data={poData} loading={poLoading} error={poError} onRefresh={loadPO} />
 
