@@ -5,8 +5,10 @@
  * Setelah tempel:
  * 1. Save
  * 2. Deploy → Manage deployments → Edit → New version → Deploy
- * 3. Tambah di router doPost: if (action === 'confirmPOStatus') return confirmPOStatus_(body);
+ * 3. Tambah di router doPost:
+ *      if (action === 'confirmPOStatus') return confirmPOStatus_(body);
  * 4. PWA: Atur → API Secret terisi
+ * 5. Uji: Beranda → ketuk baris PO → Selesai / Sebagian / Menunggu
  */
 
 function confirmPOStatus_(body) {
@@ -21,7 +23,7 @@ function confirmPOStatus_(body) {
     var noPO = String(body.noPO || body.no || '').trim();
     var status = String(body.status || 'SELESAI').toUpperCase();
     var qty = Number(body.qty) || 0;
-    var datang = Number(body.datang) || 0;
+    var datangIn = Number(body.datang) || 0;
     var rowIndex = body.rowIndex != null ? Number(body.rowIndex) : null;
 
     if (!nama && !noPO && !(rowIndex > 0)) {
@@ -35,13 +37,12 @@ function confirmPOStatus_(body) {
     if (!poSh) return { success: false, error: 'Sheet Purchase Order tidak ditemukan' };
 
     var updated = _updatePORowStatus_(poSh, {
-      nama: nama, noPO: noPO, status: status, qty: qty, datang: datang, rowIndex: rowIndex
+      nama: nama, noPO: noPO, status: status, qty: qty, datang: datangIn, rowIndex: rowIndex
     });
 
     var dashResult = null;
-    try { dashResult = refreshDashboardAfterPOConfirm_(); } catch (eDash) {
-      dashResult = { success: false, error: String(eDash) };
-    }
+    try { dashResult = refreshDashboardAfterPOConfirm_(); }
+    catch (eDash) { dashResult = { success: false, error: String(eDash) }; }
 
     return {
       success: true,
@@ -84,7 +85,7 @@ function _updatePORowStatus_(sh, opt) {
 
   var colNama = colOf(/nama/i) || 2;
   var colTotal = colOf(/total|qty/i) || 7;
-  var colDatang = colOf(/^datang$|qty\s*datang/i) || 0;
+  var colDatang = colOf(/datang/i) || 0;
   var colBelum = colOf(/belum/i) || 0;
   var colStatus = colOf(/status/i) || 9;
   var colNo = colOf(/^no\.?$|no\s*po/i) || 1;
