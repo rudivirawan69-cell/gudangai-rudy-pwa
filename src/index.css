@@ -1,1 +1,220 @@
-PLACEHOLDER
+@import "tailwindcss";
+
+/* ============================================================
+   GudangAI RUDY — Design System V6.7 (Clean · Flat · Precise)
+   Kotak solid putih · teks/angka jelas · tanpa transparan
+   ============================================================ */
+
+:root {
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --radius-sm: 0.625rem;
+  --radius-md: 0.875rem;
+  --radius-lg: 1.125rem;
+  --space-page: 0.875rem;
+  --space-block: 0.75rem;
+  --text-main: #0f172a;
+  --text-muted: #64748b;
+  --surface: #ffffff;
+  --surface-solid: #ffffff;
+  --border-subtle: #e2e8f0;
+  --shadow-soft: 0 2px 12px rgb(6 16 31 / 0.10);
+  --accent: #06b6d4;
+  --accent-2: #8b5cf6;
+  font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+  color-scheme: light;
+  -webkit-font-smoothing: antialiased;
+}
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  background: #061018;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+}
+
+.app-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  background:
+    radial-gradient(ellipse 100% 55% at 50% -10%, rgba(34, 211, 238, 0.22), transparent 55%),
+    radial-gradient(ellipse 70% 45% at 100% 100%, rgba(139, 92, 246, 0.12), transparent 50%),
+    linear-gradient(165deg, #061018 0%, #0a2433 40%, #0c3540 70%, #061018 100%);
+  background-color: #061018;
+}
+.app-bg::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(34, 211, 238, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(34, 211, 238, 0.035) 1px, transparent 1px);
+  background-size: 40px 40px;
+  mask-image: linear-gradient(to bottom, rgba(0,0,0,0.35), transparent 65%);
+  pointer-events: none;
+}
+.app-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to bottom,
+    transparent 0%,
+    rgba(6, 16, 24, 0.15) 40%,
+    rgba(6, 16, 24, 0.55) 100%
+  );
+  pointer-events: none;
+}
+.app-bg-photo {
+  position: absolute;
+  inset: 0;
+  background-image: url("/assets/bg-gudangai.jpg");
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  opacity: 0.42;
+  pointer-events: none;
+}
+.app-bg-login {
+  position: absolute;
+  inset: 0;
+  background-image: url("/assets/bg-login.jpg");
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  opacity: 0.70;
+  pointer-events: none;
+}
+
+.app-shell {
+  position: relative;
+  z-index: 1;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.surface {
+  background: #ffffff;
+  border-radius: var(--radius-lg);
+  border: 1px solid #e2e8f0;
+  box-shadow: var(--shadow-soft);
+}
+.surface-flat {
+  background: var(--surface-solid);
+  border-radius: var(--radius-md);
+  border: 1px solid #e2e8f0;
+  box-shadow: none;
+}
+.card {
+  background: #ffffff;
+  border-radius: var(--radius-lg);
+  border: 1px solid #e2e8f0;
+  box-shadow: var(--shadow-soft);
+}
+.card-interactive {
+  transition: transform 0.14s var(--ease-out);
+}
+.card-interactive:active {
+  transform: scale(0.97);
+}
+
+/* Navigasi: tetap berbentuk kotak, TANPA latar putih */
+.nav-glass {
+  background: rgba(8, 20, 32, 0.55);
+  backdrop-filter: blur(16px) saturate(1.15);
+  -webkit-backdrop-filter: blur(16px) saturate(1.15);
+  border-top: 1px solid rgba(34, 211, 238, 0.10);
+  box-shadow: 0 -4px 20px rgb(0 0 0 / 0.20);
+}
+.nav-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  box-shadow: none;
+  border-radius: var(--radius-md);
+  color: rgba(148, 163, 184, 0.88);
+  transition: color 0.2s ease, background 0.2s ease, border-color 0.2s ease, transform 0.15s var(--ease-out);
+}
+.nav-btn:active {
+  transform: scale(0.95);
+}
+.nav-btn.is-active {
+  color: #67e8f9;
+  background: rgba(34, 211, 238, 0.12);
+  border-color: rgba(34, 211, 238, 0.35);
+}
+.nav-btn .nav-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  margin-top: 2px;
+}
+.nav-btn.is-active .nav-label {
+  font-weight: 800;
+  color: #a5f3fc;
+}
+.nav-indicator {
+  position: absolute;
+  bottom: 3px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 16px;
+  height: 2px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #22d3ee, #a78bfa);
+}
+
+.conn-strip {
+  margin: 0.5rem 0.875rem 0;
+  padding: 0.4rem 0.75rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 11px;
+  font-weight: 500;
+  transition: background 0.25s ease, border-color 0.25s ease;
+}
+.conn-ok    { background: #ecfeff; border-color: #a5f3fc; color: #0e7490; }
+.conn-warn  { background: #fffbeb; border-color: #fde68a; color: #b45309; }
+.conn-err   { background: #fff1f2; border-color: #fecdd3; color: #be123c; }
+.conn-sync  { background: #ecfeff; border-color: #a5f3fc; color: #0e7490; }
+
+.btn-primary {
+  background: linear-gradient(135deg, #0b2a55, #164e8a);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-md);
+  font-weight: 700;
+  padding: 0.65rem 1rem;
+  box-shadow: 0 2px 8px rgb(11 42 85 / 0.25);
+}
+.btn-primary:active { transform: scale(0.98); }
+
+.skeleton {
+  background: linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.2s infinite;
+}
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+@keyframes soft-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+.animate-soft-pulse { animation: soft-pulse 1.6s ease-in-out infinite; }
+.animate-fade-in { animation: fadeIn 0.25s var(--ease-out); }
+.animate-page-in { animation: fadeIn 0.2s var(--ease-out); }
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
