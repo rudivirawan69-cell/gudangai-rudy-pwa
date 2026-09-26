@@ -32,7 +32,7 @@
 html, body, #root {
   height: 100%;
   margin: 0;
-  background: #f8fafc;
+  background: #dbe4ea;
   -webkit-tap-highlight-color: transparent;
   overscroll-behavior: none;
 }
@@ -41,8 +41,8 @@ html, body, #root {
   position: fixed;
   inset: 0;
   z-index: 0;
-  background: #f8fafc;
-  background-color: #f8fafc;
+  background: #dbe4ea;
+  background-color: #dbe4ea;
 }
 .app-bg::before {
   content: "";
@@ -59,7 +59,7 @@ html, body, #root {
   content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(to bottom, transparent 0%, rgba(248, 250, 252, 0.55) 100%);
+  background: linear-gradient(to bottom, rgba(15, 23, 42, 0.04) 0%, rgba(15, 23, 42, 0.18) 100%);
   pointer-events: none;
 }
 .app-bg-photo {
@@ -69,7 +69,7 @@ html, body, #root {
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
-  opacity: 0.42;
+  opacity: 0.86;
   pointer-events: none;
 }
 .app-bg:has(.app-bg-login) {
@@ -83,7 +83,7 @@ html, body, #root {
     linear-gradient(90deg, rgba(34, 211, 238, 0.035) 1px, transparent 1px);
 }
 .app-bg:has(.app-bg-login)::after {
-  background: linear-gradient(to bottom, transparent 0%, rgba(6, 16, 24, 0.55) 100%);
+  background: linear-gradient(to bottom, rgba(6, 16, 24, 0.06) 0%, rgba(6, 16, 24, 0.18) 100%);
 }
 .app-bg-login {
   position: absolute;
@@ -92,7 +92,7 @@ html, body, #root {
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
-  opacity: 0.70;
+  opacity: 0.92;
   pointer-events: none;
 }
 
