@@ -113,7 +113,7 @@ function buildMergedRows(items, defaultTglIso) {
 
 function MergedItemCard({ row, onChangeCV, onChangePT, onChangeTgl, onRemove }) {
   return (
-    <div className="rounded-2xl bg-white border border-slate-100 shadow-sm p-3.5 touch-manipulation">
+    <div className="surface-flat p-4 touch-manipulation">
       <div className="flex items-start justify-between gap-2 mb-2.5">
         <div className="min-w-0 flex-1">
           <p className="text-[15px] font-bold text-slate-800 leading-snug">{row.nama}</p>
@@ -142,13 +142,13 @@ function MergedItemCard({ row, onChangeCV, onChangePT, onChangeTgl, onRemove }) 
           <Trash2 className="w-4 h-4" />
         </button>
       </div>
-      <div className="rounded-xl bg-slate-50 border border-slate-100 p-2.5 mb-2.5">
+      <div className="border-b border-slate-200 pb-3 mb-3">
         <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">Tgl kedatangan</label>
         <input type="date" value={row.tglKedatangan || ''} onChange={(e) => onChangeTgl(row.id, e.target.value)}
           className="w-full mt-1 text-sm font-bold text-slate-800 border border-slate-200 rounded-xl py-2 px-2.5 bg-white focus:outline-none focus:border-cyan-400" />
       </div>
       <div className="grid grid-cols-2 gap-2 mb-2">
-        <div className="rounded-xl bg-white border border-cyan-100 p-2.5">
+        <div className="border border-cyan-200 rounded-xl p-2.5">
           <p className="text-[10px] font-bold text-cyan-700 mb-1.5">PO CV</p>
           <div className="flex items-center gap-1">
             <button type="button" onClick={() => onChangeCV(row.id, Math.max(0, row.poCV - 1))} className="w-8 h-8 rounded-lg bg-cyan-50 flex items-center justify-center text-cyan-700"><Minus className="w-3.5 h-3.5" /></button>
@@ -156,7 +156,7 @@ function MergedItemCard({ row, onChangeCV, onChangePT, onChangeTgl, onRemove }) 
             <button type="button" onClick={() => onChangeCV(row.id, row.poCV + 1)} className="w-8 h-8 rounded-lg bg-cyan-50 flex items-center justify-center text-cyan-700"><Plus className="w-3.5 h-3.5" /></button>
           </div>
         </div>
-        <div className="rounded-xl bg-white border border-orange-100 p-2.5">
+        <div className="border border-orange-200 rounded-xl p-2.5">
           <p className="text-[10px] font-bold text-orange-700 mb-1.5">PO PT</p>
           <div className="flex items-center gap-1">
             <button type="button" onClick={() => onChangePT(row.id, Math.max(0, row.poPT - 1))} className="w-8 h-8 rounded-lg bg-orange-50 flex items-center justify-center text-orange-700"><Minus className="w-3.5 h-3.5" /></button>
@@ -358,18 +358,18 @@ export default function POPage({ onBack }) {
   }
 
   return (
-    <div className="pb-24 animate-fade-in space-y-3">
+    <div className="pb-24 animate-fade-in space-y-4">
       <div className="flex items-center gap-3">
         {onBack && (
-          <button type="button" onClick={onBack} className="w-10 h-10 rounded-xl bg-white border border-slate-100 shadow-sm flex items-center justify-center text-slate-600" aria-label="Kembali">
+          <button type="button" onClick={onBack} className="size-10 rounded-xl bg-white border border-slate-200 shadow-sm flex items-center justify-center text-slate-700" aria-label="Kembali">
             <ArrowLeft className="w-5 h-5" />
           </button>
         )}
         <div className="min-w-0 flex-1">
-          <h1 className="text-base font-bold text-white drop-shadow-sm">Purchase Order</h1>
-          <p className="text-[11px] text-cyan-100/90 font-medium">Edit qty & tgl per item → Kirim ke sheet</p>
+          <h1 className="text-lg font-extrabold text-slate-900">Purchase Order</h1>
+          <p className="text-xs text-slate-500 font-medium">Edit jumlah dan tanggal kedatangan setiap item</p>
         </div>
-        <button type="button" onClick={() => { refresh(); setInitialized(false); }} className="w-10 h-10 rounded-xl bg-white border border-slate-100 shadow-sm flex items-center justify-center text-slate-500" aria-label="Refresh">
+        <button type="button" onClick={() => { refresh(); setInitialized(false); }} className="size-10 rounded-xl bg-white border border-slate-200 shadow-sm flex items-center justify-center text-slate-700" aria-label="Refresh">
           <RefreshCw className="w-4 h-4" />
         </button>
       </div>
@@ -387,7 +387,7 @@ export default function POPage({ onBack }) {
         <SkeletonCards />
       ) : (
         <>
-          <div className="flex items-center justify-between rounded-xl bg-white border border-slate-100 shadow-sm px-3 py-2">
+          <div className="surface-flat flex items-center justify-between px-4 py-3">
             <p className="text-xs font-semibold text-slate-600">{activeCount} item · tgl kedatangan per item</p>
             <button type="button" onClick={regenerate} className="text-xs font-bold text-cyan-600">Regenerate</button>
           </div>
