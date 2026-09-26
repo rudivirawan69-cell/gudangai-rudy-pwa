@@ -1,28 +1,21 @@
 import { useState, useMemo } from 'react';
+import {
+  Search, RefreshCw, Package, CheckCircle2, AlertTriangle, XCircle,
+  LayoutGrid, List,
+} from 'lucide-react';
 import { useStock } from '../hooks/useStock';
 import { DIVISIONS } from '../data/master';
-import {
-  Package, RefreshCw, Search, AlertTriangle,
-  CheckCircle2, XCircle, Filter, LayoutGrid, List
-} from 'lucide-react';
 
 function StockCardList({ item }) {
   const level = item.stok === 0 ? 'zero' : item.stok <= 5 ? 'danger' : item.stok <= 20 ? 'warning' : 'safe';
-  const colors = {
-    safe: 'border-l-emerald-500 bg-white',
-    warning: 'border-l-amber-400 bg-amber-50/40',
-    danger: 'border-l-red-500 bg-red-50/40',
-    zero: 'border-l-slate-300 bg-slate-50/50',
-  };
   const badges = {
-    safe: <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700">Aman</span>,
-    warning: <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700">Menipis</span>,
-    danger: <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-100 text-red-700">Kritis</span>,
-    zero: <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-200 text-slate-600">Habis</span>,
+    safe: <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">Aman</span>,
+    warning: <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700">Menipis</span>,
+    danger: <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-50 text-rose-700">Kritis</span>,
+    zero: <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">Habis</span>,
   };
-
   return (
-    <div className={`border-l-4 ${colors[level]} rounded-xl p-3 shadow-sm border border-slate-100/80 hover:shadow-md transition-shadow duration-200`}>
+    <div className="bg-white rounded-2xl border border-slate-200 p-3.5 shadow-sm">
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
           <p className="text-[11px] text-slate-400 font-mono tracking-tight">{item.kode}</p>
@@ -95,10 +88,11 @@ export default function StokPage() {
       list = list.filter((i) => i.divisi === filterDiv);
     }
     if (filterStatus !== 'Semua') {
-      if (filterStatus === 'Kritis') list = list.filter((i) => i.stok > 0 && i.stok <= 5);
-      if (filterStatus === 'Menipis') list = list.filter((i) => i.stok > 5 && i.stok <= 20);
-      if (filterStatus === 'Aman') list = list.filter((i) => i.stok > 20);
-      if (filterStatus === 'Habis') list = list.filter((i) => i.stok === 0);
+      // Selaras dengan kartu atas: Kritis = stok rendah + habis
+      if (filterStatus === 'Kritis') list = list.filter((i) => Number(i.stok ?? i.qty ?? 0) <= 5);
+      if (filterStatus === 'Menipis') list = list.filter((i) => { const q = Number(i.stok ?? i.qty ?? 0); return q > 5 && q <= 20; });
+      if (filterStatus === 'Aman') list = list.filter((i) => Number(i.stok ?? i.qty ?? 0) > 20);
+      if (filterStatus === 'Habis') list = list.filter((i) => Number(i.stok ?? i.qty ?? 0) === 0);
     }
     return list;
   }, [items, search, filterDiv, filterStatus]);
@@ -142,35 +136,36 @@ export default function StokPage() {
       </div>
 
       <div className="grid grid-cols-4 gap-2">
-        <div className="bg-white rounded-2xl p-2.5 shadow-sm border border-slate-100 text-center">
-          <div className="flex items-center justify-center gap-1 mb-1">
-            <Package className="w-3.5 h-3.5 text-blue-500" />
-            <span className="text-[10px] font-bold text-slate-500 uppercase">Total</span>
-          </div>
-          <p className="text-lg font-black text-slate-800 tabular-nums leading-none">{stats.total}</p>
-        </div>
-        <div className="bg-white rounded-2xl p-2.5 shadow-sm border border-emerald-100 text-center">
-          <div className="flex items-center justify-center gap-1 mb-1">
-            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
-            <span className="text-[10px] font-bold text-slate-500 uppercase">Aman</span>
-          </div>
-          <p className="text-lg font-black text-emerald-700 tabular-nums leading-none">{stats.safe}</p>
-        </div>
-        <div className="bg-white rounded-2xl p-2.5 shadow-sm border border-amber-100 text-center">
-          <div className="flex items-center justify-center gap-1 mb-1">
-            <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
-            <span className="text-[10px] font-bold text-slate-500 uppercase">Menipis</span>
-          </div>
-          <p className="text-lg font-black text-amber-700 tabular-nums leading-none">{stats.warning}</p>
-        </div>
-        <div className="bg-white rounded-2xl p-2.5 shadow-sm border border-red-100 text-center">
-          <div className="flex items-center justify-center gap-1 mb-1">
-            <XCircle className="w-3.5 h-3.5 text-red-500" />
-            <span className="text-[10px] font-bold text-slate-500 uppercase">Kritis</span>
-          </div>
-          <p className="text-lg font-black text-red-600 tabular-nums leading-none">{stats.danger + stats.zero}</p>
-        </div>
+        {[
+          { id: 'Semua', label: 'Total', value: stats.total, icon: Package, active: 'border-blue-400 ring-2 ring-blue-100 bg-blue-50/40', idle: 'border-slate-100', num: 'text-slate-800', iconCls: 'text-blue-500' },
+          { id: 'Aman', label: 'Aman', value: stats.safe, icon: CheckCircle2, active: 'border-emerald-400 ring-2 ring-emerald-100 bg-emerald-50/50', idle: 'border-emerald-100', num: 'text-emerald-700', iconCls: 'text-emerald-500' },
+          { id: 'Menipis', label: 'Menipis', value: stats.warning, icon: AlertTriangle, active: 'border-amber-400 ring-2 ring-amber-100 bg-amber-50/50', idle: 'border-amber-100', num: 'text-amber-700', iconCls: 'text-amber-500' },
+          { id: 'Kritis', label: 'Kritis', value: (stats.danger || 0) + (stats.zero || 0), icon: XCircle, active: 'border-rose-400 ring-2 ring-rose-100 bg-rose-50/50', idle: 'border-red-100', num: 'text-red-600', iconCls: 'text-red-500' },
+        ].map((b) => {
+          const Icon = b.icon;
+          const on = filterStatus === b.id || (b.id === 'Semua' && filterStatus === 'Semua');
+          return (
+            <button
+              key={b.id}
+              type="button"
+              onClick={() => setFilterStatus(b.id === 'Semua' ? 'Semua' : b.id)}
+              className={`rounded-2xl p-2.5 shadow-sm border text-center transition active:scale-[0.97] ${on ? b.active : `bg-white ${b.idle}`}`}
+            >
+              <div className="flex items-center justify-center gap-1 mb-1">
+                <Icon className={`w-3.5 h-3.5 ${b.iconCls}`} />
+                <span className="text-[10px] font-bold text-slate-500 uppercase">{b.label}</span>
+              </div>
+              <p className={`text-lg font-black tabular-nums leading-none ${b.num}`}>{b.value}</p>
+            </button>
+          );
+        })}
       </div>
+      {filterStatus !== 'Semua' && (
+        <p className="text-[11px] text-slate-600 bg-white/90 border border-slate-200 rounded-xl px-3 py-1.5 font-medium">
+          Filter: <span className="font-bold text-slate-800">{filterStatus}</span>
+          {' · '}ketuk Total untuk menampilkan semua
+        </p>
+      )}
 
       <div className="relative">
         <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -183,7 +178,7 @@ export default function StokPage() {
         />
       </div>
 
-      <div className="flex flex-wrap items-center justify-center gap-1.5">
+      <div className="flex flex-wrap items-center gap-1.5">
         {divisions.map((d) => (
           <button
             key={d}
@@ -196,29 +191,6 @@ export default function StokPage() {
             }`}
           >
             {d}
-          </button>
-        ))}
-      </div>
-
-      <div className="flex flex-wrap items-center justify-center gap-1.5">
-        {['Semua', 'Kritis', 'Menipis', 'Aman', 'Habis'].map((s) => (
-          <button
-            key={s}
-            type="button"
-            onClick={() => setFilterStatus(s)}
-            className={`px-2.5 py-1 rounded-xl text-[10px] transition ${
-              filterStatus === s
-                ? 'font-extrabold bg-slate-800 text-white'
-                : s === 'Kritis'
-                  ? 'font-bold bg-rose-50 text-rose-700 border border-rose-200'
-                  : s === 'Menipis'
-                    ? 'font-bold bg-amber-50 text-amber-700 border border-amber-200'
-                    : s === 'Aman'
-                      ? 'font-bold bg-emerald-50 text-emerald-700 border border-emerald-200'
-                      : 'font-bold bg-white text-slate-600 border border-slate-200'
-            }`}
-          >
-            {s === 'Semua' ? 'Semua Status' : s}
           </button>
         ))}
       </div>
@@ -248,9 +220,9 @@ export default function StokPage() {
           ))}
         </div>
       ) : filtered.length === 0 ? (
-        <div className="text-center py-12">
-          <Package className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-          <p className="text-slate-500 text-sm font-bold">Tidak ada item ditemukan</p>
+        <div className="rounded-2xl bg-white border border-slate-200 p-8 text-center shadow-sm">
+          <p className="text-sm font-semibold text-slate-500">Tidak ada item</p>
+          <p className="text-[11px] text-slate-400 mt-1">Ubah filter atau ketuk Total</p>
         </div>
       ) : dense ? (
         <div className="grid grid-cols-2 gap-2.5">
@@ -259,7 +231,7 @@ export default function StokPage() {
           ))}
         </div>
       ) : (
-        <div className="space-y-2">
+        <div className="space-y-2.5">
           {filtered.map((item) => (
             <StockCardList key={item.kode} item={item} />
           ))}
