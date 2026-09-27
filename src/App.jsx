@@ -170,7 +170,7 @@ function AppShell() {
         className="app-bg"
         aria-hidden="true"
         style={{
-          backgroundImage: `linear-gradient(to bottom, rgba(6,16,24,0.40) 0%, rgba(6,16,24,0.58) 50%, rgba(6,16,24,0.82) 100%), url(${bgDataUrl})`,
+          backgroundImage: `linear-gradient(to bottom, rgba(4,14,24,0.28) 0%, rgba(4,14,24,0.48) 52%, rgba(4,14,24,0.72) 100%), url(${bgDataUrl})`,
         }}
       />
       <ConnectionBanner />
