@@ -10,7 +10,9 @@ export default defineConfig({
     target: 'es2020',
     // Vite 8 default minify (oxc). Jangan set minify:'esbuild' + top-level esbuild{}
     // karena Vercel tidak selalu resolve package esbuild → build gagal.
-    cssMinify: true,
+    // Lightning CSS can fail on the generated utility CSS in the Workers runtime.
+    // Keep CSS minification disabled so the production build remains deterministic.
+    cssMinify: false,
     sourcemap: false,
     cssCodeSplit: true,
     reportCompressedSize: false,
