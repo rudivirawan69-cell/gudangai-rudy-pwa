@@ -11,6 +11,17 @@ createRoot(document.getElementById('root')).render(
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
+    // v0 preview assets are served through a redirecting host route; a service
+    // worker script must be a direct same-origin response, so disable and clear
+    // workers there to prevent stale chunks from breaking lazy page imports.
+    const isV0Preview = window.location.hostname.endsWith('.v0.build');
+    if (isV0Preview) {
+      navigator.serviceWorker.getRegistrations().then((registrations) => {
+        registrations.forEach((registration) => registration.unregister());
+      }).catch(() => {});
+      return;
+    }
+
     navigator.serviceWorker
       .register('/sw.js')
       .then((reg) => {
