@@ -7,16 +7,17 @@
  * - Version bump setiap rilis UI agar klien Android mendapat update
  */
 const CACHE_NAME = 'gudangai-v6.8.0-stable';
+const BASE_PATH = self.location.pathname.replace(/\/sw\.js$/, '/');
 const STATIC_ASSETS = [
-  '/',
-  '/index.html',
-  '/favicon.svg',
-  '/icon.svg',
-  '/logo-app.svg',
-  '/manifest.json',
-  '/icon-192.png',
-  '/icon-512.png',
-  '/apple-touch-icon.png',
+  BASE_PATH,
+  BASE_PATH + 'index.html',
+  BASE_PATH + 'favicon.svg',
+  BASE_PATH + 'icon.svg',
+  BASE_PATH + 'logo-app.svg',
+  BASE_PATH + 'manifest.json',
+  BASE_PATH + 'icon-192.png',
+  BASE_PATH + 'icon-512.png',
+  BASE_PATH + 'apple-touch-icon.png',
 ];
 
 self.addEventListener('install', (event) => {
@@ -115,7 +116,7 @@ self.addEventListener('fetch', (event) => {
           return res;
         })
         .catch(() =>
-          caches.match(event.request).then((c) => c || caches.match('/index.html'))
+          caches.match(event.request).then((c) => c || caches.match(BASE_PATH + 'index.html'))
         )
     );
     return;
