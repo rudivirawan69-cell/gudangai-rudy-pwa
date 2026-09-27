@@ -1,333 +1,249 @@
 import { useMemo, useState, useEffect, useCallback } from 'react';
 import { useStock } from '../hooks/useStock';
 import { useAuth } from '../hooks/useAuth';
-import { getPendingQueue, getStatusPO, confirmPOStatus } from '../data/api';
-import { DIVISIONS } from '../data/master';
+import {
+  getPendingQueue, getStatusPO,
+} from '../data/api';
 import { AVATAR_DATA_URL } from '../assets/imageAssets';
 import {
-  RefreshCw, AlertCircle, FileText, Package, TrendingUp, TrendingDown,
-  AlertTriangle, CheckCircle2, ChevronRight, ClipboardList,
+  AlertTriangle, RefreshCw, FileText, Package, AlertCircle, ShieldAlert,
 } from 'lucide-react';
 
-function statusBadgeClass(status) {
+const EMAIL = 'rudivirawan69@gmail.com';
+
+function Avatar({ name, size = 'md' }) {
+  const [err, setErr] = useState(false);
+  const dim = size === 'lg' ? 'w-12 h-12' : 'w-10 h-10';
+  if (err) {
+    return (
+      <div className={`${dim} rounded-2xl bg-gradient-to-br from-cyan-600 to-teal-700 flex items-center justify-center text-white text-sm font-bold shadow-md shrink-0`}>
+        {(name || 'R').charAt(0).toUpperCase()}
+      </div>
+    );
+  }
+  return (
+    <img src={AVATAR_DATA_URL} alt={name || 'Avatar'} className={`${dim} rounded-2xl object-cover shadow-md border-2 border-white/90 shrink-0`} onError={() => setErr(true)} />
+  );
+}
+
+function EntityStockChart({ cvItems, ptItems }) {
+  const divisions = useMemo(() => {
+    const rows = [...(cvItems || []), ...(ptItems || [])];
+    const grouped = rows.reduce((result, item) => {
+      const division = item.divisi || item.division || 'Tanpa divisi';
+      if (!result[division]) result[division] = { total: 0, zero: 0, low: 0, ok: 0 };
+      const stock = Number(item.stok ?? item.stockAkhir ?? item.qty ?? 0) || 0;
+      const aman = Number(item.stockAman ?? item.aman ?? 0) || 0;
+      result[division].total += 1;
+      if (stock === 0) result[division].zero += 1;
+      else if (aman > 0 ? stock < aman : stock <= 10) result[division].low += 1;
+      else result[division].ok += 1;
+      return result;
+    }, {});
+    return Object.entries(grouped).sort((a, b) => b[1].total - a[1].total).slice(0, 8);
+  }, [cvItems, ptItems]);
+
+  return (
+    <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm" aria-label="Grafik stock per divisi">
+      <div className="mb-3">
+        <p className="text-sm font-bold text-slate-800">Stock per Divisi</p>
+        <p className="text-[10px] text-slate-500">Kondisi item master CV dan PT</p>
+      </div>
+      <div className="flex flex-col gap-2.5">
+        {divisions.length ? divisions.map(([division, data]) => (
+          <div key={division} className="rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-2">
+            <div className="mb-1.5 flex items-center justify-between gap-2">
+              <span className="truncate text-[11px] font-bold text-slate-700">{division}</span>
+              <span className="text-xs font-black tabular-nums text-slate-900">{data.total} item</span>
+            </div>
+            <div className="grid grid-cols-3 gap-1 text-[10px] font-semibold">
+              <span className="rounded-md bg-emerald-100 px-1.5 py-1 text-center text-emerald-700">{data.ok} Aman</span>
+              <span className="rounded-md bg-amber-100 px-1.5 py-1 text-center text-amber-700">{data.low} Menipis</span>
+              <span className="rounded-md bg-rose-100 px-1.5 py-1 text-center text-rose-700">{data.zero} Habis</span>
+            </div>
+          </div>
+        )) : <p className="text-xs text-slate-400">Belum ada data stock per divisi.</p>}
+      </div>
+    </section>
+  );
+}
+
+function normalizeStatusPO(raw) {
+  if (!raw) return { success: false, error: 'Kosong' };
+  if (raw.success === false) return { success: false, error: raw.error || 'Gagal' };
+  const items = raw.items || raw.data || raw.rows || [];
+  const list = Array.isArray(items) ? items : [];
+  return { success: true, items: list, updatedAt: raw.updatedAt || raw.ts };
+}
+
+function statusPOColor(status) {
   const s = String(status || '').toUpperCase();
-  if ((s.includes('SELESAI') || s.includes('DATANG')) && !s.includes('BELUM') && !s.includes('SEBAGIAN')) {
-    return 'text-emerald-700 bg-emerald-50';
-  }
-  if (s.includes('SEBAGIAN')) return 'text-amber-700 bg-amber-50';
-  if (s.includes('MENUNGGU') || s.includes('BELUM')) return 'text-cyan-700 bg-cyan-50';
-  return 'text-slate-600 bg-slate-100';
+  if (/SELESAI|DATANG|COMPLETE/.test(s)) return 'text-emerald-300 bg-emerald-500/15';
+  if (/SEBAGIAN|PARTIAL/.test(s)) return 'text-amber-300 bg-amber-500/15';
+  return 'text-cyan-200 bg-cyan-500/15';
 }
 
-function SummaryStatCards({ items }) {
-  const total = items.length || 0;
-  let kritis = 0, menipis = 0, aman = 0;
-  for (const it of items) {
-    const q = Number(it.qty ?? it.stok ?? it.sisa ?? 0);
-    const min = Number(it.min ?? it.stokMin ?? 5);
-    if (q <= 0) kritis++;
-    else if (q <= min) menipis++;
-    else aman++;
-  }
-  const pct = (n) => (total ? Math.round((n / total) * 100) : 0);
-  const cards = [
-    { label: 'KRITIS', value: kritis, pct: pct(kritis), color: 'text-rose-600', border: 'border-rose-100', bg: 'bg-rose-50/50', desc: 'Stok habis / sangat rendah' },
-    { label: 'MENIPIS', value: menipis, pct: pct(menipis), color: 'text-amber-600', border: 'border-amber-100', bg: 'bg-amber-50/50', desc: 'Di bawah stok aman' },
-    { label: 'AMAN', value: aman, pct: pct(aman), color: 'text-emerald-600', border: 'border-emerald-100', bg: 'bg-emerald-50/50', desc: 'Kapasitas tercukupi' },
-  ];
-  return (
-    <div className="grid grid-cols-3 gap-2">
-      {cards.map((c) => (
-        <div key={c.label} className={`rounded-2xl bg-white border ${c.border} shadow-sm p-3 ${c.bg}`}>
-          <p className={`text-[10px] font-bold tracking-wide ${c.color}`}>{c.label}</p>
-          <p className={`text-2xl font-black tabular-nums ${c.color}`}>{c.value}<span className="text-xs font-semibold opacity-70"> ({c.pct}%)</span></p>
-          <div className="h-1 rounded-full bg-slate-100 mt-1.5 mb-1 overflow-hidden">
-            <div className={`h-full rounded-full ${c.color.replace('text-', 'bg-')}`} style={{ width: `${c.pct}%` }} />
-          </div>
-          <p className="text-[10px] text-slate-400 leading-tight">{c.desc}</p>
-        </div>
-      ))}
-    </div>
-  );
+const CHART_COLORS = ['#22d3ee', '#a78bfa', '#34d399', '#fbbf24', '#fb7185', '#60a5fa'];
+
+function getStatusGroup(status) {
+  const value = String(status || '').toUpperCase();
+  if (/SELESAI|DATANG|COMPLETE/.test(value)) return 'Selesai';
+  if (/SEBAGIAN|PARTIAL/.test(value)) return 'Sebagian';
+  return 'Menunggu';
 }
 
-function Donut3D({ label, aman, menipis, kritis }) {
-  const total = Math.max(1, (aman || 0) + (menipis || 0) + (kritis || 0));
-  const a = (aman || 0) / total;
-  const m = (menipis || 0) / total;
-  const k = (kritis || 0) / total;
-  const r = 36, stroke = 10;
-  const C = 2 * Math.PI * r;
-  const seg = [
-    { frac: a, color: '#10b981' },
-    { frac: m, color: '#f59e0b' },
-    { frac: k, color: '#f43f5e' },
-  ];
-  let offset = 0;
-  return (
-    <div className="flex flex-col items-center gap-1">
-      <div className="relative w-24 h-24">
-        <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90 drop-shadow-sm">
-          <circle cx="50" cy="50" r={r} fill="none" stroke="#e2e8f0" strokeWidth={stroke} />
-          {seg.map((s, i) => {
-            const len = s.frac * C;
-            const el = (
-              <circle key={i} cx="50" cy="50" r={r} fill="none" stroke={s.color} strokeWidth={stroke}
-                strokeDasharray={`${len} ${C - len}`} strokeDashoffset={-offset}
-                strokeLinecap="round" opacity={0.95} />
-            );
-            offset += len;
-            return el;
-          })}
-        </svg>
-        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-          <span className="text-lg font-black text-slate-800 tabular-nums">{(aman || 0) + (menipis || 0) + (kritis || 0)}</span>
-          <span className="text-[10px] font-semibold text-slate-400 uppercase">{label}</span>
-        </div>
-      </div>
-      <div className="flex gap-2 text-[10px] text-slate-500">
-        <span className="flex items-center gap-0.5"><i className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />{aman || 0}</span>
-        <span className="flex items-center gap-0.5"><i className="w-1.5 h-1.5 rounded-full bg-amber-500 inline-block" />{menipis || 0}</span>
-        <span className="flex items-center gap-0.5"><i className="w-1.5 h-1.5 rounded-full bg-rose-500 inline-block" />{kritis || 0}</span>
-      </div>
-    </div>
-  );
-}
-
-function AnalisaStokCard({ items }) {
-  const split = useMemo(() => {
-    const cv = { aman: 0, menipis: 0, kritis: 0 };
-    const pt = { aman: 0, menipis: 0, kritis: 0 };
-    for (const it of items || []) {
-      const ent = String(it.entity || it.entitas || 'CV').toUpperCase();
-      const bucket = ent === 'PT' ? pt : cv;
-      const q = Number(it.qty ?? it.stok ?? it.sisa ?? 0);
-      const min = Number(it.min ?? it.stokMin ?? 5);
-      if (q <= 0) bucket.kritis++;
-      else if (q <= min) bucket.menipis++;
-      else bucket.aman++;
-    }
-    return { cv, pt };
+function DonutPOChart({ items }) {
+  const summary = useMemo(() => {
+    const groups = ['Menunggu', 'Sebagian', 'Selesai'].map((label) => ({
+      label,
+      value: items.filter((item) => getStatusGroup(item.status) === label).length,
+    }));
+    return groups;
   }, [items]);
+  const total = summary.reduce((sum, item) => sum + item.value, 0);
+  let cursor = 0;
+  const gradient = total
+    ? summary.map((item, index) => {
+      const start = (cursor / total) * 100;
+      cursor += item.value;
+      return `${CHART_COLORS[index]} ${start}% ${(cursor / total) * 100}%`;
+    }).join(', ')
+    : 'rgba(255,255,255,.12) 0 100%';
+
   return (
-    <div className="rounded-2xl bg-white border border-slate-200 shadow-sm p-4">
-      <div className="flex items-center gap-2 mb-3">
-        <div className="w-8 h-8 rounded-xl bg-cyan-50 flex items-center justify-center">
-          <Package className="w-4 h-4 text-cyan-600" />
-        </div>
+    <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm" aria-label="Grafik donat status PO">
+      <div className="flex items-center justify-between gap-2 mb-3">
         <div>
-          <h3 className="text-sm font-semibold text-slate-800">Analisa Stok CV & PT</h3>
-          <p className="text-[10px] text-slate-400">Donat 3D · Aman · Menipis · Kritis</p>
+          <p className="text-sm font-bold text-slate-800">Ringkasan Status PO</p>
+          <p className="text-[10px] text-slate-500">Distribusi PO aktif</p>
+        </div>
+        <span className="rounded-full bg-cyan-50 px-2 py-1 text-[10px] font-semibold text-cyan-700">{total} total</span>
+      </div>
+      <div className="flex items-center gap-4">
+        <div className="relative grid size-32 shrink-0 place-items-center rounded-full shadow-[0_10px_0_-4px_rgba(15,23,42,.18),0_14px_18px_rgba(15,23,42,.16)]" style={{ background: `conic-gradient(${gradient})` }}>
+          <div className="grid size-20 place-items-center rounded-full border border-white bg-white shadow-inner">
+            <span className="text-2xl font-black text-slate-800 tabular-nums">{total}</span>
+          </div>
+        </div>
+        <div className="min-w-0 flex-1 space-y-2">
+          {summary.map((item, index) => (
+            <div key={item.label} className="flex items-center justify-between gap-2 text-[11px]">
+              <span className="flex items-center gap-2 text-slate-600"><i className="size-2 rounded-full" style={{ backgroundColor: CHART_COLORS[index] }} />{item.label}</span>
+              <b className="text-white tabular-nums">{item.value}</b>
+            </div>
+          ))}
         </div>
       </div>
-      <div className="flex justify-around">
-        <Donut3D label="CV" {...split.cv} />
-        <Donut3D label="PT" {...split.pt} />
-      </div>
-    </div>
+    </section>
   );
 }
 
-function DivisionStatusBars({ items }) {
-  const rows = useMemo(() => {
-    const map = {};
-    for (const it of items || []) {
-      const d = it.divisi || it.division || 'LAIN';
-      if (!map[d]) map[d] = { divisi: d, aman: 0, waspada: 0, kritis: 0, total: 0 };
-      const q = Number(it.qty ?? it.stok ?? it.sisa ?? 0);
-      const min = Number(it.min ?? it.stokMin ?? 5);
-      map[d].total++;
-      if (q <= 0) map[d].kritis++;
-      else if (q <= min) map[d].waspada++;
-      else map[d].aman++;
-    }
-    return Object.values(map).sort((a, b) => b.total - a.total);
+function DivisionPOChart({ items }) {
+  const data = useMemo(() => {
+    const counts = items.reduce((result, item) => {
+      const division = item.divisi || item.division || 'Tanpa divisi';
+      result[division] = (result[division] || 0) + 1;
+      return result;
+    }, {});
+    return Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 6);
   }, [items]);
-  if (!rows.length) {
-    return <p className="text-xs text-slate-400 py-2">Belum ada data divisi</p>;
-  }
+  const max = Math.max(...data.map(([, value]) => value), 1);
+
   return (
-    <div className="space-y-2">
-      {rows.map((r) => {
-        const t = Math.max(1, r.total);
-        return (
-          <div key={r.divisi} className="flex items-center gap-3 rounded-2xl bg-white border border-slate-200 shadow-sm p-2.5">
-            <div className="w-16 shrink-0">
-              <p className="text-[11px] font-bold text-slate-700 truncate">{r.divisi}</p>
-              <p className="text-[10px] text-slate-400">{r.total} item</p>
+    <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm" aria-label="Grafik status PO per divisi">
+      <div className="mb-3">
+        <p className="text-sm font-bold text-slate-800">Status PO per Divisi</p>
+        <p className="text-[10px] text-slate-500">Jumlah PO aktif berdasarkan divisi</p>
+      </div>
+      {data.length ? (
+        <div className="space-y-2.5">
+          {data.map(([division, value], index) => (
+            <div key={division} className="grid grid-cols-[5.5rem_1fr_1.5rem] items-center gap-2 text-[10px]">
+              <span className="truncate font-semibold text-slate-600" title={division}>{division}</span>
+              <div className="h-5 rounded-md bg-white/5 shadow-inner">
+                <div className="h-full rounded-md shadow-[0_4px_0_rgba(15,23,42,.55),0_5px_10px_rgba(0,0,0,.2)]" style={{ width: `${Math.max(8, (value / max) * 100)}%`, background: `linear-gradient(90deg, ${CHART_COLORS[(index + 1) % CHART_COLORS.length]}, ${CHART_COLORS[(index + 2) % CHART_COLORS.length]})` }} />
+              </div>
+              <b className="text-right text-white tabular-nums">{value}</b>
             </div>
-            <div className="flex-1 h-2.5 rounded-full bg-slate-100 overflow-hidden flex">
-              <div className="h-full bg-emerald-500" style={{ width: `${(r.aman / t) * 100}%` }} />
-              <div className="h-full bg-amber-400" style={{ width: `${(r.waspada / t) * 100}%` }} />
-              <div className="h-full bg-rose-500" style={{ width: `${(r.kritis / t) * 100}%` }} />
-            </div>
-            <div className="text-[10px] text-slate-500 tabular-nums shrink-0 w-16 text-right">
-              <span className="text-emerald-600">{r.aman}</span>/
-              <span className="text-amber-600">{r.waspada}</span>/
-              <span className="text-rose-600">{r.kritis}</span>
-            </div>
-          </div>
-        );
-      })}
-    </div>
+          ))}
+        </div>
+      ) : <p className="text-xs text-white/40">Belum ada data divisi untuk ditampilkan.</p>}
+    </section>
   );
 }
 
 function StatusPOCard({ data, loading, error, onRefresh }) {
   const items = data?.items || [];
-  const [openKey, setOpenKey] = useState(null);
-  const [busyKey, setBusyKey] = useState(null);
-  const [msg, setMsg] = useState('');
-
-  const confirm = async (row, status) => {
-    const key = String(row.rowIndex ?? row.noPO ?? row.no ?? row.nama ?? '');
-    setBusyKey(key);
-    setMsg('');
-    try {
-      const res = await confirmPOStatus({
-        noPO: row.noPO || row.no || '',
-        nama: row.nama || row.name || '',
-        status,
-        rowIndex: row.rowIndex ?? row.row ?? null,
-        qty: row.qty,
-        datang: status === 'SELESAI' ? (row.qty || row.totalQty || 0) : status === 'SEBAGIAN' ? (row.datang || Math.ceil((row.qty || 0) / 2)) : 0,
-      });
-      if (res?.success === false) {
-        setMsg(res.error || 'Gagal konfirmasi PO');
-      } else {
-        setMsg(`PO ditandai ${status}`);
-        setOpenKey(null);
-        onRefresh?.();
-        try { window.dispatchEvent(new Event('gudangai-stock-refresh')); } catch (_) {}
-      }
-    } catch (e) {
-      setMsg(e?.message || 'Gagal konfirmasi PO');
-    } finally {
-      setBusyKey(null);
-    }
-  };
-
   return (
-    <div className="rounded-2xl bg-white border border-slate-200 shadow-sm p-3.5 space-y-2.5">
+    <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm space-y-2">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-xl bg-cyan-50 flex items-center justify-center">
-            <FileText className="w-4 h-4 text-cyan-600" />
-          </div>
+        <div className="flex items-center gap-2">
+          <FileText className="w-4 h-4 text-cyan-600" />
           <div>
-            <h3 className="text-sm font-semibold text-slate-800 leading-tight">Status PO Aktif</h3>
-            <p className="text-[10px] text-slate-400">
-              {loading ? 'Memuat…' : items.length ? `${items.length} baris · ketuk untuk konfirmasi` : 'Belum ada data'}
+            <h3 className="text-sm font-semibold text-slate-800">Status PO Aktif</h3>
+            <p className="text-[10px] text-slate-500">
+              {loading ? 'Memuat…' : items.length ? `${items.length} baris` : 'Belum ada data'}
             </p>
           </div>
         </div>
-        <button type="button" onClick={onRefresh} className="p-2 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200" aria-label="Muat ulang PO">
-          <RefreshCw className={`w-3.5 h-3.5 text-slate-600 ${loading ? 'animate-spin' : ''}`} />
+        <button type="button" onClick={onRefresh} className="p-1.5 rounded-lg bg-white/10">
+          <RefreshCw className={`w-3.5 h-3.5 text-white/70 ${loading ? 'animate-spin' : ''}`} />
         </button>
       </div>
       {error && (
-        <p className="text-xs text-rose-600 flex items-center gap-1.5">
-          <AlertCircle className="w-3.5 h-3.5 shrink-0" /> {error}
+        <p className="text-xs text-rose-300 flex items-center gap-1">
+          <AlertCircle className="w-3.5 h-3.5" /> {error}
         </p>
       )}
-      {msg && (
-        <p className="text-[11px] text-slate-600 bg-slate-50 border border-slate-100 rounded-lg px-2 py-1">{msg}</p>
-      )}
       {!loading && !error && items.length === 0 && (
-        <p className="text-xs text-slate-400 py-1">Belum ada Status PO minggu ini. Cek sheet purchase order.</p>
+        <p className="text-xs text-white/40">Belum ada Status PO minggu ini. Cek sheet purchase order.</p>
       )}
-      <div className="space-y-1.5 max-h-64 overflow-y-auto">
-        {items.slice(0, 20).map((row, i) => {
-          const key = String(row.rowIndex ?? row.noPO ?? row.no ?? row.nama ?? i);
-          const open = openKey === key;
-          const busy = busyKey === key;
-          const st = row.status || 'MENUNGGU';
-          return (
-            <div key={key} className="rounded-xl bg-slate-50 border border-slate-100 overflow-hidden">
-              <button
-                type="button"
-                onClick={() => setOpenKey(open ? null : key)}
-                className="w-full flex items-center justify-between gap-2 px-2.5 py-2 text-left active:bg-slate-100"
-              >
-                <div className="min-w-0">
-                  <p className="text-xs font-semibold text-slate-800 truncate">
-                    {row.nama || row.name || row.keterangan || `PO ${i + 1}`}
-                  </p>
-                  <p className="text-[10px] text-slate-400 tabular-nums truncate">
-                    {[row.noPO || row.no, row.qty != null ? `qty ${row.qty}` : null, row.datang != null ? `datang ${row.datang}` : null].filter(Boolean).join(' · ')}
-                  </p>
-                </div>
-                <span className={`shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full ${statusBadgeClass(st)}`}>
-                  {st}
-                </span>
-              </button>
-              {open && (
-                <div className="px-2.5 pb-2.5 flex flex-wrap gap-1.5 border-t border-slate-100 pt-2">
-                  <button type="button" disabled={busy} onClick={() => confirm(row, 'SELESAI')}
-                    className="flex-1 min-w-[5.5rem] py-1.5 rounded-lg bg-emerald-600 text-white text-[11px] font-bold disabled:opacity-50">
-                    {busy ? '…' : '✓ Selesai'}
-                  </button>
-                  <button type="button" disabled={busy} onClick={() => confirm(row, 'SEBAGIAN')}
-                    className="flex-1 min-w-[5.5rem] py-1.5 rounded-lg bg-amber-500 text-white text-[11px] font-bold disabled:opacity-50">
-                    Sebagian
-                  </button>
-                  <button type="button" disabled={busy} onClick={() => confirm(row, 'MENUNGGU')}
-                    className="flex-1 min-w-[5.5rem] py-1.5 rounded-lg bg-slate-200 text-slate-700 text-[11px] font-bold disabled:opacity-50">
-                    Menunggu
-                  </button>
-                </div>
-              )}
+      <div className="space-y-1.5 max-h-48 overflow-y-auto">
+        {items.slice(0, 12).map((row, i) => (
+          <div key={i} className="flex items-center justify-between gap-2 rounded-xl bg-black/20 px-2.5 py-1.5">
+            <div className="min-w-0">
+              <p className="text-xs font-semibold text-slate-800 truncate">{row.nama || row.name || row.keterangan || `PO ${i + 1}`}</p>
+              <p className="text-[10px] text-white/40 truncate">
+                {[row.noPO || row.no, row.qty != null ? `qty ${row.qty}` : null].filter(Boolean).join(' · ')}
+              </p>
             </div>
-          );
-        })}
+            <span className={`shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-full ${statusPOColor(row.status)}`}>
+              {row.status || 'MENUNGGU'}
+            </span>
+          </div>
+        ))}
       </div>
     </div>
   );
 }
 
-function reminderLine(hour) {
-  if (hour < 11) return { emoji: '🌅', text: 'Fokus input masuk pagi' };
-  if (hour < 15) return { emoji: '☀️', text: 'Cek stok siang' };
-  if (hour < 18) return { emoji: '🌤️', text: 'Siapkan PO sore' };
-  return { emoji: '🌙', text: 'Tutup hari · cek antrian' };
+function reminderWithEmoji(hour) {
+  if (hour < 11) return '🌅 Fokus input masuk pagi';
+  if (hour < 15) return '☀️ Cek stok menipis siang';
+  if (hour < 18) return '🌤️ Siapkan PO sore';
+  return '🌙 Tutup hari — cek antrian sync';
 }
 
 export default function DashboardPage({ onNavigate }) {
   const { user } = useAuth();
-  const { items: stockItems, loading: stockLoading, error: stockError, refresh } = useStock();
+  const stockCV = useStock('CV');
+  const stockPT = useStock('PT');
   const [poData, setPoData] = useState(null);
   const [poLoading, setPoLoading] = useState(true);
   const [poError, setPoError] = useState(null);
   const [pending, setPending] = useState(0);
-  const hour = new Date().getHours();
-  const remind = reminderLine(hour);
-
-  const allItems = useMemo(() => {
-    if (!stockItems) return [];
-    if (Array.isArray(stockItems)) return stockItems;
-    const cv = stockItems.cv || stockItems.CV || [];
-    const pt = stockItems.pt || stockItems.PT || [];
-    return [
-      ...cv.map((x) => ({ ...x, entity: 'CV' })),
-      ...pt.map((x) => ({ ...x, entity: 'PT' })),
-    ];
-  }, [stockItems]);
 
   const loadPO = useCallback(async () => {
     setPoLoading(true);
     setPoError(null);
     try {
       const res = await getStatusPO();
-      if (res?.success === false) {
-        setPoData({ items: [] });
-        setPoError(res.error || 'Gagal memuat Status PO');
-      } else {
-        setPoData(res);
-        setPoError(null);
-      }
+      const norm = normalizeStatusPO(res);
+      if (norm.success) setPoData(norm);
+      else { setPoData(null); setPoError(norm.error || 'Gagal memuat Status PO'); }
     } catch (err) {
       setPoError(err?.message || 'Gagal memuat Status PO');
-      setPoData({ items: [] });
+      setPoData(null);
     } finally {
       setPoLoading(false);
     }
@@ -335,78 +251,68 @@ export default function DashboardPage({ onNavigate }) {
 
   useEffect(() => {
     loadPO();
-    try { setPending(getPendingQueue().length); } catch (_) {}
-    const onVis = () => { if (document.visibilityState === 'visible') loadPO(); };
-    document.addEventListener('visibilitychange', onVis);
-    return () => document.removeEventListener('visibilitychange', onVis);
+    setPending((getPendingQueue() || []).length);
+    const t = setInterval(() => setPending((getPendingQueue() || []).length), 15000);
+    return () => clearInterval(t);
   }, [loadPO]);
 
-  const onRefreshAll = () => {
-    refresh?.();
+  const hour = new Date().getHours();
+  const name = user?.name || user?.username || 'Rudi';
+  const refreshing = stockCV.loading || stockPT.loading;
+
+  const refreshAll = () => {
+    stockCV.refresh?.({ force: true });
+    stockPT.refresh?.({ force: true });
     loadPO();
-    try { setPending(getPendingQueue().length); } catch (_) {}
   };
 
-  const name = user?.name || user?.nama || 'Rudi Virawan';
-  const email = user?.email || 'rudivirawan69@gmail.com';
-
   return (
-    <div className="pb-24 space-y-3">
-      <div className="rounded-2xl bg-white border border-slate-200 shadow-sm p-3.5">
-        <div className="flex items-center gap-3">
-          <img src={AVATAR_DATA_URL} alt="" className="w-12 h-12 rounded-full object-cover border-2 border-cyan-200" />
-          <div className="min-w-0 flex-1">
-            <p className="text-[11px] text-slate-400 font-medium">Beranda</p>
-            <h2 className="text-base font-bold text-slate-900 truncate">Halo, {name}</h2>
-            <p className="text-[11px] text-slate-500 truncate">{email}</p>
+    <div className="pb-6 space-y-3 text-slate-800">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <Avatar name={name} size="lg" />
+          <div className="min-w-0">
+            <p className="text-sm font-bold truncate">Halo, {name}</p>
+            <p className="text-[11px] text-white/50 truncate">{EMAIL}</p>
+            <p className="text-[11px] text-cyan-300/80 mt-0.5">{reminderWithEmoji(hour)}</p>
           </div>
-          <button type="button" onClick={onRefreshAll} className="p-2.5 rounded-xl bg-slate-50 border border-slate-200" aria-label="Refresh">
-            <RefreshCw className={`w-4 h-4 text-slate-600 ${stockLoading || poLoading ? 'animate-spin' : ''}`} />
-          </button>
         </div>
-        <div className="mt-3 rounded-xl bg-cyan-50 border border-cyan-100 px-3 py-2 flex items-center gap-2">
-          <span className="text-base">{remind.emoji}</span>
-          <p className="text-xs font-medium text-cyan-800">{remind.text}</p>
-        </div>
+        <button type="button" onClick={refreshAll} className="p-2 rounded-xl border border-slate-200 bg-white text-slate-600 shadow-sm" aria-label="Muat ulang">
+          <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+        </button>
       </div>
 
-      {stockError && (
-        <div className="rounded-xl bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-800 flex items-center gap-2">
-          <AlertTriangle className="w-4 h-4 shrink-0" />
-          {String(stockError).includes('Unauthorized') || String(stockError).includes('secret')
-            ? 'Unauthorized — cek API Secret di Atur'
-            : stockError}
-        </div>
+      {(stockCV.error || stockPT.error) && (
+        <p className="text-xs text-amber-200 flex items-center gap-1 px-1">
+          <AlertTriangle className="w-3.5 h-3.5" />
+          {stockCV.error || stockPT.error} — data terakhir dipertahankan bila ada
+        </p>
       )}
 
-      <SummaryStatCards items={allItems} />
-      <AnalisaStokCard items={allItems} />
+      <DonutPOChart items={poData?.items || []} />
+
+      <EntityStockChart cvItems={stockCV.items} ptItems={stockPT.items} />
+
       <StatusPOCard data={poData} loading={poLoading} error={poError} onRefresh={loadPO} />
 
-      <div className="rounded-2xl bg-white border border-slate-200 shadow-sm p-3.5">
-        <div className="flex items-center gap-2 mb-2">
-          <div className="w-8 h-8 rounded-xl bg-violet-50 flex items-center justify-center">
-            <ClipboardList className="w-4 h-4 text-violet-600" />
-          </div>
-          <div>
-            <h3 className="text-sm font-semibold text-slate-800 leading-tight">Status Stok Per Divisi</h3>
-            <p className="text-[10px] text-slate-400">Aman · Waspada · Kritis</p>
-          </div>
-        </div>
-        <DivisionStatusBars items={allItems} />
+      <DivisionPOChart items={poData?.items || []} />
+
+      <div className="grid grid-cols-2 gap-2">
+        <button type="button" onClick={() => onNavigate?.('input')}
+          className="rounded-xl bg-cyan-600 py-3 text-sm font-semibold flex items-center justify-center gap-2">
+          <Package className="w-4 h-4" /> Input
+        </button>
+        <button type="button" onClick={() => onNavigate?.('stok')}
+          className="rounded-xl border border-slate-200 bg-white py-3 text-sm font-semibold text-slate-700 shadow-sm flex items-center justify-center gap-2">
+          <ShieldAlert className="w-4 h-4" /> Stok
+        </button>
       </div>
 
       {pending > 0 && (
-        <button type="button" onClick={() => onNavigate?.('settings')}
-          className="w-full rounded-xl bg-amber-50 border border-amber-200 py-3 text-sm font-semibold text-amber-800 flex items-center justify-center gap-2">
-          {pending} antrian offline · buka Atur
-        </button>
+        <div className="rounded-xl bg-amber-500/15 border border-amber-400/30 px-3 py-2 text-xs text-amber-100">
+          <b>{pending}</b> transaksi menunggu sync — buka Atur → Sinkronisasi
+        </div>
       )}
-
-      <button type="button" onClick={() => onNavigate?.('input')}
-        className="rounded-xl bg-white border border-slate-200 py-3 text-sm font-semibold text-slate-800 flex items-center justify-center gap-2 shadow-sm w-full">
-        <Package className="w-4 h-4 text-cyan-600" /> Ke Input
-      </button>
     </div>
   );
 }
