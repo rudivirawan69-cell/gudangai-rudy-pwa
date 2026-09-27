@@ -13,7 +13,6 @@ import {
   Wifi,
   WifiOff,
 } from 'lucide-react';
-import bgDataUrl from './assets/bgDataUrl';
 
 const DashboardPage = lazy(() => import('./pages/DashboardPage'));
 const StokPage = lazy(() => import('./pages/StokPage'));
@@ -133,7 +132,7 @@ function AppShell() {
   if (authLoading) {
     return (
       <div className="app-shell min-h-dvh flex items-center justify-center">
-        <div className="app-bg" aria-hidden style={{ backgroundImage: `linear-gradient(to bottom, rgba(6,16,24,0.35), rgba(6,16,24,0.7)), url(${bgDataUrl})` }} />
+        <div className="app-bg" aria-hidden="true" />
         <div className="w-8 h-8 rounded-full border-2 border-cyan-400/40 border-t-cyan-300 animate-spin relative z-[1]" />
       </div>
     );
@@ -142,7 +141,7 @@ function AppShell() {
   if (!user) {
     return (
       <div className="app-shell">
-        <div className="app-bg" aria-hidden style={{ backgroundImage: `linear-gradient(to bottom, rgba(6,16,24,0.25), rgba(6,16,24,0.55)), url(${bgDataUrl})` }} />
+        <div className="app-bg" aria-hidden="true" />
         <div className="relative z-[1]">
           <LoginPage />
         </div>
@@ -165,13 +164,7 @@ function AppShell() {
 
   return (
     <div className="app-shell">
-      <div
-        className="app-bg"
-        aria-hidden="true"
-        style={{
-          backgroundImage: `linear-gradient(to bottom, rgba(4,14,24,0.15) 0%, rgba(4,14,24,0.32) 52%, rgba(4,14,24,0.55) 100%), url(${bgDataUrl})`,
-        }}
-      />
+      <div className="app-bg" aria-hidden="true" />
       <ConnectionBanner />
 
       <main className="flex-1 px-3.5 pt-3.5 pb-24 max-w-lg mx-auto w-full overflow-y-auto relative z-[1]">
