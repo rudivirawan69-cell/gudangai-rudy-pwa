@@ -2,8 +2,8 @@
 const RETRY_COUNT = 2;
 const RETRY_BASE_MS = 400;
 const REQUEST_TIMEOUT_MS = 15000;
-const BATCH_CHUNK_SIZE = 15;
-const BATCH_TIMEOUT_MS = 150000;
+const BATCH_CHUNK_SIZE = 80;
+const BATCH_TIMEOUT_MS = 60000;
 const SINGLE_TIMEOUT_MS = 45000;
 const SCHEMA_VERSION = '1.0';
 const SAFE_WRITE_BACKEND_RE = /STOCK-READONLY|STOCK-SOURCE-LOCKED/i;
@@ -333,24 +333,25 @@ function emitProgress(sent, total, chunkResult) {
  * submitItems — batch-first with one-by-one fallback
  * Emits progress events for UI feedback
  */
-async function submitItems(action, entity, items, tanggal) {
+async function submitItems(action, entity, items, tanggal, options = {}) {
   const list = (items || []).map(ensureClientItemId);
   if (!list.length) return { success: false, error: 'Tidak ada item' };
 
-  // HARD SAFETY: sebelum transaksi apa pun dikirim, backend wajib mengiklankan
-  // kontrak STOCK-READONLY. Backend lama yang masih boleh menulis Stock CV/PT
-  // akan otomatis ditolak oleh PWA.
   if (navigator.onLine && getApiUrl()) {
     await assertSafeWriteBackend();
   }
+
   if (!navigator.onLine || !getApiUrl()) {
     enqueue(action, entity, list, { tanggal });
-    return { success: true, queued: true, count: list.length };
+    const msg = list.length + ' item masuk Antrian Sinkronisasi (offline)';
+    pushNotification({ type: 'warning', title: 'Koneksi terputus', body: msg + '. Tidak ada item yang dibuang.' });
+    return { success: true, queued: true, count: 0, queuedCount: list.length, failed: list.length, results: list.map(it => ({ success: false, queued: true, clientItemId: it.clientItemId })) };
   }
 
   const allResults = [];
   let totalSuccess = 0;
   let totalFail = 0;
+  let totalQueued = 0;
   let useBatch = _batchSupported !== false;
 
   for (let i = 0; i < list.length; i += BATCH_CHUNK_SIZE) {
@@ -364,40 +365,93 @@ async function submitItems(action, entity, items, tanggal) {
         totalSuccess += sc;
         totalFail += fc;
         if (batchRes.results) allResults.push(...batchRes.results);
-        else chunk.forEach((it) => allResults.push({ success: true, clientItemId: it.clientItemId }));
-        emitProgress(i + chunk.length, list.length, batchRes);
+        emitProgress(Math.min(i + chunk.length, list.length), list.length, {
+          successCount: totalSuccess, failCount: totalFail
+        });
+
+        // Backend partial result: ONLY failed/unknown IDs are queued.
+        const failedIds = new Set((batchRes.results || [])
+          .filter(r => !r.success && !r.skipped && r.clientItemId)
+          .map(r => r.clientItemId));
+        const knownIds = new Set((batchRes.results || []).map(r => r.clientItemId).filter(Boolean));
+        const queueItems = chunk.filter(it => failedIds.has(it.clientItemId) ||
+          (!knownIds.has(it.clientItemId) && !isApplied(it.clientItemId)));
+
+        if (queueItems.length) {
+          enqueue(action, entity, queueItems, { tanggal });
+          totalQueued += queueItems.length;
+        }
         continue;
       } catch (err) {
-        if (err.message === 'BATCH_NOT_SUPPORTED') useBatch = false;
-        else useBatch = false;
-        // Fall through to one-by-one
+        // CRITICAL: NEVER fall back to one-by-one after a batch timeout.
+        // The server may already have written the batch. Queue the SAME IDs;
+        // backend Idempotency Ledger will convert retries into DUPLICATE/IDEMPOTENT.
+        useBatch = false;
+        enqueue(action, entity, chunk, { tanggal });
+        totalQueued += chunk.length;
+        totalFail += chunk.length;
+        allResults.push(...chunk.map(it => ({
+          success: false, queued: true, uncertain: true,
+          clientItemId: it.clientItemId, error: err?.message || 'Timeout/koneksi terputus'
+        })));
+        emitProgress(Math.min(i + chunk.length, list.length), list.length, {
+          successCount: totalSuccess, failCount: totalFail
+        });
+        pushNotification({
+          type: 'warning',
+          title: 'Koneksi terputus — masuk antrian',
+          body: chunk.length + ' item belum dapat dikonfirmasi. Sudah diamankan di Antrian Sinkronisasi; sistem akan cek idempotensi agar tidak duplikasi.'
+        });
+        continue;
       }
     }
 
-    // One-by-one fallback
+    // If batch is unsupported, use individual requests ONLY for a backend that
+    // explicitly reports BATCH_NOT_SUPPORTED. The current backend supports batch.
     for (let j = 0; j < chunk.length; j++) {
       const it = chunk[j];
       try {
         const r = await submitOneItem(action, entity, it, tanggal);
         allResults.push(r);
         if (r.success || r.skipped) totalSuccess++;
-        else totalFail++;
+        else {
+          totalFail++;
+          enqueue(action, entity, [it], { tanggal });
+          totalQueued++;
+        }
       } catch (err) {
         totalFail++;
-        allResults.push({ success: false, error: err.message, clientItemId: it.clientItemId });
+        totalQueued++;
+        enqueue(action, entity, [it], { tanggal });
+        allResults.push({ success: false, queued: true, clientItemId: it.clientItemId, error: err.message });
       }
       emitProgress(i + j + 1, list.length, { successCount: totalSuccess, failCount: totalFail });
     }
   }
 
-  // Queue failed items for retry
-  const failed = allResults.filter((r) => !r.success && !r.skipped);
-  if (failed.length) {
-    const failItems = list.filter((it) => failed.some((f) => f.clientItemId === it.clientItemId));
-    if (failItems.length) enqueue(action, entity, failItems, { tanggal });
+  if (totalQueued > 0) {
+    pushNotification({
+      type: 'warning',
+      title: 'Sinkronisasi perlu dilanjutkan',
+      body: totalSuccess + ' sukses · ' + totalQueued + ' masuk antrian · ' +
+        totalFail + ' belum terkonfirmasi. Antrian menyimpan ID unik untuk mencegah duplikasi.'
+    });
+  } else {
+    pushNotification({
+      type: 'success',
+      title: 'Transaksi selesai',
+      body: totalSuccess + ' item berhasil ditulis tanpa antrian.'
+    });
   }
 
-  return { success: totalSuccess > 0, count: totalSuccess, failed: totalFail, results: allResults };
+  return {
+    success: totalSuccess > 0 || totalQueued > 0,
+    count: totalSuccess,
+    failed: totalFail,
+    queuedCount: totalQueued,
+    total: list.length,
+    results: allResults
+  };
 }
 export async function submitBarangMasuk({ entity, tanggal, items }) {
   return submitItems('barangMasuk', entity, items, tanggal);
@@ -428,7 +482,7 @@ export async function syncPendingQueue() {
     const queue = getPendingQueue();
     const remaining = [];
     for (const entry of queue) {
-      const res = await submitItems(entry.type, entry.entity, entry.items, entry.tanggal);
+      const res = await submitItems(entry.type, entry.entity, entry.items, entry.tanggal, { fromQueue: true });
       if (res.success && !res.failed) synced += entry.items.length;
       else {
         failed += res.failed || entry.items.length;
@@ -452,8 +506,10 @@ export function saveToHistory(entry) {
 }
 export function pushNotification(n) {
   const list = getNotifications();
-  list.unshift({ ...n, id: 'N-' + Date.now(), read: false, at: Date.now() });
+  const item = { ...n, id: 'N-' + Date.now(), read: false, at: Date.now() };
+  list.unshift(item);
   try { localStorage.setItem(NOTIF_KEY, JSON.stringify(list.slice(0, 50))); } catch (_) {}
+  try { window.dispatchEvent(new CustomEvent('gudangai-notification', { detail: item })); } catch (_) {}
 }
 export function getNotifications() {
   try { return JSON.parse(localStorage.getItem(NOTIF_KEY) || '[]'); } catch { return []; }
