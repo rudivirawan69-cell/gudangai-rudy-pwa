@@ -54,7 +54,12 @@ export default function InputPage() {
   const cartRef = useRef(null);
   const scanAbortRef = useRef(false);
 
-  useEffect(() => { setUnread(unreadNotificationCount()); }, [showNotif]);
+  useEffect(() => {
+    const refreshUnread = () => setUnread(unreadNotificationCount());
+    refreshUnread();
+    window.addEventListener('gudangai-notification', refreshUnread);
+    return () => window.removeEventListener('gudangai-notification', refreshUnread);
+  }, [showNotif]);
   useEffect(() => {
     const handler = (e) => {
       const d = e.detail || {};
@@ -246,18 +251,45 @@ export default function InputPage() {
       const fn = txType === 'masuk' ? submitBarangMasuk : txType === 'rusak' ? submitBarangRusak : submitBarangKeluar;
       const res = await fn({ entity, tanggal, items });
       if (res?.success !== false) {
-        const okCount = res.count || cart.length;
-        const failCount = res.failed || 0;
-        saveToHistory({ type: txType, entity, items: cart, tanggal, at: Date.now() });
-        pushNotification({ type: 'success', title: 'Berhasil', body: okCount + ' item ' + txType + ' ' + entity + (failCount ? ' (' + failCount + ' gagal, di-queue)' : '') });
-        setCart([]); setAccuracy(null);
-        if (failCount > 0) {
-          setStatusBanner('Terkirim ' + okCount + ' item · ' + failCount + ' gagal (masuk antrian offline)');
+        const okCount = Number(res.count || 0);
+        const queuedCount = Number(res.queuedCount || 0);
+        const failCount = Number(res.failed || 0);
+        saveToHistory({
+          type: txType, entity, items: cart, tanggal, at: Date.now(),
+          syncSummary: { total: cart.length, success: okCount, queued: queuedCount, failed: failCount }
+        });
+
+        if (queuedCount > 0) {
+          pushNotification({
+            type: 'warning',
+            title: 'Sebagian transaksi masuk Antrian Sinkronisasi',
+            body: okCount + ' sukses · ' + queuedCount + ' masuk antrian · ' +
+              Math.max(0, cart.length - okCount - queuedCount) + ' belum teridentifikasi. Tidak ada item dibuang.'
+          });
+          setStatusBanner(
+            'SUKSES ' + okCount + ' · ANTRIAN ' + queuedCount +
+            (failCount ? ' · BELUM TERKONFIRMASI ' + failCount : '') +
+            ' — data diamankan.'
+          );
         } else {
+          pushNotification({
+            type: 'success',
+            title: 'Transaksi selesai',
+            body: okCount + ' item ' + txType + ' ' + entity + ' berhasil ditulis tanpa antrian.'
+          });
           setStatusBanner('Berhasil dikirim · ' + okCount + ' item');
         }
+
+        setCart([]); setAccuracy(null);
         window.dispatchEvent(new Event('gudangai-stock-refresh'));
-      } else setStatusBanner(res?.error || 'Gagal kirim');
+      } else {
+        pushNotification({
+          type: 'error',
+          title: 'Transaksi belum dikirim',
+          body: res?.error || 'Tidak ada data yang dinyatakan berhasil.'
+        });
+        setStatusBanner(res?.error || 'Gagal kirim');
+      }
     } catch (err) { setStatusBanner(err.message || 'Gagal kirim'); }
     finally { setSubmitting(false); submittingRef.current = false; setSubmitProgress(null); }
   };
