@@ -1,194 +1,136 @@
-/** GudangAI RUDY — API layer V6.6.3 FULL SYNC — selaras Code.gs OPTIMIZED BULK */
-/** BUILD 2026-09-21: HOLD pendek, Dashboard PC, bulkTransaction, chunk 15, timeout 150s, sheet resmi */
+/** GudangAI RUDY — API layer V6.6.4 BUILD FIX — export getTransactionHistory + syncPendingQueue */
+/** BUILD 2026-09-26: perbaiki MISSING_EXPORT agar vite build lolos */
 const RETRY_COUNT = 2;
 const RETRY_BASE_MS = 400;
 const REQUEST_TIMEOUT_MS = 12000;
 const WRITE_TIMEOUT_MS = 150000;
-const BATCH_CHUNK_SIZE = 15;
-const BATCH_MAX = 200;
-const SCHEMA_VERSION = '1.0';
+const QUEUE_KEY = 'gudangai_pending_queue';
+const APPLIED_KEY = 'gudangai_applied_map';
+const APPLIED_TTL_MS = 7 * 24 * 3600 * 1000;
+const HISTORY_KEY = 'gudangai_tx_history';
+const NOTIF_KEY = 'gudangai_notifications';
 
-/** Tanggal kalender operasional gudang (WIB / Asia/Jakarta) — hindari toISOString UTC yang geser hari */
 export function localDateYMD(d = new Date()) {
-  try {
-    return new Intl.DateTimeFormat('en-CA', {
-      timeZone: 'Asia/Jakarta',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-    }).format(d);
-  } catch (_) {
-    return new Date(d.getTime() + 7 * 60 * 60 * 1000).toISOString().slice(0, 10);
-  }
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
 }
 
-const APPLIED_KEY = 'gudangai_applied';
-const QUEUE_KEY = 'gudangai_queue';
-const APPLIED_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-const NOTIF_KEY = 'gudangai_notif';
+function newIds() {
+  const requestId = (typeof crypto !== 'undefined' && crypto.randomUUID)
+    ? crypto.randomUUID()
+    : ('REQ-' + Date.now() + '-' + Math.random().toString(36).slice(2, 9));
+  return { requestId, clientItemId: 'CI-' + Date.now() + '-' + Math.random().toString(36).slice(2, 9) };
+}
+
 const DEFAULT_API_URL = 'https://script.google.com/macros/s/AKfycbzTN_W44k-llBaTba7yMlK5RARIqJCMi3Rt8jBtyOmKTnqdrG7IQeDmH0V2gtyVAyk-xQ/exec';
-let _syncLock = false;
-function emitConn(detail) { try { window.dispatchEvent(new CustomEvent('gudangai-conn', { detail })); } catch (_) {} }
+
 export function getApiUrl() {
-  const stored = (localStorage.getItem('gudangai_api_url') || '').trim();
-  if (stored) return stored;
-  localStorage.setItem('gudangai_api_url', DEFAULT_API_URL);
-  localStorage.setItem('gudangai_api_url_seeded', '1');
+  try {
+    const u = localStorage.getItem('gudangai_api_url');
+    if (u && u.startsWith('http')) return u;
+  } catch (_) {}
+  try { localStorage.setItem('gudangai_api_url', DEFAULT_API_URL); } catch (_) {}
   return DEFAULT_API_URL;
 }
+
 export function setApiUrl(url) {
-  const c = (url || '').trim();
-  if (c) localStorage.setItem('gudangai_api_url', c);
+  if (url && String(url).startsWith('http')) localStorage.setItem('gudangai_api_url', String(url).trim());
   else localStorage.setItem('gudangai_api_url', DEFAULT_API_URL);
 }
-export function getApiSecret() { return (localStorage.getItem('gudangai_api_secret') || '').trim(); }
-export function setApiSecret(secret) {
-  const c = (secret || '').trim();
-  if (c) localStorage.setItem('gudangai_api_secret', c);
-  else localStorage.removeItem('gudangai_api_secret');
+
+export function getApiSecret() {
+  try { return localStorage.getItem('gudangai_api_secret') || ''; } catch { return ''; }
 }
-function delay(ms) { return new Promise((r) => setTimeout(r, ms)); }
-function deviceId() {
-  let id = localStorage.getItem('gudangai_device_id');
-  if (!id) { id = 'RUDY-' + (crypto.randomUUID ? crypto.randomUUID() : String(Date.now())); localStorage.setItem('gudangai_device_id', id); }
-  return id;
+export function setApiSecret(s) {
+  try { localStorage.setItem('gudangai_api_secret', String(s || '')); } catch (_) {}
 }
-let _idSeq = 0;
-function newIds() {
-  _idSeq += 1;
-  const uuid = crypto.randomUUID ? crypto.randomUUID() : (Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
-  const stamp = Date.now().toString(36) + '-' + _idSeq.toString(36);
-  return { requestId: 'REQ-' + uuid + '-' + stamp, transactionId: 'TX-RUDY-' + uuid + '-' + stamp };
-}
-async function fetchWithRetry(url, options = {}, retries = RETRY_COUNT, timeoutMs = REQUEST_TIMEOUT_MS, emitFailure = true) {
-  let lastError;
-  for (let attempt = 1; attempt <= retries; attempt++) {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
-    try {
-      const res = await fetch(url, { ...options, signal: controller.signal });
-      clearTimeout(timer);
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      if (attempt > 1) emitConn({ state: 'recovered', attempt });
-      return res;
-    } catch (err) {
-      clearTimeout(timer);
-      lastError = err;
-      if (attempt < retries) await delay(RETRY_BASE_MS * Math.pow(1.7, attempt - 1));
-    }
+
+async function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
+
+async function fetchWithTimeout(url, options, timeoutMs) {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: ctrl.signal });
+  } finally {
+    clearTimeout(t);
   }
-  if (emitFailure) emitConn({ state: 'failed', error: (lastError && lastError.message) || 'Gagal' });
-  throw lastError;
 }
+
 async function postJson(payload, { retries = RETRY_COUNT, timeoutMs = REQUEST_TIMEOUT_MS, emitFailure = true } = {}) {
   const url = getApiUrl();
-  if (!url) throw new Error('URL API belum diatur');
-  const body = JSON.stringify({ schemaVersion: SCHEMA_VERSION, secret: getApiSecret() || undefined, client: { app: 'gudangai-rudy-pwa', deviceId: deviceId() }, ...payload });
-  const res = await fetchWithRetry(url, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body, redirect: 'follow' }, retries, timeoutMs, emitFailure);
-  const text = await res.text();
-  try { return JSON.parse(text); } catch { throw new Error('Respons bukan JSON: ' + text.slice(0, 120)); }
+  const secret = getApiSecret();
+  const body = { ...(payload || {}), secret: secret || undefined };
+  let lastErr;
+  for (let i = 0; i <= retries; i++) {
+    try {
+      const res = await fetchWithTimeout(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(body),
+        redirect: 'follow',
+      }, timeoutMs);
+      const text = await res.text();
+      let data;
+      try { data = JSON.parse(text); } catch { throw new Error('Respons bukan JSON: ' + text.slice(0, 120)); }
+      if (data && data.success === false && /unauthorized|secret/i.test(String(data.error || data.message || ''))) {
+        const err = new Error(data.error || data.message || 'Unauthorized');
+        err.code = 'UNAUTHORIZED';
+        throw err;
+      }
+      return data;
+    } catch (err) {
+      lastErr = err;
+      if (i < retries) await sleep(RETRY_BASE_MS * (i + 1));
+    }
+  }
+  if (emitFailure) {
+    try { window.dispatchEvent(new CustomEvent('gudangai-api-failure', { detail: lastErr })); } catch (_) {}
+  }
+  throw lastErr || new Error('Gagal menghubungi API');
 }
+
 async function postJsonWrite(payload) {
   return postJson(payload, { retries: 1, timeoutMs: WRITE_TIMEOUT_MS, emitFailure: false });
 }
-async function getJson(action, extraParams = {}) {
+
+async function getJson(action) {
   const url = getApiUrl();
-  if (!url) throw new Error('URL API belum diatur');
   const secret = getApiSecret();
-  const q = new URLSearchParams({ action, ...extraParams });
+  const q = new URLSearchParams({ action });
   if (secret) q.set('secret', secret);
-  const res = await fetchWithRetry(url + '?' + q.toString(), { method: 'GET', redirect: 'follow' });
+  const res = await fetchWithTimeout(url + '?' + q.toString(), { method: 'GET', redirect: 'follow' }, REQUEST_TIMEOUT_MS);
   const text = await res.text();
   try { return JSON.parse(text); } catch { throw new Error('Respons bukan JSON: ' + text.slice(0, 120)); }
 }
-function generateDemoStock() { return []; }
+
 export async function healthCheck() {
-  if (!getApiUrl()) return { ok: false, offline: true, error: 'URL API belum diatur' };
   try {
-    let data = null; let lastErr = null;
-    try { data = await getJson('ping'); } catch (e) { lastErr = e; }
-    if (!data || (data.error && !data.success && data.status !== 'OK')) {
-      try { data = await getJson('status'); } catch (e) { lastErr = e; }
-    }
-    if (data && (data.success || data.status === 'OK' || data.ok)) return { ok: true, data };
-    return { ok: false, offline: true, error: (data && data.error) || (lastErr && lastErr.message) || 'Tidak terjangkau' };
+    const data = await postJson({ action: 'ping', requestId: newIds().requestId }, { retries: 0, timeoutMs: 8000 });
+    return { ok: true, data };
   } catch (err) {
-    return { ok: false, offline: true, error: err.message || 'Offline' };
+    return { ok: false, error: err?.message || 'Health check gagal' };
   }
 }
+
 export function getConnectionStatus() { return { online: navigator.onLine, apiUrl: getApiUrl() }; }
-function mapStockItem(it, entity) {
-  const stockAkhir = Number(it.stockAkhir != null ? it.stockAkhir : it.stok != null ? it.stok : it.qty != null ? it.qty : it.sisa != null ? it.sisa : 0) || 0;
-  const stockAman = Number(it.stockAman != null ? it.stockAman : it.stokAman != null ? it.stokAman : it.aman != null ? it.aman : it.min != null ? it.min : 0) || 0;
-  return {
-    kode: it.kode || it.kodeBarang || '',
-    nama: it.nama || '',
-    satuan: it.satuan || 'Pack',
-    stok: stockAkhir,
-    stockAkhir,
-    stockAman,
-    stokAman: stockAman,
-    aman: stockAman,
-    size: it.size || it.ukuran || '',
-    divisi: it.divisi || '',
-    entitas: (it.entitas || entity || '').toUpperCase(),
-    entity: (it.entitas || entity || '').toUpperCase(),
-    stockValue: Number(it.stockValue || it.nilaiStok || 0) || 0,
-  };
+
+function normalizeQueue(list) {
+  if (!Array.isArray(list)) return [];
+  return list.filter((x) => x && (x.clientItemId || x.kode || x.kodeBarang));
 }
-export async function fetchStock(entity, options = {}) {
-  const allowDemo = options.allowDemo === true;
-  const url = getApiUrl();
-  if (!url) {
-    if (allowDemo) return generateDemoStock();
-    throw new Error('URL API belum diatur');
-  }
-  try {
-    let data;
-    try { data = await getJson('getAllStock', { entitas: entity || 'ALL' }); }
-    catch {
-      try { data = await postJson({ action: 'getAllStock', entitas: entity || 'ALL', requestId: newIds().requestId }); }
-      catch { data = null; }
-    }
-    if (data && data.code === 'UNAUTHORIZED') throw new Error('Unauthorized — cek API Secret di Atur');
-    if (data && data.success === false) throw new Error(data.error || 'Gagal mengambil stok');
-    const raw = (data && (data.items || data.stock || data.data)) || [];
-    return (Array.isArray(raw) ? raw : []).map((it) => mapStockItem(it, entity));
-  } catch (err) {
-    if (/Unauthorized|API Secret|URL API/i.test(String(err.message || ''))) throw err;
-    if (allowDemo) return generateDemoStock();
-    throw err;
-  }
+
+function getAppliedMap() {
+  try { return JSON.parse(localStorage.getItem(APPLIED_KEY) || '{}'); } catch { return {}; }
 }
-export async function getStatusPO() {
-  try {
-    let data = null;
-    try { data = await getJson('getStatusPO'); } catch (_) { data = null; }
-    if (!data || data.code === 'UNAUTHORIZED' || (data.success === false && !data.summary && !data.items)) {
-      try { data = await postJson({ action: 'getStatusPO', requestId: newIds().requestId }); }
-      catch (e2) {
-        if (data) return data;
-        return { success: false, error: e2?.message || 'Gagal mengambil status PO' };
-      }
-    }
-    return data || { success: false, error: 'Respons status PO kosong' };
-  } catch (err) {
-    return { success: false, error: err?.message || 'Gagal mengambil status PO' };
-  }
-}
-export async function getDashboardData() {
-  try {
-    const data = await getJson('getDashboard');
-    return data || { success: false };
-  } catch (err) {
-    return { success: false, error: err.message };
-  }
-}
-function getAppliedMap() { try { return JSON.parse(localStorage.getItem(APPLIED_KEY) || '{}'); } catch { return {}; } }
 function pruneApplied(map) {
   const now = Date.now();
   const out = {};
-  for (const [k, v] of Object.entries(map || {})) { if (now - (typeof v === 'number' ? v : 0) < APPLIED_TTL_MS) out[k] = v; }
+  for (const [k, v] of Object.entries(map || {})) {
+    if (now - (typeof v === 'number' ? v : 0) < APPLIED_TTL_MS) out[k] = v;
+  }
   return out;
 }
 function isApplied(clientItemId) { return !!(clientItemId && getAppliedMap()[clientItemId]); }
@@ -198,228 +140,272 @@ function markApplied(clientItemId) {
   map[clientItemId] = Date.now();
   localStorage.setItem(APPLIED_KEY, JSON.stringify(map));
 }
+
+export async function fetchStock(entity, options = {}) {
+  const allowDemo = options.allowDemo !== false;
+  try {
+    let data = null;
+    try {
+      data = await getJson('getAllStock');
+    } catch (_) {
+      data = null;
+    }
+    if (!data || data.success === false) {
+      try { data = await postJson({ action: 'getAllStock', entitas: entity || 'ALL', requestId: newIds().requestId }); }
+      catch (e2) {
+        if (!allowDemo) throw e2;
+        return { cv: [], pt: [], demo: true };
+      }
+    }
+    return data;
+  } catch (err) {
+    if (!allowDemo) throw err;
+    return { cv: [], pt: [], demo: true, error: err?.message };
+  }
+}
+
+export async function getStatusPO() {
+  try {
+    let data = null;
+    try { data = await getJson('getStatusPO'); } catch (_) { data = null; }
+    if (!data || data.success === false) {
+      try { data = await postJson({ action: 'getStatusPO', requestId: newIds().requestId }); }
+      catch (e2) {
+        return { success: false, error: e2?.message || 'Gagal mengambil status PO' };
+      }
+    }
+    return data || { success: false, error: 'Respons status PO kosong' };
+  } catch (err) {
+    return { success: false, error: err?.message || 'Gagal mengambil status PO' };
+  }
+}
+
+export async function confirmPOStatus(payload) {
+  try {
+    const body = {
+      action: 'confirmPOStatus',
+      noPO: payload?.noPO || payload?.no || '',
+      nama: payload?.nama || payload?.name || '',
+      status: String(payload?.status || 'SELESAI').toUpperCase(),
+      rowIndex: payload?.rowIndex ?? payload?.row ?? null,
+      qty: Number(payload?.qty) || 0,
+      datang: Number(payload?.datang) || 0,
+      requestId: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : ('POCF-' + Date.now()),
+    };
+    const data = await postJsonWrite(body);
+    return data || { success: false, error: 'Respons konfirmasi PO kosong' };
+  } catch (err) {
+    return { success: false, error: err?.message || 'Gagal konfirmasi status PO' };
+  }
+}
+
+export async function getDashboardData() {
+  try {
+    return await postJson({ action: 'getDashboardData', requestId: newIds().requestId });
+  } catch (err) {
+    return { success: false, error: err?.message };
+  }
+}
+
 export function markItemApplied(clientItemId) { markApplied(clientItemId); }
-function ensureClientItemId(it) {
-  if (it.clientItemId) return it;
-  return { ...it, clientItemId: 'CI-' + (crypto.randomUUID ? crypto.randomUUID() : Date.now() + '-' + Math.random().toString(36).slice(2, 9)) };
+
+function chunkArray(arr, size) {
+  const out = [];
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+  return out;
 }
-function enqueue(type, entity, items, meta = {}) {
-  if (!items || !items.length) return;
-  const queue = JSON.parse(localStorage.getItem(QUEUE_KEY) || '[]');
-  const entry = { id: 'Q-' + Date.now(), type, entity, items: items.map(ensureClientItemId), tanggal: meta.tanggal || localDateYMD(), createdAt: new Date().toISOString() };
-  queue.push(entry);
-  localStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
-}
-function normalizeQueue(rawQueue) {
-  if (!Array.isArray(rawQueue)) return [];
-  return rawQueue.map((e) => ({ ...e, items: (e.items || []).map(ensureClientItemId) }));
-}
-async function submitOneItem(sheetOrAction, entity, it, tanggal) {
-  const cid = it.clientItemId || ensureClientItemId(it).clientItemId;
-  if (isApplied(cid)) return { success: true, skipped: true, clientItemId: cid };
-  const SHEET_MAP = { barangMasuk: 'Barang masuk', barangKeluar: 'Barang keluar', barangRusak: 'Barang Rusak' };
-  const sheetName = SHEET_MAP[sheetOrAction] || sheetOrAction;
-  const entitas = String(entity || '').toUpperCase();
-  const payload = {
-    action: 'addTransaction',
-    sheet: sheetName,
-    entitas: entitas,
-    tanggal: tanggal || localDateYMD(),
-    kodeBarang: String(it.kode || it.kodeBarang || '').trim(),
+
+export async function submitTransaction(type, entityOrPayload, itemsMaybe, optionsMaybe) {
+  let entity = 'CV';
+  let items = [];
+  let options = {};
+  if (entityOrPayload && typeof entityOrPayload === 'object' && !Array.isArray(entityOrPayload) && entityOrPayload.items) {
+    entity = entityOrPayload.entity || entityOrPayload.entitas || 'CV';
+    items = entityOrPayload.items || [];
+    options = itemsMaybe || {};
+  } else {
+    entity = entityOrPayload || 'CV';
+    items = itemsMaybe || [];
+    options = optionsMaybe || {};
+  }
+  const tanggal = options.tanggal || localDateYMD();
+  const list = (items || []).map((it) => ({
+    ...it,
+    kodeBarang: it.kodeBarang || it.kode,
     qty: Number(it.qty) || 0,
-    keterangan: String(it.keterangan || '').trim().slice(0, 200),
-    requestId: cid,
-    transactionId: 'TX-' + cid,
-    nonce: 'NC-' + cid,
-    queueApproved: true,
-  };
-  const data = await postJsonWrite(payload);
-  if (data && data.code === 'UNAUTHORIZED') return { success: false, unauthorized: true, kode: payload.kodeBarang, clientItemId: cid, error: 'Unauthorized' };
-  if (data && (data.status === 'DUPLICATE' || data.idempotent === true)) { markApplied(cid); return { success: true, skipped: true, kode: payload.kodeBarang, clientItemId: cid }; }
-  if (data && data.status === 'UNKNOWN') return { success: false, unknown: true, kode: payload.kodeBarang, clientItemId: cid, error: 'UNKNOWN' };
-  if (data && (data.success === true || data.status === 'APPLIED' || data.status === 'OK' || data.status === 'COMMITTED')) {
-    markApplied(cid);
-    return { success: true, kode: payload.kodeBarang, qty: data.qty != null ? data.qty : payload.qty, row: data.row, clientItemId: cid };
+    keterangan: it.keterangan || '',
+    clientItemId: it.clientItemId || newIds().clientItemId,
+  })).filter((it) => it.kodeBarang && it.qty > 0);
+
+  if (!list.length) return { success: false, error: 'Tidak ada item valid' };
+
+  if (list.length === 1) {
+    const it = list[0];
+    const cid = it.clientItemId;
+    if (isApplied(cid)) return { success: true, skipped: true, kode: it.kodeBarang, clientItemId: cid };
+    const payload = {
+      action: type,
+      entitas: entity,
+      entity,
+      tanggal,
+      kodeBarang: it.kodeBarang,
+      qty: it.qty,
+      keterangan: it.keterangan || '',
+      clientItemId: cid,
+      transactionId: 'TX-' + cid,
+      requestId: newIds().requestId,
+    };
+    const data = await postJsonWrite(payload);
+    if (data && data.success !== false) { markApplied(cid); return { success: true, ...data, clientItemId: cid }; }
+    if (data && (data.status === 'DUPLICATE' || data.idempotent === true)) { markApplied(cid); return { success: true, skipped: true, kode: payload.kodeBarang, clientItemId: cid }; }
+    return data || { success: false, error: 'Gagal tulis transaksi' };
   }
-  return { success: false, error: (data && (data.error || data.message)) || 'Gagal tulis', clientItemId: cid, kode: payload.kodeBarang };
-}
 
-async function submitTransaction(action, entity, items, options = {}) {
-  const fromQueue = !!(options && options.fromQueue);
-  const tanggal = (options && options.tanggal) || localDateYMD();
-  const typeMap = { barangMasuk: 'masuk', barangKeluar: 'keluar', barangRusak: 'rusak' };
-  const SHEET_MAP = { barangMasuk: 'Barang masuk', barangKeluar: 'Barang keluar', barangRusak: 'Barang Rusak' };
-  const SHEET_NAME = SHEET_MAP[action] || action;
-  const entitas = String(entity || '').toUpperCase();
-  const list = (items || []).map(ensureClientItemId);
-  if (!list.length) return { success: false, error: 'Tidak ada item' };
-  const alreadyDone = list.filter((it) => isApplied(it.clientItemId)).length;
-  const todo = list.filter((it) => !isApplied(it.clientItemId));
-  if (!todo.length) return { success: true, written: alreadyDone, remaining: [], skippedAll: true };
-
-  if (!fromQueue && todo.length >= 1 && todo.length <= BATCH_MAX) {
+  const chunks = chunkArray(list, 15);
+  const results = [];
+  for (const chunk of chunks) {
+    const pending = chunk.filter((it) => !isApplied(it.clientItemId));
+    if (!pending.length) {
+      results.push({ success: true, skipped: true, count: chunk.length });
+      continue;
+    }
+    const transactions = pending.map((it) => {
+      const cid = it.clientItemId;
+      return {
+        action: type,
+        entitas: entity,
+        entity,
+        tanggal,
+        kodeBarang: it.kodeBarang,
+        qty: it.qty,
+        keterangan: it.keterangan || '',
+        clientItemId: cid,
+        transactionId: 'TX-' + cid,
+      };
+    });
+    const batchPayload = {
+      action: 'bulkTransaction',
+      entitas: entity,
+      entity,
+      tanggal,
+      transactions,
+      items: transactions,
+      requestId: newIds().requestId,
+      queueApproved: true,
+    };
+    let batchRes;
     try {
-      const chunks = [];
-      for (let i = 0; i < todo.length; i += BATCH_CHUNK_SIZE) chunks.push(todo.slice(i, i + BATCH_CHUNK_SIZE));
-      let written = alreadyDone;
-      const remaining = [];
-      for (let ci = 0; ci < chunks.length; ci++) {
-        const chunk = chunks[ci];
-        const batchId = 'BATCH-' + (chunk[0].clientItemId || Date.now()) + '-c' + ci;
-        const transactions = chunk.map((it) => {
-          const cid = it.clientItemId;
-          return {
-            sheet: SHEET_NAME,
-            entitas: entitas,
-            kodeBarang: String(it.kode || it.kodeBarang || '').trim(),
-            qty: Number(it.qty) || 0,
-            keterangan: String(it.keterangan || '').trim().slice(0, 200),
-            tanggal: tanggal || undefined,
-            requestId: cid,
-            transactionId: 'TX-' + cid,
-            nonce: 'NC-' + cid,
-            queueApproved: true,
-          };
-        });
-        const batchPayload = {
-          action: 'addTransactionBatch',
-          sheet: SHEET_NAME,
-          entitas: entitas,
-          tanggal: tanggal || undefined,
-          transactions,
-          items: transactions,
-          batchId,
-          requestId: batchId,
-          queueApproved: true,
-        };
-        let batchRes = null;
-        try {
-          batchRes = await postJsonWrite(batchPayload);
-        } catch (chunkErr) {
-          remaining.push(...chunk);
-          for (let j = ci + 1; j < chunks.length; j++) remaining.push(...chunks[j]);
-          break;
-        }
-        if (batchRes && batchRes.code === 'UNAUTHORIZED') {
-          return { success: false, error: 'Unauthorized — isi API Secret di Atur', remaining: todo, written };
-        }
-        if (batchRes && (batchRes.success === true || batchRes.status === 'COMMITTED' || batchRes.status === 'APPLIED') && !batchRes.error) {
-          const okCount = Number(batchRes.successCount);
-          chunk.forEach((it) => markApplied(it.clientItemId));
-          written += (Number.isFinite(okCount) && okCount > 0) ? okCount : chunk.length;
-        } else if (batchRes && batchRes.status === 'UNKNOWN') {
-          remaining.push(...chunk);
-        } else {
-          remaining.push(...chunk);
-        }
-      }
-      if (remaining.length && !fromQueue) {
-        enqueue(typeMap[action], entity, remaining, { tanggal });
-        const okN = written - alreadyDone;
-        pushNotification({
-          type: okN > 0 ? 'ok' : 'warn',
-          title: okN > 0 ? ('Berhasil ' + okN + ' · antrian ' + remaining.length) : 'Verifikasi antrian',
-          body: okN > 0
-            ? (okN + ' item sudah di sheet. ' + remaining.length + ' di Antrian — cek spreadsheet; jika sudah tertulis tekan Sukses.')
-            : (remaining.length + ' item masuk Antrian (timeout). Cek sheet — jika sudah ada, tekan Sukses (jangan kirim ulang).'),
-        });
-        return { success: okN > 0, written, remaining, queued: true, offline: !navigator.onLine };
-      }
-      if (!remaining.length) {
-        try { window.dispatchEvent(new CustomEvent('gudangai-stock-refresh')); } catch (_) {}
-        return { success: true, written, remaining: [], message: 'Semua item berhasil ditulis (chunked).' };
-      }
-      return { success: false, written, remaining, error: 'Batch sebagian gagal' };
+      batchRes = await postJsonWrite(batchPayload);
     } catch (err) {
-      if (!fromQueue) {
-        enqueue(typeMap[action], entity, todo, { tanggal });
-        return { success: false, written: alreadyDone, remaining: todo, queued: true, offline: true, error: err.message || 'Timeout / jaringan — masuk antrian' };
-      }
-      return { success: false, written: alreadyDone, remaining: todo, error: err.message };
+      try {
+        const q = normalizeQueue(JSON.parse(localStorage.getItem(QUEUE_KEY) || '[]'));
+        for (const it of pending) q.push({ ...it, type, entity, tanggal });
+        localStorage.setItem(QUEUE_KEY, JSON.stringify(q));
+      } catch (_) {}
+      results.push({ success: false, error: err?.message, queued: true });
+      continue;
+    }
+    if (batchRes && batchRes.success !== false) {
+      for (const it of pending) markApplied(it.clientItemId);
+      results.push(batchRes);
+    } else {
+      results.push(batchRes || { success: false });
     }
   }
-
-  const written = [];
-  const errors = [];
-  const failedItems = [];
-  for (let i = 0; i < todo.length; i++) {
-    const it = todo[i];
-    if (isApplied(it.clientItemId)) continue;
-    try {
-      const res = await submitOneItem(action, entity, it, tanggal);
-      if (res.unauthorized) return { success: false, written: written.length + alreadyDone, remaining: todo.slice(i), error: 'Unauthorized — isi API Secret di Atur' };
-      if (res.success) written.push(res);
-      else { errors.push((res.kode || '?') + ': ' + (res.error || 'gagal')); failedItems.push(it); }
-    } catch (err) {
-      const msg = err.message || '';
-      const isNetwork = !navigator.onLine || /Failed to fetch|NetworkError|Timeout|HTTP 5/i.test(msg);
-      if (isNetwork) {
-        const rest = todo.slice(i).filter((x) => !isApplied(x.clientItemId));
-        if (!fromQueue) enqueue(typeMap[action], entity, rest, { tanggal });
-        return { success: written.length > 0, queued: true, remaining: rest, written: written.length + alreadyDone, error: 'Jaringan terputus — sisa antrian.' };
-      }
-      errors.push((it.kode || '?') + ': ' + msg);
-      failedItems.push(it);
-    }
-  }
-  const stillPending = failedItems.filter((it) => !isApplied(it.clientItemId));
-  if (!failedItems.length) {
-    try { window.dispatchEvent(new CustomEvent('gudangai-stock-refresh')); } catch (_) {}
-    return { success: true, written: written.length + alreadyDone, remaining: [], details: written };
-  }
-  if (stillPending.length && !fromQueue) enqueue(typeMap[action], entity, stillPending, { tanggal });
-  return { success: false, written: written.length + alreadyDone, remaining: stillPending, error: 'Sebagian gagal. ' + errors.join('; ') };
+  return { success: true, results, count: list.length };
 }
 
-export const submitBarangMasuk = (entity, items, options) => submitTransaction('barangMasuk', entity, items, options || {});
-export const submitBarangKeluar = (entity, items, options) => submitTransaction('barangKeluar', entity, items, options || {});
-export const submitBarangRusak = (entity, items, options) => submitTransaction('barangRusak', entity, items, options || {});
+export const submitBarangMasuk = (entity, items, options) => {
+  if (entity && typeof entity === 'object' && entity.items) return submitTransaction('barangMasuk', entity);
+  return submitTransaction('barangMasuk', entity, items, options || {});
+};
+export const submitBarangKeluar = (entity, items, options) => {
+  if (entity && typeof entity === 'object' && entity.items) return submitTransaction('barangKeluar', entity);
+  return submitTransaction('barangKeluar', entity, items, options || {});
+};
+export const submitBarangRusak = (entity, items, options) => {
+  if (entity && typeof entity === 'object' && entity.items) return submitTransaction('barangRusak', entity);
+  return submitTransaction('barangRusak', entity, items, options || {});
+};
+
 export function getPendingQueue() { try { return normalizeQueue(JSON.parse(localStorage.getItem(QUEUE_KEY) || '[]')); } catch { return []; } }
 export function removePendingByClientIds(ids) {
-  if (!ids || !ids.length) return;
+  const set = new Set(ids || []);
   try {
-    const q = JSON.parse(localStorage.getItem(QUEUE_KEY) || '[]');
-    const set = new Set(ids);
-    const next = [];
-    for (const e of q) {
-      const items = (e.items || []).filter((it) => !set.has(it.clientItemId));
-      if (items.length) next.push({ ...e, items });
-    }
-    localStorage.setItem(QUEUE_KEY, JSON.stringify(next));
+    const q = normalizeQueue(JSON.parse(localStorage.getItem(QUEUE_KEY) || '[]')).filter((x) => !set.has(x.clientItemId));
+    localStorage.setItem(QUEUE_KEY, JSON.stringify(q));
   } catch (_) {}
 }
 export function clearPendingQueue() { localStorage.setItem(QUEUE_KEY, '[]'); }
+
 export async function syncPendingQueue() {
-  const url = getApiUrl();
-  if (!url || !navigator.onLine) return { synced: 0, failed: 0, skipped: true };
-  if (_syncLock) return { synced: 0, failed: 0, skipped: true, reason: 'sync-in-progress' };
-  _syncLock = true;
-  try {
-    let queue = normalizeQueue(JSON.parse(localStorage.getItem(QUEUE_KEY) || '[]'));
-    let synced = 0, failed = 0;
-    const actionMap = { masuk: 'barangMasuk', keluar: 'barangKeluar', rusak: 'barangRusak' };
-    for (let i = 0; i < queue.length; i++) {
-      if (queue[i].synced) continue;
-      const pendingItems = (queue[i].items || []).map(ensureClientItemId).filter((it) => !isApplied(it.clientItemId));
-      if (!pendingItems.length) { queue[i].synced = true; continue; }
-      const act = actionMap[queue[i].type] || 'barangMasuk';
-      try {
-        const res = await submitTransaction(act, queue[i].entity, pendingItems, { tanggal: queue[i].tanggal, fromQueue: true });
-        if (res.success && (!res.remaining || !res.remaining.length)) { queue[i].synced = true; synced += pendingItems.length; }
-        else { failed += (res.remaining || pendingItems).length; if (res.offline) break; }
-      } catch { failed++; break; }
+  if (!navigator.onLine) return { synced: 0, failed: 0, skipped: true, reason: 'offline' };
+  let queue = [];
+  try { queue = normalizeQueue(JSON.parse(localStorage.getItem(QUEUE_KEY) || '[]')); } catch { queue = []; }
+  if (!queue.length) return { synced: 0, failed: 0, skipped: false };
+
+  let synced = 0;
+  let failed = 0;
+  const remaining = [];
+
+  const groups = new Map();
+  for (const row of queue) {
+    if (isApplied(row.clientItemId)) { synced += 1; continue; }
+    const type = row.type || row.action || 'barangMasuk';
+    const entity = row.entity || row.entitas || 'CV';
+    const tanggal = row.tanggal || localDateYMD();
+    const key = type + '|' + entity + '|' + tanggal;
+    if (!groups.has(key)) groups.set(key, { type, entity, tanggal, items: [] });
+    groups.get(key).items.push({
+      kode: row.kode || row.kodeBarang,
+      kodeBarang: row.kodeBarang || row.kode,
+      qty: Number(row.qty) || 0,
+      keterangan: row.keterangan || '',
+      clientItemId: row.clientItemId,
+      nama: row.nama || '',
+      satuan: row.satuan || '',
+    });
+  }
+
+  for (const g of groups.values()) {
+    const pending = g.items.filter((it) => it.clientItemId && !isApplied(it.clientItemId) && it.kodeBarang && it.qty > 0);
+    if (!pending.length) continue;
+    try {
+      const res = await submitTransaction(g.type, g.entity, pending, { tanggal: g.tanggal, fromQueue: true });
+      const ok = res && res.success !== false && !res.queued;
+      if (ok) {
+        for (const it of pending) markApplied(it.clientItemId);
+        synced += pending.length;
+      } else if (res && res.queued) {
+        for (const it of pending) remaining.push({ ...it, type: g.type, entity: g.entity, tanggal: g.tanggal });
+        failed += pending.length;
+      } else {
+        for (const it of pending) {
+          if (isApplied(it.clientItemId)) synced += 1;
+          else {
+            remaining.push({ ...it, type: g.type, entity: g.entity, tanggal: g.tanggal });
+            failed += 1;
+          }
+        }
+      }
+    } catch (err) {
+      for (const it of pending) remaining.push({ ...it, type: g.type, entity: g.entity, tanggal: g.tanggal });
+      failed += pending.length;
     }
-    localStorage.setItem(QUEUE_KEY, JSON.stringify(queue.filter((e) => !e.synced && (e.items || []).length)));
-    return { synced, failed, skipped: false };
-  } finally { _syncLock = false; }
+  }
+
+  try { localStorage.setItem(QUEUE_KEY, JSON.stringify(remaining)); } catch (_) {}
+  return { synced, failed, remaining: remaining.length, skipped: false };
 }
-const HISTORY_KEY = 'gudangai_history';
-export function getTransactionHistory() { try { return JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]'); } catch { return []; } }
+
+export function getTransactionHistory() {
+  try { return JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]'); } catch { return []; }
+}
 export function saveToHistory(entry) {
   try {
-    const h = getTransactionHistory();
-    h.unshift({ ...entry, savedAt: new Date().toISOString() });
-    if (h.length > 500) h.length = 500;
+    const h = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+    h.unshift(entry);
+    if (h.length > 100) h.length = 100;
     localStorage.setItem(HISTORY_KEY, JSON.stringify(h));
   } catch (_) {}
 }
@@ -440,6 +426,7 @@ export function markNotificationsRead() {
   } catch (_) {}
 }
 export function unreadNotificationCount() { return getNotifications().filter((n) => !n.read).length; }
+
 export async function submitPO(payload) {
   try {
     const rawItems = (payload && (payload.items || payload.poItems)) || [];

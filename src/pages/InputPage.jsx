@@ -16,48 +16,44 @@ import {
 } from '../data/api';
 import { searchMaster } from '../data/master';
 
-const TX_TYPES = [
-  { id: 'masuk', label: 'Masuk', icon: PackagePlus, active: 'bg-emerald-50 border-emerald-200 ring-2 ring-emerald-400/40', iconBg: 'bg-emerald-500 text-white', iconIdle: 'bg-emerald-50 text-emerald-600' },
-  { id: 'keluar', label: 'Keluar', icon: PackageMinus, active: 'bg-orange-50 border-orange-200 ring-2 ring-orange-400/40', iconBg: 'bg-orange-500 text-white', iconIdle: 'bg-orange-50 text-orange-600' },
-  { id: 'rusak', label: 'Rusak', icon: AlertOctagon, active: 'bg-rose-50 border-rose-200 ring-2 ring-rose-400/40', iconBg: 'bg-rose-500 text-white', iconIdle: 'bg-rose-50 text-rose-600' },
+const TX = [
+  { id: 'masuk', label: 'Masuk', icon: PackagePlus },
+  { id: 'keluar', label: 'Keluar', icon: PackageMinus },
+  { id: 'rusak', label: 'Rusak', icon: AlertOctagon },
 ];
+
+function todayStr() {
+  const d = new Date();
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  return `${dd}/${mm}/${d.getFullYear()}`;
+}
 
 export default function InputPage() {
   const [entity, setEntity] = useState('CV');
   const [txType, setTxType] = useState('keluar');
-  const [mode, setMode] = useState('search');
+  const [tanggal, setTanggal] = useState(todayStr());
+  const [query, setQuery] = useState('');
+  const [hits, setHits] = useState([]);
   const [busy, setBusy] = useState(false);
   const [statusBanner, setStatusBanner] = useState('');
   const [accuracy, setAccuracy] = useState(null);
   const [cart, setCart] = useState([]);
   const [submitting, setSubmitting] = useState(false);
-  const submittingRef = useRef(false);
-  const [tanggal, setTanggal] = useState(() => {
-    try {
-      return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jakarta', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
-    } catch (_) {
-      return new Date().toISOString().slice(0, 10);
-    }
-  });
-  const [query, setQuery] = useState('');
-  const [hits, setHits] = useState([]);
-  const [listening, setListening] = useState(false);
-  const [showNotif, setShowNotif] = useState(false);
-  const [notifs, setNotifs] = useState([]);
   const [showPaste, setShowPaste] = useState(false);
   const [pasteText, setPasteText] = useState('');
-  const [camOn, setCamOn] = useState(false);
-  const fileRef = useRef(null);
-  const photoRef = useRef(null);
+  const [showNotif, setShowNotif] = useState(false);
+  const [notifs, setNotifs] = useState([]);
+  const [unread, setUnread] = useState(0);
+  const filePdfRef = useRef(null);
+  const fileImgRef = useRef(null);
   const videoRef = useRef(null);
-  const canvasRef = useRef(null);
-  const streamRef = useRef(null);
-  const recogRef = useRef(null);
+  const [scanning, setScanning] = useState(false);
+  const submittingRef = useRef(false);
+  const cartRef = useRef(null);
+  const scanAbortRef = useRef(false);
 
-  useEffect(() => {
-    setNotifs(getNotifications());
-  }, [showNotif]);
-
+  useEffect(() => { setUnread(unreadNotificationCount()); }, [showNotif]);
   useEffect(() => {
     if (!query.trim()) { setHits([]); return; }
     const t = setTimeout(() => setHits(searchMaster(entity, query).slice(0, 12)), 180);
@@ -74,265 +70,219 @@ export default function InputPage() {
         return next;
       }
       return [...prev, {
-        kode: item.kode,
-        nama: item.nama || item.name,
-        satuan: item.satuan || 'Pack',
-        qty: +qty || 1,
-        keterangan: '',
+        kode: item.kode, nama: item.nama || item.name, satuan: item.satuan || 'Pack',
+        qty: +qty || 1, keterangan: '',
         clientItemId: `${item.kode}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
       }];
     });
   }, []);
 
-  const mergePdfIntoCart = useCallback((matched, amb = [], _un = []) => {
+  const mergePdfIntoCart = useCallback((matched) => {
+    const rows = [];
+    for (const m of matched || []) {
+      const kode = m.kode || m.match?.kode || m.match?.item?.kode || m.item?.kode || null;
+      if (!kode) continue;
+      const nama = m.nama || m.match?.nama || m.match?.item?.nama || m.name || m.nameFromPdf || kode;
+      const satuan = m.satuan || m.match?.satuan || m.match?.item?.satuan || 'Pack';
+      const qty = Number(m.qty) > 0 ? Number(m.qty) : 1;
+      const existing = rows.find((c) => c.kode === kode);
+      if (existing) existing.qty = +(existing.qty + qty).toFixed(2);
+      else rows.push({ kode, nama, satuan, qty, keterangan: '', clientItemId: `${kode}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}` });
+    }
     setCart((prev) => {
       const next = [...prev];
-      for (const m of matched) {
-        if (!m.kode) continue;
-        const idx = next.findIndex((c) => c.kode === m.kode);
-        const qty = +m.qty || 1;
-        if (idx >= 0) next[idx] = { ...next[idx], qty: +(next[idx].qty + qty).toFixed(2) };
-        else next.push({
-          kode: m.kode,
-          nama: m.nama || m.name,
-          satuan: m.satuan || 'Pack',
-          qty,
-          keterangan: '',
-          clientItemId: `${m.kode}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-        });
+      for (const r of rows) {
+        const idx = next.findIndex((c) => c.kode === r.kode);
+        if (idx >= 0) next[idx] = { ...next[idx], qty: +(next[idx].qty + r.qty).toFixed(2) };
+        else next.push(r);
       }
       return next;
     });
+    setTimeout(() => { try { cartRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' }); } catch (_) {} }, 150);
   }, []);
 
   const runValidationPipeline = useCallback(async (text, lines = [], sourceLabel = 'Validasi') => {
-    if (!text || !String(text).trim()) {
-      setStatusBanner('Tidak ada teks untuk divalidasi.');
-      return;
-    }
-    setBusy(true);
-    setStatusBanner('');
-    setAccuracy(null);
+    if (!text || !String(text).trim()) { setStatusBanner('Tidak ada teks untuk divalidasi.'); return; }
+    setBusy(true); setStatusBanner(''); setAccuracy(null);
     try {
       const detected = detectEntityFromText(text);
       const useEntity = detected || entity;
       if (detected && detected !== entity) setEntity(detected);
       const rows = parseLinesFromText(text, lines);
-      if (!rows.length) {
-        setStatusBanner('Tidak ada baris barang terdeteksi dari ' + sourceLabel + '.');
-        return;
-      }
+      if (!rows.length) { setStatusBanner('Tidak ada baris barang terdeteksi dari ' + sourceLabel + '.'); return; }
       const validation = validateItems(rows, useEntity);
-      const stock = await fetchStock(useEntity, { allowDemo: false });
+      let stock = null;
+      try { stock = await fetchStock(useEntity, { allowDemo: false }); } catch (_) { stock = null; }
       const matched = applyStockAwareFallback(validation.matched || [], useEntity, stock);
       const amb = validation.ambiguous || [];
       const un = validation.unmatched || [];
       const total = matched.length + amb.length + un.length;
       const acc = total ? Math.round((matched.length / total) * 100) : 0;
       setAccuracy({ pct: acc, matched: matched.length, skipped: un.length, needPick: amb.length, total });
-      const ambFiltered = (amb || []).filter((r) => (r.candidates || []).length > 0);
-      mergePdfIntoCart(matched, ambFiltered, []);
+      mergePdfIntoCart(matched);
       const parts = [];
       if (matched.length) parts.push(matched.length + ' cocok');
-      if (ambFiltered.length) parts.push(ambFiltered.length + ' pilih master');
       if (un.length) parts.push(un.length + ' dilewati');
-      setStatusBanner(
-        matched.length || ambFiltered.length
-          ? (sourceLabel + ' ' + acc + '% · ' + parts.join(' · '))
-          : (un.length ? ('Tidak ada yang cocok master · ' + un.length + ' baris dilewati') : 'Tidak ada baris barang terdeteksi.')
-      );
+      setStatusBanner(matched.length ? (sourceLabel + ' ' + acc + '% · ' + parts.join(' · ')) : (un.length ? ('Tidak ada yang cocok master · ' + un.length + ' baris dilewati') : 'Tidak ada baris barang terdeteksi.'));
     } catch (err) {
       setStatusBanner(err.message || 'Gagal memvalidasi ' + sourceLabel);
-    } finally {
-      setBusy(false);
-    }
+    } finally { setBusy(false); }
   }, [entity, mergePdfIntoCart]);
 
   const updateQty = (idx, delta) => setCart((prev) => prev.map((c, i) => (i === idx ? { ...c, qty: Math.max(0.01, +(c.qty + delta).toFixed(2)) } : c)));
-  const setQtyValue = (idx, val) => {
-    const n = parseFloat(String(val).replace(',', '.'));
-    if (!Number.isFinite(n) || n <= 0) return;
-    setCart((prev) => prev.map((c, i) => (i === idx ? { ...c, qty: +n.toFixed(2) } : c)));
-  };
+  const setQtyValue = (idx, val) => { const n = parseFloat(val); if (Number.isNaN(n)) return; setCart((prev) => prev.map((c, i) => (i === idx ? { ...c, qty: +n.toFixed(2) } : c))); };
   const removeCart = (idx) => setCart((prev) => prev.filter((_, i) => i !== idx));
   const setKet = (idx, val) => setCart((prev) => prev.map((c, i) => (i === idx ? { ...c, keterangan: val } : c)));
 
-  const stopCam = () => {
-    streamRef.current?.getTracks?.().forEach((t) => t.stop());
-    streamRef.current = null;
-    setCamOn(false);
-  };
-
-  const startCam = async () => {
+  const onPdfPick = async (e) => {
+    const f = e.target.files?.[0]; e.target.value = ''; if (!f) return;
+    setBusy(true); setStatusBanner('Membaca PDF…');
     try {
-      stopCam();
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
-      streamRef.current = stream;
-      setCamOn(true);
-      setTimeout(() => {
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          videoRef.current.play?.();
-        }
-      }, 50);
+      const res = await extractTextFromPdf(f, (msg) => setStatusBanner(String(msg || 'Membaca PDF…')));
+      if (res && res.ok === false) { setStatusBanner(res.error || 'Gagal baca PDF'); setBusy(false); return; }
+      const text = res?.text || ''; const lines = res?.lines || [];
+      if (!text.trim()) { setStatusBanner('PDF tidak berisi teks terbaca.'); setBusy(false); return; }
+      await runValidationPipeline(text, lines, 'PDF');
+    } catch (err) { setStatusBanner(err.message || 'Gagal baca PDF'); setBusy(false); }
+  };
+
+  const onImgPick = async (e) => {
+    const f = e.target.files?.[0]; e.target.value = ''; if (!f) return;
+    setBusy(true); setStatusBanner('OCR foto…');
+    try {
+      const res = await extractTextFromImage(f, (msg) => setStatusBanner(String(msg || 'OCR foto…')));
+      if (res && res.ok === false) { setStatusBanner(res.error || 'Gagal OCR foto'); setBusy(false); return; }
+      const text = res?.text || ''; const lines = res?.lines || [];
+      if (!text.trim()) { setStatusBanner('Foto tidak berisi teks terbaca. Coba foto lebih jelas.'); setBusy(false); return; }
+      await runValidationPipeline(text, lines, 'Foto');
+    } catch (err) { setStatusBanner(err.message || 'Gagal OCR foto'); setBusy(false); }
+  };
+
+  const onPasteValidate = async () => { setShowPaste(false); await runValidationPipeline(pasteText, [], 'Tempel'); setPasteText(''); };
+
+  const startScan = async () => {
+    if (scanning) return;
+    if (!navigator.mediaDevices?.getUserMedia) { setStatusBanner('Kamera tidak didukung di perangkat ini.'); return; }
+    scanAbortRef.current = false; setScanning(true); setStatusBanner('Menyalakan kamera… arahkan ke barcode/QR');
+    let stream = null;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false });
+      const video = videoRef.current;
+      if (!video) throw new Error('Video belum siap');
+      video.srcObject = stream; video.setAttribute('playsinline', 'true'); video.muted = true; await video.play();
+      await new Promise((r) => { if (video.readyState >= 2) r(); else video.onloadeddata = () => r(); });
+      await new Promise((r) => setTimeout(r, 400));
+      const deadline = Date.now() + 15000; let value = null; let lastErr = '';
+      while (Date.now() < deadline && !scanAbortRef.current) {
+        const res = await scanBarcodeFromVideo(video);
+        if (res && res.ok && res.value) { value = res.value; break; }
+        if (res && res.error && !/tidak ada barcode/i.test(res.error)) lastErr = res.error;
+        await new Promise((r) => setTimeout(r, 350));
+      }
+      if (stream) stream.getTracks().forEach((t) => t.stop());
+      if (video) video.srcObject = null;
+      setScanning(false);
+      if (value) {
+        const found = searchMaster(entity, String(value));
+        if (found[0]) { addToCart(found[0], 1); setStatusBanner('Barcode cocok: ' + found[0].nama); }
+        else { setQuery(String(value)); setStatusBanner('Barcode tidak cocok master: ' + value); }
+      } else if (!scanAbortRef.current) {
+        setStatusBanner(lastErr || 'Tidak ada barcode terdeteksi (15 dtk). Coba lagi / pastikan cahaya cukup.');
+      }
     } catch (err) {
-      setStatusBanner(err.message || 'Kamera tidak tersedia');
+      if (stream) try { stream.getTracks().forEach((t) => t.stop()); } catch (_) {}
+      if (videoRef.current) videoRef.current.srcObject = null;
+      setScanning(false);
+      setStatusBanner(err?.name === 'NotAllowedError' ? 'Izin kamera ditolak. Aktifkan kamera di pengaturan browser/HP.' : (err?.message || 'Gagal scan QR'));
     }
   };
 
-  const scanOnce = async () => {
-    if (!videoRef.current) return;
-    const res = await scanBarcodeFromVideo(videoRef.current);
-    if (res.ok && res.value) {
-      const found = searchMaster(entity, res.value);
-      if (found.length) {
-        addToCart(found[0], 1);
-        setStatusBanner('QR/Barcode: ' + found[0].nama + ' masuk keranjang');
-        stopCam();
-      } else {
-        setStatusBanner('Barcode tidak cocok master: ' + res.value);
-      }
-    } else {
-      setStatusBanner(res.error || 'Tidak terdeteksi');
-    }
+  const stopScan = () => {
+    scanAbortRef.current = true;
+    try { const v = videoRef.current; const stream = v?.srcObject; if (stream?.getTracks) stream.getTracks().forEach((t) => t.stop()); if (v) v.srcObject = null; } catch (_) {}
+    setScanning(false); setStatusBanner('Scan dibatalkan');
   };
 
   const startVoice = () => {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) { setStatusBanner('Suara tidak didukung di browser ini'); return; }
+    if (!SR) { setStatusBanner('Suara tidak didukung. Pakai Chrome Android / Safari terbaru.'); return; }
     try {
-      recogRef.current?.stop?.();
-      const r = new SR();
-      r.lang = 'id-ID';
-      r.interimResults = false;
-      r.onresult = (e) => {
-        const text = e.results?.[0]?.[0]?.transcript || '';
-        setListening(false);
-        if (!text) return;
-        const found = searchMaster(entity, text);
-        if (found.length) {
-          addToCart(found[0], 1);
-          setStatusBanner('Suara: ' + found[0].nama);
-        } else {
-          setQuery(text);
-          setStatusBanner('Suara: "' + text + '" — pilih dari hasil cari');
-        }
+      const rec = new SR(); rec.lang = 'id-ID'; rec.interimResults = false; rec.maxAlternatives = 3;
+      setStatusBanner('🎤 Mendengarkan… sebutkan nama barang'); setBusy(true);
+      rec.onresult = (ev) => {
+        const t = (ev.results?.[0]?.[0]?.transcript || '').trim(); setBusy(false);
+        if (!t) { setStatusBanner('Tidak ada suara terdeteksi. Coba lagi.'); return; }
+        setQuery(t); const found = searchMaster(entity, t);
+        if (found[0]) { addToCart(found[0], 1); setStatusBanner('Suara cocok: ' + found[0].nama); }
+        else if (found.length > 1) { setHits(found.slice(0, 12)); setStatusBanner('Suara: ' + t + ' — pilih dari daftar'); }
+        else setStatusBanner('Suara: "' + t + '" — tidak cocok master. Ketik manual.');
       };
-      r.onerror = () => setListening(false);
-      r.onend = () => setListening(false);
-      recogRef.current = r;
-      setListening(true);
-      r.start();
-    } catch (err) {
-      setListening(false);
-      setStatusBanner(err.message || 'Gagal mulai suara');
-    }
-  };
-
-  const onFile = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setBusy(true);
-    setStatusBanner('Memproses file…');
-    try {
-      const isPdf = /pdf/i.test(file.type) || /\.pdf$/i.test(file.name);
-      const extracted = isPdf
-        ? await extractTextFromPdf(file, (m) => setStatusBanner(m))
-        : await extractTextFromImage(file, (m) => setStatusBanner(m));
-      if (!extracted.ok) {
-        setStatusBanner(extracted.error || 'Gagal baca file');
-        return;
-      }
-      await runValidationPipeline(extracted.text, [], isPdf ? 'PDF' : 'Foto');
-    } catch (err) {
-      setStatusBanner(err.message || 'Gagal proses file');
-    } finally {
-      setBusy(false);
-      if (fileRef.current) fileRef.current.value = '';
-      if (photoRef.current) photoRef.current.value = '';
-    }
-  };
-
-  const onPasteValidate = async () => {
-    const text = String(pasteText || '').trim();
-    if (!text) { setStatusBanner('Tempel teks rekap order terlebih dahulu.'); return; }
-    setShowPaste(false);
-    await runValidationPipeline(text, [], 'Tempel Teks');
+      rec.onerror = (ev) => {
+        setBusy(false);
+        const code = ev?.error || '';
+        if (code === 'not-allowed') setStatusBanner('Izin mikrofon ditolak. Aktifkan di pengaturan.');
+        else if (code === 'no-speech') setStatusBanner('Tidak ada suara. Coba lagi.');
+        else setStatusBanner('Gagal rekam suara: ' + (code || 'error'));
+      };
+      rec.onend = () => { setBusy(false); };
+      rec.start();
+    } catch (err) { setBusy(false); setStatusBanner(err?.message || 'Gagal memulai rekaman suara'); }
   };
 
   const handleSubmit = async () => {
     if (submittingRef.current || !cart.length) return;
-    submittingRef.current = true;
-    setSubmitting(true);
-    setStatusBanner('Mengirim…');
-    const items = cart.map((c) => ({
-      kodeBarang: c.kode,
-      qty: c.qty,
-      keterangan: c.keterangan || '',
-      tanggal,
-      clientItemId: c.clientItemId,
-    }));
+    submittingRef.current = true; setSubmitting(true);
     try {
-      const submitFn = txType === 'masuk' ? submitBarangMasuk : txType === 'rusak' ? submitBarangRusak : submitBarangKeluar;
-      const res = await submitFn(entity, items, { tanggal });
-      if (res?.success || res?.ok) {
+      const items = cart.map((c) => ({ kode: c.kode, nama: c.nama, qty: c.qty, satuan: c.satuan, keterangan: c.keterangan || '', clientItemId: c.clientItemId }));
+      const fn = txType === 'masuk' ? submitBarangMasuk : txType === 'rusak' ? submitBarangRusak : submitBarangKeluar;
+      const res = await fn({ entity, tanggal, items });
+      if (res?.success !== false) {
         saveToHistory({ type: txType, entity, items: cart, tanggal, at: Date.now() });
         pushNotification({ type: 'success', title: 'Berhasil', body: cart.length + ' item ' + txType + ' ' + entity });
-        setCart([]);
-        setStatusBanner('Berhasil dikirim · ' + cart.length + ' item');
-        setAccuracy(null);
-      } else {
-        const msg = res?.error || res?.message || 'Respons tidak jelas';
-        pushNotification({ type: 'warn', title: 'Perlu cek antrian', body: msg });
-        setStatusBanner(msg + ' — cek Atur → Sinkronisasi');
-      }
-    } catch (err) {
-      pushNotification({ type: 'warn', title: 'Timeout / error', body: err.message || 'Cek antrian' });
-      setStatusBanner((err.message || 'Gagal kirim') + ' — cek Atur → Sinkronisasi');
-    } finally {
-      setSubmitting(false);
-      submittingRef.current = false;
-      setNotifs(getNotifications());
-    }
+        setCart([]); setStatusBanner('Berhasil dikirim · ' + cart.length + ' item'); setAccuracy(null);
+        window.dispatchEvent(new Event('gudangai-stock-refresh'));
+      } else setStatusBanner(res?.error || 'Gagal kirim');
+    } catch (err) { setStatusBanner(err.message || 'Gagal kirim'); }
+    finally { setSubmitting(false); submittingRef.current = false; }
   };
 
-  const unread = unreadNotificationCount();
+  const openNotif = () => { setNotifs(getNotifications()); markNotificationsRead(); setUnread(0); setShowNotif((v) => !v); };
 
   return (
-    <div className="pb-28 space-y-3">
+    <div className="pb-24 space-y-3">
       <div className="flex items-center justify-between">
-        <h1 className="text-lg font-bold text-white flex items-center gap-2">
-          <PackagePlus className="w-5 h-5 text-cyan-300" /> Input
+        <h1 className="text-xl font-bold flex items-center gap-2 text-white drop-shadow-sm">
+          <PackagePlus className="w-6 h-6 text-cyan-300" /> Input
         </h1>
-        <button type="button" onClick={() => { setShowNotif((v) => !v); markNotificationsRead(); setNotifs(getNotifications()); }}
-          className="relative p-2 rounded-xl bg-white/10 text-white">
+        <button type="button" onClick={openNotif} className="relative p-2 rounded-xl bg-white border border-slate-200 shadow-sm text-slate-700">
           <Bell className="w-5 h-5" />
-          {unread > 0 && <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-rose-500 text-[10px] flex items-center justify-center">{unread}</span>}
+          {unread > 0 && <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-rose-500 text-[10px] text-white flex items-center justify-center">{unread}</span>}
         </button>
       </div>
 
-      <div className="flex items-center gap-2">
-        <input type="date" value={tanggal} onChange={(e) => setTanggal(e.target.value)}
-          className="rounded-xl bg-white/10 border border-white/15 text-white text-sm px-3 py-2" />
-        <div className="flex rounded-xl overflow-hidden border border-white/15">
+      <div className="flex items-center gap-2 flex-wrap">
+        <input type="text" value={tanggal} onChange={(e) => setTanggal(e.target.value)}
+          className="rounded-xl bg-white border border-slate-200 text-slate-900 px-3 py-2 text-sm w-32 shadow-sm font-semibold" />
+        <div className="flex rounded-xl overflow-hidden border border-slate-200 shadow-sm">
           {['CV', 'PT'].map((e) => (
             <button key={e} type="button" onClick={() => setEntity(e)}
-              className={`px-4 py-2 text-sm font-bold ${entity === e ? 'bg-cyan-600 text-white' : 'bg-white/10 text-white/70'}`}>{e}</button>
+              className={`px-4 py-2 text-sm font-semibold ${entity === e ? 'bg-cyan-600 text-white' : 'bg-white text-slate-600'}`}>{e}</button>
           ))}
         </div>
       </div>
 
       <div className="grid grid-cols-3 gap-2">
-        {TX_TYPES.map((t) => {
+        {TX.map((t) => {
           const Icon = t.icon;
           const on = txType === t.id;
+          const accent = t.id === 'masuk' ? { active: 'bg-emerald-600 border-emerald-600', icon: 'text-emerald-600', soft: 'bg-emerald-50 border-emerald-100' }
+            : t.id === 'rusak' ? { active: 'bg-rose-600 border-rose-600', icon: 'text-rose-600', soft: 'bg-rose-50 border-rose-100' }
+            : { active: 'bg-cyan-600 border-cyan-600', icon: 'text-cyan-600', soft: 'bg-cyan-50 border-cyan-100' };
           return (
             <button key={t.id} type="button" onClick={() => setTxType(t.id)}
-              className={`rounded-2xl border px-2 py-3 flex flex-col items-center gap-1.5 transition ${
-                on ? 'border-cyan-400/50 bg-cyan-500/20 text-white' : 'border-white/10 bg-white/5 text-white/70'
-              }`}>
-              <span className={`w-9 h-9 rounded-xl flex items-center justify-center ${on ? 'bg-cyan-500 text-white' : 'bg-white/10'}`}>
-                <Icon className="w-5 h-5" />
+              className={`rounded-2xl py-3 flex flex-col items-center gap-1 border shadow-sm transition ${on ? accent.active + ' text-white' : 'bg-white border-slate-200 text-slate-700'}`}>
+              <span className={`w-9 h-9 rounded-xl flex items-center justify-center ${on ? 'bg-white/20' : accent.soft}`}>
+                <Icon className={`w-5 h-5 ${on ? 'text-white' : accent.icon}`} />
               </span>
               <span className="text-xs font-semibold">{t.label}</span>
             </button>
@@ -341,139 +291,145 @@ export default function InputPage() {
       </div>
 
       <div className="grid grid-cols-4 gap-2">
-        <button type="button" onClick={() => fileRef.current?.click()} disabled={busy}
-          className="rounded-2xl border border-white/10 bg-white/5 px-2 py-3 flex flex-col items-center gap-1.5 text-white/80">
-          <Upload className="w-5 h-5" /><span className="text-[11px] font-medium">PDF</span>
+        <button type="button" onClick={() => filePdfRef.current?.click()} disabled={busy}
+          className="rounded-2xl bg-white border border-slate-200 shadow-sm py-3 flex flex-col items-center gap-1.5 disabled:opacity-50">
+          <span className="w-9 h-9 rounded-xl bg-violet-50 border border-violet-100 flex items-center justify-center">
+            <Upload className="w-5 h-5 text-violet-600" />
+          </span>
+          <span className="text-[11px] font-semibold text-slate-700">PDF</span>
         </button>
-        <button type="button" onClick={() => photoRef.current?.click()} disabled={busy}
-          className="rounded-2xl border border-white/10 bg-white/5 px-2 py-3 flex flex-col items-center gap-1.5 text-white/80">
-          <Image className="w-5 h-5" /><span className="text-[11px] font-medium">Foto</span>
+        <button type="button" onClick={() => fileImgRef.current?.click()} disabled={busy}
+          className="rounded-2xl bg-white border border-slate-200 shadow-sm py-3 flex flex-col items-center gap-1.5 disabled:opacity-50">
+          <span className="w-9 h-9 rounded-xl bg-sky-50 border border-sky-100 flex items-center justify-center">
+            <Image className="w-5 h-5 text-sky-600" />
+          </span>
+          <span className="text-[11px] font-semibold text-slate-700">Foto</span>
         </button>
-        <button type="button" onClick={() => (camOn ? stopCam() : startCam())}
-          className={`rounded-2xl border px-2 py-3 flex flex-col items-center gap-1.5 ${
-            camOn ? 'border-cyan-400/50 bg-cyan-500/20 text-white' : 'border-white/10 bg-white/5 text-white/80'
-          }`}>
-          <QrCode className="w-5 h-5" /><span className="text-[11px] font-medium">QR</span>
+        <button type="button" onClick={startScan} disabled={busy || scanning}
+          className="rounded-2xl bg-white border border-slate-200 shadow-sm py-3 flex flex-col items-center gap-1.5 disabled:opacity-50">
+          <span className="w-9 h-9 rounded-xl bg-amber-50 border border-amber-100 flex items-center justify-center">
+            <QrCode className="w-5 h-5 text-amber-600" />
+          </span>
+          <span className="text-[11px] font-semibold text-slate-700">QR</span>
         </button>
-        <button type="button" onClick={startVoice}
-          className={`rounded-2xl border px-2 py-3 flex flex-col items-center gap-1.5 ${
-            listening ? 'border-violet-400/50 bg-violet-500/20 text-white' : 'border-white/10 bg-white/5 text-white/80'
-          }`}>
-          <Mic className="w-5 h-5" /><span className="text-[11px] font-medium">{listening ? '…' : 'Suara'}</span>
+        <button type="button" onClick={startVoice} disabled={busy}
+          className="rounded-2xl bg-white border border-slate-200 shadow-sm py-3 flex flex-col items-center gap-1.5 disabled:opacity-50">
+          <span className="w-9 h-9 rounded-xl bg-rose-50 border border-rose-100 flex items-center justify-center">
+            <Mic className="w-5 h-5 text-rose-600" />
+          </span>
+          <span className="text-[11px] font-semibold text-slate-700">Suara</span>
         </button>
       </div>
-
-      <input ref={fileRef} type="file" accept="application/pdf,.pdf" className="hidden" onChange={onFile} />
-      <input ref={photoRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={onFile} />
-
-      {camOn && (
-        <div className="rounded-2xl overflow-hidden border border-white/15 bg-black relative">
-          <video ref={videoRef} className="w-full max-h-56 object-cover" playsInline muted />
-          <div className="absolute bottom-2 left-0 right-0 flex justify-center gap-2">
-            <button type="button" onClick={scanOnce} className="px-4 py-2 rounded-xl bg-cyan-600 text-white text-sm font-semibold">Scan</button>
-            <button type="button" onClick={stopCam} className="px-4 py-2 rounded-xl bg-white/20 text-white text-sm">Tutup</button>
-          </div>
-        </div>
-      )}
+      <input ref={filePdfRef} type="file" accept="application/pdf" className="hidden" onChange={onPdfPick} />
+      <input ref={fileImgRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={onImgPick} />
 
       <div className="flex gap-2">
         <div className="flex-1 relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Cari nama / kode…"
-            className="w-full rounded-xl bg-white/10 border border-white/15 text-white text-sm pl-9 pr-3 py-2.5 placeholder:text-white/40" />
+            className="w-full rounded-xl bg-white border border-slate-200 shadow-sm pl-9 pr-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 font-medium" />
         </div>
-        <button type="button" onClick={() => setShowPaste(true)}
-          className="px-3 rounded-xl bg-white/10 border border-white/15 text-white" title="Tempel teks">
-          <Clipboard className="w-4 h-4" />
+        <button type="button" onClick={() => setShowPaste(true)} className="p-2.5 rounded-xl bg-white border border-slate-200 shadow-sm text-slate-600">
+          <Clipboard className="w-5 h-5" />
         </button>
       </div>
 
       {hits.length > 0 && (
-        <div className="rounded-xl bg-slate-900/90 border border-white/10 max-h-40 overflow-y-auto">
+        <div className="rounded-xl bg-white border border-slate-200 shadow-md max-h-40 overflow-y-auto">
           {hits.map((h) => (
-            <button key={h.kode} type="button" onClick={() => { addToCart(h, 1); setQuery(''); setHits([]); }}
-              className="w-full text-left px-3 py-2 hover:bg-cyan-500/20 text-sm text-white flex justify-between gap-2">
-              <span className="truncate">{h.nama}</span>
-              <span className="text-white/40 text-xs shrink-0">{h.kode}</span>
+            <button key={h.kode} type="button" onClick={() => { addToCart(h); setQuery(''); setHits([]); }}
+              className="w-full text-left px-3 py-2 border-b border-slate-100 hover:bg-slate-50">
+              <p className="text-sm font-semibold text-slate-900 truncate">{h.nama}</p>
+              <p className="text-[11px] text-slate-500">{h.kode} · {h.satuan}</p>
             </button>
           ))}
         </div>
       )}
 
+      {scanning && (
+        <div className="rounded-xl overflow-hidden border border-cyan-400 bg-black shadow-sm">
+          <video ref={videoRef} className="w-full h-52 object-cover bg-black" muted playsInline autoPlay />
+          <div className="flex items-center justify-between px-3 py-2 bg-slate-900">
+            <p className="text-xs text-cyan-200">Arahkan ke barcode / QR…</p>
+            <button type="button" onClick={stopScan} className="text-xs font-bold text-rose-300 px-2 py-1 rounded-lg bg-slate-800">Stop</button>
+          </div>
+        </div>
+      )}
+
       {(statusBanner || busy) && (
-        <div className={`rounded-xl px-3 py-2 text-sm flex items-center gap-2 ${
-          busy ? 'bg-cyan-500/20 text-cyan-100' : 'bg-white/10 text-white/80'
+        <div className={`rounded-xl px-3 py-2 text-sm flex items-center gap-2 shadow-sm ${
+          busy ? 'bg-cyan-50 text-cyan-800 border border-cyan-200' : 'bg-white text-slate-700 border border-slate-200'
         }`}>
-          {busy ? <Loader2 className="w-4 h-4 animate-spin shrink-0" /> : <CheckCircle2 className="w-4 h-4 shrink-0 opacity-60" />}
-          <span>{statusBanner || 'Memproses…'}</span>
+          {busy ? <Loader2 className="w-4 h-4 animate-spin shrink-0" /> : <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />}
+          <span className="font-medium">{statusBanner || 'Memproses…'}</span>
         </div>
       )}
 
       {accuracy && (
-        <div className="text-xs text-white/50 px-1">
+        <div className="text-xs text-white font-semibold px-1 drop-shadow-sm">
           Akurasi {accuracy.pct}% · cocok {accuracy.matched} · dilewati {accuracy.skipped}
         </div>
       )}
 
       {cart.length > 0 && (
-        <div className="space-y-2">
-          <p className="text-sm font-semibold text-white/80">Keranjang ({cart.length})</p>
+        <div ref={cartRef} className="space-y-2 pb-16">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-bold text-white drop-shadow-sm">Keranjang ({cart.length})</p>
+            <button type="button" onClick={() => setCart([])} className="text-[11px] text-rose-200 font-semibold">Kosongkan</button>
+          </div>
           {cart.map((c, idx) => (
-            <div key={c.clientItemId || idx} className="rounded-xl bg-white/5 border border-white/10 p-3 space-y-2">
+            <div key={c.clientItemId || idx} className="rounded-2xl bg-white border border-slate-200 shadow-sm p-3 space-y-2">
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
-                  <p className="text-sm font-semibold text-white truncate">{c.nama}</p>
-                  <p className="text-[11px] text-white/40">{c.kode} · {c.satuan}</p>
+                  <p className="text-sm font-bold text-slate-900 truncate">{c.nama}</p>
+                  <p className="text-[11px] text-slate-600 font-medium">{c.kode} · {c.satuan}</p>
                 </div>
-                <button type="button" onClick={() => removeCart(idx)} className="p-1 text-rose-300"><Trash2 className="w-4 h-4" /></button>
+                <button type="button" onClick={() => removeCart(idx)} className="p-1 text-rose-500"><Trash2 className="w-4 h-4" /></button>
               </div>
               <div className="flex items-center gap-2">
-                <button type="button" onClick={() => updateQty(idx, -1)} className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center"><Minus className="w-4 h-4" /></button>
+                <button type="button" onClick={() => updateQty(idx, -1)} className="w-8 h-8 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center"><Minus className="w-4 h-4" /></button>
                 <input type="number" step="0.01" value={c.qty} onChange={(e) => setQtyValue(idx, e.target.value)}
-                  className="w-16 text-center rounded-lg bg-white/10 border border-white/15 text-white text-sm py-1" />
-                <button type="button" onClick={() => updateQty(idx, 1)} className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center"><Plus className="w-4 h-4" /></button>
+                  className="w-16 text-center rounded-lg bg-slate-50 border border-slate-200 text-slate-900 text-sm font-bold py-1 tabular-nums" />
+                <button type="button" onClick={() => updateQty(idx, 1)} className="w-8 h-8 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center"><Plus className="w-4 h-4" /></button>
                 <input value={c.keterangan} onChange={(e) => setKet(idx, e.target.value)} placeholder="Keterangan"
-                  className="flex-1 rounded-lg bg-white/10 border border-white/15 text-white text-xs px-2 py-1.5 placeholder:text-white/30" />
+                  className="flex-1 rounded-lg bg-slate-50 border border-slate-200 text-slate-800 text-xs px-2 py-1.5 placeholder:text-slate-400" />
               </div>
             </div>
           ))}
+          <button type="button" onClick={handleSubmit} disabled={submitting || !cart.length}
+            className="fixed bottom-20 left-4 right-4 z-40 py-3.5 rounded-2xl bg-cyan-600 text-white font-bold shadow-lg disabled:opacity-50 flex items-center justify-center gap-2">
+            {submitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
+            Kirim {cart.length} item
+          </button>
         </div>
       )}
 
       {showPaste && (
         <div className="fixed inset-0 z-50 bg-black/70 flex items-end sm:items-center justify-center p-4">
-          <div className="w-full max-w-md rounded-2xl bg-slate-900 border border-white/15 p-4 space-y-3">
+          <div className="w-full max-w-md rounded-2xl bg-white border border-slate-200 shadow-xl p-4 space-y-3">
             <div className="flex justify-between items-center">
-              <p className="font-semibold text-white">Tempel teks rekap</p>
-              <button type="button" onClick={() => setShowPaste(false)}><X className="w-5 h-5 text-white/60" /></button>
+              <p className="font-semibold text-slate-900">Tempel teks rekap</p>
+              <button type="button" onClick={() => setShowPaste(false)}><X className="w-5 h-5 text-slate-500" /></button>
             </div>
             <textarea value={pasteText} onChange={(e) => setPasteText(e.target.value)} rows={6}
-              className="w-full rounded-xl bg-white/10 border border-white/15 text-white text-sm p-3" placeholder="Tempel isi rekap order di sini…" />
+              className="w-full rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm p-3 font-medium" placeholder="Tempel isi rekap order di sini…" />
             <button type="button" onClick={onPasteValidate} className="w-full py-3 rounded-xl bg-cyan-600 text-white font-semibold">Validasi & masuk keranjang</button>
           </div>
         </div>
       )}
 
       {showNotif && (
-        <div className="rounded-xl bg-slate-900/95 border border-white/10 p-3 space-y-2 max-h-48 overflow-y-auto">
-          <p className="text-xs font-semibold text-white/50 uppercase">Notifikasi</p>
-          {notifs.length === 0 && <p className="text-sm text-white/40">Belum ada</p>}
-          {notifs.slice(0, 8).map((n, i) => (
-            <div key={i} className="text-sm text-white/80 border-b border-white/5 pb-1">
-              <span className="font-medium">{n.title}</span>
-              {n.body && <p className="text-xs text-white/50">{n.body}</p>}
-            </div>
-          ))}
-        </div>
-      )}
-
-      {cart.length > 0 && (
-        <div className="fixed bottom-20 left-0 right-0 z-30 px-3.5 max-w-lg mx-auto">
-          <button type="button" onClick={handleSubmit} disabled={submitting}
-            className="w-full py-3.5 rounded-2xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold flex items-center justify-center gap-2 shadow-lg disabled:opacity-60">
-            {submitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
-            Kirim {cart.length} item · {txType} {entity}
-          </button>
+        <div className="fixed inset-0 z-50 bg-black/60" onClick={() => setShowNotif(false)}>
+          <div className="absolute top-16 right-3 left-3 max-w-sm ml-auto rounded-2xl bg-white border border-slate-200 shadow-xl p-3 max-h-80 overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <p className="text-sm font-bold text-slate-900 mb-2">Notifikasi</p>
+            {notifs.length === 0 && <p className="text-xs text-slate-400">Belum ada notifikasi</p>}
+            {notifs.slice(0, 20).map((n) => (
+              <div key={n.id} className="border-b border-slate-100 py-2">
+                <p className="text-xs font-semibold text-slate-800">{n.title}</p>
+                <p className="text-[11px] text-slate-500">{n.body}</p>
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>

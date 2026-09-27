@@ -4,6 +4,7 @@
  * + 2-column merge + ambiguity rules (YAKINIKU/LOWFAT only for unresolved)
  * Acuan ketat validasi PDF (12 Sep 2026): strip NO urut, size, outlet noise
  * V6.5.4: deterministic resolver BEFORE alias matching; parenthesis context preserved
+ * V6.7.4: unwrap deterministic {item, matchType} so matched rows always have kode
  */
 import { matchByAlias, getMasterByEntity } from './master';
 import { resolvePdfNameDeterministic, normalizeOcr } from './pdfDeterministicRules';
@@ -101,24 +102,26 @@ export async function extractTextFromPdf(file, onProgress) {
   try {
     const buf = await file.arrayBuffer();
     const pdf = await lib.getDocument({ data: buf }).promise;
+    let fullText = '';
     const allLines = [];
     for (let p = 1; p <= pdf.numPages; p++) {
-      if (onProgress) onProgress(`Halaman ${p}/${pdf.numPages}...`);
+      if (onProgress) onProgress(`Halaman ${p}/${pdf.numPages}`);
       const page = await pdf.getPage(p);
       const content = await page.getTextContent();
-      allLines.push(...itemsToLines(content.items));
+      const lines = itemsToLines(content.items);
+      allLines.push(...lines);
+      fullText += lines.join('\n') + '\n';
     }
-    let text = allLines.join('\n');
-    const merged = tryMergeTwoColumnPdf(text);
-    if (merged) text = merged;
-    return { ok: true, text, pageCount: pdf.numPages };
+    const merged = tryMergeTwoColumnPdf(fullText);
+    const text = merged || fullText;
+    return { ok: true, text, lines: allLines, pageCount: pdf.numPages };
   } catch (err) {
     return { ok: false, error: err.message || 'Gagal baca PDF' };
   }
 }
 
 export async function extractTextFromImage(file, onProgress) {
-  if (onProgress) onProgress('OCR gambar...');
+  if (onProgress) onProgress('OCR foto...');
   try {
     const Tesseract = (await import('tesseract.js')).default;
     const result = await Tesseract.recognize(file, 'ind+eng', {
@@ -128,39 +131,36 @@ export async function extractTextFromImage(file, onProgress) {
         }
       },
     });
-    return { ok: true, text: result.data?.text || '' };
+    const text = result?.data?.text || '';
+    return { ok: true, text, lines: text.split(/\n/).map((l) => l.trim()).filter(Boolean) };
   } catch (err) {
     return { ok: false, error: err.message || 'OCR gagal' };
   }
 }
 
-function stripLeadingNoAndNormalize(raw) {
-  let s = String(raw || '').trim();
-  s = s.replace(/^\d{1,4}\s+/, '');
-  s = s.replace(/\s*\(\s*\d+\s*gram\s*\)/gi, '');
-  s = s.replace(/\s*\(\s*\d+\s*g\s*\)/gi, '');
-  s = s.replace(/\b(size|ukuran)\s*[:=]?\s*\d+\s*(gram|g|kg|ml)?/gi, '');
-  s = s.replace(/\b(outlet|cabang|store)\s*[:=].*$/i, '');
-  s = s.replace(/\s+/g, ' ').trim();
-  return s;
+function stripLeadingNoAndNormalize(name) {
+  return String(name || '')
+    .replace(/^\d{1,3}[.)\s-]+/, '')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 export function parsePdfLinesToItems(text) {
-  const lines = String(text || '').split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  const merged = tryMergeTwoColumnPdf(text);
+  const src = merged || text;
+  const lines = String(src || '').split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
   const items = [];
   for (const line of lines) {
     if (/^(no\.?|total|grand|sub\s*total|kode\s*trans|icon\s*mall)/i.test(line)) continue;
-    const m = line.match(/^(.+?)\s+(\d+(?:\.\d+)?)\s*$/);
-    if (m) {
-      items.push({ rawName: m[1].trim(), qty: parseFloat(m[2]) });
-    } else {
-      const nums = [...line.matchAll(/(\d+(?:\.\d+)?)/g)];
-      if (nums.length) {
-        const qty = parseFloat(nums[nums.length - 1][1]);
-        const namePart = line.slice(0, nums[nums.length - 1].index).trim();
-        if (namePart.length >= 3) items.push({ rawName: namePart, qty });
-      }
-    }
+    const nums = [...line.matchAll(/(\d+(?:\.\d+)?)/g)];
+    if (!nums.length) continue;
+    const qty = parseFloat(nums[nums.length - 1][1]);
+    if (!(qty > 0)) continue;
+    let rawName = line.slice(0, nums[nums.length - 1].index).trim();
+    rawName = stripLeadingNoAndNormalize(rawName);
+    rawName = rawName.replace(/\b(pack|pcs|pail|ekor|kg|box|unit|porsi)\b/gi, '').replace(/\s+/g, ' ').trim();
+    if (rawName.length < 3) continue;
+    items.push({ rawName, qty });
   }
   return items;
 }
@@ -177,9 +177,14 @@ export function validatePdfItems(entity, textOrItems, masterOverride) {
     if (!rawNameOriginal || qty <= 0) continue;
 
     const deterministic = resolvePdfNameDeterministic(entity, rawNameOriginal, master);
-    let match = deterministic;
+    let match = null;
     let status = 'matched';
-    let note = deterministic ? 'deterministic' : '';
+    let note = '';
+
+    if (deterministic) {
+      match = deterministic.item || deterministic;
+      note = deterministic.matchType || 'deterministic';
+    }
 
     if (!match) {
       const normalizedForFallback = stripLeadingNoAndNormalize(rawNameOriginal);
@@ -198,15 +203,16 @@ export function validatePdfItems(entity, textOrItems, masterOverride) {
       }
     }
 
+    const masterItem = match?.kode ? match : (match?.item || null);
     results.push({
       rawName: rawNameOriginal,
       qty,
       status,
       note,
-      kode: match?.kode || null,
-      nama: match?.nama || null,
-      satuan: match?.satuan || null,
-      match,
+      kode: masterItem?.kode || match?.kode || null,
+      nama: masterItem?.nama || match?.nama || null,
+      satuan: masterItem?.satuan || match?.satuan || null,
+      match: masterItem || match,
     });
   }
   return results;
@@ -252,25 +258,38 @@ export function nameSimilarity(a, b) {
 
 export function summarizeValidation(results) {
   if (!results || !Array.isArray(results)) {
-    if (results && typeof results === 'object') {
-      const matched = results.matched || [];
-      return { matched: matched.length, ambiguous: (results.ambiguous || []).length, unmatched: (results.unmatched || []).length, matchedItems: matched };
-    }
     return { matched: 0, ambiguous: 0, unmatched: 0, matchedItems: [] };
   }
   const matchedItems = results.filter((r) => r.status === 'matched');
-  return { matched: matchedItems.length, ambiguous: results.filter((r) => r.status === 'ambiguous').length, unmatched: results.filter((r) => r.status === 'unmatched').length, matchedItems };
+  return {
+    matched: matchedItems.length,
+    ambiguous: results.filter((r) => r.status === 'ambiguous').length,
+    unmatched: results.filter((r) => r.status === 'unmatched').length,
+    matchedItems,
+  };
 }
 
 export async function scanBarcodeFromVideo(video) {
-  if (!('BarcodeDetector' in window)) return { ok: false, error: 'BarcodeDetector tidak didukung browser ini.' };
+  if (!('BarcodeDetector' in window)) {
+    return { ok: false, error: 'BarcodeDetector tidak didukung. Gunakan Chrome Android terbaru, atau ketik kode manual.' };
+  }
+  if (!video || video.readyState < 2) {
+    return { ok: false, error: 'Kamera belum siap' };
+  }
   try {
-    const detector = new window.BarcodeDetector({ formats: ['qr_code', 'ean_13', 'ean_8', 'code_128'] });
+    const detector = new window.BarcodeDetector({
+      formats: ['qr_code', 'ean_13', 'ean_8', 'code_128', 'code_39', 'upc_a', 'upc_e'],
+    });
     const barcodes = await detector.detect(video);
-    if (barcodes.length === 0) return { ok: false, error: 'Tidak ada barcode terdeteksi. Arahkan kamera ke barcode.' };
-    return { ok: true, value: barcodes[0].rawValue };
+    if (!barcodes || barcodes.length === 0) {
+      return { ok: false, error: 'Tidak ada barcode terdeteksi. Arahkan kamera ke barcode.' };
+    }
+    const raw = barcodes[0].rawValue;
+    const value = raw == null ? '' : String(raw);
+    if (!value) return { ok: false, error: 'Barcode kosong' };
+    return { ok: true, value };
   } catch (err) {
-    return { ok: false, error: err.message || 'Scan gagal' };
+    return { ok: false, error: err?.message || 'Scan gagal' };
   }
 }
 
