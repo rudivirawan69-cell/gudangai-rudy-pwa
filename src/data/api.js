@@ -6,6 +6,8 @@ const BATCH_CHUNK_SIZE = 15;
 const BATCH_TIMEOUT_MS = 150000;
 const SINGLE_TIMEOUT_MS = 45000;
 const SCHEMA_VERSION = '1.0';
+const SAFE_WRITE_BACKEND_RE = /STOCK-READONLY|STOCK-SOURCE-LOCKED/i;
+
 const APPLIED_KEY = 'gudangai_applied';
 const QUEUE_KEY = 'gudangai_queue';
 const APPLIED_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -124,6 +126,22 @@ export async function healthCheck() {
 export function getConnectionStatus() { return { online: navigator.onLine, apiUrl: getApiUrl() }; }
 export function getWriteCircuitState() {
   return { failures: 0, openedAt: 0, lastError: '', open: false, retryAfterMs: 0 };
+}
+async function assertSafeWriteBackend() {
+  const health = await healthCheck();
+  const version = String(
+    health?.data?.version ??
+    health?.data?.data?.version ??
+    ''
+  ).trim();
+
+  if (!health?.ok) {
+    throw new Error('WRITE DITAHAN: backend tidak terverifikasi. Tidak ada transaksi yang dikirim.');
+  }
+  if (!SAFE_WRITE_BACKEND_RE.test(version)) {
+    throw new Error('WRITE DITAHAN: backend belum LOCK Stock CV/PT. Versi: ' + (version || 'tidak diketahui'));
+  }
+  return health;
 }
 function mapStockItem(it, entity) {
   const stockAkhir = Number(it.stockAkhir ?? it.stok ?? it.qty ?? it.sisa ?? 0) || 0;
@@ -318,6 +336,13 @@ function emitProgress(sent, total, chunkResult) {
 async function submitItems(action, entity, items, tanggal) {
   const list = (items || []).map(ensureClientItemId);
   if (!list.length) return { success: false, error: 'Tidak ada item' };
+
+  // HARD SAFETY: sebelum transaksi apa pun dikirim, backend wajib mengiklankan
+  // kontrak STOCK-READONLY. Backend lama yang masih boleh menulis Stock CV/PT
+  // akan otomatis ditolak oleh PWA.
+  if (navigator.onLine && getApiUrl()) {
+    await assertSafeWriteBackend();
+  }
   if (!navigator.onLine || !getApiUrl()) {
     enqueue(action, entity, list, { tanggal });
     return { success: true, queued: true, count: list.length };
