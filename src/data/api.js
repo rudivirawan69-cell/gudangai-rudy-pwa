@@ -1,4 +1,4 @@
-/** GudangAI RUDY — API layer V6.4.15 + V6.6.3 batch fix */
+/** GudangAI RUDY — API layer V6.4.15 + V6.6.4 deploy fix */
 const RETRY_COUNT = 2;
 const RETRY_BASE_MS = 400;
 const REQUEST_TIMEOUT_MS = 12000;
