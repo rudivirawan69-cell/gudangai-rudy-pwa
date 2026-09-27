@@ -1,6 +1,6 @@
 /**
  * pdfValidate.js — PDF/image text extraction + master validation
- * V6.7.4: unwrap deterministic {item, matchType}
+ * V6.8.0: OCR foto uses same validation pipeline as PDF for consistent accuracy
  */
 import { matchByAlias, getMasterByEntity } from './master';
 import { resolvePdfNameDeterministic, normalizeOcr } from './pdfDeterministicRules';
@@ -71,6 +71,10 @@ export async function extractTextFromPdf(file, onProgress) {
   }
 }
 
+/**
+ * Enhanced image OCR — pre-process text for better validation accuracy
+ * Uses same normalizeOcr pipeline + additional OCR-specific cleaning
+ */
 export async function extractTextFromImage(file, onProgress) {
   if (onProgress) onProgress('OCR foto...');
   try {
@@ -82,29 +86,76 @@ export async function extractTextFromImage(file, onProgress) {
         }
       },
     });
-    const text = result?.data?.text || '';
-    return { ok: true, text, lines: text.split(/\n/).map((l) => l.trim()).filter(Boolean) };
+    const rawText = result?.data?.text || '';
+    // OCR post-processing: fix common OCR mistakes
+    const cleaned = cleanOcrText(rawText);
+    const lines = cleaned.split(/\n/).map((l) => l.trim()).filter(Boolean);
+    return { ok: true, text: cleaned, lines };
   } catch (err) {
     return { ok: false, error: err.message || 'OCR gagal' };
   }
 }
 
+/**
+ * Clean OCR text — fix common misreads for Indonesian food/stock items
+ */
+function cleanOcrText(text) {
+  return String(text || '')
+    // Fix common OCR character substitutions
+    .replace(/[|l](?=\d)/gi, '1')        // |5 or l5 → 15
+    .replace(/(?<=\d)[oO]/g, '0')         // 1o → 10
+    .replace(/\bAyarn\b/gi, 'Ayam')       // Ayarn → Ayam
+    .replace(/\bDag[il]ng\b/gi, 'Daging') // Dagiing/Daging
+    .replace(/\bBaks[oO0]\b/gi, 'Bakso')  // Baks0 → Bakso
+    .replace(/\bNugge[t7]\b/gi, 'Nugget') // Nugge7 → Nugget
+    .replace(/\bS[ao0]s[il]s\b/gi, 'Sosis') // S0sis, Sasis
+    .replace(/\bBumb[uU0]\b/gi, 'Bumbu')  // Bumb0
+    .replace(/\bSa[oO0]s\b/gi, 'Saos')    // Sa0s
+    .replace(/\bSamba[l1]\b/gi, 'Sambal')  // Sambal
+    .replace(/\bF[il1]llet\b/gi, 'Fillet') // F1llet
+    .replace(/\b[Kk]atsu\b/g, 'Katsu')
+    .replace(/\bCh[il1]ken\b/gi, 'Chiken') // Ch1ken → Chiken (matching master data spelling)
+    // Fix unit/satuan OCR
+    .replace(/\bPa[ck]k\b/gi, 'Pack')
+    .replace(/\bpc[s5]\b/gi, 'pcs')
+    .replace(/\bGR[A4]M\b/gi, 'GRAM')
+    // Fix number-space issues
+    .replace(/(\d)\s*[xX×]\s*(\d)/g, '$1 x $2')
+    // Remove stray special characters from OCR noise
+    .replace(/[~`^{}[\]\\]/g, '')
+    // Normalize whitespace
+    .replace(/\s+/g, ' ');
+}
+
 function stripLeadingNo(name) {
-  return String(name || '').replace(/^\d{1,3}[.)\s-]+/, '').replace(/\s+/g, ' ').trim();
+  return String(name || '')
+    .replace(/^\d{1,3}[.)\s-]+/, '')
+    .replace(/\s*[/\\]\s*cv\.?\s*pd3\s*chicken/gi, '')
+    .replace(/\s*[/\\]\s*good\s*eat/gi, '')
+    .replace(/[-–—]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 export function parsePdfLinesToItems(text) {
   const lines = String(text || '').split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
   const items = [];
   for (const line of lines) {
-    if (/^(no\.?|total|grand|sub\s*total)/i.test(line)) continue;
-    const nums = [...line.matchAll(/(\d+(?:\.\d+)?)/g)];
+    if (/^(no\.?|total|grand|sub\s*total|jumlah|halaman|page)/i.test(line)) continue;
+    // Skip header-like lines
+    if (/^(nama\s*barang|kode|satuan|qty|quantity|unit)/i.test(line)) continue;
+    const nums = [...line.matchAll(/(\d+(?:[.,]\d+)?)/g)];
     if (!nums.length) continue;
-    const qty = parseFloat(nums[nums.length - 1][1]);
-    if (!(qty > 0)) continue;
+    // Take the last number as qty (could have commas for decimals)
+    let qtyStr = nums[nums.length - 1][1].replace(',', '.');
+    const qty = parseFloat(qtyStr);
+    if (!(qty > 0) || qty > 99999) continue;
     let rawName = line.slice(0, nums[nums.length - 1].index).trim();
-    rawName = stripLeadingNo(rawName).replace(/\b(pack|pcs|pail|ekor|kg|box|unit|porsi)\b/gi, '').replace(/\s+/g, ' ').trim();
-    if (rawName.length < 3) continue;
+    rawName = stripLeadingNo(rawName)
+      .replace(/\b(pack|pcs|pail|ekor|kg|box|unit|porsi|gram|liter)\b/gi, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (rawName.length < 2) continue;
     items.push({ rawName, qty });
   }
   return items;
@@ -114,6 +165,7 @@ export function validatePdfItems(entity, textOrItems, masterOverride) {
   const master = masterOverride || getMasterByEntity(entity) || [];
   const items = Array.isArray(textOrItems) ? textOrItems : parsePdfLinesToItems(textOrItems);
   const results = [];
+  const seenKodes = new Set(); // prevent duplicate matches
   for (const it of items) {
     const rawNameOriginal = it.rawName || it.nama || it.name || '';
     const qty = Number(it.qty) || 0;
@@ -127,20 +179,35 @@ export function validatePdfItems(entity, textOrItems, masterOverride) {
       note = deterministic.matchType || 'deterministic';
     }
     if (!match) {
-      match = matchByAlias(entity, stripLeadingNo(rawNameOriginal));
-      if (match) note = 'alias';
+      const aliasResult = matchByAlias(entity, stripLeadingNo(rawNameOriginal));
+      if (aliasResult) {
+        match = aliasResult;
+        note = aliasResult.matchType || 'alias';
+      }
     }
     if (!match) {
       status = 'unmatched';
       note = 'tidak cocok master';
     }
     const masterItem = match?.kode ? match : (match?.item || null);
+    const kode = masterItem?.kode || match?.kode || null;
+
+    // Deduplicate: if same kode already matched, merge qty
+    if (kode && seenKodes.has(kode)) {
+      const existing = results.find((r) => r.kode === kode && r.status === 'matched');
+      if (existing) {
+        existing.qty = +(existing.qty + qty).toFixed(2);
+        continue;
+      }
+    }
+    if (kode) seenKodes.add(kode);
+
     results.push({
       rawName: rawNameOriginal,
       qty,
       status,
       note,
-      kode: masterItem?.kode || match?.kode || null,
+      kode,
       nama: masterItem?.nama || match?.nama || null,
       satuan: masterItem?.satuan || match?.satuan || null,
       match: masterItem || match,
@@ -176,8 +243,13 @@ export function applyStockAwareFallback(matched) {
 
 export function detectEntityFromText(text) {
   const t = String(text || '').toLowerCase();
-  if (/\bpt\.?\s*rasyuka|\bpt\b/.test(t) && !/\bcv\b/.test(t)) return 'PT';
-  if (/\bcv\.?\s*selera|\bcv\b/.test(t) && !/\bpt\b/.test(t)) return 'CV';
+  if (/\bpt\.?\s*rasyuka|\brasyuka\b/.test(t)) return 'PT';
+  if (/\bcv\.?\s*selera|\bselera\b/.test(t)) return 'CV';
+  // Count mentions
+  const ptCount = (t.match(/\bpt[-.\s]/g) || []).length;
+  const cvCount = (t.match(/\bcv[-.\s]/g) || []).length;
+  if (ptCount > cvCount && ptCount >= 2) return 'PT';
+  if (cvCount > ptCount && cvCount >= 2) return 'CV';
   return null;
 }
 

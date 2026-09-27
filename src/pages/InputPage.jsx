@@ -40,6 +40,7 @@ export default function InputPage() {
   const [accuracy, setAccuracy] = useState(null);
   const [cart, setCart] = useState([]);
   const [submitting, setSubmitting] = useState(false);
+  const [submitProgress, setSubmitProgress] = useState(null);
   const [showPaste, setShowPaste] = useState(false);
   const [pasteText, setPasteText] = useState('');
   const [showNotif, setShowNotif] = useState(false);
@@ -54,6 +55,14 @@ export default function InputPage() {
   const scanAbortRef = useRef(false);
 
   useEffect(() => { setUnread(unreadNotificationCount()); }, [showNotif]);
+  useEffect(() => {
+    const handler = (e) => {
+      const d = e.detail || {};
+      setSubmitProgress({ sent: d.sent || 0, total: d.total || 0, success: d.success || 0, failed: d.failed || 0 });
+    };
+    window.addEventListener('gudangai-submit-progress', handler);
+    return () => window.removeEventListener('gudangai-submit-progress', handler);
+  }, []);
   useEffect(() => {
     if (!query.trim()) { setHits([]); return; }
     const t = setTimeout(() => setHits(searchMaster(entity, query).slice(0, 12)), 180);
@@ -207,7 +216,7 @@ export default function InputPage() {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) { setStatusBanner('Suara tidak didukung. Pakai Chrome Android / Safari terbaru.'); return; }
     try {
-      const rec = new SR(); rec.lang = 'id-ID'; rec.interimResults = false; rec.maxAlternatives = 3;
+      const rec = new SR(); rec.lang = 'id-ID'; rec.interimResults = false; rec.maxAlternatives = 5; rec.continuous = false;
       setStatusBanner('🎤 Mendengarkan… sebutkan nama barang'); setBusy(true);
       rec.onresult = (ev) => {
         const t = (ev.results?.[0]?.[0]?.transcript || '').trim(); setBusy(false);
@@ -231,19 +240,26 @@ export default function InputPage() {
 
   const handleSubmit = async () => {
     if (submittingRef.current || !cart.length) return;
-    submittingRef.current = true; setSubmitting(true);
+    submittingRef.current = true; setSubmitting(true); setSubmitProgress({ sent: 0, total: cart.length, success: 0, failed: 0 });
     try {
       const items = cart.map((c) => ({ kode: c.kode, nama: c.nama, qty: c.qty, satuan: c.satuan, keterangan: c.keterangan || '', clientItemId: c.clientItemId }));
       const fn = txType === 'masuk' ? submitBarangMasuk : txType === 'rusak' ? submitBarangRusak : submitBarangKeluar;
       const res = await fn({ entity, tanggal, items });
       if (res?.success !== false) {
+        const okCount = res.count || cart.length;
+        const failCount = res.failed || 0;
         saveToHistory({ type: txType, entity, items: cart, tanggal, at: Date.now() });
-        pushNotification({ type: 'success', title: 'Berhasil', body: cart.length + ' item ' + txType + ' ' + entity });
-        setCart([]); setStatusBanner('Berhasil dikirim · ' + cart.length + ' item'); setAccuracy(null);
+        pushNotification({ type: 'success', title: 'Berhasil', body: okCount + ' item ' + txType + ' ' + entity + (failCount ? ' (' + failCount + ' gagal, di-queue)' : '') });
+        setCart([]); setAccuracy(null);
+        if (failCount > 0) {
+          setStatusBanner('Terkirim ' + okCount + ' item · ' + failCount + ' gagal (masuk antrian offline)');
+        } else {
+          setStatusBanner('Berhasil dikirim · ' + okCount + ' item');
+        }
         window.dispatchEvent(new Event('gudangai-stock-refresh'));
       } else setStatusBanner(res?.error || 'Gagal kirim');
     } catch (err) { setStatusBanner(err.message || 'Gagal kirim'); }
-    finally { setSubmitting(false); submittingRef.current = false; }
+    finally { setSubmitting(false); submittingRef.current = false; setSubmitProgress(null); }
   };
 
   const openNotif = () => { setNotifs(getNotifications()); markNotificationsRead(); setUnread(0); setShowNotif((v) => !v); };
@@ -396,11 +412,25 @@ export default function InputPage() {
               </div>
             </div>
           ))}
-          <button type="button" onClick={handleSubmit} disabled={submitting || !cart.length}
-            className="fixed bottom-20 left-4 right-4 z-40 py-3.5 rounded-2xl bg-cyan-600 text-white font-bold shadow-lg disabled:opacity-50 flex items-center justify-center gap-2">
-            {submitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
-            Kirim {cart.length} item
-          </button>
+          <div className="fixed bottom-20 left-4 right-4 z-40 space-y-1.5">
+            {submitting && submitProgress && (
+              <div className="rounded-xl bg-white border border-cyan-200 shadow-md px-3 py-2">
+                <div className="flex justify-between text-xs font-semibold text-slate-700 mb-1">
+                  <span>Mengirim {submitProgress.sent}/{submitProgress.total}</span>
+                  <span className="text-emerald-600">{submitProgress.success} OK{submitProgress.failed > 0 ? ` · ${submitProgress.failed} gagal` : ''}</span>
+                </div>
+                <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                  <div className="h-full bg-gradient-to-r from-cyan-500 to-emerald-500 rounded-full transition-all duration-300"
+                    style={{ width: `${submitProgress.total ? Math.round((submitProgress.sent / submitProgress.total) * 100) : 0}%` }} />
+                </div>
+              </div>
+            )}
+            <button type="button" onClick={handleSubmit} disabled={submitting || !cart.length}
+              className="w-full py-3.5 rounded-2xl bg-cyan-600 text-white font-bold shadow-lg disabled:opacity-50 flex items-center justify-center gap-2">
+              {submitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
+              {submitting && submitProgress ? `Mengirim ${submitProgress.sent}/${submitProgress.total}...` : `Kirim ${cart.length} item`}
+            </button>
+          </div>
         </div>
       )}
 
