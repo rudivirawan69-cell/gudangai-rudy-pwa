@@ -303,3 +303,34 @@ html, body, #root {
 @media (min-width: 520px) {
   main { padding-left: 1rem; padding-right: 1rem; }
 }
+
+
+/* ── Global contrast & shared page system v6.8.1 ── */
+.page-header{color:var(--text-main);background:rgba(255,255,255,.96);border:1px solid #e2e8f0;border-radius:1.15rem;padding:.85rem .9rem;box-shadow:var(--shadow-sm)}
+.page-kicker{color:#475569;font-size:10px;font-weight:800;letter-spacing:.075em;text-transform:uppercase}
+.page-title{color:#0f172a;font-size:1.05rem;line-height:1.25;font-weight:800}
+.page-subtitle{color:#475569;font-size:11px;line-height:1.4}
+.section-card,.section-card-header,.menu-group{background:rgba(255,255,255,.98);color:#0f172a;border:1px solid #e2e8f0;box-shadow:var(--shadow-sm)}
+.section-card{border-radius:1.15rem}
+.section-card-header{display:flex;align-items:center;justify-content:space-between;gap:.75rem;padding:.75rem 1rem;border-radius:1.15rem 1.15rem 0 0}
+.menu-group{overflow:hidden;border-radius:0 0 1.15rem 1.15rem}
+.menu-group .menu-row + .menu-row{border-top:1px solid #eef2f7}
+.menu-row{color:#0f172a;background:#fff}
+.menu-row:hover{background:#f8fafc}
+.menu-row:focus-visible{outline:3px solid rgba(6,182,212,.28);outline-offset:-3px}
+.status-pill{display:inline-flex;align-items:center;justify-content:center;min-height:1.5rem;padding:.25rem .6rem;border-radius:999px;font-size:10px;font-weight:800;white-space:nowrap}
+.status-pill-neutral{color:#334155;background:#f1f5f9;border:1px solid #cbd5e1}
+.info-box{color:#334155;background:#f8fafc;border:1px solid #e2e8f0;border-radius:.85rem}
+.info-box p{color:inherit}
+.info-box-ok{color:#065f46;background:#ecfdf5;border-color:#a7f3d0}
+.info-box-danger{color:#991b1b;background:#fef2f2;border-color:#fecaca}
+.info-box-warn{color:#92400e;background:#fffbeb;border-color:#fde68a}
+.info-box-warn p{color:#92400e}
+.page-header *, .section-card *, .section-card-header *, .menu-group *, .card *, .surface *, .stat-tile *, .stock-card *{text-shadow:none}
+.section-card .text-slate-400,.section-card-header .text-slate-400,.menu-group .text-slate-400,.card .text-slate-400,.surface .text-slate-400{color:#64748b!important}
+.section-card .text-slate-500,.section-card-header .text-slate-500,.menu-group .text-slate-500,.card .text-slate-500,.surface .text-slate-500{color:#475569!important}
+.section-card .text-slate-600,.section-card-header .text-slate-600,.menu-group .text-slate-600,.card .text-slate-600,.surface .text-slate-600{color:#334155!important}
+.section-card .text-slate-700,.section-card-header .text-slate-700,.menu-group .text-slate-700,.card .text-slate-700,.surface .text-slate-700{color:#1e293b!important}
+.section-card .text-slate-800,.section-card-header .text-slate-800,.menu-group .text-slate-800,.card .text-slate-800,.surface .text-slate-800{color:#0f172a!important}
+.metric-value,.page-title,.menu-row .font-semibold,.menu-row .font-bold{color:#0f172a}
+@media(max-width:380px){.page-header{padding:.75rem}.page-title{font-size:1rem}.page-subtitle{font-size:10px}.menu-row{padding-left:.75rem;padding-right:.75rem}}
