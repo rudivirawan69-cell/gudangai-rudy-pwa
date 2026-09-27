@@ -1,6 +1,6 @@
 /**
  * ============================================================================
- * BACKEND GudangAI-69 V6.4.5+STOCK-UPDATE + PO Writer
+ * BACKEND GudangAI-69 V6.5.0+BATCH-TRANSACTION + STOCK-UPDATE + PO Writer
  * Spreadsheet: COLD STORAGE SEPTEMBER '26
  * ID: 1lJwqvSNZUNBO4ZH-PgVZsgd5Cf57UgCjGJIRD05IeCw
  * ============================================================================
@@ -15,12 +15,17 @@
  * PO SHEET (tab "purchase order") — FORMAT TETAP:
  *   Baris 5 header: B=NO | C=NAMA BARANG | D=SIZE | E=SATUAN | F=PO CV | G=PO PT | H=TOTAL | I=TGL KEDATANGAN
  *   Data mulai baris 6 → kolom B s/d I saja (jangan geser kolom)
+ *
+ * CHANGELOG V6.5.0:
+ * - Tambah action addBatchTransaction: proses 15-80 item dalam SATU request
+ * - Menghilangkan kebutuhan 80x HTTP round-trip → 1-6x saja
+ * - Fallback otomatis: jika batch gagal, PWA kirim satu-satu
  * ============================================================================
  */
 
 var SPREADSHEET_ID_FALLBACK = '1lJwqvSNZUNBO4ZH-PgVZsgd5Cf57UgCjGJIRD05IeCw';
-var VERSION = '6.4.5+STOCK-UPDATE';
-var TITLE = 'BACKEND GudangAI-69 V6.4.5';
+var VERSION = '6.5.0+BATCH-TX';
+var TITLE = 'BACKEND GudangAI-69 V6.5.0';
 var TZ = 'Asia/Jakarta';
 
 /** Nama tab purchase order (urutan dicoba) */
@@ -104,6 +109,11 @@ function route_(action, params, body) {
     return json_(addTransaction_(body));
   }
 
+  // ★ BATCH TRANSACTION — proses banyak item dalam 1 request
+  if (a === 'addBatchTransaction' || a === 'batchTransaction') {
+    return json_(addBatchTransaction_(body));
+  }
+
   if (a === 'generatePO' || a === 'writePurchaseOrder') {
     return json_(writePurchaseOrder_(body));
   }
@@ -111,7 +121,7 @@ function route_(action, params, body) {
   return json_({
     success: false,
     error: 'UNKNOWN_ACTION',
-    available: ['status', 'getAllStock', 'addTransaction', 'generatePO', 'writePurchaseOrder']
+    available: ['status', 'getAllStock', 'addTransaction', 'addBatchTransaction', 'generatePO', 'writePurchaseOrder']
   });
 }
 
@@ -156,7 +166,8 @@ function statusPayload_() {
     spreadsheet: ss.getName(),
     activeMonth: { bulan: 9, tahun: 2026, nama: 'SEPTEMBER' },
     serverTime: now.toISOString(),
-    poSheet: findPoSheet_(ss) ? findPoSheet_(ss).getName() : null
+    poSheet: findPoSheet_(ss) ? findPoSheet_(ss).getName() : null,
+    batchSupported: true
   };
 }
 
@@ -288,6 +299,110 @@ function addTransaction_(body) {
     note: stockResult.note || '',
     transactionId: body.transactionId || '',
     requestId: body.requestId || ''
+  };
+}
+
+// ---------------------------------------------------------------------------
+// BATCH TRANSACTION — proses banyak item dalam 1 request (V6.5.0)
+// Menghilangkan 80x HTTP round-trip → 1x saja
+// ---------------------------------------------------------------------------
+
+/**
+ * addBatchTransaction_(body)
+ * body.items = [{kodeBarang, qty, keterangan, clientItemId}, ...]
+ * body.sheet = 'Barang masuk' / 'Barang keluar' / 'Barang Rusak'
+ * body.entitas = 'CV' / 'PT'
+ * body.tanggal (opsional)
+ *
+ * Proses semua item dalam satu eksekusi Apps Script.
+ * Flush setiap 15 item agar tidak kena timeout.
+ * Return {success, results: [{success, kode, clientItemId, stockAkhir}]}
+ */
+function addBatchTransaction_(body) {
+  var rawItems = body.items || [];
+  if (!Array.isArray(rawItems) || rawItems.length === 0) {
+    return { success: false, error: 'items kosong' };
+  }
+  if (rawItems.length > 100) {
+    return { success: false, error: 'Maksimal 100 item per batch' };
+  }
+
+  var sheetName = String(body.sheet || '').trim();
+  var entitas = String(body.entitas || body.entity || 'CV').toUpperCase();
+
+  if (entitas !== 'CV' && entitas !== 'PT') {
+    return { success: false, error: 'entitas harus CV atau PT' };
+  }
+  if (!sheetName) {
+    return { success: false, error: 'sheet wajib (Barang masuk/keluar/Rusak)' };
+  }
+
+  var results = [];
+  var successCount = 0;
+  var failCount = 0;
+
+  for (var i = 0; i < rawItems.length; i++) {
+    var item = rawItems[i] || {};
+    var singleBody = {
+      sheet: sheetName,
+      entitas: entitas,
+      entity: entitas,
+      kodeBarang: String(item.kodeBarang || item.kode || '').trim(),
+      kode: String(item.kode || item.kodeBarang || '').trim(),
+      qty: item.qty,
+      keterangan: String(item.keterangan || '').trim(),
+      tanggal: body.tanggal || item.tanggal,
+      requestId: item.requestId || item.clientItemId || '',
+      transactionId: item.transactionId || '',
+      clientItemId: item.clientItemId || ''
+    };
+
+    try {
+      var res = addTransaction_(singleBody);
+      if (res.success !== false) {
+        successCount++;
+        results.push({
+          success: true,
+          kode: singleBody.kodeBarang,
+          clientItemId: item.clientItemId || '',
+          stockAkhir: res.stockAkhir,
+          status: res.status || 'APPLIED'
+        });
+      } else {
+        failCount++;
+        results.push({
+          success: false,
+          kode: singleBody.kodeBarang,
+          clientItemId: item.clientItemId || '',
+          error: res.error || 'Gagal'
+        });
+      }
+    } catch (err) {
+      failCount++;
+      results.push({
+        success: false,
+        kode: singleBody.kodeBarang,
+        clientItemId: item.clientItemId || '',
+        error: String(err.message || err)
+      });
+    }
+
+    // Flush setiap 15 item untuk mencegah timeout
+    if ((i + 1) % 15 === 0) {
+      try { SpreadsheetApp.flush(); } catch (_) {}
+    }
+  }
+
+  // Flush sisa
+  try { SpreadsheetApp.flush(); } catch (_) {}
+
+  return {
+    success: successCount > 0,
+    status: failCount === 0 ? 'ALL_APPLIED' : (successCount > 0 ? 'PARTIAL' : 'ALL_FAILED'),
+    total: rawItems.length,
+    successCount: successCount,
+    failCount: failCount,
+    results: results
   };
 }
 
@@ -601,4 +716,19 @@ function testWritePO() {
     ]
   });
   Logger.log(JSON.stringify(res));
+}
+
+/**
+ * Tes batch transaction:
+ */
+function testBatchTransaction() {
+  var res = addBatchTransaction_({
+    sheet: 'Barang masuk',
+    entitas: 'CV',
+    items: [
+      { kodeBarang: 'CV-0001', qty: 5, keterangan: 'test batch 1', clientItemId: 'test-1' },
+      { kodeBarang: 'CV-0002', qty: 3, keterangan: 'test batch 2', clientItemId: 'test-2' }
+    ]
+  });
+  Logger.log(JSON.stringify(res, null, 2));
 }
