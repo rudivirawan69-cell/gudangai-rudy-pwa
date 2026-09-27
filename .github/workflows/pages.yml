@@ -17,9 +17,6 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     outputs:
       artifact_id: ${{ steps.upload-pages-artifact.outputs.artifact-id }}
     steps:
