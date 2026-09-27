@@ -1,9 +1,10 @@
-/** GudangAI RUDY — API layer V6.4.15 + V6.6.4 deploy fix */
+/** GudangAI RUDY — API layer V6.5.0 + Batch Transaction */
 const RETRY_COUNT = 2;
 const RETRY_BASE_MS = 400;
 const REQUEST_TIMEOUT_MS = 12000;
 const WRITE_TIMEOUT_MAX_MS = 120000;
-const BATCH_CHUNK_SIZE_BASE = 8;
+const BATCH_CHUNK_SIZE = 15;
+const BATCH_TIMEOUT_MS = 120000;
 const SCHEMA_VERSION = '1.0';
 const APPLIED_KEY = 'gudangai_applied';
 const QUEUE_KEY = 'gudangai_queue';
@@ -12,6 +13,7 @@ const NOTIF_KEY = 'gudangai_notif';
 const DEFAULT_API_URL = 'https://script.google.com/macros/s/AKfycbwtSr7cdBKhvJOwwkSZ9GUf1ebuHOM8CsKXo1I6r8v0Z_gi4_ElrDK9oez8LX5DAB1INw/exec';
 let _syncLock = false;
 let _queueRevision = 0;
+let _batchSupported = null; // null = unknown, true/false after first check
 
 import { hydrateQueueBackup, persistQueueBackup } from './offlineStore';
 function emitConn(detail) { try { window.dispatchEvent(new CustomEvent('gudangai-conn', { detail })); } catch (_) {} }
@@ -24,6 +26,7 @@ export function getApiUrl() {
 export function setApiUrl(url) {
   const c = (url || '').trim();
   localStorage.setItem('gudangai_api_url', c || DEFAULT_API_URL);
+  _batchSupported = null; // reset detection on URL change
 }
 export function getApiSecret() { return (localStorage.getItem('gudangai_api_secret') || '').trim(); }
 export function setApiSecret(secret) {
@@ -108,7 +111,12 @@ export async function healthCheck() {
     let data = null;
     try { data = await getJson('ping'); } catch (_) {}
     if (!data) try { data = await getJson('status'); } catch (_) {}
-    if (data && (data.success || data.status === 'OK' || data.ok)) return { ok: true, data };
+    if (data && (data.success || data.status === 'OK' || data.ok)) {
+      // Detect batch support from status response
+      if (data.data && data.data.batchSupported != null) _batchSupported = !!data.data.batchSupported;
+      else if (data.batchSupported != null) _batchSupported = !!data.batchSupported;
+      return { ok: true, data };
+    }
     return { ok: false, offline: true, error: (data && data.error) || 'Tidak terjangkau' };
   } catch (err) {
     return { ok: false, offline: true, error: err.message || 'Offline' };
@@ -227,6 +235,81 @@ async function submitOneItem(sheetOrAction, entity, it, tanggal) {
   }
   return { success: false, error: (data && (data.error || data.message)) || 'Gagal tulis', clientItemId: cid };
 }
+
+/**
+ * ★ BATCH SUBMISSION — kirim chunk item ke addBatchTransaction
+ * Menghilangkan N round-trip → 1 request per chunk
+ */
+async function submitBatchChunk(action, entity, chunkItems, tanggal) {
+  const SHEET_MAP = { barangMasuk: 'Barang masuk', barangKeluar: 'Barang keluar', barangRusak: 'Barang Rusak' };
+  const sheetName = SHEET_MAP[action] || action;
+
+  // Filter already applied items
+  const toSend = [];
+  const skipped = [];
+  for (const it of chunkItems) {
+    const cid = it.clientItemId || ensureClientItemId(it).clientItemId;
+    if (isApplied(cid)) {
+      skipped.push({ success: true, skipped: true, clientItemId: cid });
+    } else {
+      toSend.push({
+        kodeBarang: String(it.kode || it.kodeBarang || '').trim(),
+        kode: String(it.kode || it.kodeBarang || '').trim(),
+        qty: Number(it.qty) || 0,
+        keterangan: String(it.keterangan || '').trim().slice(0, 200),
+        clientItemId: cid,
+        requestId: cid,
+        transactionId: 'TX-' + cid,
+      });
+    }
+  }
+
+  if (!toSend.length) {
+    return { success: true, successCount: skipped.length, failCount: 0, results: skipped };
+  }
+
+  const payload = {
+    action: 'addBatchTransaction',
+    sheet: sheetName,
+    entitas: String(entity || '').toUpperCase(),
+    tanggal: tanggal || new Date().toISOString().slice(0, 10),
+    items: toSend,
+    requestId: newIds().requestId,
+  };
+
+  const data = await postJson(payload, { retries: 1, timeoutMs: BATCH_TIMEOUT_MS });
+
+  // Check if backend doesn't support batch (UNKNOWN_ACTION)
+  if (data && data.error === 'UNKNOWN_ACTION') {
+    _batchSupported = false;
+    throw new Error('BATCH_NOT_SUPPORTED');
+  }
+
+  _batchSupported = true;
+
+  // Mark applied items
+  const batchResults = [];
+  if (data && Array.isArray(data.results)) {
+    for (const r of data.results) {
+      if (r.success && r.clientItemId) markApplied(r.clientItemId);
+      batchResults.push(r);
+    }
+  }
+
+  return {
+    success: (data && data.success) || false,
+    successCount: (data && data.successCount) || 0,
+    failCount: (data && data.failCount) || 0,
+    results: [...skipped, ...batchResults],
+  };
+}
+
+/**
+ * submitItems — batch-first with one-by-one fallback
+ * 1. If batch supported: send in chunks of BATCH_CHUNK_SIZE (15)
+ * 2. If batch fails or not supported: fallback to one-by-one
+ * 3. Failed items → queued for retry
+ */
 async function submitItems(action, entity, items, tanggal) {
   const list = (items || []).map(ensureClientItemId);
   if (!list.length) return { success: false, error: 'Tidak ada item' };
@@ -234,21 +317,61 @@ async function submitItems(action, entity, items, tanggal) {
     enqueue(action, entity, list, { tanggal });
     return { success: true, queued: true, count: list.length };
   }
-  const results = [];
-  for (const it of list) {
-    try {
-      results.push(await submitOneItem(action, entity, it, tanggal));
-    } catch (err) {
-      results.push({ success: false, error: err.message, clientItemId: it.clientItemId });
+
+  const allResults = [];
+  let totalSuccess = 0;
+  let totalFail = 0;
+  let useBatch = _batchSupported !== false; // try batch unless explicitly disabled
+
+  // Process in chunks
+  for (let i = 0; i < list.length; i += BATCH_CHUNK_SIZE) {
+    const chunk = list.slice(i, i + BATCH_CHUNK_SIZE);
+
+    if (useBatch) {
+      try {
+        const batchRes = await submitBatchChunk(action, entity, chunk, tanggal);
+        if (batchRes && batchRes.results) {
+          allResults.push(...batchRes.results);
+          totalSuccess += batchRes.successCount || 0;
+          totalFail += batchRes.failCount || 0;
+        } else if (batchRes && batchRes.success) {
+          totalSuccess += chunk.length;
+          chunk.forEach((it) => allResults.push({ success: true, clientItemId: it.clientItemId }));
+        }
+        continue; // batch succeeded, move to next chunk
+      } catch (err) {
+        if (err.message === 'BATCH_NOT_SUPPORTED') {
+          useBatch = false;
+          // Fall through to one-by-one for this chunk
+        } else {
+          // Network/timeout error on batch — fallback to one-by-one for this chunk
+          useBatch = false;
+        }
+      }
+    }
+
+    // One-by-one fallback (original behavior)
+    for (const it of chunk) {
+      try {
+        const r = await submitOneItem(action, entity, it, tanggal);
+        allResults.push(r);
+        if (r.success || r.skipped) totalSuccess++;
+        else totalFail++;
+      } catch (err) {
+        totalFail++;
+        allResults.push({ success: false, error: err.message, clientItemId: it.clientItemId });
+      }
     }
   }
-  const failed = results.filter((r) => !r.success && !r.skipped);
+
+  // Queue failed items for retry
+  const failed = allResults.filter((r) => !r.success && !r.skipped);
   if (failed.length) {
     const failItems = list.filter((it) => failed.some((f) => f.clientItemId === it.clientItemId));
     if (failItems.length) enqueue(action, entity, failItems, { tanggal });
   }
-  const ok = results.filter((r) => r.success || r.skipped).length;
-  return { success: ok > 0, count: ok, failed: failed.length, results };
+
+  return { success: totalSuccess > 0, count: totalSuccess, failed: totalFail, results: allResults };
 }
 export async function submitBarangMasuk({ entity, tanggal, items }) {
   return submitItems('barangMasuk', entity, items, tanggal);
