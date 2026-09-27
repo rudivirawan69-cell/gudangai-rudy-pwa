@@ -33,7 +33,7 @@ function formatConnLabel(data) {
 function MenuRow({ icon: Icon, iconBg, title, subtitle, onClick, right, danger }) {
   return (
     <button type="button" onClick={onClick}
-      className="w-full flex items-center gap-3 px-4 py-3.5 text-left active:bg-slate-50 transition-colors border-b border-slate-50 last:border-0">
+      className="menu-row w-full flex items-center gap-3 px-4 py-3.5 text-left active:bg-slate-50 transition-colors">
       <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${iconBg || 'bg-slate-100 text-slate-600'}`}>
         <Icon className="w-5 h-5" />
       </div>
@@ -171,16 +171,26 @@ export default function SettingsPage() {
 
   return (
     <div className="pb-2 animate-fade-in space-y-3.5">
-      <div className="card p-4 flex items-center gap-3">
-        <Avatar name={user?.name || 'Rudi Virawan'} size="lg" />
-        <div className="min-w-0 flex-1">
-          <p className="text-base font-bold text-slate-900 truncate">{user?.name || 'Rudi Virawan'}</p>
-          <p className="text-[11px] text-slate-400">SPV Gudang · Cold Storage NG69</p>
-          <p className="text-[10px] text-cyan-700 mt-0.5 font-medium">GudangAI RUDY</p>
+      <div className="page-header">
+        <div className="flex items-center gap-3">
+          <Avatar name={user?.name || 'Rudi Virawan'} size="lg" />
+          <div className="min-w-0 flex-1">
+            <p className="page-kicker flex items-center gap-2"><SettingsIcon className="w-3.5 h-3.5" /> Pengaturan aplikasi</p>
+            <p className="page-title truncate">{user?.name || 'Rudi Virawan'}</p>
+            <p className="page-subtitle">SPV Gudang · Cold Storage NG69 · GudangAI RUDY</p>
+          </div>
         </div>
       </div>
 
-      <div className="card overflow-hidden">
+      <div className="section-card-header rounded-t-[1.15rem] border border-b-0 border-slate-200">
+        <div>
+          <p className="section-label">Konfigurasi</p>
+          <p className="text-sm font-bold text-slate-800">Pengaturan & koneksi</p>
+        </div>
+        <span className="status-pill status-pill-neutral">Lokal</span>
+      </div>
+
+      <div className="menu-group">
         <MenuRow icon={User} iconBg="bg-blue-50 text-blue-600" title="Profil Saya" subtitle="Nama tampilan di dashboard" onClick={() => setPanel(panel === 'profile' ? null : 'profile')} />
         <MenuRow icon={Link2} iconBg="bg-cyan-50 text-cyan-700" title="Koneksi Google Sheets" subtitle={connSubtitle}
           onClick={() => setPanel(panel === 'koneksi' ? null : 'koneksi')}
@@ -191,13 +201,13 @@ export default function SettingsPage() {
       </div>
 
       {panel === 'profile' && (
-        <div className="card p-4 space-y-3">
+        <div className="section-card p-4 space-y-3">
           <div className="flex items-center gap-3">
             <Avatar name={username} size="lg" />
             <p className="text-[11px] text-slate-500">Foto profil aktif</p>
           </div>
           <p className="text-xs font-semibold text-slate-600">Nama tampilan</p>
-          <input value={username} onChange={(e) => setUsername(e.target.value)} className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm" placeholder="Nama" />
+          <input value={username} onChange={(e) => setUsername(e.target.value)} className="form-control px-3 py-2.5 text-sm" placeholder="Nama" />
           <button type="button" onClick={handleSaveProfile} className="w-full py-2.5 rounded-xl bg-[#0b2a55] text-white text-sm font-semibold">Simpan Nama</button>
           {profileMsg && <p className="text-xs text-emerald-600">{profileMsg}</p>}
         </div>
@@ -206,7 +216,7 @@ export default function SettingsPage() {
       {panel === 'koneksi' && (
         <div className="card p-4 space-y-3">
           <p className="text-xs font-semibold text-slate-600">URL Web App Apps Script</p>
-          <input value={apiUrl} onChange={(e) => setApiUrlState(e.target.value)} className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs font-mono" placeholder="https://script.google.com/macros/s/.../exec" />
+          <input value={apiUrl} onChange={(e) => setApiUrlState(e.target.value)} className="form-control px-3 py-2.5 text-xs font-mono" placeholder="https://script.google.com/macros/s/.../exec" />
           <p className="text-xs font-semibold text-slate-600">API Secret (Script Properties)</p>
           <input type="password" value={apiSecret} onChange={(e) => setApiSecretState(e.target.value)} className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm" placeholder="API_SECRET backend 6.4.4" />
           <div className="flex gap-2">
@@ -216,8 +226,8 @@ export default function SettingsPage() {
             </button>
           </div>
           {connMessage && (
-            <p className={`text-[11px] px-2.5 py-2 rounded-lg ${
-              connStatus === 'ok' ? 'bg-emerald-50 text-emerald-700' : connStatus === 'fail' ? 'bg-red-50 text-red-700' : 'bg-slate-50 text-slate-600'
+            <p className={`text-[11px] px-3 py-2.5 rounded-xl border ${
+              connStatus === 'ok' ? 'info-box-ok' : connStatus === 'fail' ? 'info-box-danger' : 'info-box'
             }`}>{connMessage}</p>
           )}
         </div>
@@ -225,7 +235,7 @@ export default function SettingsPage() {
 
       {panel === 'sync' && (
         <div className="card p-4 space-y-3">
-          <p className="text-xs text-slate-500">Transaksi gagal disimpan di perangkat dan disinkron saat online.</p>
+          <div className="info-box info-box-warn px-3 py-2.5 text-xs"><p className="font-semibold">Mode Offline & Sync</p><p className="mt-0.5 text-amber-800/80">Transaksi yang belum terkirim tetap berada di perangkat sampai koneksi tersedia.</p></div>
           <div className="flex gap-2">
             <button type="button" onClick={handleSync} disabled={syncing || pendingCount === 0}
               className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-500 text-white text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-50">
@@ -234,7 +244,7 @@ export default function SettingsPage() {
             <button type="button" onClick={handleClearSynced} className="px-4 py-2.5 rounded-xl bg-slate-100 text-slate-600"><Trash2 className="w-4 h-4" /></button>
           </div>
           {syncResult && (
-            <p className="text-xs text-slate-600 bg-slate-50 rounded-lg px-3 py-2">
+            <p className="info-box px-3 py-2.5 text-xs">
               {syncResult.message ? syncResult.message : syncResult.skipped ? 'Lewati — offline atau URL belum diatur.' : `Berhasil: ${syncResult.synced} · Gagal: ${syncResult.failed}`}
             </p>
           )}
@@ -251,7 +261,7 @@ export default function SettingsPage() {
       )}
 
       {panel === 'about' && (
-        <div className="card p-4 text-[11px] text-slate-500 leading-relaxed space-y-1">
+        <div className="info-box p-4 text-[11px] leading-relaxed space-y-1">
           <p className="font-semibold text-slate-700">GudangAI RUDY</p>
           <p>Cold Storage Nasi Goreng 69 · CV & PT</p>
           <p>Frontend PWA · Backend Google Apps Script V6.4.4+OUTBOX</p>
@@ -263,7 +273,7 @@ export default function SettingsPage() {
         <MenuRow icon={LogOut} iconBg="bg-red-50 text-red-600" title="Keluar" subtitle="Login ulang dengan PIN" onClick={() => setShowLogout(true)} danger />
       </div>
 
-      <div className="flex items-start gap-2 px-1">
+      <div className="info-box px-3 py-2.5 flex items-start gap-2">
         <Shield className="w-3.5 h-3.5 text-slate-300 shrink-0 mt-0.5" />
         <p className="text-[10px] text-slate-400 leading-relaxed">PIN & data antrian tersimpan lokal. Jangan bagikan API Secret.</p>
       </div>
