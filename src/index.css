@@ -1,125 +1,141 @@
 @import "tailwindcss";
 
+/* GudangAI RUDY — HD background · solid cards · high contrast */
 :root {
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
-  font-family: Inter, system-ui, -apple-system, sans-serif;
+  --radius-lg: 1.125rem;
+  --surface: #ffffff;
+  --text-main: #0f172a;
+  --text-muted: #475569;
+  --border: #e2e8f0;
+  --shadow: 0 2px 12px rgb(6 16 31 / 0.12);
+  font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
   color-scheme: light;
+  -webkit-font-smoothing: antialiased;
 }
 
 html, body, #root {
   height: 100%;
   margin: 0;
-  background: #f1f5f9;
+  background: #061018;
   -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
 }
 
-/* Safe area for notched phones */
+/* Full-screen HD background (image via inline style from bgDataUrl) */
+.app-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  background-color: #061018;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  pointer-events: none;
+}
+.app-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 80% 50% at 50% 0%, rgba(34, 211, 238, 0.12), transparent 55%);
+  pointer-events: none;
+}
+
+.app-shell {
+  position: relative;
+  z-index: 1;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
 .safe-bottom {
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
-/* Card base */
-.card {
-  background: white;
-  border-radius: 1rem;
-  border: 1px solid rgb(241 245 249);
-  box-shadow: 0 1px 2px rgb(15 23 42 / 0.04);
+/* Solid white cards — no transparency */
+.card, .surface {
+  background: #ffffff;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
 }
 .card-interactive {
-  transition: transform 0.15s var(--ease-out), box-shadow 0.2s ease;
+  transition: transform 0.14s var(--ease-out);
 }
 .card-interactive:active {
-  transform: scale(0.96);
+  transform: scale(0.97);
 }
 
-/* Page transitions */
-@keyframes pageIn {
-  from { opacity: 0.01; }
-  to { opacity: 1; }
+/* Bottom nav — dark glass for contrast on HD bg */
+.nav-bar {
+  background: rgba(8, 20, 32, 0.88);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-top: 1px solid rgba(34, 211, 238, 0.15);
+  box-shadow: 0 -4px 24px rgb(0 0 0 / 0.25);
 }
-@keyframes slideUp {
-  from { opacity: 0; transform: translateY(14px); }
-  to { opacity: 1; transform: translateY(0); }
+
+.conn-strip {
+  margin: 0.5rem 0.875rem 0;
+  padding: 0.4rem 0.75rem;
+  border-radius: 0.625rem;
+  border: 1px solid #a5f3fc;
+  background: #ecfeff;
+  color: #0e7490;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 11px;
+  font-weight: 600;
 }
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+.conn-ok { background: #ecfeff; border-color: #a5f3fc; color: #0e7490; }
+.conn-warn { background: #fffbeb; border-color: #fde68a; color: #b45309; }
+.conn-err { background: #fff1f2; border-color: #fecdd3; color: #be123c; }
+.conn-sync { background: #ecfeff; border-color: #a5f3fc; color: #0e7490; }
+
+.btn-primary {
+  background: linear-gradient(135deg, #0b2a55, #164e8a);
+  color: #fff;
+  border: none;
+  border-radius: 0.875rem;
+  font-weight: 700;
+  padding: 0.65rem 1rem;
+  box-shadow: 0 2px 8px rgb(11 42 85 / 0.25);
 }
-@keyframes pulse-ring {
-  0% { box-shadow: 0 0 0 0 rgba(6, 182, 212, 0.4); }
-  70% { box-shadow: 0 0 0 10px transparent; }
-  100% { box-shadow: 0 0 0 0 transparent; }
+
+.skeleton {
+  background: linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.2s infinite;
+}
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
 }
 @keyframes softPulse {
   0%, 100% { opacity: 1; }
-  50% { opacity: 0.65; }
+  50% { opacity: 0.55; }
 }
-@keyframes navPop {
-  0% { transform: scale(0.85); opacity: 0.6; }
-  60% { transform: scale(1.08); }
-  100% { transform: scale(1); opacity: 1; }
-}
-@keyframes colorWash {
-  from { background-position: 0% 50%; }
-  to { background-position: 100% 50%; }
+.animate-soft-pulse { animation: softPulse 1.6s ease-in-out infinite; }
+.animate-page-in { animation: fadeIn 0.22s var(--ease-out); }
+.animate-fade-in { animation: fadeIn 0.25s var(--ease-out); }
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
 }
 
-.animate-page-in {
-  animation: pageIn 0.28s ease-out forwards;
-  opacity: 1; /* fallback if animation skipped */
-}
-.animate-slide-up { animation: slideUp 0.34s var(--ease-out) forwards; }
-.animate-fade-in { animation: fadeIn 0.28s ease-out forwards; }
-.animate-pulse-ring { animation: pulse-ring 1.6s ease-out infinite; }
-.animate-soft-pulse { animation: softPulse 2s ease-in-out infinite; }
-.animate-nav-pop { animation: navPop 0.32s var(--ease-out) forwards; }
-
-/* Mode selector */
 .mode-active-masuk {
   background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
   border-color: #6ee7b7;
-  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.15);
 }
 .mode-active-keluar {
-  background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%);
-  border-color: #fdba74;
-  box-shadow: 0 0 0 2px rgba(249, 115, 22, 0.15);
+  background: linear-gradient(135deg, #ecfeff 0%, #cffafe 100%);
+  border-color: #67e8f9;
 }
 .mode-active-rusak {
   background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
   border-color: #fca5a5;
-  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.15);
-}
-.mode-dim {
-  opacity: 0.45;
-  filter: grayscale(0.35);
-  transform: scale(0.97);
-  transition: opacity 0.3s ease, filter 0.3s ease, transform 0.3s var(--ease-out);
-}
-.mode-badge {
-  animation: softPulse 1.2s ease-in-out infinite;
-  box-shadow: 0 0 0 3px rgba(255,255,255,0.9);
-}
-
-/* Sheet / modal slide */
-@keyframes sheetUp {
-  from { transform: translateY(100%); opacity: 0.6; }
-  to { transform: translateY(0); opacity: 1; }
-}
-.sheet-panel {
-  animation: sheetUp 0.36s var(--ease-out) forwards;
-  will-change: transform;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .animate-page-in,
-  .animate-slide-up,
-  .animate-fade-in,
-  .animate-nav-pop,
-  .sheet-panel,
-  .mode-active-masuk,
-  .mode-active-keluar,
-  .mode-active-rusak {
-    animation: none !important;
-  }
 }
