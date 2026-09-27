@@ -115,6 +115,9 @@ export async function healthCheck() {
   }
 }
 export function getConnectionStatus() { return { online: navigator.onLine, apiUrl: getApiUrl() }; }
+export function getWriteCircuitState() {
+  return { failures: 0, openedAt: 0, lastError: '', open: false, retryAfterMs: 0 };
+}
 function mapStockItem(it, entity) {
   const stockAkhir = Number(it.stockAkhir ?? it.stok ?? it.qty ?? it.sisa ?? 0) || 0;
   const stockAman = Number(it.stockAman ?? it.stokAman ?? it.aman ?? it.min ?? 0) || 0;
@@ -145,7 +148,6 @@ export async function fetchStock(entity, options = {}) {
   }
   if (data && data.code === 'UNAUTHORIZED') throw new Error('Unauthorized — cek API Secret di Atur');
   if (data && data.success === false) throw new Error(data.error || 'Gagal mengambil stok');
-  // Support {cv,pt} shape
   if (data && !Array.isArray(data.items) && (data.cv || data.pt || data.CV || data.PT)) {
     const cv = (data.cv || data.CV || []).map((it) => mapStockItem(it, 'CV'));
     const pt = (data.pt || data.PT || []).map((it) => mapStockItem(it, 'PT'));
