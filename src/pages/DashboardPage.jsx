@@ -346,7 +346,19 @@ function StatusPOCard({ data, loading, error, onRefresh, onConfirm, confirmingId
 
 export default function DashboardPage() {
   const { user } = useAuth();
-  const { items: allItems, loading, refresh } = useStock('ALL');
+
+  // HARD SAFETY: backend menerima getAllStock untuk CV/PT secara terpisah.
+  // Dashboard tidak pernah meminta entitas "ALL" dan tidak pernah menulis ke
+  // Stock CV / Stock PT. Kedua sheet hanya menjadi sumber data baca.
+  const stockCV = useStock('CV');
+  const stockPT = useStock('PT');
+  const allItems = useMemo(() => [...(stockCV.items || []), ...(stockPT.items || [])], [stockCV.items, stockPT.items]);
+  const loading = stockCV.loading || stockPT.loading;
+  const refresh = useCallback(() => {
+    void stockCV.refresh({ force: true });
+    void stockPT.refresh({ force: true });
+  }, [stockCV.refresh, stockPT.refresh]);
+
   const [poData, setPoData] = useState(null);
   const [poLoading, setPoLoading] = useState(true);
   const [poError, setPoError] = useState('');
