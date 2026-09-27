@@ -19,8 +19,8 @@
  */
 
 var SPREADSHEET_ID_FALLBACK = '1lJwqvSNZUNBO4ZH-PgVZsgd5Cf57UgCjGJIRD05IeCw';
-var VERSION = '6.4.5+STOCK-READONLY';
-var TITLE = 'BACKEND GudangAI-69 V6.4.5 STOCK READ-ONLY';
+var VERSION = '6.7.0+BATCH80-IDEMPOTENT';
+var TITLE = 'BACKEND GudangAI-69 V6.7.0 BATCH80 IDEMPOTENT';
 var TZ = 'Asia/Jakarta';
 
 /** Nama tab purchase order (urutan dicoba) */
@@ -98,6 +98,10 @@ function route_(action, params, body) {
     }
     var items = getAllStock_(ent);
     return json_({ success: true, count: items.length, items: items, entitas: ent });
+  }
+
+  if (a === 'addBatchTransaction') {
+    return json_(addBatchTransaction_(body));
   }
 
   if (a === 'addTransaction') {
@@ -229,62 +233,262 @@ function getAllStock_(entitas) {
 // ---------------------------------------------------------------------------
 
 function addTransaction_(body) {
-  var sheetName = String(body.sheet || '').trim();
-  var entitas = String(body.entitas || body.entity || '').toUpperCase();
-  var kode = String(body.kodeBarang || body.kode || '').trim();
-  var qty = num_(body.qty);
-  var ket = String(body.keterangan || '').trim();
-
-  if (!kode) return { success: false, error: 'Kode kosong' };
-  if (!sheetName) return { success: false, error: 'sheet wajib' };
-  if (entitas !== 'CV' && entitas !== 'PT') {
-    return { success: false, error: 'entitas harus CV atau PT' };
-  }
-
-  var ss = openSS_();
-  var candidates = [sheetName];
-  if (/masuk/i.test(sheetName)) candidates = candidates.concat(['Barang masuk', 'Barang Masuk']);
-  if (/keluar/i.test(sheetName)) candidates = candidates.concat(['Barang keluar', 'Barang Keluar']);
-  if (/rusak/i.test(sheetName)) candidates = candidates.concat(['Barang Rusak', 'Barang rusak']);
-
-  var sheet = null;
-  for (var i = 0; i < candidates.length; i++) {
-    sheet = ss.getSheetByName(candidates[i]);
-    if (sheet) break;
-  }
-  if (!sheet) return { success: false, error: 'Sheet transaksi tidak ditemukan: ' + sheetName };
-
-  // HARD SAFETY CONTRACT:
-  // addTransaction HANYA menulis ke sheet transaksi yang di-whitelist.
-  // Stock CV dan Stock PT adalah SOURCE OF TRUTH dan TIDAK BOLEH ditulis
-  // oleh jalur PWA ini. Keduanya hanya dibaca oleh getAllStock_().
-  var finalQty = qty;
-  var finalKet = ket;
-
-  var tgl = Utilities.formatDate(new Date(), TZ, 'dd/MM/yyyy');
-  var nr = Math.max(sheet.getLastRow(), 1) + 1;
-
-  // Hanya kolom yang diizinkan (proteksi VLOOKUP) — JANGAN tulis Nama (D) / Satuan (E)
-  sheet.getRange(nr, 2).setValue(tgl);   // B Tanggal
-  sheet.getRange(nr, 3).setValue(kode);  // C Kode
-  sheet.getRange(nr, 6).setValue(finalQty);   // F Qty
-  sheet.getRange(nr, 7).setValue(finalKet);   // G Keterangan
-
-  SpreadsheetApp.flush();
+  var item = {
+    clientItemId: String(body.clientItemId || body.requestId || body.transactionId || '').trim(),
+    kodeBarang: body.kodeBarang || body.kode,
+    qty: body.qty,
+    keterangan: body.keterangan
+  };
+  var res = addBatchTransaction_({
+    sheet: body.sheet,
+    entitas: body.entitas || body.entity,
+    tanggal: body.tanggal,
+    items: [item]
+  });
+  var r = (res.results && res.results[0]) || {};
   return {
-    success: true,
-    status: 'APPLIED',
-    row: nr,
-    qty: finalQty,
-    kode: kode,
-    // Field dipertahankan untuk kompatibilitas PWA; backend TIDAK mengubah
-    // maupun menghitung ulang Stock CV/PT dari jalur transaksi ini.
+    success: !!r.success,
+    status: r.status || (r.success ? 'APPLIED' : 'FAILED'),
+    row: r.row || null,
+    qty: r.qty || num_(body.qty),
+    kode: String(body.kodeBarang || body.kode || '').trim(),
     stockAkhir: null,
     adjusted: false,
     note: '',
     transactionId: body.transactionId || '',
-    requestId: body.requestId || ''
+    requestId: body.requestId || '',
+    clientItemId: item.clientItemId,
+    idempotent: !!r.idempotent,
+    error: r.error || ''
   };
+}
+
+/**
+ * BATCH 80 + IDEMPOTENCY
+ * - Satu request dapat membawa sampai 80 item.
+ * - Stock CV/PT tidak pernah disentuh.
+ * - Penulisan transaksi dilakukan dalam dua operasi range batch:
+ *   B:C dan F:G, sehingga D:E/VLOOKUP tetap aman.
+ * - Idempotency Ledger menyimpan clientItemId + status + row.
+ * - Retry setelah timeout akan dikenali sebagai DUPLICATE/IDEMPOTENT,
+ *   sehingga item tidak ditulis dua kali.
+ */
+function addBatchTransaction_(body) {
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(15000)) {
+    return { success: false, status: 'RETRY', error: 'Server sedang memproses transaksi lain', results: [] };
+  }
+
+  try {
+    var sheetName = String(body.sheet || '').trim();
+    var entitas = String(body.entitas || body.entity || '').toUpperCase();
+    var tanggalRaw = String(body.tanggal || '').trim();
+    var raw = Array.isArray(body.items) ? body.items : [];
+
+    if (!sheetName) return { success: false, error: 'sheet wajib', results: [] };
+    if (entitas !== 'CV' && entitas !== 'PT') return { success: false, error: 'entitas harus CV atau PT', results: [] };
+    if (!raw.length) return { success: false, error: 'items kosong', results: [] };
+    if (raw.length > 80) return { success: false, error: 'Maksimal 80 item per batch', results: [] };
+
+    var ss = openSS_();
+    var sheet = resolveTransactionSheet_(ss, sheetName);
+    if (!sheet) return { success: false, error: 'Sheet transaksi tidak ditemukan: ' + sheetName, results: [] };
+
+    var ledger = ensureIdempotencyLedger_(ss);
+    var ledgerMap = readIdempotencyLedger_(ledger);
+
+    var results = [];
+    var pending = [];
+    var seen = {};
+
+    for (var i = 0; i < raw.length; i++) {
+      var it = raw[i] || {};
+      var cid = String(it.clientItemId || it.requestId || '').trim();
+      var kode = String(it.kodeBarang || it.kode || '').trim();
+      var qty = num_(it.qty);
+      var ket = String(it.keterangan || '').trim().slice(0, 200);
+
+      if (!cid) {
+        results.push({ success: false, error: 'clientItemId kosong', index: i });
+        continue;
+      }
+      if (seen[cid]) {
+        results.push({ success: true, status: 'DUPLICATE', idempotent: true, clientItemId: cid });
+        continue;
+      }
+      seen[cid] = true;
+
+      if (!kode || qty <= 0) {
+        results.push({ success: false, error: !kode ? 'Kode kosong' : 'Qty tidak valid', clientItemId: cid });
+        continue;
+      }
+
+      var old = ledgerMap[cid];
+      if (old && old.status === 'APPLIED') {
+        results.push({ success: true, status: 'DUPLICATE', idempotent: true, clientItemId: cid, row: old.row, qty: old.qty, kode: old.kode });
+        continue;
+      }
+
+      // PENDING dari request sebelumnya: bila baris target sudah berisi kode+qty,
+      // anggap write sudah selesai walaupun respons sebelumnya timeout.
+      if (old && old.status === 'PENDING' && old.row) {
+        var existing = readTransactionIdentity_(sheet, old.row);
+        if (existing.kode === old.kode && Number(existing.qty) === Number(old.qty)) {
+          results.push({ success: true, status: 'DUPLICATE', idempotent: true, clientItemId: cid, row: old.row, qty: old.qty, kode: old.kode });
+          pending.push({ cid: cid, status: 'APPLIED', row: old.row, kode: old.kode, qty: old.qty, ket: old.ket || '' });
+          continue;
+        }
+      }
+
+      pending.push({ cid: cid, status: 'NEW', kode: kode, qty: qty, ket: ket });
+    }
+
+    // Pisahkan item yang harus benar-benar ditulis.
+    var toWrite = pending.filter(function (x) { return x.status === 'NEW'; });
+    var startRow = toWrite.length ? Math.max(sheet.getLastRow(), 1) + 1 : null;
+
+    // Reserve row + ledger PENDING sebelum write. Ini memberi jejak recovery
+    // jika koneksi putus setelah Sheets selesai tetapi sebelum response diterima.
+    var pendingRows = [];
+    for (var p = 0; p < toWrite.length; p++) {
+      toWrite[p].row = startRow + p;
+      pendingRows.push([
+        toWrite[p].cid, 'PENDING', sheet.getName(), toWrite[p].row,
+        toWrite[p].kode, toWrite[p].qty, toWrite[p].ket,
+        new Date().toISOString()
+      ]);
+    }
+    if (pendingRows.length) {
+      ledger.getRange(ledger.getLastRow() + 1, 1, pendingRows.length, 8).setValues(pendingRows);
+    }
+
+    if (toWrite.length) {
+      var bc = [];
+      var fg = [];
+      for (var w = 0; w < toWrite.length; w++) {
+        var t = toWrite[w];
+        bc.push([formatTransactionDate_(tanggalRaw), t.kode]);
+        fg.push([t.qty, t.ket]);
+      }
+
+      // JANGAN tulis D:E. Dua batch range tetap mempertahankan formula/VLOOKUP.
+      sheet.getRange(startRow, 2, toWrite.length, 2).setValues(bc);
+      sheet.getRange(startRow, 6, toWrite.length, 2).setValues(fg);
+      SpreadsheetApp.flush();
+    }
+
+    // Tandai seluruh NEW sebagai APPLIED dalam satu batch ledger.
+    if (toWrite.length) {
+      var lastLedgerRow = ledger.getLastRow();
+      var ledgerValues = ledger.getRange(2, 1, Math.max(0, lastLedgerRow - 1), 8).getValues();
+      var rowByCid = {};
+      for (var lr = 0; lr < ledgerValues.length; lr++) {
+        var lc = String(ledgerValues[lr][0] || '');
+        if (lc) rowByCid[lc] = lr + 2;
+      }
+      for (var aw = 0; aw < toWrite.length; aw++) {
+        var tw = toWrite[aw];
+        var lrow = rowByCid[tw.cid];
+        if (lrow) {
+          ledger.getRange(lrow, 2, 1, 8).setValues([[
+            'APPLIED', sheet.getName(), tw.row, tw.kode, tw.qty, tw.ket, new Date().toISOString(), entitas
+          ]]);
+        }
+        results.push({ success: true, status: 'APPLIED', clientItemId: tw.cid, row: tw.row, qty: tw.qty, kode: tw.kode });
+      }
+    }
+
+    // Update recovered PENDING rows to APPLIED.
+    for (var rr = 0; rr < pending.length; rr++) {
+      if (pending[rr].status !== 'APPLIED') continue;
+      var oldRow = ledgerMap[pending[rr].cid];
+      if (!oldRow || !oldRow.ledgerRow) continue;
+      ledger.getRange(oldRow.ledgerRow, 2, 1, 8).setValues([[
+        'APPLIED', sheet.getName(), pending[rr].row, pending[rr].kode, pending[rr].qty,
+        pending[rr].ket || '', new Date().toISOString(), entitas
+      ]]);
+    }
+
+    // Safety: semua hasil yang berasal dari old APPLIED / recovered PENDING
+    // sudah masuk results; jangan pernah mengubah Stock CV/PT.
+    var successCount = results.filter(function (x) { return x.success; }).length;
+    var failCount = results.filter(function (x) { return !x.success; }).length;
+
+    return {
+      success: failCount === 0,
+      status: failCount === 0 ? 'APPLIED' : 'PARTIAL',
+      total: raw.length,
+      successCount: successCount,
+      failCount: failCount,
+      results: results
+    };
+  } catch (err) {
+    return { success: false, status: 'ERROR', error: String(err.message || err), results: [] };
+  } finally {
+    try { SpreadsheetApp.flush(); } catch (_) {}
+    lock.releaseLock();
+  }
+}
+
+function resolveTransactionSheet_(ss, sheetName) {
+  var candidates = [sheetName];
+  if (/masuk/i.test(sheetName)) candidates = candidates.concat(['Barang masuk', 'Barang Masuk']);
+  if (/keluar/i.test(sheetName)) candidates = candidates.concat(['Barang keluar', 'Barang Keluar']);
+  if (/rusak/i.test(sheetName)) candidates = candidates.concat(['Barang Rusak', 'Barang rusak']);
+  for (var i = 0; i < candidates.length; i++) {
+    var sh = ss.getSheetByName(candidates[i]);
+    if (sh) return sh;
+  }
+  return null;
+}
+
+function formatTransactionDate_(raw) {
+  var s = String(raw || '').trim();
+  var m = s.match(/^(\\d{1,2})[\\/-](\\d{1,2})[\\/-](\\d{4})$/);
+  if (m) return ('0' + m[1]).slice(-2) + '/' + ('0' + m[2]).slice(-2) + '/' + m[3];
+  return Utilities.formatDate(new Date(), TZ, 'dd/MM/yyyy');
+}
+
+function ensureIdempotencyLedger_(ss) {
+  var sh = ss.getSheetByName('Idempotency Ledger');
+  if (!sh) {
+    sh = ss.insertSheet('Idempotency Ledger');
+    sh.getRange(1, 1, 1, 8).setValues([[
+      'ClientItemID', 'Status', 'Sheet', 'Row', 'Kode', 'Qty', 'Keterangan', 'UpdatedAt'
+    ]]);
+  } else if (sh.getLastRow() === 0) {
+    sh.getRange(1, 1, 1, 8).setValues([[
+      'ClientItemID', 'Status', 'Sheet', 'Row', 'Kode', 'Qty', 'Keterangan', 'UpdatedAt'
+    ]]);
+  }
+  return sh;
+}
+
+function readIdempotencyLedger_(sh) {
+  var out = {};
+  var last = sh.getLastRow();
+  if (last < 2) return out;
+  var values = sh.getRange(2, 1, last - 1, 8).getValues();
+  for (var i = 0; i < values.length; i++) {
+    var cid = String(values[i][0] || '').trim();
+    if (!cid) continue;
+    out[cid] = {
+      status: String(values[i][1] || '').toUpperCase(),
+      sheet: String(values[i][2] || ''),
+      row: Number(values[i][3]) || 0,
+      kode: String(values[i][4] || ''),
+      qty: num_(values[i][5]),
+      ket: String(values[i][6] || ''),
+      ledgerRow: i + 2
+    };
+  }
+  return out;
+}
+
+function readTransactionIdentity_(sheet, row) {
+  if (!row || row > sheet.getMaxRows()) return { kode: '', qty: 0 };
+  var v = sheet.getRange(row, 3, 1, 4).getValues()[0]; // C:F
+  return { kode: String(v[0] || '').trim(), qty: num_(v[3]) };
 }
 
 // ---------------------------------------------------------------------------
