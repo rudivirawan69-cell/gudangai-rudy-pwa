@@ -102,7 +102,7 @@ function normalizeStatusPO(raw) {
 function StatusPOCard({ data, loading, error, onRefresh }) {
   if (loading) {
     return (
-      <div className="rounded-2xl bg-white border border-slate-100 shadow-sm p-4">
+      <div className="section-card">
         <div className="flex items-center gap-2 mb-3">
           <div className="w-9 h-9 rounded-full bg-violet-100 flex items-center justify-center"><FileText className="w-4 h-4 text-violet-600" /></div>
           <div><h3 className="text-sm font-semibold text-slate-800">Status Purchase Order</h3><p className="text-[10px] text-slate-400">Memuat…</p></div>
@@ -113,7 +113,7 @@ function StatusPOCard({ data, loading, error, onRefresh }) {
   }
   if (error || !data?.success) {
     return (
-      <div className="rounded-2xl bg-white border border-slate-100 shadow-sm p-4">
+      <div className="section-card">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
             <div className="w-9 h-9 rounded-full bg-violet-100 flex items-center justify-center"><FileText className="w-4 h-4 text-violet-600" /></div>
@@ -121,7 +121,7 @@ function StatusPOCard({ data, loading, error, onRefresh }) {
           </div>
           <button type="button" onClick={onRefresh} className="text-[11px] text-cyan-700 font-medium">Muat ulang</button>
         </div>
-        <p className="text-[11px] text-slate-500 bg-slate-50 rounded-xl px-3 py-2.5">{error || 'Belum ada data PO aktif. Pastikan API Secret di Atur.'}</p>
+        <p className="info-box px-3 py-2.5 text-[11px]">{error || 'Belum ada data PO aktif. Pastikan API Secret di Atur.'}</p>
       </div>
     );
   }
@@ -133,8 +133,8 @@ function StatusPOCard({ data, loading, error, onRefresh }) {
   const selesai = summary.itemSelesai || 0;
   const progressPct = totalItem > 0 ? Math.round(((selesai + sebagian * 0.5) / totalItem) * 100) : 0;
   return (
-    <div className="rounded-2xl bg-white border border-slate-100 shadow-sm p-4">
-      <div className="flex items-center justify-between mb-3">
+    <div className="section-card">
+      <div className="section-card-header">
         <div className="flex items-center gap-2.5 min-w-0">
           <div className="w-9 h-9 rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center shrink-0"><FileText className="w-4 h-4 text-white" /></div>
           <div className="min-w-0">
@@ -144,19 +144,19 @@ function StatusPOCard({ data, loading, error, onRefresh }) {
         </div>
         <button type="button" onClick={onRefresh} className="w-8 h-8 rounded-full bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-500" aria-label="Refresh"><RefreshCw className="w-3.5 h-3.5" /></button>
       </div>
-      <div className="flex gap-4 mb-3 text-center">
-        <div className="flex-1 rounded-xl bg-slate-50 border border-slate-100 py-2"><p className="text-[9px] text-slate-400 font-semibold uppercase">Progress</p><p className="text-lg font-bold text-slate-800">{progressPct}%</p></div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-3.5">
+        <div className="metric-card py-2 text-center"><p className="text-[9px] text-slate-400 font-semibold uppercase">Progress</p><p className="text-lg font-bold text-slate-800">{progressPct}%</p></div>
         <div className="flex-1 rounded-xl bg-slate-50 border border-slate-100 py-2"><p className="text-[9px] text-slate-400 font-semibold uppercase">Menunggu</p><p className="text-lg font-bold text-slate-600">{menunggu}</p></div>
-        <div className="flex-1 rounded-xl bg-amber-50 border border-amber-100 py-2"><p className="text-[9px] text-amber-600 font-semibold uppercase">Sebagian</p><p className="text-lg font-bold text-amber-700">{sebagian}</p></div>
-        <div className="flex-1 rounded-xl bg-emerald-50 border border-emerald-100 py-2"><p className="text-[9px] text-emerald-600 font-semibold uppercase">Selesai</p><p className="text-lg font-bold text-emerald-700">{selesai}</p></div>
+        <div className="metric-card border-amber-200 bg-amber-50 py-2 text-center"><p className="text-[9px] text-amber-600 font-semibold uppercase">Sebagian</p><p className="text-lg font-bold text-amber-700">{sebagian}</p></div>
+        <div className="metric-card border-emerald-200 bg-emerald-50 py-2 text-center"><p className="text-[9px] text-emerald-600 font-semibold uppercase">Selesai</p><p className="text-lg font-bold text-emerald-700">{selesai}</p></div>
       </div>
       {items.length > 0 && (
-        <div className="space-y-0 divide-y divide-slate-100 max-h-48 overflow-y-auto">
+        <div className="mx-3.5 mb-3.5 space-y-0 divide-y divide-slate-100 border border-slate-100 rounded-xl overflow-hidden max-h-52 overflow-y-auto">
           {items.slice(0, 8).map((it, idx) => (
             <div key={it.itemNo || idx} className="py-2 first:pt-0">
               <div className="flex items-start justify-between gap-2">
                 <p className="text-[12px] font-semibold text-slate-800 truncate"><span className="text-slate-400 mr-1">#{String(it.itemNo || idx + 1).padStart(2, '0')}</span>{it.nama}</p>
-                <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-slate-50 text-slate-600 shrink-0">{it.status}</span>
+                <span className={`status-pill ${it.status === 'Selesai' ? 'status-pill-safe' : it.status === 'Sebagian' ? 'status-pill-warn' : 'status-pill-neutral'}`}>{it.status}</span>
               </div>
               <p className="text-[10px] text-slate-400">{it.qtyDatang}/{it.qtyPO} {it.satuan}</p>
             </div>
@@ -223,54 +223,62 @@ export default function DashboardPage() {
 
   return (
     <div className="pb-6 animate-fade-in space-y-3">
-      <div className="rounded-2xl bg-white border border-slate-100 shadow-sm p-3.5">
-        <div className="flex items-start justify-between gap-2 mb-2.5">
+      <div className="page-header">
+        <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <div className="flex items-center gap-2 mb-0.5">
-              <Snowflake className="w-4 h-4 text-cyan-600 shrink-0" />
-              <span className="text-[11px] text-slate-500 font-medium">GudangAI RUDY</span>
-            </div>
-            <h1 className="text-lg font-bold text-slate-900 leading-tight">{greeting}, <span className="text-cyan-700">{firstName}</span></h1>
-            {reminder && <p className="text-[13px] font-bold text-pink-500 mt-0.5 leading-snug">{reminder}</p>}
-            <p className="text-[11px] text-slate-500 mt-1 capitalize">{dateLabel} · <span className="tabular-nums font-semibold text-slate-700">{timeLabel}</span></p>
-            {lastSync && <p className="text-[10px] text-slate-400 mt-0.5">Stok sinkron {lastSync.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</p>}
+            <div className="page-kicker flex items-center gap-2"><Snowflake className="w-3.5 h-3.5" /> GudangAI RUDY · Beranda</div>
+            <div className="page-title">{greeting}, <span className="text-cyan-700">{firstName}</span></div>
+            <p className="page-subtitle">{dateLabel} · <span className="tabular-nums font-semibold text-slate-700">{timeLabel}</span>{lastSync ? ' · Stok sinkron ' + lastSync.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : ''}</p>
+            {reminder && <p className="text-[11px] font-bold text-pink-600 mt-2">{reminder}</p>}
           </div>
           <button type="button" onClick={() => { stockCV.refresh(); stockPT.refresh(); loadPO(); }} disabled={loading}
-            className="w-9 h-9 rounded-xl bg-white border border-slate-200 shadow-sm flex items-center justify-center text-slate-600" aria-label="Refresh">
+            className="w-9 h-9 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-600 shadow-sm shrink-0" aria-label="Refresh beranda">
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
         </div>
-        <div className="grid grid-cols-3 gap-2">
-          <div className="rounded-2xl bg-white border border-slate-200 shadow-sm px-2 py-2.5 text-center">
-            <p className="text-[9px] uppercase tracking-wider text-slate-400 font-semibold">Total SKU</p>
-            <p className="text-xl font-bold text-slate-900 tabular-nums">{loading ? '…' : stats.total}</p>
+        <div className="mt-3.5 grid grid-cols-3 gap-2">
+          <div className="metric-card px-2 py-2.5 text-center">
+            <p className="metric-label text-slate-500">Total SKU</p>
+            <p className="metric-value text-slate-900">{loading ? '…' : stats.total}</p>
             <p className="text-[9px] text-slate-400">{stats.totalUnit.toLocaleString('id-ID')} unit</p>
           </div>
-          <div className="rounded-2xl bg-white border border-emerald-100 shadow-sm ring-1 ring-emerald-50 px-2 py-2.5 text-center">
-            <p className="text-[9px] uppercase tracking-wider text-emerald-600 font-semibold">Aman</p>
-            <p className="text-xl font-bold text-emerald-700 tabular-nums">{loading ? '…' : stats.aman}</p>
+          <div className="metric-card border-emerald-200 bg-emerald-50/60 px-2 py-2.5 text-center">
+            <p className="metric-label text-emerald-700">Aman</p>
+            <p className="metric-value text-emerald-700">{loading ? '…' : stats.aman}</p>
             <p className="text-[9px] text-emerald-600/70">{stats.total ? Math.round((stats.aman / stats.total) * 100) : 0}% SKU</p>
           </div>
-          <div className="rounded-2xl bg-white border border-red-100 shadow-sm ring-1 ring-red-50 px-2 py-2.5 text-center">
-            <p className="text-[9px] uppercase tracking-wider text-red-600 font-semibold">Kritis</p>
-            <p className="text-xl font-bold text-red-600 tabular-nums">{loading ? '…' : stats.kritis}</p>
+          <div className="metric-card border-red-200 bg-red-50/60 px-2 py-2.5 text-center">
+            <p className="metric-label text-red-700">Kritis</p>
+            <p className="metric-value text-red-700">{loading ? '…' : stats.kritis}</p>
             <p className="text-[9px] text-amber-600">{stats.waspada} waspada</p>
           </div>
         </div>
+        <p className="mt-2 text-[9px] text-slate-400">Data gabungan CV + PT · pembaruan stok & PO otomatis</p>
       </div>
 
       <StatusPOCard data={poData} loading={poLoading} error={poError} onRefresh={loadPO} />
 
-      <div className="rounded-2xl bg-white border border-slate-100 shadow-sm p-3.5">
-        <div className="flex items-center gap-2 mb-3">
-          <div className="w-8 h-8 rounded-full bg-cyan-50 flex items-center justify-center"><Package className="w-4 h-4 text-cyan-600" /></div>
-          <h3 className="text-sm font-semibold text-slate-800">Status per Divisi</h3>
+      <div className="section-card">
+        <div className="section-card-header">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-xl bg-cyan-50 flex items-center justify-center"><Package className="w-4 h-4 text-cyan-600" /></div>
+            <div><p className="section-label">Distribusi operasional</p><h2 className="text-sm font-bold text-slate-800">Status per Divisi</h2></div>
+          </div>
+          <span className="status-pill status-pill-neutral">CV + PT</span>
         </div>
-        <DivisionStatusBars items={allItems} />
+        <div className="p-3.5">
+          <div className="mb-3 text-[10px] text-slate-500 font-semibold">7 divisi aktif · hijau aman · kuning waspada · merah kritis</div>
+          <DivisionStatusBars items={allItems} />
+          <div className="mt-3 flex flex-wrap gap-2">
+            <span className="status-pill status-pill-safe">Aman</span>
+            <span className="status-pill status-pill-warn">Waspada</span>
+            <span className="status-pill status-pill-danger">Kritis</span>
+          </div>
+        </div>
       </div>
 
       {pending > 0 && (
-        <div className="rounded-xl bg-amber-50 border border-amber-100 px-3 py-2.5 flex items-center gap-2">
+        <div className="info-box info-box-warn px-3 py-2.5 flex items-center gap-2">
           <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
           <span className="text-[11px] text-amber-800"><b>{pending}</b> transaksi menunggu sync — buka Atur</span>
         </div>
