@@ -214,11 +214,11 @@ export default function SettingsPage() {
       )}
 
       {panel === 'koneksi' && (
-        <div className="card p-4 space-y-3">
+        <div className="section-card p-4 space-y-3">
           <p className="text-xs font-semibold text-slate-600">URL Web App Apps Script</p>
           <input value={apiUrl} onChange={(e) => setApiUrlState(e.target.value)} className="form-control px-3 py-2.5 text-xs font-mono" placeholder="https://script.google.com/macros/s/.../exec" />
           <p className="text-xs font-semibold text-slate-600">API Secret (Script Properties)</p>
-          <input type="password" value={apiSecret} onChange={(e) => setApiSecretState(e.target.value)} className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm" placeholder="API_SECRET backend 6.4.4" />
+          <input type="password" value={apiSecret} onChange={(e) => setApiSecretState(e.target.value)} className="form-control px-3 py-2.5 text-sm" placeholder="API_SECRET backend 6.4.4" />
           <div className="flex gap-2">
             <button type="button" onClick={handleSaveUrl} className="flex-1 py-2.5 rounded-xl bg-slate-100 text-slate-700 text-sm font-semibold">Simpan</button>
             <button type="button" onClick={handleTestConnection} className="flex-1 py-2.5 rounded-xl bg-[#0b2a55] text-white text-sm font-semibold flex items-center justify-center gap-1.5">
