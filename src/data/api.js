@@ -330,7 +330,7 @@ function emitProgress(sent, total, chunkResult) {
 }
 
 /**
- * submitItems — batch-first with one-by-one fallback
+ * submitItems — batch-only with idempotent queue fallback
  * Emits progress events for UI feedback
  */
 async function submitItems(action, entity, items, tanggal, options = {}) {
@@ -352,12 +352,39 @@ async function submitItems(action, entity, items, tanggal, options = {}) {
   let totalSuccess = 0;
   let totalFail = 0;
   let totalQueued = 0;
-  let useBatch = _batchSupported !== false;
+
+  // Safe backend contract: if health reports batch unsupported, never downgrade
+  // to per-item writes. Keep the whole payload queued until the backend is fixed.
+  if (_batchSupported === false) {
+    if (!options.fromQueue) enqueue(action, entity, list, { tanggal });
+    totalQueued = list.length;
+    totalFail = list.length;
+    allResults.push(...list.map(it => ({
+      success: false,
+      queued: true,
+      uncertain: true,
+      clientItemId: it.clientItemId,
+      error: 'Batch transaction belum didukung backend'
+    })));
+    pushNotification({
+      type: 'warning',
+      title: 'Transaksi diamankan di antrian',
+      body: list.length + ' item masuk Antrian Sinkronisasi. Backend batch belum terdeteksi; tidak ada fallback satu-per-satu.'
+    });
+    return {
+      success: true,
+      count: 0,
+      failed: totalFail,
+      queuedCount: totalQueued,
+      total: list.length,
+      results: allResults
+    };
+  }
 
   for (let i = 0; i < list.length; i += BATCH_CHUNK_SIZE) {
     const chunk = list.slice(i, i + BATCH_CHUNK_SIZE);
 
-    if (useBatch) {
+    {
       try {
         const batchRes = await submitBatchChunk(action, entity, chunk, tanggal);
         const sc = batchRes.successCount || 0;
@@ -383,49 +410,31 @@ async function submitItems(action, entity, items, tanggal, options = {}) {
         }
         continue;
       } catch (err) {
-        // CRITICAL: NEVER fall back to one-by-one after a batch timeout.
-        // The server may already have written the batch. Queue the SAME IDs;
-        // backend Idempotency Ledger will convert retries into DUPLICATE/IDEMPOTENT.
-        useBatch = false;
-        if (!options.fromQueue) enqueue(action, entity, chunk, { tanggal });
-        totalQueued += chunk.length;
-        totalFail += chunk.length;
-        allResults.push(...chunk.map(it => ({
-          success: false, queued: true, uncertain: true,
-          clientItemId: it.clientItemId, error: err?.message || 'Timeout/koneksi terputus'
+        // CRITICAL: never continue with per-item requests after a batch
+        // timeout/network error. The server may already have committed this chunk.
+        // Queue the SAME clientItemIds plus all not-yet-sent items.
+        const remainingItems = list.slice(i);
+        if (!options.fromQueue) enqueue(action, entity, remainingItems, { tanggal });
+        totalQueued += remainingItems.length;
+        totalFail += remainingItems.length;
+        allResults.push(...remainingItems.map(it => ({
+          success: false,
+          queued: true,
+          uncertain: true,
+          clientItemId: it.clientItemId,
+          error: err?.message || 'Timeout/koneksi terputus'
         })));
-        emitProgress(Math.min(i + chunk.length, list.length), list.length, {
-          successCount: totalSuccess, failCount: totalFail
+        emitProgress(list.length, list.length, {
+          successCount: totalSuccess,
+          failCount: totalFail
         });
         pushNotification({
           type: 'warning',
           title: 'Koneksi terputus — masuk antrian',
-          body: chunk.length + ' item belum dapat dikonfirmasi. Sudah diamankan di Antrian Sinkronisasi; sistem akan cek idempotensi agar tidak duplikasi.'
+          body: remainingItems.length + ' item diamankan di Antrian Sinkronisasi. Tidak ada fallback satu-per-satu; retry memakai ID unik agar tidak duplikasi.'
         });
-        continue;
+        break;
       }
-    }
-
-    // If batch is unsupported, use individual requests ONLY for a backend that
-    // explicitly reports BATCH_NOT_SUPPORTED. The current backend supports batch.
-    for (let j = 0; j < chunk.length; j++) {
-      const it = chunk[j];
-      try {
-        const r = await submitOneItem(action, entity, it, tanggal);
-        allResults.push(r);
-        if (r.success || r.skipped) totalSuccess++;
-        else {
-          totalFail++;
-          if (!options.fromQueue) enqueue(action, entity, [it], { tanggal });
-          totalQueued++;
-        }
-      } catch (err) {
-        totalFail++;
-        totalQueued++;
-        enqueue(action, entity, [it], { tanggal });
-        allResults.push({ success: false, queued: true, clientItemId: it.clientItemId, error: err.message });
-      }
-      emitProgress(i + j + 1, list.length, { successCount: totalSuccess, failCount: totalFail });
     }
   }
 
