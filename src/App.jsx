@@ -49,12 +49,12 @@ class PageErrorBoundary extends Component {
 }
 
 const TABS = [
-  { id: 'dashboard', label: 'Beranda', icon: LayoutDashboard, active: 'text-cyan-700', chip: 'bg-cyan-50' },
-  { id: 'stok', label: 'Stok', icon: Package, active: 'text-blue-700', chip: 'bg-blue-50' },
-  { id: 'input', label: 'Input', icon: PackagePlus, active: 'text-emerald-700', chip: 'bg-emerald-50' },
-  { id: 'po', label: 'PO', icon: FileText, active: 'text-violet-700', chip: 'bg-violet-50' },
-  { id: 'riwayat', label: 'Riwayat', icon: Clock, active: 'text-amber-700', chip: 'bg-amber-50' },
-  { id: 'settings', label: 'Atur', icon: Settings, active: 'text-slate-700', chip: 'bg-slate-100' },
+  { id: 'dashboard', label: 'Beranda', icon: LayoutDashboard, active: 'text-cyan-300', chip: 'bg-cyan-500/20' },
+  { id: 'stok', label: 'Stok', icon: Package, active: 'text-blue-300', chip: 'bg-blue-500/20' },
+  { id: 'input', label: 'Input', icon: PackagePlus, active: 'text-emerald-300', chip: 'bg-emerald-500/20' },
+  { id: 'po', label: 'PO', icon: FileText, active: 'text-violet-300', chip: 'bg-violet-500/20' },
+  { id: 'riwayat', label: 'Riwayat', icon: Clock, active: 'text-amber-300', chip: 'bg-amber-500/20' },
+  { id: 'settings', label: 'Atur', icon: Settings, active: 'text-slate-200', chip: 'bg-slate-500/20' },
 ];
 
 const TAB_ACCENT = {
@@ -113,17 +113,15 @@ function ConnectionBanner() {
   return (
     <div className="bg-emerald-50/95 border-b border-emerald-100 px-3 py-1.5 flex items-center justify-center gap-1.5 text-[11px] text-emerald-800 font-medium relative z-[2]">
       <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-soft-pulse" />
-      Terhubung
+      Online
       <span className="opacity-50">·</span>
-      <span className="tabular-nums font-semibold">
-        {new Intl.DateTimeFormat('id-ID', { weekday: 'short', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date())}
-      </span>
+      <span className="tabular-nums font-semibold">API OK</span>
     </div>
   );
 }
 
 function AppShell() {
-  const { user, loading } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [pageKey, setPageKey] = useState(0);
 
@@ -132,7 +130,7 @@ function AppShell() {
     setPageKey((k) => k + 1);
   };
 
-  if (loading) {
+  if (authLoading) {
     return (
       <div className="app-shell min-h-dvh flex items-center justify-center">
         <div className="app-bg" aria-hidden style={{ backgroundImage: `linear-gradient(to bottom, rgba(6,16,24,0.35), rgba(6,16,24,0.7)), url(${bgDataUrl})` }} />
@@ -154,6 +152,7 @@ function AppShell() {
 
   const renderPage = () => {
     switch (activeTab) {
+      case 'dashboard': return <DashboardPage onNavigate={goTab} />;
       case 'stok': return <StokPage />;
       case 'input': return <InputPage />;
       case 'po': return <POPage />;
@@ -195,22 +194,22 @@ function AppShell() {
                 key={tab.id}
                 type="button"
                 onClick={() => goTab(tab.id)}
-                className={`nav-btn flex-1 flex flex-col items-center pt-2 pb-1 relative ${
-                  isActive ? 'text-cyan-300' : 'text-slate-400'
+                className={`nav-btn flex-1 flex flex-col items-center pt-2.5 pb-1.5 relative ${
+                  isActive ? tab.active : 'text-slate-500'
                 }`}
               >
                 <div className={`nav-icon-wrap p-1.5 rounded-xl ${
-                  isActive ? 'bg-cyan-500/20 text-cyan-300' : ''
+                  isActive ? tab.chip : 'bg-transparent'
                 }`}>
-                  <Icon className={`w-5 h-5 ${isActive ? 'stroke-[2.25]' : 'stroke-[1.5]'}`} />
+                  <Icon className={`w-5 h-5 transition-all duration-200 ${isActive ? 'stroke-[2.35]' : 'stroke-[1.5]'}`} />
                 </div>
-                <span className={`text-[10px] mt-0.5 tracking-wide transition-all duration-250 ${
-                  isActive ? 'font-semibold' : 'font-medium'
+                <span className={`text-[10px] mt-0.5 tracking-wide transition-all duration-200 ${
+                  isActive ? 'font-bold opacity-100' : 'font-medium opacity-80'
                 }`}>
                   {tab.label}
                 </span>
                 {isActive && (
-                  <span className={`absolute bottom-0 left-1/2 -translate-x-1/2 w-8 h-0.5 rounded-full bg-gradient-to-r ${TAB_ACCENT[tab.id]}`} />
+                  <span className={`nav-underline absolute bottom-0 left-1/2 -translate-x-1/2 w-7 h-[3px] rounded-full bg-gradient-to-r ${TAB_ACCENT[tab.id]}`} />
                 )}
               </button>
             );

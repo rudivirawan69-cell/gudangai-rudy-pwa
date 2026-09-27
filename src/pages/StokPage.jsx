@@ -3,175 +3,48 @@ import { useStock } from '../hooks/useStock';
 import { DIVISIONS } from '../data/master';
 import {
   Package, RefreshCw, Search, AlertTriangle,
-  CheckCircle2, XCircle, Filter
+  CheckCircle2, XCircle,
 } from 'lucide-react';
 
-function StockCard({ item }) {
-  const level = item.stok === 0 ? 'zero' : item.stok <= 5 ? 'danger' : item.stok <= 20 ? 'warning' : 'safe';
-  const colors = {
-    safe: 'border-l-emerald-500 bg-white',
-    warning: 'border-l-amber-400 bg-amber-50/50',
-    danger: 'border-l-red-500 bg-red-50/50',
-    zero: 'border-l-gray-300 bg-gray-50/50',
-  };
-  const badges = {
-    safe: <span className="chip-safe text-[10px] px-2 py-0.5 rounded-full font-medium">Aman</span>,
-    warning: <span className="chip-warning text-[10px] px-2 py-0.5 rounded-full font-medium">Menipis</span>,
-    danger: <span className="chip-danger text-[10px] px-2 py-0.5 rounded-full font-medium">Kritis</span>,
-    zero: <span className="chip-zero text-[10px] px-2 py-0.5 rounded-full font-medium">Habis</span>,
-  };
-
-  return (
-    <div className={`border-l-4 ${colors[level]} rounded-xl p-3 shadow-sm hover:shadow-md transition-shadow`}>
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex-1 min-w-0">
-          <p className="text-xs text-gray-400 font-mono">{item.kode}</p>
-          <p className="text-sm font-semibold text-gray-800 truncate leading-tight mt-0.5">{item.nama}</p>
-          <p className="text-[11px] text-gray-400 mt-1">{item.divisi} · {item.satuan}</p>
-        </div>
-        <div className="text-right flex-shrink-0">
-          <p className={`text-2xl font-bold tabular-nums ${
-            level === 'danger' ? 'text-red-600' : level === 'warning' ? 'text-amber-600' : level === 'zero' ? 'text-gray-400' : 'text-gray-800'
-          }`}>{item.stok}</p>
-          {badges[level]}
-        </div>
-      </div>
-    </div>
-  );
+function levelOf(stok) {
+  if (stok === 0) return 'zero';
+  if (stok <= 5) return 'danger';
+  if (stok <= 20) return 'warning';
+  return 'safe';
 }
 
-/** StokSummaryBar — filter chips + search + status summary */
-function StokSummaryBar({
-  stats,
-  search,
-  onSearch,
-  filterStatus,
-  onFilterStatus,
-  filterDiv,
-  onFilterDiv,
-  divisions,
-  entity,
-  onEntity,
-  loading,
-  onRefresh,
-  lastRefresh,
-  resultCount,
-}) {
+function StockCard({ item }) {
+  const level = levelOf(Number(item.stok) || 0);
+  const border = {
+    safe: 'border-l-emerald-500',
+    warning: 'border-l-amber-400',
+    danger: 'border-l-red-500',
+    zero: 'border-l-slate-300',
+  }[level];
+  const numColor = {
+    safe: 'text-slate-900',
+    warning: 'text-amber-600',
+    danger: 'text-red-600',
+    zero: 'text-slate-400',
+  }[level];
+  const badge = {
+    safe: <span className="chip-safe text-[10px] px-2 py-0.5 rounded-full font-bold">Aman</span>,
+    warning: <span className="chip-warning text-[10px] px-2 py-0.5 rounded-full font-bold">Menipis</span>,
+    danger: <span className="chip-danger text-[10px] px-2 py-0.5 rounded-full font-bold">Kritis</span>,
+    zero: <span className="chip-zero text-[10px] px-2 py-0.5 rounded-full font-bold">Habis</span>,
+  }[level];
+
   return (
-    <div className="space-y-3 mb-4">
-      <div className="flex gap-2">
-        {['CV', 'PT'].map((e) => (
-          <button
-            key={e}
-            type="button"
-            onClick={() => onEntity(e)}
-            className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all ${
-              entity === e
-                ? 'bg-gradient-to-r from-[#0b2a55] to-[#164e8a] text-white shadow-lg'
-                : 'bg-white text-gray-600 border border-gray-200 hover:border-blue-300'
-            }`}
-          >
-            {e === 'CV' ? 'CV. Selera Bogatama' : 'PT. Rasyuka Inti Pratama'}
-          </button>
-        ))}
-      </div>
-
-      <div className="grid grid-cols-4 gap-2">
-        <div className="bg-white rounded-xl p-3 shadow-sm border border-gray-100">
-          <div className="flex items-center gap-1.5 mb-0.5">
-            <Package className="w-3.5 h-3.5 text-blue-500" />
-            <span className="text-[10px] text-gray-500">Total</span>
-          </div>
-          <p className="text-lg font-bold text-gray-800 tabular-nums">{stats.total}</p>
+    <div className={`stock-card border-l-4 ${border}`}>
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex-1 min-w-0">
+          <p className="text-[11px] text-slate-400 font-mono font-medium">{item.kode}</p>
+          <p className="text-[13px] font-bold text-slate-900 truncate leading-tight mt-0.5">{item.nama}</p>
+          <p className="text-[11px] text-slate-500 mt-1 font-medium">{item.divisi} · {item.satuan}</p>
         </div>
-        <div className="bg-white rounded-xl p-3 shadow-sm border border-gray-100">
-          <div className="flex items-center gap-1.5 mb-0.5">
-            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
-            <span className="text-[10px] text-gray-500">Aman</span>
-          </div>
-          <p className="text-lg font-bold text-emerald-700 tabular-nums">{stats.safe}</p>
-        </div>
-        <div className="bg-white rounded-xl p-3 shadow-sm border border-gray-100">
-          <div className="flex items-center gap-1.5 mb-0.5">
-            <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
-            <span className="text-[10px] text-gray-500">Menipis</span>
-          </div>
-          <p className="text-lg font-bold text-amber-700 tabular-nums">{stats.warning}</p>
-        </div>
-        <div className="bg-white rounded-xl p-3 shadow-sm border border-gray-100">
-          <div className="flex items-center gap-1.5 mb-0.5">
-            <XCircle className="w-3.5 h-3.5 text-red-500" />
-            <span className="text-[10px] text-gray-500">Kritis</span>
-          </div>
-          <p className="text-lg font-bold text-red-600 tabular-nums">{stats.danger + stats.zero}</p>
-        </div>
-      </div>
-
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-        <input
-          type="text"
-          placeholder="Cari kode atau nama barang..."
-          value={search}
-          onChange={(e) => onSearch(e.target.value)}
-          className="w-full pl-10 pr-4 py-3 bg-white rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
-        />
-      </div>
-
-      <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
-        {divisions.map((d) => (
-          <button
-            key={d}
-            type="button"
-            onClick={() => onFilterDiv(d)}
-            className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
-              filterDiv === d ? 'bg-[#0b2a55] text-white' : 'bg-white text-gray-600 border border-gray-200'
-            }`}
-          >
-            {d}
-          </button>
-        ))}
-      </div>
-
-      <div className="flex flex-wrap items-center gap-2">
-        <Filter className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-        {['Semua', 'Kritis', 'Menipis', 'Aman', 'Habis'].map((s) => (
-          <button
-            key={s}
-            type="button"
-            onClick={() => onFilterStatus(s)}
-            className={`px-3 py-1 rounded-lg text-[11px] font-medium transition-all ${
-              filterStatus === s
-                ? s === 'Kritis'
-                  ? 'bg-red-500 text-white'
-                  : s === 'Menipis'
-                    ? 'bg-amber-500 text-white'
-                    : s === 'Aman'
-                      ? 'bg-emerald-500 text-white'
-                      : s === 'Habis'
-                        ? 'bg-gray-500 text-white'
-                        : 'bg-blue-500 text-white'
-                : 'bg-gray-100 text-gray-600'
-            }`}
-          >
-            {s}
-          </button>
-        ))}
-        <div className="ml-auto flex items-center gap-2">
-          <p className="text-[11px] text-gray-400">
-            {resultCount} item
-            {lastRefresh
-              ? ` · ${new Intl.DateTimeFormat('id-ID', { hour: '2-digit', minute: '2-digit' }).format(lastRefresh)}`
-              : ''}
-          </p>
-          <button
-            type="button"
-            onClick={onRefresh}
-            disabled={loading}
-            className="flex items-center gap-1 text-xs text-blue-600"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-          </button>
+        <div className="text-right flex-shrink-0">
+          <p className={`text-2xl font-extrabold tabular-nums leading-none ${numColor}`}>{item.stok}</p>
+          <div className="mt-1 flex justify-end">{badge}</div>
         </div>
       </div>
     </div>
@@ -185,19 +58,19 @@ export default function StokPage() {
   const [filterStatus, setFilterStatus] = useState('Semua');
   const { items, loading, refresh, lastRefresh, getStats } = useStock(entity);
 
-  const stats = useMemo(() => getStats(), [getStats]);
+  const stats = useMemo(() => {
+    try { return getStats(); } catch { return { total: 0, aman: 0, waspada: 0, kritis: 0, habis: 0 }; }
+  }, [getStats, items]);
 
   const filtered = useMemo(() => {
-    let list = items;
+    let list = items || [];
     if (search) {
       const q = search.toLowerCase();
       list = list.filter(
-        (i) => i.kode.toLowerCase().includes(q) || i.nama.toLowerCase().includes(q)
+        (i) => String(i.kode || '').toLowerCase().includes(q) || String(i.nama || '').toLowerCase().includes(q)
       );
     }
-    if (filterDiv !== 'Semua') {
-      list = list.filter((i) => i.divisi === filterDiv);
-    }
+    if (filterDiv !== 'Semua') list = list.filter((i) => i.divisi === filterDiv);
     if (filterStatus !== 'Semua') {
       if (filterStatus === 'Kritis') list = list.filter((i) => i.stok > 0 && i.stok <= 5);
       if (filterStatus === 'Menipis') list = list.filter((i) => i.stok > 5 && i.stok <= 20);
@@ -208,41 +81,125 @@ export default function StokPage() {
   }, [items, search, filterDiv, filterStatus]);
 
   const divisions = ['Semua', ...DIVISIONS];
+  const statusFilters = [
+    { id: 'Semua', label: 'Semua', icon: Package },
+    { id: 'Aman', label: 'Aman', icon: CheckCircle2 },
+    { id: 'Menipis', label: 'Menipis', icon: AlertTriangle },
+    { id: 'Kritis', label: 'Kritis', icon: XCircle },
+    { id: 'Habis', label: 'Habis', icon: XCircle },
+  ];
+
+  const topStats = [
+    { key: 'total', label: 'TOTAL', value: stats.total ?? items?.length ?? 0, color: 'text-slate-900', border: 'border-slate-100', filter: 'Semua' },
+    { key: 'aman', label: 'AMAN', value: stats.safe ?? stats.aman ?? 0, color: 'text-emerald-600', border: 'border-emerald-100', filter: 'Aman' },
+    { key: 'menipis', label: 'MENIPIS', value: stats.warning ?? stats.waspada ?? 0, color: 'text-amber-600', border: 'border-amber-100', filter: 'Menipis' },
+    { key: 'kritis', label: 'KRITIS', value: (stats.danger ?? stats.kritis ?? 0) + (stats.zero ?? 0), color: 'text-red-600', border: 'border-red-100', filter: 'Kritis' },
+  ];
 
   return (
-    <div className="pb-4 animate-fade-in">
-      <StokSummaryBar
-        stats={stats}
-        search={search}
-        onSearch={setSearch}
-        filterStatus={filterStatus}
-        onFilterStatus={setFilterStatus}
-        filterDiv={filterDiv}
-        onFilterDiv={setFilterDiv}
-        divisions={divisions}
-        entity={entity}
-        onEntity={setEntity}
-        loading={loading}
-        onRefresh={refresh}
-        lastRefresh={lastRefresh}
-        resultCount={filtered.length}
-      />
+    <div className="pb-4 animate-fade-in space-y-3">
+      <div className="grid grid-cols-2 gap-2">
+        {['CV', 'PT'].map((e) => (
+          <button
+            key={e}
+            type="button"
+            onClick={() => setEntity(e)}
+            className={`pressable py-2.5 rounded-2xl text-sm font-bold border shadow-sm transition-colors ${
+              entity === e
+                ? 'bg-cyan-600 text-white border-cyan-600'
+                : 'bg-white text-slate-600 border-slate-200'
+            }`}
+          >
+            {e}
+          </button>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-4 gap-2">
+        {topStats.map((s) => (
+          <button
+            key={s.key}
+            type="button"
+            onClick={() => setFilterStatus(s.filter)}
+            className={`stat-tile p-2.5 text-center border ${s.border} ${
+              filterStatus === s.filter ? 'is-active' : ''
+            }`}
+          >
+            <p className="text-[9px] font-extrabold uppercase tracking-wider text-slate-400">{s.label}</p>
+            <p className={`text-xl font-extrabold tabular-nums leading-tight mt-0.5 ${s.color}`}>
+              {loading ? '…' : s.value}
+            </p>
+          </button>
+        ))}
+      </div>
+
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+        <input
+          type="search"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Cari kode atau nama barang…"
+          className="form-control w-full pl-10 pr-4 py-3 text-sm font-medium shadow-sm"
+        />
+      </div>
+
+      <div className="flex gap-1.5 overflow-x-auto pb-0.5 -mx-0.5 px-0.5">
+        {divisions.map((d) => (
+          <button
+            key={d}
+            type="button"
+            onClick={() => setFilterDiv(d)}
+            className={`chip-btn shrink-0 ${filterDiv === d ? 'is-active' : ''}`}
+          >
+            {d}
+          </button>
+        ))}
+      </div>
+
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex gap-1.5 overflow-x-auto flex-1">
+          {statusFilters.map((s) => (
+            <button
+              key={s.id}
+              type="button"
+              onClick={() => setFilterStatus(s.id)}
+              className={`chip-btn shrink-0 ${filterStatus === s.id ? 'is-active' : ''}`}
+            >
+              {s.label}
+            </button>
+          ))}
+        </div>
+        <button
+          type="button"
+          onClick={() => refresh?.()}
+          className="pressable w-9 h-9 rounded-xl bg-white border border-slate-200 shadow-sm flex items-center justify-center text-slate-600 shrink-0"
+          aria-label="Refresh"
+        >
+          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+        </button>
+      </div>
+
+      <div className="flex items-center justify-between text-[11px] text-slate-500 font-medium px-0.5">
+        <span>{filtered.length} item ditampilkan</span>
+        {lastRefresh && <span className="tabular-nums">Update {new Date(lastRefresh).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</span>}
+      </div>
 
       {loading ? (
-        <div className="space-y-3">
+        <div className="space-y-2">
           {[...Array(6)].map((_, i) => (
-            <div key={i} className="skeleton h-20 rounded-xl" />
+            <div key={i} className="skeleton h-[72px] rounded-xl" />
           ))}
         </div>
       ) : filtered.length === 0 ? (
-        <div className="text-center py-12">
-          <Package className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-          <p className="text-gray-400 text-sm">Tidak ada item ditemukan</p>
+        <div className="rounded-2xl bg-white border border-slate-100 shadow-sm py-12 text-center">
+          <Package className="w-11 h-11 text-slate-300 mx-auto mb-2" />
+          <p className="text-slate-500 text-sm font-medium">Tidak ada item ditemukan</p>
         </div>
       ) : (
         <div className="space-y-2">
           {filtered.map((item) => (
-            <StockCard key={item.kode} item={item} />
+            <StockCard key={item.kode + (item.entitas || '')} item={item} />
           ))}
         </div>
       )}
