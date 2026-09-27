@@ -103,7 +103,7 @@ function StatusPOCard({ data, loading, error, onRefresh }) {
   if (loading) {
     return (
       <div className="section-card">
-        <div className="flex items-center gap-2 mb-3">
+        <div className="p-3.5 flex items-center gap-2">
           <div className="w-9 h-9 rounded-full bg-violet-100 flex items-center justify-center"><FileText className="w-4 h-4 text-violet-600" /></div>
           <div><h3 className="text-sm font-semibold text-slate-800">Status Purchase Order</h3><p className="text-[10px] text-slate-400">Memuat…</p></div>
         </div>
@@ -145,8 +145,8 @@ function StatusPOCard({ data, loading, error, onRefresh }) {
         <button type="button" onClick={onRefresh} className="w-8 h-8 rounded-full bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-500" aria-label="Refresh"><RefreshCw className="w-3.5 h-3.5" /></button>
       </div>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-3.5">
-        <div className="metric-card py-2 text-center"><p className="text-[9px] text-slate-400 font-semibold uppercase">Progress</p><p className="text-lg font-bold text-slate-800">{progressPct}%</p></div>
-        <div className="flex-1 rounded-xl bg-slate-50 border border-slate-100 py-2"><p className="text-[9px] text-slate-400 font-semibold uppercase">Menunggu</p><p className="text-lg font-bold text-slate-600">{menunggu}</p></div>
+        <div className="metric-card border-cyan-200 bg-cyan-50/50 py-2 text-center"><p className="text-[9px] text-cyan-700 font-semibold uppercase">Progress</p><p className="metric-value text-cyan-800">{progressPct}%</p></div>
+        <div className="metric-card py-2 text-center"><p className="text-[9px] text-slate-500 font-semibold uppercase">Menunggu</p><p className="metric-value text-slate-600">{menunggu}</p></div>
         <div className="metric-card border-amber-200 bg-amber-50 py-2 text-center"><p className="text-[9px] text-amber-600 font-semibold uppercase">Sebagian</p><p className="text-lg font-bold text-amber-700">{sebagian}</p></div>
         <div className="metric-card border-emerald-200 bg-emerald-50 py-2 text-center"><p className="text-[9px] text-emerald-600 font-semibold uppercase">Selesai</p><p className="text-lg font-bold text-emerald-700">{selesai}</p></div>
       </div>
