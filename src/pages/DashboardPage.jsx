@@ -2,14 +2,85 @@ import { useMemo, useState, useEffect, useCallback } from 'react';
 import { useStock } from '../hooks/useStock';
 import { useAuth } from '../hooks/useAuth';
 import {
-  getPendingQueue, getStatusPO,
+  getPendingQueue, getStatusPO, confirmPOStatus,
 } from '../data/api';
 import { DIVISIONS } from '../data/master';
 import {
-  AlertTriangle, RefreshCw, FileText, Package, Snowflake,
+  AlertTriangle, RefreshCw, FileText, Package, ShieldAlert, CheckCircle2, AlertCircle,
 } from 'lucide-react';
 
-function DivisionStatusBars({ items }) {
+function classifyItem(it) {
+  const stok = Number(it.stok ?? it.stockAkhir ?? 0) || 0;
+  const aman = Number(it.stockAman ?? it.aman ?? it.min ?? 0) || 0;
+  if (aman > 0) {
+    if (stok <= 0 || stok <= Math.max(5, Math.floor(aman * 0.25))) return 'kritis';
+    if (stok < aman) return 'waspada';
+    return 'aman';
+  }
+  if (stok <= 5) return 'kritis';
+  if (stok <= 20) return 'waspada';
+  return 'aman';
+}
+
+function RingChart({ pct, color = '#ef4444', size = 52, stroke = 6 }) {
+  const r = (size - stroke) / 2;
+  const c = 2 * Math.PI * r;
+  const dash = Math.max(0, Math.min(100, pct)) / 100 * c;
+  return (
+    <svg width={size} height={size} className="shrink-0 -rotate-90">
+      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#f1f5f9" strokeWidth={stroke} />
+      <circle
+        cx={size / 2} cy={size / 2} r={r} fill="none"
+        stroke={color} strokeWidth={stroke} strokeLinecap="round"
+        strokeDasharray={`${dash} ${c - dash}`}
+      />
+    </svg>
+  );
+}
+
+function DonutPO({ complete, progress, pending, size = 140 }) {
+  const total = Math.max(1, complete + progress + pending);
+  const cPct = (complete / total) * 100;
+  const pPct = (progress / total) * 100;
+  const nPct = (pending / total) * 100;
+  const center = Math.round((complete + progress * 0.5) / total * 100);
+  const r = 52;
+  const circ = 2 * Math.PI * r;
+  const seg = (pct) => (pct / 100) * circ;
+  let offset = 0;
+  const parts = [
+    { pct: cPct, color: '#10b981' },
+    { pct: pPct, color: '#f59e0b' },
+    { pct: nPct, color: '#94a3b8' },
+  ];
+  return (
+    <div className="relative mx-auto" style={{ width: size, height: size }}>
+      <svg width={size} height={size} className="-rotate-90" viewBox="0 0 140 140">
+        <circle cx="70" cy="70" r={r} fill="none" stroke="#f1f5f9" strokeWidth="18" />
+        {parts.map((p, i) => {
+          const len = seg(p.pct);
+          const el = (
+            <circle
+              key={i}
+              cx="70" cy="70" r={r} fill="none"
+              stroke={p.color} strokeWidth="18" strokeLinecap="butt"
+              strokeDasharray={`${len} ${circ - len}`}
+              strokeDashoffset={-offset}
+            />
+          );
+          offset += len;
+          return el;
+        })}
+      </svg>
+      <div className="absolute inset-0 flex flex-col items-center justify-center">
+        <p className="text-3xl font-extrabold text-slate-900 tabular-nums leading-none">{center}%</p>
+        <p className="text-[11px] text-slate-400 font-medium mt-0.5">Progress</p>
+      </div>
+    </div>
+  );
+}
+
+function DivisionStatus3D({ items }) {
   const rows = useMemo(() => {
     const map = {};
     DIVISIONS.forEach((d) => { map[d] = { divisi: d, total: 0, aman: 0, waspada: 0, kritis: 0 }; });
@@ -17,37 +88,52 @@ function DivisionStatusBars({ items }) {
       const d = String(it.divisi || 'CS').trim() || 'CS';
       if (!map[d]) map[d] = { divisi: d, total: 0, aman: 0, waspada: 0, kritis: 0 };
       map[d].total += 1;
-      const stok = Number(it.stok) || 0;
-      const aman = Number(it.stockAman ?? it.aman ?? 0);
-      if (aman > 0) {
-        if (stok <= 0 || stok <= Math.max(5, Math.floor(aman * 0.25))) map[d].kritis += 1;
-        else if (stok < aman) map[d].waspada += 1;
-        else map[d].aman += 1;
-      } else {
-        if (stok <= 5) map[d].kritis += 1;
-        else if (stok <= 20) map[d].waspada += 1;
-        else map[d].aman += 1;
-      }
+      const cls = classifyItem(it);
+      map[d][cls] += 1;
     });
-    return Object.values(map).filter((r) => r.total > 0).sort((a, b) => b.kritis - a.kritis || b.total - a.total);
+    return Object.values(map)
+      .filter((r) => r.total > 0)
+      .sort((a, b) => (b.kritis / b.total) - (a.kritis / a.total) || b.total - a.total);
   }, [items]);
-  const maxTotal = Math.max(1, ...rows.map((r) => r.total));
-  if (rows.length === 0) return <p className="text-[11px] text-slate-400 text-center py-3">Belum ada data divisi</p>;
+
+  if (rows.length === 0) {
+    return <p className="text-[12px] text-slate-400 text-center py-4">Belum ada data divisi</p>;
+  }
+
   return (
-    <div className="space-y-2.5">
-      {rows.map((r, idx) => {
-        const pct = (n) => Math.max(n > 0 ? 4 : 0, Math.round((n / maxTotal) * 100));
+    <div className="space-y-3">
+      {rows.map((r) => {
         const kritisPct = r.total ? Math.round((r.kritis / r.total) * 100) : 0;
+        const aPct = r.total ? (r.aman / r.total) * 100 : 0;
+        const wPct = r.total ? (r.waspada / r.total) * 100 : 0;
+        const kPct = r.total ? (r.kritis / r.total) * 100 : 0;
+        const ringColor = kritisPct >= 50 ? '#ef4444' : kritisPct >= 25 ? '#f59e0b' : '#10b981';
         return (
-          <div key={r.divisi} className="animate-slide-up" style={{ animationDelay: `${idx * 40}ms`, animationFillMode: 'both' }}>
-            <div className="flex items-center justify-between gap-2 mb-1">
-              <span className="text-[11px] font-semibold text-slate-700 truncate">{r.divisi}</span>
-              <span className="text-[10px] text-slate-400 tabular-nums shrink-0">{r.total} SKU · <span className="text-red-600 font-medium">{kritisPct}%</span> kritis</span>
+          <div key={r.divisi} className="flex items-center gap-3">
+            <div className="relative shrink-0">
+              <RingChart pct={kritisPct || 1} color={ringColor} size={52} stroke={6} />
+              <span className="absolute inset-0 flex items-center justify-center text-[11px] font-extrabold text-slate-800 tabular-nums">
+                {kritisPct}%
+              </span>
             </div>
-            <div className="h-2.5 w-full rounded-full bg-slate-100 overflow-hidden flex">
-              <div className="h-full bg-emerald-500" style={{ width: `${pct(r.aman)}%` }} />
-              <div className="h-full bg-amber-400" style={{ width: `${pct(r.waspada)}%` }} />
-              <div className="h-full bg-red-500" style={{ width: `${pct(r.kritis)}%` }} />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between gap-2 mb-1">
+                <span className="text-[13px] font-bold text-slate-800 uppercase tracking-wide truncate">{r.divisi}</span>
+                <span className="text-[11px] text-slate-400 tabular-nums shrink-0">{r.total} SKU</span>
+              </div>
+              <div className="h-2 w-full rounded-full bg-slate-100 overflow-hidden flex">
+                <div className="h-full bg-emerald-500" style={{ width: `${aPct}%` }} />
+                <div className="h-full bg-amber-400" style={{ width: `${wPct}%` }} />
+                <div className="h-full bg-red-500" style={{ width: `${kPct}%` }} />
+              </div>
+              <div className="flex items-center justify-between mt-1">
+                <div className="flex items-center gap-2 text-[10px] tabular-nums">
+                  <span className="text-emerald-600">● {r.aman}</span>
+                  <span className="text-amber-500">● {r.waspada}</span>
+                  <span className="text-red-500">● {r.kritis}</span>
+                </div>
+                <span className="text-[10px] font-semibold text-red-600 tabular-nums">{kritisPct}% kritis</span>
+              </div>
             </div>
           </div>
         );
@@ -65,9 +151,9 @@ function normalizeStatusPO(raw) {
     const statusRaw = String(it.status || it.Status || '').trim();
     let status = statusRaw || 'Menunggu';
     const low = status.toLowerCase();
-    if (low.includes('sebagian')) status = 'Sebagian';
-    else if (low.includes('selesai') || low === 'datang') status = 'Selesai';
-    else if (low.includes('belum') || low.includes('menunggu')) status = 'Menunggu';
+    if (low.includes('sebagian') || low.includes('progress')) status = 'Sebagian';
+    else if (low.includes('selesai') || low === 'datang' || low.includes('complete')) status = 'Selesai';
+    else if (low.includes('belum') || low.includes('menunggu') || low.includes('pending')) status = 'Menunggu';
     return {
       itemNo: it.itemNo || it.no || idx + 1,
       nama: it.nama || it.Nama || it.name || '—',
@@ -77,6 +163,7 @@ function normalizeStatusPO(raw) {
       qtyPO: Number(it.qtyPO ?? it.qty ?? 0) || 0,
       qtyDatang: Number(it.qtyDatang ?? it.datang ?? 0) || 0,
       status,
+      id: it.id || it.itemId || it.clientItemId || `po-${idx}`,
     };
   });
   const summaryRaw = raw.summary || raw.data?.summary || {};
@@ -95,72 +182,156 @@ function normalizeStatusPO(raw) {
     success: true,
     noPO: raw.noPO || summaryRaw.noPO || '',
     items,
-    summary: { totalItem, itemMenunggu: menunggu, itemSebagian: sebagian, itemSelesai: selesai, totalAktif: menunggu + sebagian, totalKonfirmasi: selesai },
+    summary: {
+      totalItem,
+      itemMenunggu: menunggu,
+      itemSebagian: sebagian,
+      itemSelesai: selesai,
+      totalAktif: menunggu + sebagian,
+      totalKonfirmasi: selesai,
+    },
   };
 }
 
-function StatusPOCard({ data, loading, error, onRefresh }) {
+function StatusPOCard({ data, loading, error, onRefresh, onConfirm, confirmingId }) {
   if (loading) {
     return (
-      <div className="section-card">
-        <div className="p-3.5 flex items-center gap-2">
-          <div className="w-9 h-9 rounded-full bg-violet-100 flex items-center justify-center"><FileText className="w-4 h-4 text-violet-600" /></div>
-          <div><h3 className="text-sm font-semibold text-slate-800">Status Purchase Order</h3><p className="text-[10px] text-slate-400">Memuat…</p></div>
+      <div className="rounded-2xl bg-white border border-slate-100 shadow-sm p-4">
+        <div className="flex items-center gap-2 mb-3">
+          <div className="w-9 h-9 rounded-full bg-violet-100 flex items-center justify-center">
+            <FileText className="w-4 h-4 text-violet-600" />
+          </div>
+          <div>
+            <h3 className="text-sm font-bold text-slate-800">Status PO Aktif 3D</h3>
+            <p className="text-[10px] text-slate-400">Memuat…</p>
+          </div>
         </div>
-        <div className="skeleton h-14 rounded-xl" />
+        <div className="h-28 rounded-xl bg-slate-50 animate-pulse" />
       </div>
     );
   }
+
   if (error || !data?.success) {
     return (
-      <div className="section-card">
+      <div className="rounded-2xl bg-white border border-slate-100 shadow-sm p-4">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
-            <div className="w-9 h-9 rounded-full bg-violet-100 flex items-center justify-center"><FileText className="w-4 h-4 text-violet-600" /></div>
-            <h3 className="text-sm font-semibold text-slate-800">Status Purchase Order</h3>
+            <div className="w-9 h-9 rounded-full bg-violet-100 flex items-center justify-center">
+              <FileText className="w-4 h-4 text-violet-600" />
+            </div>
+            <h3 className="text-sm font-bold text-slate-800">Status PO Aktif 3D</h3>
           </div>
-          <button type="button" onClick={onRefresh} className="text-[11px] text-cyan-700 font-medium">Muat ulang</button>
+          <button type="button" onClick={onRefresh} className="text-[11px] text-cyan-700 font-semibold">Muat ulang</button>
         </div>
-        <p className="info-box px-3 py-2.5 text-[11px]">{error || 'Belum ada data PO aktif. Pastikan API Secret di Atur.'}</p>
+        <p className="text-[12px] text-slate-500">{error || 'Belum ada data PO aktif. Pastikan API Secret di Atur.'}</p>
       </div>
     );
   }
+
   const summary = data.summary || {};
   const items = data.items || [];
   const totalItem = summary.totalItem || 0;
   const menunggu = summary.itemMenunggu || 0;
   const sebagian = summary.itemSebagian || 0;
   const selesai = summary.itemSelesai || 0;
-  const progressPct = totalItem > 0 ? Math.round(((selesai + sebagian * 0.5) / totalItem) * 100) : 0;
+  const pct = (n) => (totalItem > 0 ? Math.round((n / totalItem) * 1000) / 10 : 0);
+
   return (
-    <div className="section-card">
-      <div className="section-card-header">
+    <div className="rounded-2xl bg-white border border-slate-100 shadow-sm p-4 space-y-4">
+      <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2.5 min-w-0">
-          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center shrink-0"><FileText className="w-4 h-4 text-white" /></div>
+          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center shrink-0">
+            <FileText className="w-4 h-4 text-white" />
+          </div>
           <div className="min-w-0">
-            <h3 className="text-sm font-semibold text-slate-800">Status Purchase Order</h3>
-            <p className="text-[10px] text-slate-400 truncate">{data.noPO ? `No. PO ${data.noPO}` : 'PO aktif'} · {totalItem} item</p>
+            <h3 className="text-sm font-bold text-slate-800">Status PO Aktif 3D</h3>
+            <p className="text-[11px] text-slate-400 truncate">
+              {data.noPO ? `No. PO ${data.noPO}` : 'Tidak ada No. PO aktif'} · {totalItem} item · Interactive
+            </p>
           </div>
         </div>
-        <button type="button" onClick={onRefresh} className="w-8 h-8 rounded-full bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-500" aria-label="Refresh"><RefreshCw className="w-3.5 h-3.5" /></button>
+        <button
+          type="button"
+          onClick={onRefresh}
+          className="w-9 h-9 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-500"
+          aria-label="Refresh"
+        >
+          <RefreshCw className="w-4 h-4" />
+        </button>
       </div>
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-3.5">
-        <div className="metric-card border-cyan-200 bg-cyan-50/50 py-2 text-center"><p className="text-[9px] text-cyan-700 font-semibold uppercase">Progress</p><p className="metric-value text-cyan-800">{progressPct}%</p></div>
-        <div className="metric-card py-2 text-center"><p className="text-[9px] text-slate-500 font-semibold uppercase">Menunggu</p><p className="metric-value text-slate-600">{menunggu}</p></div>
-        <div className="metric-card border-amber-200 bg-amber-50 py-2 text-center"><p className="text-[9px] text-amber-600 font-semibold uppercase">Sebagian</p><p className="text-lg font-bold text-amber-700">{sebagian}</p></div>
-        <div className="metric-card border-emerald-200 bg-emerald-50 py-2 text-center"><p className="text-[9px] text-emerald-600 font-semibold uppercase">Selesai</p><p className="text-lg font-bold text-emerald-700">{selesai}</p></div>
+
+      <DonutPO complete={selesai} progress={sebagian} pending={menunggu} />
+
+      <div className="grid grid-cols-3 gap-2">
+        <div className="rounded-xl bg-emerald-50 px-2 py-2.5 text-center">
+          <p className="text-[11px] font-semibold text-emerald-700">Complete</p>
+          <p className="text-lg font-extrabold text-emerald-700 tabular-nums">{pct(selesai)}%</p>
+          <p className="text-[10px] text-emerald-600/80 tabular-nums">{selesai} item</p>
+        </div>
+        <div className="rounded-xl bg-amber-50 px-2 py-2.5 text-center">
+          <p className="text-[11px] font-semibold text-amber-700">Progress</p>
+          <p className="text-lg font-extrabold text-amber-700 tabular-nums">{pct(sebagian)}%</p>
+          <p className="text-[10px] text-amber-600/80 tabular-nums">{sebagian} item</p>
+        </div>
+        <div className="rounded-xl bg-slate-50 px-2 py-2.5 text-center">
+          <p className="text-[11px] font-semibold text-slate-600">Pending</p>
+          <p className="text-lg font-extrabold text-slate-700 tabular-nums">{pct(menunggu)}%</p>
+          <p className="text-[10px] text-slate-500 tabular-nums">{menunggu} item</p>
+        </div>
       </div>
+
+      <div className="flex items-center justify-between text-[11px] text-slate-500">
+        <span>Konfirmasi <b className="text-slate-800">{selesai}</b></span>
+        <span>Sisa aktif <b className="text-slate-800">{menunggu + sebagian}</b></span>
+      </div>
+
       {items.length > 0 && (
-        <div className="mx-3.5 mb-3.5 space-y-0 divide-y divide-slate-100 border border-slate-100 rounded-xl overflow-hidden max-h-52 overflow-y-auto">
-          {items.slice(0, 8).map((it, idx) => (
-            <div key={it.itemNo || idx} className="py-2 first:pt-0">
-              <div className="flex items-start justify-between gap-2">
-                <p className="text-[12px] font-semibold text-slate-800 truncate"><span className="text-slate-400 mr-1">#{String(it.itemNo || idx + 1).padStart(2, '0')}</span>{it.nama}</p>
-                <span className={`status-pill ${it.status === 'Selesai' ? 'status-pill-safe' : it.status === 'Sebagian' ? 'status-pill-warn' : 'status-pill-neutral'}`}>{it.status}</span>
+        <div className="space-y-0 divide-y divide-slate-100">
+          {items.map((it, idx) => {
+            const canConfirm = it.status === 'Menunggu' || it.status === 'Sebagian';
+            const badge =
+              it.status === 'Selesai'
+                ? 'bg-emerald-50 text-emerald-700'
+                : it.status === 'Sebagian'
+                  ? 'bg-amber-50 text-amber-700'
+                  : 'bg-slate-50 text-slate-600';
+            const barPct = it.qtyPO > 0 ? Math.min(100, Math.round((it.qtyDatang / it.qtyPO) * 100)) : 0;
+            return (
+              <div key={it.id || idx} className="py-3 first:pt-0">
+                <div className="flex items-start justify-between gap-2 mb-1">
+                  <div className="min-w-0">
+                    <p className="text-[13px] font-bold text-slate-800 truncate">
+                      <span className="text-slate-400 font-semibold mr-1">#{String(it.itemNo || idx + 1).padStart(2, '0')}</span>
+                      {it.nama}
+                    </p>
+                    <p className="text-[11px] text-slate-400">{it.satuan}{it.size ? ` · ${it.size}` : ''}</p>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${badge}`}>{it.status}</span>
+                    {canConfirm && (
+                      <button
+                        type="button"
+                        disabled={confirmingId === it.id}
+                        onClick={() => onConfirm?.(it)}
+                        className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-cyan-600 text-white active:scale-95 disabled:opacity-50"
+                      >
+                        {confirmingId === it.id ? '…' : 'Konfirmasi'}
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
+                  <div
+                    className={`h-full rounded-full ${it.status === 'Selesai' ? 'bg-emerald-500' : 'bg-cyan-400'}`}
+                    style={{ width: `${barPct}%` }}
+                  />
+                </div>
+                <p className="text-[10px] text-slate-400 mt-0.5 tabular-nums text-right">
+                  {it.qtyDatang}/{it.qtyPO}
+                </p>
               </div>
-              <p className="text-[10px] text-slate-400">{it.qtyDatang}/{it.qtyPO} {it.satuan}</p>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
@@ -168,119 +339,265 @@ function StatusPOCard({ data, loading, error, onRefresh }) {
 }
 
 export default function DashboardPage() {
-  const stockCV = useStock('CV');
-  const stockPT = useStock('PT');
   const { user } = useAuth();
+  const { items: allItems, loading, refresh } = useStock('ALL');
   const [poData, setPoData] = useState(null);
   const [poLoading, setPoLoading] = useState(true);
-  const [poError, setPoError] = useState(null);
-  const allItems = useMemo(() => [...(stockCV.items || []), ...(stockPT.items || [])], [stockCV.items, stockPT.items]);
+  const [poError, setPoError] = useState('');
+  const [confirmingId, setConfirmingId] = useState(null);
+  const [confirmMsg, setConfirmMsg] = useState('');
+
   const stats = useMemo(() => {
-    let aman = 0, waspada = 0, kritis = 0, totalUnit = 0;
-    allItems.forEach((it) => {
-      const s = Number(it.stok) || 0;
-      totalUnit += s;
-      const a = Number(it.stockAman ?? it.aman ?? 0);
-      if (a > 0) {
-        if (s <= 0 || s <= Math.max(5, Math.floor(a * 0.25))) kritis += 1;
-        else if (s < a) waspada += 1;
-        else aman += 1;
-      } else {
-        if (s <= 5) kritis += 1;
-        else if (s <= 20) waspada += 1;
-        else aman += 1;
-      }
+    const list = allItems || [];
+    let aman = 0; let waspada = 0; let kritis = 0; let totalUnit = 0;
+    let cv = { total: 0, unit: 0, aman: 0, waspada: 0, kritis: 0 };
+    let pt = { total: 0, unit: 0, aman: 0, waspada: 0, kritis: 0 };
+    list.forEach((it) => {
+      const cls = classifyItem(it);
+      if (cls === 'aman') aman += 1;
+      else if (cls === 'waspada') waspada += 1;
+      else kritis += 1;
+      const unit = Number(it.stok ?? it.stockAkhir ?? 0) || 0;
+      totalUnit += unit;
+      const ent = String(it.entitas || it.entity || '').toUpperCase();
+      const bucket = ent === 'PT' ? pt : cv;
+      bucket.total += 1;
+      bucket.unit += unit;
+      bucket[cls] += 1;
     });
-    return { total: allItems.length, aman, waspada, kritis, totalUnit };
+    return {
+      total: list.length,
+      aman,
+      waspada,
+      kritis,
+      totalUnit,
+      cv,
+      pt,
+    };
   }, [allItems]);
+
   const loadPO = useCallback(async () => {
     setPoLoading(true);
-    setPoError(null);
+    setPoError('');
     try {
       const res = await getStatusPO();
       const norm = normalizeStatusPO(res);
-      if (norm?.success) { setPoData(norm); setPoError(null); }
-      else { setPoData(null); setPoError(norm?.error || res?.error || 'Gagal memuat Status PO'); }
+      if (norm?.success) setPoData(norm);
+      else {
+        setPoData(null);
+        setPoError(norm?.error || res?.error || 'Gagal memuat Status PO');
+      }
     } catch (err) {
-      setPoError(err?.message || 'Gagal memuat Status PO');
       setPoData(null);
-    } finally { setPoLoading(false); }
+      setPoError(err?.message || 'Gagal memuat Status PO');
+    } finally {
+      setPoLoading(false);
+    }
   }, []);
-  useEffect(() => { loadPO(); const t = setInterval(loadPO, 60000); return () => clearInterval(t); }, [loadPO]);
-  const pending = getPendingQueue().length;
-  const lastSync = stockCV.lastRefresh || stockPT.lastRefresh;
+
+  useEffect(() => { loadPO(); }, [loadPO]);
+
+  const handleConfirm = useCallback(async (item) => {
+    if (!item) return;
+    setConfirmingId(item.id);
+    setConfirmMsg('');
+    try {
+      const res = await confirmPOStatus({
+        itemNo: item.itemNo,
+        nama: item.nama,
+        noPO: poData?.noPO,
+        status: 'Selesai',
+        qtyDatang: item.qtyPO || item.qtyDatang,
+      });
+      if (res?.success || res?.status === 'OK' || res?.status === 'APPLIED') {
+        setConfirmMsg(`✓ ${item.nama} dikonfirmasi`);
+        await loadPO();
+      } else {
+        setConfirmMsg(res?.error || 'Gagal konfirmasi');
+      }
+    } catch (err) {
+      setConfirmMsg(err?.message || 'Gagal konfirmasi');
+    } finally {
+      setConfirmingId(null);
+      setTimeout(() => setConfirmMsg(''), 3200);
+    }
+  }, [loadPO, poData?.noPO]);
+
+  const pending = useMemo(() => {
+    try {
+      const q = getPendingQueue() || [];
+      return q.reduce((n, e) => n + (e.items?.length || 0), 0);
+    } catch { return 0; }
+  }, [allItems, poData]);
+
   const hour = new Date().getHours();
-  const firstName = (user?.name || 'Rudy').split(' ')[0];
-  let greeting = 'Selamat malam';
+  let greeting = 'Halo';
   let reminder = null;
   if (hour >= 4 && hour < 10) { greeting = 'Selamat pagi'; reminder = 'Cek kedatangan barang ya'; }
   else if (hour >= 10 && hour < 15) { greeting = 'Selamat siang'; reminder = 'jangan lupa input barang datang'; }
   else if (hour >= 15 && hour < 18) { greeting = 'Selamat sore'; reminder = 'apakah pengeluaran hari ini sudah di input...'; }
-  const now = new Date();
-  const dateLabel = now.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-  const timeLabel = now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
-  const loading = stockCV.loading || stockPT.loading;
+  else { greeting = 'Selamat malam'; reminder = 'Pastikan data hari ini sudah lengkap'; }
+
+  const name = user?.name || user?.nama || 'Rudy';
+  const kritisPct = stats.total ? Math.round((stats.kritis / stats.total) * 100) : 0;
+  const waspadaPct = stats.total ? Math.round((stats.waspada / stats.total) * 100) : 0;
+  const amanPct = stats.total ? Math.round((stats.aman / stats.total) * 100) : 0;
+
+  const barSeg = (bucket) => {
+    const t = Math.max(1, bucket.total);
+    return {
+      a: (bucket.aman / t) * 100,
+      w: (bucket.waspada / t) * 100,
+      k: (bucket.kritis / t) * 100,
+    };
+  };
+  const cvBar = barSeg(stats.cv);
+  const ptBar = barSeg(stats.pt);
 
   return (
-    <div className="pb-6 animate-fade-in space-y-3">
-      <div className="page-header">
-        <div className="flex items-start justify-between gap-3">
+    <div className="px-3 pt-3 pb-24 space-y-3 max-w-lg mx-auto">
+      <div className="rounded-2xl bg-white border border-slate-100 shadow-sm p-3.5">
+        <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
-            <div className="page-kicker flex items-center gap-2"><Snowflake className="w-3.5 h-3.5" /> GudangAI RUDY · Beranda</div>
-            <div className="page-title">{greeting}, <span className="text-cyan-700">{firstName}</span></div>
-            <p className="page-subtitle">{dateLabel} · <span className="tabular-nums font-semibold text-slate-700">{timeLabel}</span>{lastSync ? ' · Stok sinkron ' + lastSync.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : ''}</p>
-            {reminder && <p className="text-[11px] font-bold text-pink-600 mt-2">{reminder}</p>}
+            <p className="text-[11px] text-slate-400 font-medium">{greeting}</p>
+            <h1 className="text-lg font-extrabold text-slate-900 truncate">{name}</h1>
+            {reminder && <p className="text-[13px] font-bold text-pink-500 mt-0.5 leading-snug">{reminder}</p>}
           </div>
-          <button type="button" onClick={() => { stockCV.refresh(); stockPT.refresh(); loadPO(); }} disabled={loading}
-            className="w-9 h-9 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-600 shadow-sm shrink-0" aria-label="Refresh beranda">
+          <button
+            type="button"
+            onClick={() => { refresh?.(); loadPO(); }}
+            className="w-9 h-9 rounded-xl bg-white border border-slate-200 shadow-sm flex items-center justify-center text-slate-600 shrink-0"
+            aria-label="Refresh"
+          >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
         </div>
-        <div className="mt-3.5 grid grid-cols-3 gap-2">
-          <div className="metric-card px-2 py-2.5 text-center">
-            <p className="metric-label text-slate-500">Total SKU</p>
-            <p className="metric-value text-slate-900">{loading ? '…' : stats.total}</p>
-            <p className="text-[9px] text-slate-400">{stats.totalUnit.toLocaleString('id-ID')} unit</p>
-          </div>
-          <div className="metric-card border-emerald-200 bg-emerald-50/60 px-2 py-2.5 text-center">
-            <p className="metric-label text-emerald-700">Aman</p>
-            <p className="metric-value text-emerald-700">{loading ? '…' : stats.aman}</p>
-            <p className="text-[9px] text-emerald-600/70">{stats.total ? Math.round((stats.aman / stats.total) * 100) : 0}% SKU</p>
-          </div>
-          <div className="metric-card border-red-200 bg-red-50/60 px-2 py-2.5 text-center">
-            <p className="metric-label text-red-700">Kritis</p>
-            <p className="metric-value text-red-700">{loading ? '…' : stats.kritis}</p>
-            <p className="text-[9px] text-amber-600">{stats.waspada} waspada</p>
-          </div>
-        </div>
-        <p className="mt-2 text-[9px] text-slate-400">Data gabungan CV + PT · pembaruan stok & PO otomatis</p>
       </div>
 
-      <StatusPOCard data={poData} loading={poLoading} error={poError} onRefresh={loadPO} />
+      <div className="grid grid-cols-2 gap-2.5">
+        <div className="rounded-2xl bg-white border border-slate-100 shadow-sm p-3.5">
+          <div className="flex items-start justify-between mb-1">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total Item</p>
+            <Package className="w-4 h-4 text-cyan-500" />
+          </div>
+          <p className="text-3xl font-extrabold text-slate-900 tabular-nums leading-none">{loading ? '…' : stats.total}</p>
+          <p className="text-[11px] text-slate-400 mt-1">Semua Entitas CV &amp; PT</p>
+        </div>
+        <div className="rounded-2xl bg-white border border-red-100 shadow-sm p-3.5">
+          <div className="flex items-start justify-between mb-1">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-red-500">Kritis</p>
+            <ShieldAlert className="w-4 h-4 text-red-500" />
+          </div>
+          <p className="text-3xl font-extrabold text-red-600 tabular-nums leading-none">
+            {loading ? '…' : stats.kritis}
+            <span className="text-base font-bold text-red-400 ml-1">({kritisPct}%)</span>
+          </p>
+          <p className="text-[11px] text-red-400 mt-1">Stok di bawah batas minimal</p>
+        </div>
+        <div className="rounded-2xl bg-white border border-amber-100 shadow-sm p-3.5">
+          <div className="flex items-start justify-between mb-1">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-amber-500">Waspada</p>
+            <AlertCircle className="w-4 h-4 text-amber-500" />
+          </div>
+          <p className="text-3xl font-extrabold text-amber-600 tabular-nums leading-none">
+            {loading ? '…' : stats.waspada}
+            <span className="text-base font-bold text-amber-400 ml-1">({waspadaPct}%)</span>
+          </p>
+          <p className="text-[11px] text-amber-500/80 mt-1">Mendekati ambang batas</p>
+        </div>
+        <div className="rounded-2xl bg-white border border-emerald-100 shadow-sm p-3.5">
+          <div className="flex items-start justify-between mb-1">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-600">Aman</p>
+            <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+          </div>
+          <p className="text-3xl font-extrabold text-emerald-600 tabular-nums leading-none">
+            {loading ? '…' : stats.aman}
+            <span className="text-base font-bold text-emerald-400 ml-1">({amanPct}%)</span>
+          </p>
+          <p className="text-[11px] text-emerald-600/70 mt-1">Kapasitas stok tercukupi</p>
+        </div>
+      </div>
 
-      <div className="section-card">
-        <div className="section-card-header">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-cyan-50 flex items-center justify-center"><Package className="w-4 h-4 text-cyan-600" /></div>
-            <div><p className="section-label">Distribusi operasional</p><h2 className="text-sm font-bold text-slate-800">Status per Divisi</h2></div>
+      <div className="rounded-2xl bg-white border border-slate-100 shadow-sm p-4">
+        <div className="flex items-center gap-2 mb-3">
+          <div className="w-8 h-8 rounded-full bg-cyan-50 flex items-center justify-center">
+            <Package className="w-4 h-4 text-cyan-600" />
           </div>
-          <span className="status-pill status-pill-neutral">CV + PT</span>
-        </div>
-        <div className="p-3.5">
-          <div className="mb-3 text-[10px] text-slate-500 font-semibold">7 divisi aktif · hijau aman · kuning waspada · merah kritis</div>
-          <DivisionStatusBars items={allItems} />
-          <div className="mt-3 flex flex-wrap gap-2">
-            <span className="status-pill status-pill-safe">Aman</span>
-            <span className="status-pill status-pill-warn">Waspada</span>
-            <span className="status-pill status-pill-danger">Kritis</span>
+          <div>
+            <h3 className="text-sm font-bold text-slate-800">Analisa Stok CV &amp; PT</h3>
+            <p className="text-[11px] text-slate-400">Perbandingan status per entitas</p>
           </div>
         </div>
+        <div className="space-y-3">
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-[13px] font-bold text-slate-800">CV</span>
+              <span className="text-[11px] text-slate-400 tabular-nums">{stats.cv.total} SKU · {stats.cv.unit.toLocaleString('id-ID')} unit</span>
+            </div>
+            <div className="h-2.5 w-full rounded-full bg-slate-100 overflow-hidden flex">
+              <div className="h-full bg-emerald-500" style={{ width: `${cvBar.a}%` }} />
+              <div className="h-full bg-amber-400" style={{ width: `${cvBar.w}%` }} />
+              <div className="h-full bg-red-500" style={{ width: `${cvBar.k}%` }} />
+            </div>
+            <div className="flex gap-3 mt-1 text-[10px] tabular-nums">
+              <span className="text-emerald-600">● Aman {stats.cv.aman}</span>
+              <span className="text-amber-500">● Waspada {stats.cv.waspada}</span>
+              <span className="text-red-500">● Kritis {stats.cv.kritis}</span>
+            </div>
+          </div>
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-[13px] font-bold text-slate-800">PT</span>
+              <span className="text-[11px] text-slate-400 tabular-nums">{stats.pt.total} SKU · {stats.pt.unit.toLocaleString('id-ID')} unit</span>
+            </div>
+            <div className="h-2.5 w-full rounded-full bg-slate-100 overflow-hidden flex">
+              <div className="h-full bg-emerald-500" style={{ width: `${ptBar.a}%` }} />
+              <div className="h-full bg-amber-400" style={{ width: `${ptBar.w}%` }} />
+              <div className="h-full bg-red-500" style={{ width: `${ptBar.k}%` }} />
+            </div>
+            <div className="flex gap-3 mt-1 text-[10px] tabular-nums">
+              <span className="text-emerald-600">● Aman {stats.pt.aman}</span>
+              <span className="text-amber-500">● Waspada {stats.pt.waspada}</span>
+              <span className="text-red-500">● Kritis {stats.pt.kritis}</span>
+            </div>
+          </div>
+        </div>
+        <div className="flex justify-center gap-4 mt-3 text-[10px] text-slate-500">
+          <span><span className="inline-block w-2 h-2 rounded-full bg-emerald-500 mr-1" />Aman</span>
+          <span><span className="inline-block w-2 h-2 rounded-full bg-amber-400 mr-1" />Waspada</span>
+          <span><span className="inline-block w-2 h-2 rounded-full bg-red-500 mr-1" />Kritis</span>
+        </div>
+      </div>
+
+      <StatusPOCard
+        data={poData}
+        loading={poLoading}
+        error={poError}
+        onRefresh={loadPO}
+        onConfirm={handleConfirm}
+        confirmingId={confirmingId}
+      />
+      {confirmMsg && (
+        <p className="text-[12px] text-center font-semibold text-cyan-700">{confirmMsg}</p>
+      )}
+
+      <div className="rounded-2xl bg-white border border-slate-100 shadow-sm p-4">
+        <div className="flex items-center gap-2 mb-3">
+          <div className="w-8 h-8 rounded-full bg-cyan-50 flex items-center justify-center">
+            <Package className="w-4 h-4 text-cyan-600" />
+          </div>
+          <div>
+            <h3 className="text-sm font-bold text-slate-800">Status Stok Per Divisi 3D</h3>
+            <p className="text-[11px] text-slate-400">Aman · Waspada · Kritis · Interactive</p>
+          </div>
+        </div>
+        <DivisionStatus3D items={allItems} />
       </div>
 
       {pending > 0 && (
-        <div className="info-box info-box-warn px-3 py-2.5 flex items-center gap-2">
+        <div className="rounded-2xl bg-amber-50 border border-amber-100 px-3 py-2.5 flex items-center gap-2">
           <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
-          <span className="text-[11px] text-amber-800"><b>{pending}</b> transaksi menunggu sync — buka Atur</span>
+          <span className="text-[12px] text-amber-800"><b>{pending}</b> transaksi menunggu sync — buka Atur</span>
         </div>
       )}
     </div>
