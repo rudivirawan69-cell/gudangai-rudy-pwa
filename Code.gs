@@ -19,8 +19,8 @@
  */
 
 var SPREADSHEET_ID_FALLBACK = '1lJwqvSNZUNBO4ZH-PgVZsgd5Cf57UgCjGJIRD05IeCw';
-var VERSION = '6.4.5+STOCK-UPDATE';
-var TITLE = 'BACKEND GudangAI-69 V6.4.5';
+var VERSION = '6.4.5+STOCK-READONLY';
+var TITLE = 'BACKEND GudangAI-69 V6.4.5 STOCK READ-ONLY';
 var TZ = 'Asia/Jakarta';
 
 /** Nama tab purchase order (urutan dicoba) */
