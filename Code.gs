@@ -218,7 +218,14 @@ function getAllStock_(entitas) {
 }
 
 // ---------------------------------------------------------------------------
-// TRANSAKSI (addTransaction) — kompat PWA + update stock
+/**
+ * HARD SAFETY:
+ * - Sheet sumber: Stock CV / Stock PT = READ ONLY dari backend PWA.
+ * - Tidak ada fungsi transaksi PWA yang boleh setValue/setValues pada kedua sheet.
+ * - Penulisan PWA hanya di sheet whitelist: Barang masuk, Barang keluar, Barang Rusak.
+ * - Nama/Satuan (kolom D/E) tetap dibiarkan untuk VLOOKUP/formula existing.
+ */
+// TRANSAKSI (addTransaction) — PWA transaction writer (STOCK SOURCE LOCKED)
 // ---------------------------------------------------------------------------
 
 function addTransaction_(body) {
@@ -247,25 +254,12 @@ function addTransaction_(body) {
   }
   if (!sheet) return { success: false, error: 'Sheet transaksi tidak ditemukan: ' + sheetName };
 
-  var isKeluar = /keluar/i.test(sheetName);
-  var isMasuk = /masuk/i.test(sheetName);
-  var isRusak = /rusak/i.test(sheetName);
-
-  // --- Update Stock CV / Stock PT ---
-  var stockResult = updateStock_(ss, entitas, kode, qty, isKeluar, isMasuk, isRusak);
-  if (stockResult.error && !stockResult.soft) {
-    return { success: false, error: stockResult.error };
-  }
-
-  // Sesuaikan qty & keterangan sesuai aturan bisnis
+  // HARD SAFETY CONTRACT:
+  // addTransaction HANYA menulis ke sheet transaksi yang di-whitelist.
+  // Stock CV dan Stock PT adalah SOURCE OF TRUTH dan TIDAK BOLEH ditulis
+  // oleh jalur PWA ini. Keduanya hanya dibaca oleh getAllStock_().
   var finalQty = qty;
-  var finalKet = ket || entitas;
-  if (stockResult.adjusted) {
-    finalQty = stockResult.qtyWritten;
-    if (stockResult.note) {
-      finalKet = (finalKet ? finalKet + ' ' : '') + stockResult.note;
-    }
-  }
+  var finalKet = ket;
 
   var tgl = Utilities.formatDate(new Date(), TZ, 'dd/MM/yyyy');
   var nr = Math.max(sheet.getLastRow(), 1) + 1;
@@ -283,109 +277,13 @@ function addTransaction_(body) {
     row: nr,
     qty: finalQty,
     kode: kode,
-    stockAkhir: stockResult.stockAkhir,
-    adjusted: !!stockResult.adjusted,
-    note: stockResult.note || '',
+    // Field dipertahankan untuk kompatibilitas PWA; backend TIDAK mengubah
+    // maupun menghitung ulang Stock CV/PT dari jalur transaksi ini.
+    stockAkhir: null,
+    adjusted: false,
+    note: '',
     transactionId: body.transactionId || '',
     requestId: body.requestId || ''
-  };
-}
-
-/**
- * Update stock di sheet Stock CV / Stock PT.
- * Aturan:
- * - barangMasuk  : stok += qty
- * - barangKeluar : stok -= qty (jika stok <= 0 → qty=0 + "(STOK HABIS)"; jika qty > stok → sesuaikan + "(DISESUAIKAN)")
- * - barangRusak  : stok -= qty (sama seperti keluar, tanpa stok negatif)
- * Jangan menulis kolom Nama / Satuan.
- */
-function updateStock_(ss, entitas, kode, qty, isKeluar, isMasuk, isRusak) {
-  var names = entitas === 'CV'
-    ? ['Stock CV', 'stock CV', 'STOCK CV']
-    : ['Stock PT', 'stock PT', 'STOCK PT'];
-  var sheet = null;
-  for (var i = 0; i < names.length; i++) {
-    sheet = ss.getSheetByName(names[i]);
-    if (sheet) break;
-  }
-  if (!sheet) {
-    return { soft: true, error: 'Sheet Stock ' + entitas + ' tidak ditemukan (transaksi tetap dicatat)' };
-  }
-
-  var data = sheet.getDataRange().getValues();
-  if (data.length < 2) {
-    return { soft: true, error: 'Sheet Stock kosong' };
-  }
-
-  var headerRow = 0;
-  for (var r = 0; r < Math.min(6, data.length); r++) {
-    var joined = data[r].map(function (x) { return norm_(x); }).join('|');
-    if (joined.indexOf('kode') >= 0) {
-      headerRow = r;
-      break;
-    }
-  }
-
-  var h = data[headerRow].map(norm_);
-  var iK = findCol_(h, ['kode barang', 'kode']);
-  var iQ = findCol_(h, ['stock akhir', 'stok akhir', 'stockakhir', 'stok', 'stock']);
-
-  if (iK < 0 || iQ < 0) {
-    return { soft: true, error: 'Kolom Kode / Stock Akhir tidak ditemukan di Stock ' + entitas };
-  }
-
-  var targetRow = -1;
-  var current = 0;
-  for (var i = headerRow + 1; i < data.length; i++) {
-    var k = String(data[i][iK] || '').trim();
-    if (k === kode) {
-      targetRow = i + 1; // 1-based
-      current = num_(data[i][iQ]);
-      break;
-    }
-  }
-
-  if (targetRow < 0) {
-    return { soft: true, error: 'Kode ' + kode + ' tidak ada di Stock ' + entitas + ' (transaksi tetap dicatat)', stockAkhir: null };
-  }
-
-  var newStock = current;
-  var qtyWritten = qty;
-  var adjusted = false;
-  var note = '';
-
-  if (isMasuk) {
-    newStock = current + qty;
-  } else if (isKeluar || isRusak) {
-    if (current <= 0) {
-      qtyWritten = 0;
-      newStock = 0;
-      adjusted = true;
-      note = '(STOK HABIS)';
-    } else if (qty > current) {
-      qtyWritten = current;
-      newStock = 0;
-      adjusted = true;
-      note = '(DISESUAIKAN)';
-    } else {
-      newStock = current - qty;
-      qtyWritten = qty;
-    }
-  } else {
-    // fallback: treat as keluar
-    newStock = Math.max(0, current - qty);
-    qtyWritten = Math.min(qty, current);
-  }
-
-  // Tulis hanya kolom Stock Akhir (jangan sentuh Nama/Satuan)
-  sheet.getRange(targetRow, iQ + 1).setValue(newStock);
-
-  return {
-    stockAkhir: newStock,
-    qtyWritten: qtyWritten,
-    adjusted: adjusted,
-    note: note,
-    previous: current
   };
 }
 
