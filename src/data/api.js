@@ -342,7 +342,7 @@ async function submitItems(action, entity, items, tanggal, options = {}) {
   }
 
   if (!navigator.onLine || !getApiUrl()) {
-    enqueue(action, entity, list, { tanggal });
+    if (!options.fromQueue) enqueue(action, entity, list, { tanggal });
     const msg = list.length + ' item masuk Antrian Sinkronisasi (offline)';
     pushNotification({ type: 'warning', title: 'Koneksi terputus', body: msg + '. Tidak ada item yang dibuang.' });
     return { success: true, queued: true, count: 0, queuedCount: list.length, failed: list.length, results: list.map(it => ({ success: false, queued: true, clientItemId: it.clientItemId })) };
@@ -378,7 +378,7 @@ async function submitItems(action, entity, items, tanggal, options = {}) {
           (!knownIds.has(it.clientItemId) && !isApplied(it.clientItemId)));
 
         if (queueItems.length) {
-          enqueue(action, entity, queueItems, { tanggal });
+          if (!options.fromQueue) enqueue(action, entity, queueItems, { tanggal });
           totalQueued += queueItems.length;
         }
         continue;
@@ -387,7 +387,7 @@ async function submitItems(action, entity, items, tanggal, options = {}) {
         // The server may already have written the batch. Queue the SAME IDs;
         // backend Idempotency Ledger will convert retries into DUPLICATE/IDEMPOTENT.
         useBatch = false;
-        enqueue(action, entity, chunk, { tanggal });
+        if (!options.fromQueue) enqueue(action, entity, chunk, { tanggal });
         totalQueued += chunk.length;
         totalFail += chunk.length;
         allResults.push(...chunk.map(it => ({
@@ -416,7 +416,7 @@ async function submitItems(action, entity, items, tanggal, options = {}) {
         if (r.success || r.skipped) totalSuccess++;
         else {
           totalFail++;
-          enqueue(action, entity, [it], { tanggal });
+          if (!options.fromQueue) enqueue(action, entity, [it], { tanggal });
           totalQueued++;
         }
       } catch (err) {
@@ -483,10 +483,16 @@ export async function syncPendingQueue() {
     const remaining = [];
     for (const entry of queue) {
       const res = await submitItems(entry.type, entry.entity, entry.items, entry.tanggal, { fromQueue: true });
-      if (res.success && !res.failed) synced += entry.items.length;
-      else {
-        failed += res.failed || entry.items.length;
-        remaining.push(entry);
+      const resultMap = new Map((res.results || []).filter(r => r.clientItemId).map(r => [r.clientItemId, r]));
+      const remainingItems = (entry.items || []).filter(it => {
+        const r = resultMap.get(it.clientItemId);
+        return !r || (!r.success && !r.skipped);
+      });
+      const doneCount = (entry.items || []).length - remainingItems.length;
+      synced += doneCount;
+      if (remainingItems.length) {
+        failed += remainingItems.length;
+        remaining.push({ ...entry, items: remainingItems });
       }
     }
     commitQueueLocal(remaining);
