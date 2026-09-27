@@ -1,2 +1,2 @@
 /** Background — foto server room GudangAI (asli user 100%) */
-export default '/assets/bg-gudangai.jpg';
+export default '/assets/grok_1790510736004.jpg';
