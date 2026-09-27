@@ -22,7 +22,7 @@ html, body, #root {
   overscroll-behavior: none;
 }
 
-/* Full-screen HD background (image via inline style from bgDataUrl) */
+/* Full-screen HD background — shared by every authenticated page */
 .app-bg {
   position: fixed;
   inset: 0;
@@ -31,6 +31,7 @@ html, body, #root {
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
+  transform: translateZ(0);
   pointer-events: none;
 }
 .app-bg::after {
@@ -38,7 +39,8 @@ html, body, #root {
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(ellipse 80% 50% at 50% 0%, rgba(34, 211, 238, 0.12), transparent 55%);
+    linear-gradient(180deg, rgba(3, 12, 22, 0.10) 0%, rgba(3, 12, 22, 0.18) 48%, rgba(3, 12, 22, 0.34) 100%),
+    radial-gradient(ellipse 90% 55% at 50% 0%, rgba(34, 211, 238, 0.14), transparent 62%);
   pointer-events: none;
 }
 
@@ -138,4 +140,39 @@ html, body, #root {
 .mode-active-rusak {
   background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
   border-color: #fca5a5;
+}
+
+
+/* Global page polish: readable surfaces over the HD corridor background. */
+.page-header {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,.72);
+  background: rgba(255,255,255,.94);
+  box-shadow: 0 8px 28px rgba(3,12,22,.14);
+  backdrop-filter: blur(10px);
+}
+.page-header::after {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 3px;
+  background: linear-gradient(90deg,#22d3ee,#3b82f6,#8b5cf6);
+  opacity: .9;
+}
+.page-title { color: #0b1f36; letter-spacing: -.02em; }
+.page-subtitle { color: #52657a; }
+.section-title { color: #102a43; letter-spacing: -.01em; }
+.data-surface {
+  background: rgba(255,255,255,.96);
+  border: 1px solid rgba(226,232,240,.95);
+  box-shadow: 0 6px 22px rgba(3,12,22,.10);
+}
+.muted-label { color:#64748b; font-weight:600; }
+.number-emphasis { color:#0b2a55; font-variant-numeric:tabular-nums; }
+main::-webkit-scrollbar { width: 5px; }
+main::-webkit-scrollbar-thumb { background: rgba(148,163,184,.45); border-radius: 99px; }
+@media (max-width: 480px) {
+  .page-header { border-radius: 1rem; }
+  .data-surface { border-radius: .95rem; }
 }
