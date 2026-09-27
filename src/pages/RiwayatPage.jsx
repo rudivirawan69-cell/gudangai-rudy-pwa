@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { getTransactionHistory } from '../data/api';
 import {
   Clock, ArrowUpRight, ArrowDownRight, Search,
-  AlertTriangle, Package, WifiOff, CheckCircle2, TrendingUp, LayoutGrid, List
+  AlertTriangle, Package, WifiOff, CheckCircle2, TrendingUp
 } from 'lucide-react';
 
 function typeMeta(type) {
@@ -87,39 +87,35 @@ export default function RiwayatPage() {
   return (
     <div className="pb-2 animate-fade-in space-y-3">
       <div className="flex items-center justify-between gap-2">
-        <div className="min-w-0">
-          <h1 className="text-base font-black text-white drop-shadow-sm tracking-tight">Riwayat Log</h1>
-          <p className="text-[11px] text-cyan-100/90 font-medium">
-            {stats.total} transaksi · {stats.itemsCount} baris item
+        <div>
+          <h1 className="text-lg font-bold text-slate-900">Riwayat</h1>
+          <p className="text-[11px] text-slate-400">
+            {stats.total} transaksi · {stats.itemsCount} baris item · lokal perangkat
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => setDense((v) => !v)}
-          className="px-3 py-1.5 rounded-xl bg-slate-900 text-white text-[11px] font-extrabold shadow-sm flex items-center gap-1.5 active:scale-95 transition shrink-0"
-        >
-          {dense ? <LayoutGrid className="w-3.5 h-3.5" /> : <List className="w-3.5 h-3.5" />}
-          <span>{dense ? 'Grid padat' : 'List longgar'}</span>
+        <button type="button" onClick={() => setDense((v) => !v)}
+          className="text-[10px] font-semibold px-2.5 py-1.5 rounded-lg bg-slate-100 text-slate-600">
+          {dense ? 'Grid padat' : 'List longgar'}
         </button>
       </div>
 
       {stats.total > 0 && (
         <div className="grid grid-cols-3 gap-2">
-          <div className="flex items-center gap-1.5 rounded-xl border border-emerald-200/60 bg-emerald-50/95 px-2.5 py-2 shadow-sm">
+          <div className="flex items-center gap-1.5 rounded-lg bg-emerald-50 px-2 py-1.5">
             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
             <div>
               <p className="text-[11px] font-bold text-emerald-700 tabular-nums">{stats.ok}</p>
               <p className="text-[9px] text-emerald-600/80">Terkirim</p>
             </div>
           </div>
-          <div className="flex items-center gap-1.5 rounded-xl border border-amber-200/60 bg-amber-50/95 px-2.5 py-2 shadow-sm">
+          <div className="flex items-center gap-1.5 rounded-lg bg-amber-50 px-2 py-1.5">
             <WifiOff className="w-3.5 h-3.5 text-amber-600 shrink-0" />
             <div>
               <p className="text-[11px] font-bold text-amber-700 tabular-nums">{stats.offline}</p>
               <p className="text-[9px] text-amber-600/80">Offline</p>
             </div>
           </div>
-          <div className="flex items-center gap-1.5 rounded-xl border border-red-200/60 bg-red-50/95 px-2.5 py-2 shadow-sm">
+          <div className="flex items-center gap-1.5 rounded-lg bg-red-50 px-2 py-1.5">
             <AlertTriangle className="w-3.5 h-3.5 text-red-600 shrink-0" />
             <div>
               <p className="text-[11px] font-bold text-red-700 tabular-nums">{stats.fail}</p>
@@ -134,33 +130,31 @@ export default function RiwayatPage() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
           <input value={search} onChange={(e) => setSearch(e.target.value)}
             placeholder="Cari kode, nama, keterangan…"
-            className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-200/80 bg-white/95 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-cyan-400 shadow-sm" />
+            className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 bg-white text-sm focus:outline-none focus:border-cyan-400" />
         </div>
 
-        <div className="flex justify-center gap-1.5 flex-wrap">
+        {/* Filter Tipe — center */}
+        <div className="flex justify-center gap-1.5">
           {typeFilters.map((f) => (
             <button key={f.id} type="button" onClick={() => setFilterType(f.id)}
-              className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold border transition-all ${
-                filterType === f.id
-                  ? 'bg-[#0b2a55] text-white border-[#0b2a55] shadow-sm'
-                  : 'bg-white/90 border-slate-200 text-slate-600 hover:border-cyan-300'
+              className={`px-3 py-1.5 rounded-full text-[11px] font-semibold ${
+                filterType === f.id ? 'bg-[#0b2a55] text-white' : 'bg-white border border-slate-200 text-slate-600'
               }`}>{f.label}</button>
           ))}
         </div>
 
+        {/* Filter Entitas — center, baris terpisah */}
         <div className="flex justify-center gap-1.5">
           {entityFilters.map((f) => (
             <button key={f.id} type="button" onClick={() => setFilterEntity(f.id)}
-              className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold border transition-all ${
-                filterEntity === f.id
-                  ? 'bg-cyan-600 text-white border-cyan-600 shadow-sm'
-                  : 'bg-white/90 border-slate-200 text-slate-600 hover:border-cyan-300'
+              className={`px-3 py-1.5 rounded-full text-[11px] font-semibold ${
+                filterEntity === f.id ? 'bg-cyan-600 text-white' : 'bg-white border border-slate-200 text-slate-600'
               }`}>{f.label}</button>
           ))}
         </div>
 
-        <p className="text-[10px] text-cyan-100/70 px-0.5 text-center">
-          Menampilkan <span className="font-semibold text-white">{filtered.length}</span> dari {history.length}
+        <p className="text-[10px] text-slate-400 px-0.5 text-center">
+          Menampilkan <span className="font-semibold text-slate-600">{filtered.length}</span> dari {history.length}
         </p>
       </div>
 
@@ -171,12 +165,29 @@ export default function RiwayatPage() {
           <p className="text-[11px] text-slate-400 leading-relaxed max-w-xs mx-auto">
             Transaksi dari Input (manual, PDF, atau Suara) tersimpan di sini setelah dikirim — termasuk offline.
           </p>
+          <div className="grid grid-cols-3 gap-2 pt-2 text-left">
+            <div className="rounded-lg bg-slate-50 p-2">
+              <Package className="w-3.5 h-3.5 text-slate-500 mb-1" />
+              <p className="text-[10px] font-medium text-slate-700">Input item</p>
+              <p className="text-[9px] text-slate-400">Masuk / keluar / rusak</p>
+            </div>
+            <div className="rounded-lg bg-slate-50 p-2">
+              <TrendingUp className="w-3.5 h-3.5 text-slate-500 mb-1" />
+              <p className="text-[10px] font-medium text-slate-700">Grafik terisi</p>
+              <p className="text-[9px] text-slate-400">Otomatis 7 hari</p>
+            </div>
+            <div className="rounded-lg bg-slate-50 p-2">
+              <CheckCircle2 className="w-3.5 h-3.5 text-slate-500 mb-1" />
+              <p className="text-[10px] font-medium text-slate-700">Status kirim</p>
+              <p className="text-[9px] text-slate-400">OK / offline / gagal</p>
+            </div>
+          </div>
         </div>
       ) : dense ? (
         <div className="space-y-3">
           {grouped.map((g) => (
             <div key={g.label}>
-              <p className="text-[10px] font-semibold text-cyan-100/80 uppercase tracking-wide mb-1.5 px-0.5">
+              <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-1.5 px-0.5">
                 {g.label} · {g.items.length} tx
               </p>
               <div className="grid grid-cols-2 gap-2">
@@ -223,7 +234,7 @@ export default function RiwayatPage() {
         <div className="space-y-3">
           {grouped.map((g) => (
             <div key={g.label}>
-              <p className="text-[10px] font-semibold text-cyan-100/80 uppercase tracking-wide mb-1.5 px-0.5">{g.label}</p>
+              <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-1.5 px-0.5">{g.label}</p>
               <div className="space-y-2">
                 {g.items.map((h, idx) => {
                   const m = typeMeta(h.type);

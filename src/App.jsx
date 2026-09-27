@@ -1,7 +1,13 @@
-import { useState, useEffect, Component, lazy, Suspense } from 'react';
+import { useState, useEffect, Component } from 'react';
 import { SpeedInsights } from '@vercel/speed-insights/react';
 import { AuthProvider, useAuth } from './hooks/useAuth';
 import LoginPage from './pages/LoginPage';
+import DashboardPage from './pages/DashboardPage';
+import StokPage from './pages/StokPage';
+import InputPage from './pages/InputPage';
+import RiwayatPage from './pages/RiwayatPage';
+import SettingsPage from './pages/SettingsPage';
+import POPage from './pages/POPage';
 import { useConnection } from './hooks/useConnection';
 import {
   LayoutDashboard,
@@ -14,22 +20,6 @@ import {
   WifiOff,
 } from 'lucide-react';
 
-/* Lazy load halaman — first paint lebih cepat di Android */
-const DashboardPage = lazy(() => import('./pages/DashboardPage'));
-const StokPage = lazy(() => import('./pages/StokPage'));
-const InputPage = lazy(() => import('./pages/InputPage'));
-const RiwayatPage = lazy(() => import('./pages/RiwayatPage'));
-const SettingsPage = lazy(() => import('./pages/SettingsPage'));
-const SyncQueuePage = lazy(() => import('./pages/SyncQueuePage'));
-const POPage = lazy(() => import('./pages/POPage'));
-
-function PageFallback() {
-  return (
-    <div className="flex items-center justify-center py-16">
-      <div className="w-8 h-8 rounded-full border-2 border-cyan-400/40 border-t-cyan-300 animate-spin" />
-    </div>
-  );
-}
 
 class ErrorBoundary extends Component {
   constructor(props) {
@@ -45,16 +35,11 @@ class ErrorBoundary extends Component {
   render() {
     if (this.state.error) {
       return (
-        <div className="surface p-4 text-sm text-red-800">
+        <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-sm text-red-800">
           <p className="font-bold mb-1">Halaman error</p>
-          <p className="text-xs break-all text-red-600">{String(this.state.error?.message || this.state.error)}</p>
-          <button
-            type="button"
-            className="btn-primary mt-3 text-xs"
-            onClick={() => this.setState({ error: null })}
-          >
-            Coba lagi
-          </button>
+          <p className="text-xs break-all">{String(this.state.error?.message || this.state.error)}</p>
+          <button type="button" className="mt-3 px-3 py-2 rounded-lg bg-red-600 text-white text-xs font-semibold"
+            onClick={() => this.setState({ error: null })}>Coba lagi</button>
         </div>
       );
     }
@@ -63,36 +48,35 @@ class ErrorBoundary extends Component {
 }
 
 const TABS = [
-  { id: 'dashboard', label: 'Beranda', icon: LayoutDashboard },
-  { id: 'stok', label: 'Stok', icon: Package },
-  { id: 'input', label: 'Input', icon: PackagePlus },
-  { id: 'po', label: 'PO', icon: FileText },
-  { id: 'riwayat', label: 'Riwayat', icon: Clock },
-  { id: 'settings', label: 'Atur', icon: Settings },
+  { id: 'dashboard', label: 'Beranda', icon: LayoutDashboard, active: 'text-cyan-700', chip: 'bg-cyan-50' },
+  { id: 'stok', label: 'Stok', icon: Package, active: 'text-blue-700', chip: 'bg-blue-50' },
+  { id: 'input', label: 'Input', icon: PackagePlus, active: 'text-emerald-700', chip: 'bg-emerald-50' },
+  { id: 'po', label: 'PO', icon: FileText, active: 'text-violet-700', chip: 'bg-violet-50' },
+  { id: 'riwayat', label: 'Riwayat', icon: Clock, active: 'text-amber-700', chip: 'bg-amber-50' },
+  { id: 'settings', label: 'Atur', icon: Settings, active: 'text-slate-700', chip: 'bg-slate-100' },
 ];
+
+const TAB_ACCENT = {
+  dashboard: 'from-cyan-400 to-blue-500',
+  stok: 'from-blue-400 to-indigo-500',
+  input: 'from-emerald-400 to-teal-500',
+  po: 'from-violet-400 to-purple-500',
+  riwayat: 'from-amber-400 to-orange-500',
+  settings: 'from-slate-400 to-slate-600',
+};
 
 function ConnectionBanner() {
   const { online, hasUrl, status, message, syncing } = useConnection({ pollMs: 90000 });
   const [flash, setFlash] = useState('');
-  const [now, setNow] = useState(() => new Date());
-
-  useEffect(() => {
-    const t = setInterval(() => setNow(new Date()), 30000);
-    return () => clearInterval(t);
-  }, []);
 
   useEffect(() => {
     const onConn = (e) => {
       const d = e.detail || {};
-      if (d.state === 'write_unknown') {
-        setFlash('Menunggu respons server…');
-        setTimeout(() => setFlash(''), 4000);
-        return;
-      }
       if (d.state === 'recovered') {
         setFlash('Koneksi stabil');
         setTimeout(() => setFlash(''), 1800);
       } else if (d.state === 'failed' && d.error) {
+        // Hanya tampilkan error nyata (bukan setiap retry)
         setFlash(d.error);
         setTimeout(() => setFlash(''), 3500);
       }
@@ -101,68 +85,47 @@ function ConnectionBanner() {
     return () => window.removeEventListener('gudangai-conn', onConn);
   }, []);
 
-  const dateLabel = now.toLocaleDateString('id-ID', {
-    weekday: 'short', day: 'numeric', month: 'short',
-  });
-  const timeLabel = now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
-
-  let tone = 'conn-ok';
-  let statusContent;
-
   if (!hasUrl) {
-    tone = 'conn-warn';
-    statusContent = (
-      <>
-        <WifiOff className="w-3.5 h-3.5 shrink-0" />
-        <span className="font-semibold">Mode Demo</span>
-      </>
+    return (
+      <div className="bg-amber-50/95 border-b border-amber-100/80 px-3 py-1.5 flex items-center justify-center gap-1.5 text-[11px] text-amber-800 font-medium backdrop-blur-sm transition-colors duration-300">
+        <WifiOff className="w-3 h-3 shrink-0" />
+        Mode Demo · Atur URL API di Pengaturan
+      </div>
     );
-  } else if (!online || status === 'offline') {
-    tone = 'conn-err';
-    statusContent = (
-      <>
-        <WifiOff className="w-3.5 h-3.5 shrink-0" />
-        <span className="font-semibold">Offline</span>
-      </>
+  }
+
+  if (!online || status === 'offline') {
+    return (
+      <div className="bg-red-50/95 border-b border-red-100/80 px-3 py-1.5 flex items-center justify-center gap-1.5 text-[11px] text-red-700 font-medium backdrop-blur-sm transition-colors duration-300">
+        <WifiOff className="w-3 h-3 shrink-0" />
+        Offline · Antrian disimpan lokal
+      </div>
     );
-  } else if (syncing) {
-    tone = 'conn-sync';
-    statusContent = (
-      <>
-        <Wifi className="w-3.5 h-3.5 shrink-0 animate-pulse" />
-        <span className="font-semibold">Sinkron…</span>
-      </>
+  }
+
+  if (syncing) {
+    return (
+      <div className="bg-cyan-50/95 border-b border-cyan-100/80 px-3 py-1.5 flex items-center justify-center gap-1.5 text-[11px] text-cyan-800 font-medium backdrop-blur-sm">
+        <Wifi className="w-3 h-3 shrink-0 animate-pulse" />
+        Menyinkronkan antrian…
+      </div>
     );
-  } else if (flash) {
+  }
+
+  if (flash) {
     const isErr = flash.length > 20 || /gagal|error|fail/i.test(flash);
-    const isWait = /Menunggu respons/i.test(flash);
-    tone = isWait ? 'conn-sync' : isErr ? 'conn-warn' : 'conn-ok';
-    statusContent = (
-      <>
-        <Wifi className="w-3.5 h-3.5 shrink-0" />
-        <span className="font-semibold truncate max-w-[140px]">{flash}</span>
-      </>
-    );
-  } else {
-    tone = 'conn-ok';
-    statusContent = (
-      <>
-        <span className="w-1.5 h-1.5 rounded-full bg-cyan-300 animate-soft-pulse shrink-0" />
-        <span className="font-semibold">Terhubung</span>
-      </>
+    return (
+      <div className={`${isErr ? 'bg-amber-50/95 border-amber-100 text-amber-800' : 'bg-emerald-50/95 border-emerald-100 text-emerald-800'} border-b px-3 py-1.5 flex items-center justify-center gap-1.5 text-[11px] font-medium backdrop-blur-sm transition-colors duration-300`}>
+        <Wifi className="w-3 h-3 shrink-0" />
+        {flash}
+      </div>
     );
   }
 
   return (
-    <div className={`conn-strip ${tone}`}>
-      <div className="flex items-center gap-1.5 min-w-0">
-        {statusContent}
-      </div>
-      <div className="flex items-center gap-1.5 shrink-0 tabular-nums text-[10px] opacity-90">
-        <span>{dateLabel}</span>
-        <span className="opacity-40">·</span>
-        <span className="font-bold">{timeLabel}</span>
-      </div>
+    <div className="bg-emerald-50/90 border-b border-emerald-100/80 px-3 py-1.5 flex items-center justify-center gap-1.5 text-[11px] text-emerald-800 font-medium backdrop-blur-sm">
+      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-soft-pulse" />
+      Terhubung ke GudangAI RUDY
     </div>
   );
 }
@@ -171,81 +134,14 @@ function AppShell() {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [pageKey, setPageKey] = useState(0);
-  const [showSyncQueue, setShowSyncQueue] = useState(false);
 
-  const goTab = (id, push = true) => {
-    if (id === activeTab && !showSyncQueue) return;
-    setShowSyncQueue(false);
+  const goTab = (id) => {
+    if (id === activeTab) return;
     setActiveTab(id);
     setPageKey((k) => k + 1);
-    if (push && typeof history !== 'undefined') {
-      try {
-        history.pushState({ tab: id }, '', `#${id}`);
-      } catch (_) {}
-    }
   };
 
-  useEffect(() => {
-    const onPop = (e) => {
-      const state = e.state;
-      if (state && state.sync) {
-        setShowSyncQueue(true);
-        return;
-      }
-      if (state && state.tab) {
-        setShowSyncQueue(false);
-        setActiveTab(state.tab);
-        setPageKey((k) => k + 1);
-        return;
-      }
-      setShowSyncQueue(false);
-      setActiveTab('dashboard');
-      setPageKey((k) => k + 1);
-      try {
-        if (typeof history !== 'undefined') {
-          history.pushState({ tab: 'dashboard' }, '', '#dashboard');
-        }
-      } catch (_) {}
-    };
-    window.addEventListener('popstate', onPop);
-    try {
-      if (typeof history !== 'undefined' && !history.state?.tab) {
-        history.replaceState({ tab: activeTab }, '', `#${activeTab}`);
-      }
-    } catch (_) {}
-    return () => window.removeEventListener('popstate', onPop);
-  }, [activeTab]);
-
-  if (!user) {
-    return <LoginPage />;
-  }
-
-  if (showSyncQueue) {
-    return (
-      <>
-        <div className="app-bg" aria-hidden>
-          <div className="app-bg-photo" />
-        </div>
-        <div className="app-shell">
-          <ConnectionBanner />
-          <main className="flex-1 px-3.5 pt-3 pb-6 max-w-lg mx-auto w-full overflow-y-auto">
-            <ErrorBoundary>
-              <Suspense fallback={<PageFallback />}>
-                <SyncQueuePage
-                  onBack={() => {
-                    setShowSyncQueue(false);
-                    try {
-                      history.pushState({ tab: activeTab }, '', `#${activeTab}`);
-                    } catch (_) {}
-                  }}
-                />
-              </Suspense>
-            </ErrorBoundary>
-          </main>
-        </div>
-      </>
-    );
-  }
+  if (!user) return <LoginPage />;
 
   const renderPage = () => {
     switch (activeTab) {
@@ -254,75 +150,65 @@ function AppShell() {
       case 'stok':
         return <StokPage />;
       case 'input':
-        return (
-          <ErrorBoundary>
-            <InputPage />
-          </ErrorBoundary>
-        );
+        return <ErrorBoundary><InputPage /></ErrorBoundary>;
       case 'po':
         return <POPage />;
       case 'riwayat':
         return <RiwayatPage />;
       case 'settings':
-        return (
-          <SettingsPage
-            onOpenSyncQueue={() => {
-              setShowSyncQueue(true);
-              try {
-                history.pushState({ tab: activeTab, sync: true }, '', '#sync');
-              } catch (_) {}
-            }}
-          />
-        );
+        return <SettingsPage />;
       default:
         return <DashboardPage onNavigate={goTab} />;
     }
   };
 
   return (
-    <>
-      <div className="app-bg" aria-hidden>
-        <div className="app-bg-photo" />
-      </div>
-      <div className="app-shell">
-        <ConnectionBanner />
-        <main className="flex-1 px-3.5 pt-3 pb-24 max-w-lg mx-auto w-full overflow-y-auto">
-          <div key={pageKey} className="animate-page-in">
-            <Suspense fallback={<PageFallback />}>
-              {renderPage()}
-            </Suspense>
-          </div>
-        </main>
+    <div className="min-h-dvh bg-slate-100 flex flex-col">
+      <ConnectionBanner />
 
-        <nav className="nav-glass fixed bottom-0 left-0 right-0 safe-bottom z-40">
-          <div className="max-w-lg mx-auto flex px-1 py-1">
-            {TABS.map((tab) => {
-              const Icon = tab.icon;
-              const isActive = activeTab === tab.id;
-              return (
-                <button
-                  key={tab.id}
-                  type="button"
-                  onClick={() => goTab(tab.id)}
-                  className={`nav-btn flex-1 flex flex-col items-center justify-center py-2 relative ${
-                    isActive ? 'is-active' : ''
-                  }`}
+      <main className="flex-1 px-3.5 pt-3.5 pb-24 max-w-lg mx-auto w-full overflow-y-auto">
+        <div key={pageKey} className="animate-page-in">
+          {renderPage()}
+        </div>
+      </main>
+
+      <nav className="fixed bottom-0 left-0 right-0 bg-white/92 backdrop-blur-xl border-t border-slate-200/80 safe-bottom z-40 shadow-[0_-4px_20px_rgb(15_23_42/0.04)]">
+        <div className="max-w-lg mx-auto flex">
+          {TABS.map((tab) => {
+            const Icon = tab.icon;
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => goTab(tab.id)}
+                className={`nav-btn flex-1 flex flex-col items-center pt-2 pb-1 relative ${
+                  isActive ? tab.active : 'text-slate-400'
+                }`}
+              >
+                <div
+                  className={`nav-icon-wrap p-1.5 rounded-xl ${
+                    isActive ? `${tab.chip} ${tab.active}` : ''
+                  } ${isActive ? 'animate-nav-pop' : ''}`}
                 >
-                  <Icon
-                    className={`w-5 h-5 transition-all duration-200 ${
-                      isActive ? 'stroke-[2.4] animate-nav-pop' : 'stroke-[1.5]'
-                    }`}
-                  />
-                  <span className="nav-label">{tab.label}</span>
-                  {isActive && <span className="nav-indicator" />}
-                </button>
-              );
-            })}
-          </div>
-        </nav>
-        <SpeedInsights />
-      </div>
-    </>
+                  <Icon className={`w-5 h-5 ${isActive ? 'stroke-[2.25]' : 'stroke-[1.5]'}`} />
+                </div>
+                <span className={`text-[10px] mt-0.5 tracking-wide transition-all duration-250 ${
+                  isActive ? 'font-semibold' : 'font-medium'
+                }`}>
+                  {tab.label}
+                </span>
+                {isActive && (
+                  <span className={`absolute bottom-0 left-1/2 -translate-x-1/2 w-8 h-0.5 rounded-full bg-gradient-to-r ${TAB_ACCENT[tab.id]}`} />
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </nav>
+
+      <SpeedInsights />
+    </div>
   );
 }
 

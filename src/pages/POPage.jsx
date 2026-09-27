@@ -1,11 +1,11 @@
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { useStock } from '../hooks/useStock';
-import { submitPO } from '../data/api';
 import {
-  Trash2, Plus, Minus, CheckCircle, Snowflake, ChefHat,
-  ArrowLeft, Send, Loader2, RefreshCw,
+  FileText, Trash2, Plus, Minus, Download, ShoppingCart,
+  CheckCircle, Snowflake, ChefHat,
 } from 'lucide-react';
 
+/** Fallback batas aman (dipakai jika live stockAman = 0). */
 const STOCK_AMAN = {
   'CV-0001': 2500, 'CV-0002': 500, 'CV-0003': 500, 'CV-0005': 850, 'CV-0007': 350,
   'CV-0009': 150, 'CV-0010': 550, 'CV-0012': 850, 'CV-0013': 500, 'CV-0014': 750,
@@ -23,395 +23,395 @@ const STOCK_AMAN = {
   'PT-0044': 150,
 };
 
-function normDiv(d) { return String(d || '').trim().toUpperCase(); }
-function isCS(divisi) { const d = normDiv(divisi); return d === 'CS' || d.includes('COLD'); }
-function isRekanan(divisi) { const d = normDiv(divisi); return d.includes('REKAN'); }
-function isProduksi(divisi) { return !isCS(divisi) && !isRekanan(divisi); }
+function normDiv(d) {
+  return String(d || '').trim().toUpperCase();
+}
+
+function isCS(divisi) {
+  const d = normDiv(divisi);
+  return d === 'CS' || d.includes('COLD') || d === 'COLD STORAGE';
+}
+
+function isRekanan(divisi) {
+  const d = normDiv(divisi);
+  return d.includes('REKANAN') || d.includes('REKAN') || d === 'RK';
+}
+
+function isProduksi(divisi) {
+  return !isCS(divisi) && !isRekanan(divisi);
+}
+
 function getAman(item) {
   const live = Number(item.stockAman ?? item.aman ?? 0);
-  return live > 0 ? live : (STOCK_AMAN[item.kode] || 0);
+  if (live > 0) return live;
+  return STOCK_AMAN[item.kode] || 0;
 }
+
 function buildCritical(list, entity, predicate) {
-  return (list || []).filter((i) => {
-    if (i.kode?.startsWith('BB')) return false;
-    if (predicate && !predicate(i.divisi)) return false;
-    const aman = getAman(i);
-    return aman > 0 && Number(i.stok ?? i.stockAkhir ?? i.qty ?? 0) < aman;
-  }).map((i) => {
-    const aman = getAman(i);
-    const stok = Number(i.stok ?? i.stockAkhir ?? i.qty ?? 0) || 0;
-    return {
-      id: `${entity}-${i.kode}`,
-      kode: i.kode,
-      nama: i.nama,
-      size: i.size || '',
-      satuan: i.satuan || 'Pack',
-      divisi: i.divisi || '',
-      entity,
-      stok,
-      aman,
-      qty: Math.max(0, aman - stok),
-    };
-  }).sort((a, b) => b.qty - a.qty || a.nama.localeCompare(b.nama));
+  return list
+    .filter((i) => {
+      if (i.kode?.startsWith('BB')) return false;
+      if (predicate && !predicate(i.divisi)) return false;
+      const aman = getAman(i);
+      if (!aman) return false;
+      return Number(i.stok) < aman;
+    })
+    .map((i) => {
+      const aman = getAman(i);
+      const stok = Number(i.stok) || 0;
+      const kurang = Math.max(0, aman - stok);
+      return {
+        ...i,
+        entity,
+        aman,
+        kurang,
+        suggestQty: kurang,
+      };
+    })
+    .sort((a, b) => b.kurang - a.kurang);
 }
-function dateParts(offsetDays = 0) {
+
+function formatTglKedatangan() {
   const d = new Date();
-  d.setDate(d.getDate() + offsetDays);
-  const monthsShort = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
-  const monthsLong = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
-  return {
-    iso: `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`,
-    short: `${String(d.getDate()).padStart(2,'0')} ${monthsShort[d.getMonth()]} ${d.getFullYear()}`,
-    long: `${String(d.getDate()).padStart(2,'0')} ${monthsLong[d.getMonth()]} ${d.getFullYear()}`,
-  };
+  d.setDate(d.getDate() + 2);
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const yyyy = d.getFullYear();
+  return `${dd} Sep ${yyyy}`.replace('Sep', ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'][d.getMonth()]);
 }
-function buildMergedRows(items, defaultTglIso) {
+
+function formatTglHeader() {
+  const d = new Date();
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'][d.getMonth()];
+  return `${dd} ${mm} ${d.getFullYear()}`;
+}
+
+/** TSV kolom B–I (mulai baris 6 sheet purchase order). */
+function buildSheetTSV(items) {
+  const tgl = formatTglKedatangan();
+  // Gabung by nama: satu baris bisa punya PO CV + PO PT
   const map = new Map();
-  for (const it of items) {
-    const qty = Number(it.qty) || 0;
-    if (qty <= 0) continue;
-    const key = String(it.nama || it.kode || '').trim().toLowerCase().replace(/\s+/g, ' ');
-    if (!key) continue;
+  items.forEach((it) => {
+    const key = String(it.nama || it.kode).trim().toLowerCase();
     if (!map.has(key)) {
       map.set(key, {
-        id: key,
-        kodeCV: it.entity === 'CV' ? it.kode : '',
-        kodePT: it.entity === 'PT' ? it.kode : '',
         nama: it.nama,
         size: it.size || '',
         satuan: it.satuan || 'Pack',
-        divisi: it.divisi || '',
         poCV: 0,
         poPT: 0,
-        total: 0,
-        stokCV: 0,
-        stokPT: 0,
-        amanCV: 0,
-        amanPT: 0,
-        tglKedatangan: defaultTglIso || dateParts(2).iso,
       });
     }
     const row = map.get(key);
-    if (it.entity === 'CV') {
-      row.poCV += qty;
-      row.kodeCV = it.kode || row.kodeCV;
-      row.stokCV = Number(it.stok) || row.stokCV;
-      row.amanCV = Number(it.aman) || row.amanCV;
-      if (it.size) row.size = it.size;
-      if (it.divisi) row.divisi = it.divisi;
-    } else {
-      row.poPT += qty;
-      row.kodePT = it.kode || row.kodePT;
-      row.stokPT = Number(it.stok) || row.stokPT;
-      row.amanPT = Number(it.aman) || row.amanPT;
-      if (!row.size && it.size) row.size = it.size;
-    }
-    row.total = row.poCV + row.poPT;
-  }
-  return [...map.values()].sort((a, b) => b.total - a.total || a.nama.localeCompare(b.nama));
+    if (it.entity === 'CV') row.poCV += Number(it.qty) || 0;
+    else row.poPT += Number(it.qty) || 0;
+  });
+  const rows = Array.from(map.values()).filter((r) => r.poCV + r.poPT > 0);
+  // Header opsional untuk paste manual — data saja cocok B6:I
+  // B=NO C=NAMA D=SIZE E=SATUAN F=PO CV G=PO PT H=TOTAL I=TGL
+  return rows
+    .map((r, idx) => {
+      const total = r.poCV + r.poPT;
+      return [idx + 1, r.nama, r.size, r.satuan, r.poCV || 0, r.poPT || 0, total, tgl].join('\t');
+    })
+    .join('\n');
 }
 
-function MergedItemCard({ row, onChangeCV, onChangePT, onChangeTgl, onRemove }) {
+function buildReadablePO(items, title) {
+  const tgl = formatTglHeader();
+  let text = `PURCHASE ORDER (PRODIS) — ${title}\nTANGGAL : ${tgl}\n\n`;
+  text += 'NO\tNAMA BARANG\tSIZE\tSATUAN\tPO CV\tPO PT\tTOTAL\tTGL KEDATANGAN\n';
+  text += buildSheetTSV(items);
+  text += `\n\nDibuat oleh: Rudi Virawan\nMengetahui: Heri Suprijanto`;
+  return text;
+}
+
+function ItemCard({ item, onUpdate, onRemove, editable }) {
   return (
-    <div className="surface-flat p-4 touch-manipulation">
-      <div className="flex items-start justify-between gap-2 mb-2.5">
+    <div className="bg-white rounded-xl px-2.5 py-2 border border-gray-100 shadow-sm">
+      <div className="flex items-start justify-between gap-1 mb-1">
         <div className="min-w-0 flex-1">
-          <p className="text-[15px] font-bold text-slate-800 leading-snug">{row.nama}</p>
-          <p className="text-[11px] text-slate-400 mt-0.5 font-medium">
-            {row.size ? `${row.size} · ` : ''}{row.satuan}
-            {row.kodeCV ? ` · CV ${row.kodeCV}` : ''}
-            {row.kodePT ? ` · PT ${row.kodePT}` : ''}
+          <div className="flex items-center gap-1.5">
+            <span className={`text-[8px] font-bold px-1 py-0.5 rounded shrink-0 ${
+              item.entity === 'CV' ? 'bg-blue-100 text-blue-600' : 'bg-violet-100 text-violet-600'
+            }`}>{item.entity}</span>
+            <p className="text-[11px] font-medium text-gray-800 truncate">{item.nama}</p>
+          </div>
+          <p className="text-[9px] text-gray-400 mt-0.5">
+            {item.kode} · sisa {item.sisa ?? item.stok}/{item.aman}
           </p>
-          <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1.5 text-[10px] font-semibold">
-            {row.kodeCV ? (
-              <span className="text-cyan-700">
-                CV: stok <b className="tabular-nums">{row.stokCV ?? '—'}</b>
-                {row.amanCV > 0 ? <> · aman <b className="tabular-nums">{row.amanCV}</b></> : null}
-              </span>
-            ) : null}
-            {row.kodePT ? (
-              <span className="text-orange-700">
-                PT: stok <b className="tabular-nums">{row.stokPT ?? '—'}</b>
-                {row.amanPT > 0 ? <> · aman <b className="tabular-nums">{row.amanPT}</b></> : null}
-              </span>
-            ) : null}
-          </div>
         </div>
-        <button type="button" aria-label={`Hapus ${row.nama}`} onClick={() => onRemove(row.id)}
-          className="min-w-[40px] min-h-[40px] flex items-center justify-center text-red-400 rounded-xl bg-red-50 active:bg-red-100 shrink-0">
-          <Trash2 className="w-4 h-4" />
-        </button>
+        {editable ? (
+          <button type="button" onClick={() => onRemove(item.kode)} className="text-gray-300 p-0.5">
+            <Trash2 className="w-3 h-3" />
+          </button>
+        ) : (
+          <span className="text-xs font-bold text-red-600 shrink-0">-{item.kurang}</span>
+        )}
       </div>
-      <div className="border-b border-slate-200 pb-3 mb-3">
-        <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">Tgl kedatangan</label>
-        <input type="date" value={row.tglKedatangan || ''} onChange={(e) => onChangeTgl(row.id, e.target.value)}
-          className="w-full mt-1 text-sm font-bold text-slate-800 border border-slate-200 rounded-xl py-2 px-2.5 bg-white focus:outline-none focus:border-cyan-400" />
-      </div>
-      <div className="grid grid-cols-2 gap-2 mb-2">
-        <div className="border border-cyan-200 rounded-xl p-2.5">
-          <p className="text-[10px] font-bold text-cyan-700 mb-1.5">PO CV</p>
-          <div className="flex items-center gap-1">
-            <button type="button" onClick={() => onChangeCV(row.id, Math.max(0, row.poCV - 1))} className="w-8 h-8 rounded-lg bg-cyan-50 flex items-center justify-center text-cyan-700"><Minus className="w-3.5 h-3.5" /></button>
-            <input type="number" min="0" inputMode="numeric" value={row.poCV} onChange={(e) => onChangeCV(row.id, Math.max(0, Number(e.target.value) || 0))} onFocus={(e) => e.target.select()} className="flex-1 min-w-0 text-center text-sm font-bold border border-slate-200 rounded-lg py-1.5 text-slate-800" />
-            <button type="button" onClick={() => onChangeCV(row.id, row.poCV + 1)} className="w-8 h-8 rounded-lg bg-cyan-50 flex items-center justify-center text-cyan-700"><Plus className="w-3.5 h-3.5" /></button>
-          </div>
+      {editable && (
+        <div className="flex items-center gap-1">
+          <button type="button" onClick={() => onUpdate(item.kode, item.qty - 10)}
+            className="w-6 h-6 rounded bg-gray-100 flex items-center justify-center">
+            <Minus className="w-3 h-3 text-gray-500" />
+          </button>
+          <input
+            type="number" min="0" value={item.qty}
+            onChange={(e) => onUpdate(item.kode, parseInt(e.target.value, 10) || 0)}
+            className="w-14 text-center text-xs font-bold border border-gray-200 rounded-lg py-1"
+          />
+          <button type="button" onClick={() => onUpdate(item.kode, item.qty + 10)}
+            className="w-6 h-6 rounded bg-gray-100 flex items-center justify-center">
+            <Plus className="w-3 h-3 text-gray-500" />
+          </button>
+          <span className="text-[9px] text-gray-400 ml-1">{item.satuan}</span>
         </div>
-        <div className="border border-orange-200 rounded-xl p-2.5">
-          <p className="text-[10px] font-bold text-orange-700 mb-1.5">PO PT</p>
-          <div className="flex items-center gap-1">
-            <button type="button" onClick={() => onChangePT(row.id, Math.max(0, row.poPT - 1))} className="w-8 h-8 rounded-lg bg-orange-50 flex items-center justify-center text-orange-700"><Minus className="w-3.5 h-3.5" /></button>
-            <input type="number" min="0" inputMode="numeric" value={row.poPT} onChange={(e) => onChangePT(row.id, Math.max(0, Number(e.target.value) || 0))} onFocus={(e) => e.target.select()} className="flex-1 min-w-0 text-center text-sm font-bold border border-slate-200 rounded-lg py-1.5 text-slate-800" />
-            <button type="button" onClick={() => onChangePT(row.id, row.poPT + 1)} className="w-8 h-8 rounded-lg bg-orange-50 flex items-center justify-center text-orange-700"><Plus className="w-3.5 h-3.5" /></button>
-          </div>
-        </div>
-      </div>
-      <div className="flex items-center justify-end">
-        <p className="text-[11px] text-slate-400 font-medium">
-          Total PO <span className="text-base font-bold text-slate-800 tabular-nums ml-1">{row.poCV + row.poPT}</span>
-        </p>
-      </div>
+      )}
     </div>
   );
 }
 
-function SkeletonCards() {
-  return (
-    <div className="space-y-2" aria-busy="true" aria-label="Memuat rekomendasi">
-      {[0, 1, 2, 3].map((i) => (
-        <div key={i} className="rounded-xl bg-white border border-gray-100 p-3">
-          <div className="skeleton h-4 w-3/4 rounded mb-2" />
-          <div className="skeleton h-3 w-1/2 rounded mb-3" />
-          <div className="grid grid-cols-2 gap-2">
-            <div className="skeleton h-16 rounded-lg" />
-            <div className="skeleton h-16 rounded-lg" />
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-export default function POPage({ onBack }) {
+export default function POPage() {
   const stockCV = useStock('CV');
   const stockPT = useStock('PT');
+  const [tab, setTab] = useState('cs'); // cs | produksi
+  const [csItems, setCsItems] = useState([]);
+  const [prodItems, setProdItems] = useState([]);
+  const [csGenerated, setCsGenerated] = useState(false);
+  const [prodGenerated, setProdGenerated] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const criticalCS = useMemo(() => {
+    const cv = buildCritical(stockCV.items, 'CV', isCS);
+    const pt = buildCritical(stockPT.items, 'PT', isCS);
+    return [...cv, ...pt].sort((a, b) => b.kurang - a.kurang);
+  }, [stockCV.items, stockPT.items]);
+
+  const criticalProd = useMemo(() => {
+    const cv = buildCritical(stockCV.items, 'CV', isProduksi);
+    const pt = buildCritical(stockPT.items, 'PT', isProduksi);
+    return [...cv, ...pt].sort((a, b) => b.kurang - a.kurang);
+  }, [stockCV.items, stockPT.items]);
+
   const loading = stockCV.loading || stockPT.loading;
-  const refresh = () => {
-    try { stockCV.refresh({ force: true }); } catch (_) {}
-    try { stockPT.refresh({ force: true }); } catch (_) {}
+  const activeList = tab === 'cs' ? criticalCS : criticalProd;
+  const generated = tab === 'cs' ? csGenerated : prodGenerated;
+  const editList = tab === 'cs' ? csItems : prodItems;
+
+  const generate = () => {
+    const src = tab === 'cs' ? criticalCS : criticalProd;
+    const mapped = src.map((i) => ({
+      kode: i.kode,
+      nama: i.nama,
+      entity: i.entity,
+      satuan: i.satuan || 'Pack',
+      size: i.size || '',
+      sisa: i.stok,
+      aman: i.aman,
+      qty: i.suggestQty,
+      divisi: i.divisi,
+    }));
+    if (tab === 'cs') {
+      setCsItems(mapped);
+      setCsGenerated(true);
+    } else {
+      setProdItems(mapped);
+      setProdGenerated(true);
+    }
   };
-  const [tab, setTab] = useState('cs');
-  const [phase, setPhase] = useState('review');
-  const [draftItems, setDraftItems] = useState([]);
-  const [initialized, setInitialized] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [submitMsg, setSubmitMsg] = useState('');
 
-  const criticalCS = useMemo(() => [
-    ...buildCritical(stockCV.items || [], 'CV', isCS),
-    ...buildCritical(stockPT.items || [], 'PT', isCS),
-  ].sort((a, b) => b.qty - a.qty), [stockCV.items, stockPT.items]);
+  const updateQty = (kode, qty) => {
+    const setter = tab === 'cs' ? setCsItems : setProdItems;
+    setter((p) => p.map((i) => (i.kode === kode ? { ...i, qty: Math.max(0, qty) } : i)));
+  };
+  const removeItem = (kode) => {
+    const setter = tab === 'cs' ? setCsItems : setProdItems;
+    setter((p) => p.filter((i) => i.kode !== kode));
+  };
 
-  const criticalProduksi = useMemo(() => [
-    ...buildCritical(stockCV.items || [], 'CV', isProduksi),
-    ...buildCritical(stockPT.items || [], 'PT', isProduksi),
-  ].sort((a, b) => b.qty - a.qty), [stockCV.items, stockPT.items]);
-
-  const activeCritical = tab === 'cs' ? criticalCS : criticalProduksi;
-  const defaultArrival = useMemo(() => dateParts(2).iso, []);
-  const [mergedRows, setMergedRows] = useState([]);
-  const activeCount = mergedRows.filter((r) => r.poCV + r.poPT > 0).length;
-
-  useEffect(() => {
-    if (loading) return;
-    if (initialized) return;
+  const copyPO = async () => {
+    const title = tab === 'cs' ? 'DIVISI CS (Cold Storage)' : 'TEAM PRODUKSI';
+    const text = buildReadablePO(editList, title);
     try {
-      const draft = activeCritical.map((i) => ({ ...i }));
-      setDraftItems(draft);
-      setMergedRows(buildMergedRows(draft, defaultArrival));
-      setInitialized(true);
-    } catch (err) {
-      console.error('[POPage] init failed', err);
-      setDraftItems([]);
-      setMergedRows([]);
-      setInitialized(true);
+      await navigator.clipboard?.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    } catch (_) {
+      setCopied(false);
     }
-  }, [loading, initialized, tab, defaultArrival, activeCritical]);
-
-  const regenerate = useCallback(() => {
-    const draft = activeCritical.map((i) => ({ ...i }));
-    setDraftItems(draft);
-    setMergedRows(buildMergedRows(draft, dateParts(2).iso));
-    setPhase('review');
-    setSubmitMsg('');
-  }, [activeCritical]);
-
-  const syncDraftFromMerged = (rows) => {
-    const out = [];
-    for (const r of rows) {
-      if (r.poCV > 0 && r.kodeCV) {
-        out.push({ id: `CV-${r.kodeCV}`, kode: r.kodeCV, nama: r.nama, size: r.size || '', satuan: r.satuan, divisi: r.divisi || '', entity: 'CV', qty: r.poCV, tglKedatangan: r.tglKedatangan });
-      }
-      if (r.poPT > 0 && r.kodePT) {
-        out.push({ id: `PT-${r.kodePT}`, kode: r.kodePT, nama: r.nama, size: r.size || '', satuan: r.satuan, divisi: r.divisi || '', entity: 'PT', qty: r.poPT, tglKedatangan: r.tglKedatangan });
-      }
-    }
-    setDraftItems(out);
   };
 
-  const updateMergedCV = (id, qty) => {
-    setMergedRows((prev) => {
-      const next = prev.map((r) => (r.id === id ? { ...r, poCV: qty, total: qty + r.poPT } : r));
-      syncDraftFromMerged(next);
-      return next;
-    });
-  };
-  const updateMergedPT = (id, qty) => {
-    setMergedRows((prev) => {
-      const next = prev.map((r) => (r.id === id ? { ...r, poPT: qty, total: r.poCV + qty } : r));
-      syncDraftFromMerged(next);
-      return next;
-    });
-  };
-  const updateMergedTgl = (id, tgl) => {
-    setMergedRows((prev) => {
-      const next = prev.map((r) => (r.id === id ? { ...r, tglKedatangan: tgl } : r));
-      syncDraftFromMerged(next);
-      return next;
-    });
-  };
-  const removeMerged = (id) => {
-    setMergedRows((prev) => {
-      const next = prev.filter((r) => r.id !== id);
-      syncDraftFromMerged(next);
-      return next;
-    });
-  };
-
-  const switchTab = (nextTab) => {
-    if (nextTab === tab) return;
-    setTab(nextTab);
-    setInitialized(false);
-    setDraftItems([]);
-    setMergedRows([]);
-    setPhase('review');
-    setSubmitMsg('');
-  };
-
-  const handleSubmit = async () => {
-    const active = mergedRows.filter((r) => r.poCV + r.poPT > 0);
-    if (submitting || active.length === 0) return;
-    setSubmitting(true);
-    setSubmitMsg('Menyimpan PO...');
+  const copySheetOnly = async () => {
+    const tsv = buildSheetTSV(editList);
     try {
-      const today = dateParts(0);
-      // Backend production mensyaratkan poCV/poPT (bukan hanya qty+entity).
-      // Satu baris merged = satu item Final PO dengan kedua kolom CV/PT.
-      const items = active.map((r) => ({
-        kode: r.kodeCV || r.kodePT || '',
-        kodeCV: r.kodeCV || '',
-        kodePT: r.kodePT || '',
-        nama: r.nama,
-        size: r.size || '',
-        satuan: r.satuan || 'Pack',
-        divisi: r.divisi || '',
-        entity: r.poCV > 0 && r.poPT > 0 ? 'BOTH' : r.poCV > 0 ? 'CV' : 'PT',
-        entitas: r.poCV > 0 && r.poPT > 0 ? 'BOTH' : r.poCV > 0 ? 'CV' : 'PT',
-        qty: Number(r.poCV || 0) + Number(r.poPT || 0),
-        poCV: Number(r.poCV || 0),
-        poPT: Number(r.poPT || 0),
-        tglKedatangan: r.tglKedatangan || defaultArrival,
-      }));
-      const payload = {
-        action: 'submitPO',
-        tipe: tab === 'cs' ? 'CS' : 'PRODUKSI',
-        tanggal: today.iso,
-        tglKedatangan: items[0]?.tglKedatangan || defaultArrival,
-        items,
-        requestId: `PO-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      };
-      const res = await submitPO(payload);
-      if (res && (res.success === true || res.status === 'OK' || res.status === 'APPLIED' || res.status === 'COMMITTED' || res.status === 'SAVED' || res.code === 'PO_WRITE_APPLIED')) {
-        setPhase('saved');
-        setSubmitMsg(res.message || 'PO berhasil disimpan ke sheet purchase order.');
-      } else {
-        setSubmitMsg(res?.error || res?.message || 'Gagal menyimpan PO. Coba lagi.');
-      }
-    } catch (err) {
-      setSubmitMsg(err?.message || 'Gagal menyimpan PO.');
-    } finally {
-      setSubmitting(false);
-    }
+      await navigator.clipboard?.writeText(tsv);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    } catch (_) {}
   };
 
-  if (phase === 'saved') {
-    return (
-      <div className="pb-4 animate-fade-in space-y-4">
-        <div className="card p-6 text-center space-y-3">
-          <CheckCircle className="w-12 h-12 text-emerald-500 mx-auto" />
-          <p className="text-base font-bold text-slate-800">PO berhasil disimpan</p>
-          <p className="text-xs text-slate-500">{submitMsg}</p>
-          <button type="button" onClick={() => { setPhase('review'); setInitialized(false); setSubmitMsg(''); }} className="mt-2 px-4 py-2.5 rounded-xl bg-[#0b2a55] text-white text-sm font-semibold">Buat PO baru</button>
-          {onBack && (<button type="button" onClick={onBack} className="block w-full mt-1 px-4 py-2 rounded-xl border border-slate-200 text-sm text-slate-600">Kembali</button>)}
-        </div>
-      </div>
-    );
-  }
+  const totalKurang = activeList.reduce((s, i) => s + i.kurang, 0);
 
   return (
-    <div className="pb-24 animate-fade-in space-y-4 text-slate-800">
-      <div className="flex items-center gap-3">
-        {onBack && (
-          <button type="button" onClick={onBack} className="size-10 rounded-xl bg-white border border-slate-200 shadow-sm flex items-center justify-center text-slate-700" aria-label="Kembali">
-            <ArrowLeft className="w-5 h-5" />
-          </button>
-        )}
-        <div className="min-w-0 flex-1">
-          <h1 className="text-lg font-extrabold text-slate-900">Purchase Order</h1>
-          <p className="text-xs text-slate-500 font-medium">Edit jumlah dan tanggal kedatangan setiap item</p>
+    <div className="pb-28 animate-fade-in">
+      <h2 className="text-lg font-bold text-gray-800 mb-1">PO Generator</h2>
+      <p className="text-xs text-gray-400 mb-3">
+        2 jalur: <b>PO CS</b> (beli cold storage) · <b>PO Produksi</b> (prioritas proses)
+      </p>
+
+      {/* Tabs 2 kolom */}
+      <div className="grid grid-cols-2 gap-2 mb-3">
+        <button
+          type="button"
+          onClick={() => setTab('cs')}
+          className={`rounded-xl px-3 py-3 flex items-center gap-2 border-2 transition-all ${
+            tab === 'cs'
+              ? 'border-cyan-500 bg-cyan-50 shadow-sm'
+              : 'border-gray-100 bg-white'
+          }`}
+        >
+          <Snowflake className={`w-5 h-5 ${tab === 'cs' ? 'text-cyan-600' : 'text-gray-400'}`} />
+          <div className="text-left min-w-0">
+            <p className={`text-xs font-bold ${tab === 'cs' ? 'text-cyan-800' : 'text-gray-700'}`}>PO CS</p>
+            <p className="text-[9px] text-gray-400 truncate">Cold Storage · ke sheet PO</p>
+          </div>
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab('produksi')}
+          className={`rounded-xl px-3 py-3 flex items-center gap-2 border-2 transition-all ${
+            tab === 'produksi'
+              ? 'border-orange-500 bg-orange-50 shadow-sm'
+              : 'border-gray-100 bg-white'
+          }`}
+        >
+          <ChefHat className={`w-5 h-5 ${tab === 'produksi' ? 'text-orange-600' : 'text-gray-400'}`} />
+          <div className="text-left min-w-0">
+            <p className={`text-xs font-bold ${tab === 'produksi' ? 'text-orange-800' : 'text-gray-700'}`}>PO Produksi</p>
+            <p className="text-[9px] text-gray-400 truncate">Prioritas proses dapur</p>
+          </div>
+        </button>
+      </div>
+
+      {/* Summary card */}
+      <div className={`rounded-2xl p-4 mb-3 text-white bg-gradient-to-br ${
+        tab === 'cs' ? 'from-cyan-700 to-[#0b2a55]' : 'from-orange-600 to-amber-800'
+      }`}>
+        <div className="flex items-center gap-3 mb-3">
+          <ShoppingCart className="w-6 h-6 text-white/90" />
+          <div>
+            <p className="text-sm font-bold">
+              {tab === 'cs' ? 'Rekomendasi PO · Divisi CS' : 'Prioritas · Team Produksi'}
+            </p>
+            <p className="text-[11px] text-white/70">
+              {tab === 'cs'
+                ? 'Stok kritis CS → generate ke purchase order'
+                : 'Item non-CS / non-rekanan yang harus diproses dulu'}
+            </p>
+          </div>
         </div>
-        <button type="button" onClick={() => { refresh(); setInitialized(false); }} className="size-10 rounded-xl bg-white border border-slate-200 shadow-sm flex items-center justify-center text-slate-700" aria-label="Refresh">
-          <RefreshCw className="w-4 h-4" />
-        </button>
+        <div className="flex gap-4">
+          <div className="flex-1">
+            <p className="text-white/50 text-[10px] uppercase">Item Kritis</p>
+            <p className="text-2xl font-bold">{loading ? '…' : activeList.length}</p>
+          </div>
+          <div className="flex-1">
+            <p className="text-white/50 text-[10px] uppercase">Total Kurang</p>
+            <p className="text-2xl font-bold">{loading ? '…' : totalKurang.toLocaleString('id-ID')}</p>
+          </div>
+        </div>
       </div>
 
-      <div className="flex gap-2">
-        <button type="button" onClick={() => switchTab('cs')} className={`flex-1 py-2.5 rounded-xl text-sm font-bold flex items-center justify-center gap-1.5 border transition-all ${tab === 'cs' ? 'bg-cyan-500 text-white border-cyan-500 shadow-sm' : 'bg-white border-slate-100 text-slate-600 shadow-sm'}`}>
-          <Snowflake className="w-4 h-4" /> PO CS
-        </button>
-        <button type="button" onClick={() => switchTab('produksi')} className={`flex-1 py-2.5 rounded-xl text-sm font-bold flex items-center justify-center gap-1.5 border transition-all ${tab === 'produksi' ? 'bg-orange-500 text-white border-orange-500 shadow-sm' : 'bg-white border-slate-100 text-slate-600 shadow-sm'}`}>
-          <ChefHat className="w-4 h-4" /> PO Produksi
-        </button>
-      </div>
-
-      {loading || !initialized ? (
-        <SkeletonCards />
-      ) : (
+      {/* List */}
+      {!generated ? (
         <>
-          <div className="surface-flat flex items-center justify-between px-4 py-3">
-            <p className="text-xs font-semibold text-slate-600">{activeCount} item · tgl kedatangan per item</p>
-            <button type="button" onClick={regenerate} className="text-xs font-bold text-cyan-600">Regenerate</button>
-          </div>
-
-          <div className="space-y-2">
-            {mergedRows.filter((r) => r.poCV + r.poPT > 0).map((row) => (
-              <MergedItemCard key={row.id} row={row} onChangeCV={updateMergedCV} onChangePT={updateMergedPT} onChangeTgl={updateMergedTgl} onRemove={removeMerged} />
-            ))}
-            {activeCount === 0 && (
-              <div className="card p-6 text-center text-sm text-slate-500">Tidak ada item di bawah stok aman.</div>
-            )}
-          </div>
-
-          {activeCount > 0 && (
-            <div className="sticky bottom-16 pt-2">
-              <button type="button" onClick={handleSubmit} disabled={submitting}
-                className="w-full py-3.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-500 text-white text-sm font-semibold shadow-lg shadow-cyan-500/25 active:scale-[0.98] transition-transform disabled:opacity-60 flex items-center justify-center gap-2">
-                {submitting ? (<><Loader2 className="w-4 h-4 animate-spin" /> Menyimpan…</>) : (<><Send className="w-4 h-4" /> Kirim PO ({activeCount})</>)}
-              </button>
-              {submitMsg && <p className="text-center text-xs text-slate-500 mt-2">{submitMsg}</p>}
+          {loading ? (
+            <div className="space-y-2">{[...Array(5)].map((_, i) => <div key={i} className="skeleton h-14 rounded-xl" />)}</div>
+          ) : activeList.length === 0 ? (
+            <div className="text-center py-12">
+              <CheckCircle className="w-12 h-12 text-emerald-400 mx-auto mb-3" />
+              <p className="text-gray-500 text-sm">
+                {tab === 'cs' ? 'Stok CS aman!' : 'Tidak ada item produksi kritis'}
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-1.5 mb-2">
+              {activeList.map((item) => (
+                <ItemCard key={`${item.entity}-${item.kode}`} item={item} editable={false} />
+              ))}
             </div>
           )}
         </>
+      ) : (
+        <>
+          <div className="space-y-1.5 mb-2">
+            {editList.map((item) => (
+              <ItemCard
+                key={`${item.entity}-${item.kode}`}
+                item={item}
+                editable
+                onUpdate={updateQty}
+                onRemove={removeItem}
+              />
+            ))}
+          </div>
+          <p className="text-[10px] text-gray-400 text-center mb-2">
+            Dibuat oleh: <b>Rudi Virawan</b> · Mengetahui: <b>Heri Suprijanto</b>
+          </p>
+        </>
       )}
+
+      {/* Sticky bottom actions — selalu terlihat di atas nav */}
+      <div className="fixed bottom-[4.25rem] left-0 right-0 z-40 px-3 pointer-events-none">
+        <div className="max-w-lg mx-auto pointer-events-auto space-y-2">
+          {!generated ? (
+            <button
+              type="button"
+              onClick={generate}
+              disabled={loading || activeList.length === 0}
+              className={`w-full py-3.5 rounded-xl text-white text-sm font-bold flex items-center justify-center gap-2 shadow-xl disabled:opacity-50 ${
+                tab === 'cs'
+                  ? 'bg-gradient-to-r from-cyan-600 to-[#0b2a55]'
+                  : 'bg-gradient-to-r from-orange-500 to-amber-700'
+              }`}
+            >
+              <FileText className="w-4 h-4" />
+              Generate {tab === 'cs' ? 'PO CS' : 'PO Produksi'} ({activeList.length} item)
+            </button>
+          ) : (
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => (tab === 'cs' ? setCsGenerated(false) : setProdGenerated(false))}
+                className="flex-1 py-3 rounded-xl bg-white border border-gray-200 text-gray-700 text-sm font-medium shadow"
+              >
+                Kembali
+              </button>
+              {tab === 'cs' && (
+                <button
+                  type="button"
+                  onClick={copySheetOnly}
+                  className="flex-1 py-3 rounded-xl bg-cyan-600 text-white text-xs font-semibold flex items-center justify-center gap-1 shadow"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  {copied ? 'Tersalin!' : 'Salin ke Sheet'}
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={copyPO}
+                className={`flex-1 py-3 rounded-xl text-white text-xs font-semibold flex items-center justify-center gap-1 shadow ${
+                  copied ? 'bg-emerald-500' : tab === 'cs' ? 'bg-[#0b2a55]' : 'bg-orange-600'
+                }`}
+              >
+                <Download className="w-3.5 h-3.5" />
+                {copied ? 'OK' : 'Salin PO'}
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
