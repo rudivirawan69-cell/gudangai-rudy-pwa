@@ -16,6 +16,10 @@ import {
   Package,
   CheckCircle2,
   AlertCircle,
+  ClipboardList,
+  Send,
+  Clock3,
+  Server,
 } from 'lucide-react';
 
 const TYPE_LABEL = {
@@ -48,17 +52,49 @@ function flattenQueue(queue) {
   }
   return rows;
 }
+function summarizeRows(rows) {
+  const map = new Map();
+  for (const row of rows || []) {
+    const name = row.nama || row.kode || 'Tanpa nama';
+    const key = [
+      row.type || 'masuk',
+      String(row.entity || '').toUpperCase(),
+      name,
+      row.tanggal || '',
+    ].join('|');
+    const prev = map.get(key);
+    if (prev) {
+      prev.qty += Number(row.qty) || 0;
+      prev.count += 1;
+      if (row.clientItemId) prev.clientItemIds.push(row.clientItemId);
+    } else {
+      map.set(key, {
+        ...row,
+        nama: name,
+        entity: String(row.entity || '').toUpperCase(),
+        qty: Number(row.qty) || 0,
+        count: 1,
+        clientItemIds: row.clientItemId ? [row.clientItemId] : [],
+      });
+    }
+  }
+  return Array.from(map.values());
+}
+
 
 export default function SyncQueuePage({ onBack }) {
   const [rows, setRows] = useState([]);
   const [syncing, setSyncing] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
+  const [reviewing, setReviewing] = useState(false);
+  const [lastSyncReport, setLastSyncReport] = useState(null);
   const [circuit, setCircuit] = useState(() => getWriteCircuitState());
 
   const refresh = useCallback(() => {
     const q = getPendingQueue();
     setRows(flattenQueue(q));
+    setReviewing(false);
   }, []);
 
   useEffect(() => {
@@ -115,6 +151,7 @@ export default function SyncQueuePage({ onBack }) {
 
   const handleSendAll = async () => {
     if (total === 0 || syncing || circuit.open) return;
+    setReviewing(false);
     setSyncing(true);
     setResult(null);
     setError(null);
@@ -127,6 +164,11 @@ export default function SyncQueuePage({ onBack }) {
       const afterIds = new Set(after.map((r) => r.clientItemId).filter(Boolean));
 
       const succeeded = before.filter((r) => r.clientItemId && !afterIds.has(r.clientItemId));
+      setLastSyncReport({
+        confirmed: summarizeRows(succeeded),
+        remaining: summarizeRows(after),
+        at: Date.now(),
+      });
       for (const item of succeeded) {
         saveToHistory({
           type: item.type,
@@ -225,55 +267,44 @@ export default function SyncQueuePage({ onBack }) {
         </div>
       ) : (
         <>
+
           <div className="space-y-2">
-            {rows.map((row) => (
-              <div
-                key={row.key}
-                className="card p-3.5 flex items-start gap-3"
-              >
-                <div className="w-9 h-9 rounded-xl bg-cyan-50 text-cyan-700 flex items-center justify-center shrink-0">
-                  <Package className="w-4 h-4" />
+            <div className="rounded-2xl border border-cyan-200 bg-cyan-50 px-3.5 py-3">
+              <div className="flex items-center gap-2">
+                <ClipboardList className="w-5 h-5 text-cyan-700" />
+                <div>
+                  <p className="text-sm font-bold text-cyan-900">Keranjang Antrian</p>
+                  <p className="text-[11px] text-cyan-800/80">
+                    {summarizeRows(rows).length} kelompok · {total} item · belum dikirim ulang ke server
+                  </p>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">
-                      {TYPE_LABEL[row.type] || row.type}
-                    </span>
-                    <span className="text-[10px] font-medium text-slate-500">
-                      {row.entity || '—'}
-                    </span>
-                    {row.tanggal && (
-                      <span className="text-[10px] text-slate-400">{row.tanggal}</span>
-                    )}
+              </div>
+            </div>
+
+            {summarizeRows(rows).map((row) => (
+              <div key={row.key} className="card p-3.5">
+                <div className="flex items-start gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center shrink-0">
+                    <Clock3 className="w-4 h-4" />
                   </div>
-                  <p className="text-sm font-semibold text-slate-800 mt-1 truncate">
-                    {row.nama || row.kode || 'Tanpa nama'}
-                  </p>
-                  <p className="text-[11px] text-slate-500 mt-0.5">
-                    Kode: {row.kode || '—'} · Qty: {row.qty}
-                    {row.keterangan ? ` · ${row.keterangan}` : ''}
-                  </p>
-                </div>
-                <div className="flex flex-col gap-1.5 shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => handleMarkSuccess(row)}
-                    disabled={syncing || !row.clientItemId}
-                    className="min-h-[36px] px-2.5 rounded-xl bg-emerald-50 text-emerald-700 text-[11px] font-bold flex items-center justify-center gap-1 disabled:opacity-40 active:bg-emerald-100"
-                    aria-label={`Tandai sukses ${row.nama || row.kode}`}
-                  >
-                    <CheckCircle2 className="w-3.5 h-3.5" />
-                    Sukses
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleRemove(row.clientItemId)}
-                    disabled={syncing || !row.clientItemId}
-                    className="w-full min-h-[32px] rounded-xl bg-red-50 text-red-600 flex items-center justify-center disabled:opacity-40"
-                    aria-label="Hapus item"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">
+                        {TYPE_LABEL[row.type] || row.type}
+                      </span>
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-cyan-50 text-cyan-700 border border-cyan-100">
+                        {row.entity || '—'}
+                      </span>
+                    </div>
+                    <p className="text-sm font-bold text-slate-900 mt-1">{row.nama}</p>
+                    <p className="text-[11px] text-slate-500 mt-0.5">
+                      Total Qty: <b className="text-slate-800">{row.qty}</b> {row.satuan || ''}
+                      {row.tanggal ? ' · ' + row.tanggal : ''}
+                    </p>
+                  </div>
+                  <span className="shrink-0 text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-2 py-1">
+                    MASIH ANTRIAN
+                  </span>
                 </div>
               </div>
             ))}
@@ -282,24 +313,135 @@ export default function SyncQueuePage({ onBack }) {
           <div className="sticky bottom-0 pt-2 pb-1 bg-gradient-to-t from-[#0b2a55]/5 to-transparent">
             <button
               type="button"
-              onClick={handleSendAll}
+              onClick={() => setReviewing(true)}
               disabled={syncing || total === 0 || circuit.open}
               className="w-full py-3.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-500 text-white text-sm font-semibold flex items-center justify-center gap-2 shadow-lg disabled:opacity-50"
             >
-              {syncing ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Mengeksekusi…
-                </>
-              ) : (
-                <>
-                  <RefreshCw className="w-4 h-4" />
-                  {circuit.open ? 'Dijeda Sementara' : 'Kirim & Eksekusi Semua (' + total + ')'}
-                </>
-              )}
+              <ClipboardList className="w-4 h-4" />
+              {circuit.open ? 'Dijeda Sementara' : 'Tinjau Keranjang & Sinkronisasi (' + total + ')'}
             </button>
           </div>
+
+          {reviewing && (
+            <div className="fixed inset-0 z-[70] bg-slate-950/70 p-3 flex items-end sm:items-center justify-center">
+              <div className="w-full max-w-md max-h-[88vh] overflow-hidden rounded-3xl bg-white shadow-2xl flex flex-col">
+                <div className="px-4 py-3.5 border-b border-slate-200 flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-cyan-50 text-cyan-700 flex items-center justify-center">
+                    <ClipboardList className="w-5 h-5" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-base font-bold text-slate-900">Periksa sebelum sinkronisasi</p>
+                    <p className="text-[11px] text-slate-500">
+                      {total} item · {summarizeRows(rows).length} kelompok
+                    </p>
+                  </div>
+                  <button type="button" onClick={() => setReviewing(false)} className="w-9 h-9 rounded-xl bg-slate-100 text-slate-600 flex items-center justify-center">
+                    ×
+                  </button>
+                </div>
+
+                <div className="overflow-y-auto p-3 space-y-2">
+                  <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-[11px] text-amber-900 leading-relaxed">
+                    <b>Belum ada data yang dikirim pada tahap ini.</b> Periksa nama barang, total Qty, dan entitas CV/PT. Server baru akan menerima data setelah tombol konfirmasi di bawah ditekan.
+                  </div>
+
+                  {summarizeRows(rows).map((row) => (
+                    <div key={row.key} className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                      <div className="flex items-start gap-2.5">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-bold text-slate-900">{row.nama}</p>
+                          <div className="mt-1 flex items-center gap-2 flex-wrap">
+                            <span className="text-[10px] font-bold rounded-lg px-2 py-1 bg-cyan-100 text-cyan-800">{row.entity || '—'}</span>
+                            <span className="text-[10px] font-semibold rounded-lg px-2 py-1 bg-slate-200 text-slate-700">{TYPE_LABEL[row.type] || row.type}</span>
+                            <span className="text-[10px] text-slate-500">{row.tanggal || 'Tanggal —'}</span>
+                          </div>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className="text-lg font-black text-slate-900 tabular-nums">{row.qty}</p>
+                          <p className="text-[10px] text-slate-500">TOTAL QTY</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="p-3 border-t border-slate-200 space-y-2 bg-white">
+                  <button
+                    type="button"
+                    onClick={handleSendAll}
+                    disabled={syncing || total === 0 || circuit.open}
+                    className="w-full py-3.5 rounded-2xl bg-cyan-600 text-white text-sm font-bold flex items-center justify-center gap-2 shadow-md disabled:opacity-50"
+                  >
+                    {syncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                    {syncing ? 'Mengirim & memverifikasi…' : 'Konfirmasi & Kirim ke Spreadsheet'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setReviewing(false)}
+                    disabled={syncing}
+                    className="w-full py-2.5 rounded-xl bg-slate-100 text-slate-700 text-xs font-bold disabled:opacity-50"
+                  >
+                    Kembali / Periksa Lagi
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
         </>
+      )}
+
+
+      {lastSyncReport && (
+        <div className="card p-3.5 space-y-3">
+          <div className="flex items-center gap-2">
+            <Server className="w-4 h-4 text-slate-700" />
+            <div>
+              <p className="text-sm font-bold text-slate-900">Hasil pemeriksaan sinkronisasi</p>
+              <p className="text-[10px] text-slate-500">
+                Respons server terakhir · {new Date(lastSyncReport.at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+              </p>
+            </div>
+          </div>
+
+          {lastSyncReport.confirmed.length > 0 && (
+            <div>
+              <p className="text-[11px] font-bold text-emerald-700 mb-1.5">TERKONFIRMASI MASUK SERVER</p>
+              <div className="space-y-1.5">
+                {lastSyncReport.confirmed.map((row) => (
+                  <div key={'ok-' + row.key} className="flex items-center justify-between gap-2 rounded-xl bg-emerald-50 border border-emerald-100 px-3 py-2">
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-emerald-900 truncate">{row.nama}</p>
+                      <p className="text-[10px] text-emerald-700">{row.entity || '—'} · {TYPE_LABEL[row.type] || row.type}</p>
+                    </div>
+                    <b className="text-sm text-emerald-800 tabular-nums shrink-0">{row.qty}</b>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {lastSyncReport.remaining.length > 0 && (
+            <div>
+              <p className="text-[11px] font-bold text-amber-700 mb-1.5">MASIH DI ANTRIAN / BELUM TERKONFIRMASI</p>
+              <div className="space-y-1.5">
+                {lastSyncReport.remaining.map((row) => (
+                  <div key={'pending-' + row.key} className="flex items-center justify-between gap-2 rounded-xl bg-amber-50 border border-amber-100 px-3 py-2">
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-amber-900 truncate">{row.nama}</p>
+                      <p className="text-[10px] text-amber-700">{row.entity || '—'} · {TYPE_LABEL[row.type] || row.type}</p>
+                    </div>
+                    <b className="text-sm text-amber-800 tabular-nums shrink-0">{row.qty}</b>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {lastSyncReport.confirmed.length === 0 && lastSyncReport.remaining.length === 0 && (
+            <p className="text-xs text-slate-500">Tidak ada perubahan pada antrian.</p>
+          )}
+        </div>
       )}
 
       {result && (
