@@ -1,12 +1,12 @@
 /**
- * GudangAI RUDY — Service Worker V6.8.0 (Android performance)
+ * GudangAI RUDY — Service Worker V6.8.1 (Android performance)
  * Strategi:
  * - API Google Apps Script: network-only (no-store)
  * - Navigasi + JS/CSS: network-first, fallback cache
  * - Aset statis (ikon, foto): cache-first
  * - Version bump setiap rilis UI agar klien Android mendapat update
  */
-const CACHE_NAME = 'gudangai-v6.8.0-ui-polish';
+const CACHE_NAME = 'gudangai-v6.8.1-prod-sync';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
