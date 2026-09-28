@@ -71,13 +71,26 @@ function buildCritical(list, entity, predicate) {
     .sort((a, b) => b.kurang - a.kurang);
 }
 
-function formatTglKedatangan() {
+function formatTglKedatangan(baseDate) {
+  const d = baseDate ? new Date(baseDate) : new Date();
+  if (!baseDate) d.setDate(d.getDate() + 2);
+  if (Number.isNaN(d.getTime())) {
+    const f = new Date();
+    f.setDate(f.getDate() + 2);
+    return formatTglKedatangan(f.toISOString().slice(0, 10));
+  }
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mon = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()];
+  return `${dd}-${mon}-${d.getFullYear()}`;
+}
+
+function defaultTglISO() {
   const d = new Date();
   d.setDate(d.getDate() + 2);
-  const dd = String(d.getDate()).padStart(2, '0');
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  const yyyy = d.getFullYear();
-  return `${dd} Sep ${yyyy}`.replace('Sep', ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'][d.getMonth()]);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
 }
 
 function formatTglHeader() {
@@ -89,8 +102,6 @@ function formatTglHeader() {
 
 /** TSV kolom B–I (mulai baris 6 sheet purchase order). */
 function buildSheetTSV(items) {
-  const tgl = formatTglKedatangan();
-  // Gabung by nama: satu baris bisa punya PO CV + PO PT
   const map = new Map();
   items.forEach((it) => {
     const key = String(it.nama || it.kode).trim().toLowerCase();
@@ -101,18 +112,20 @@ function buildSheetTSV(items) {
         satuan: it.satuan || 'Pack',
         poCV: 0,
         poPT: 0,
+        tglKedatangan: it.tglKedatangan || defaultTglISO(),
       });
     }
     const row = map.get(key);
     if (it.entity === 'CV') row.poCV += Number(it.qty) || 0;
     else row.poPT += Number(it.qty) || 0;
+    if (it.tglKedatangan) row.tglKedatangan = it.tglKedatangan;
   });
   const rows = Array.from(map.values()).filter((r) => r.poCV + r.poPT > 0);
-  // Header opsional untuk paste manual — data saja cocok B6:I
-  // B=NO C=NAMA D=SIZE E=SATUAN F=PO CV G=PO PT H=TOTAL I=TGL
+  // B=NO C=NAMA D=SIZE E=SATUAN F=PO CV G=PO PT H=TOTAL I=TGL (29-Sep-2026)
   return rows
     .map((r, idx) => {
       const total = r.poCV + r.poPT;
+      const tgl = formatTglKedatangan(r.tglKedatangan);
       return [idx + 1, r.nama, r.size, r.satuan, r.poCV || 0, r.poPT || 0, total, tgl].join('\t');
     })
     .join('\n');
@@ -129,53 +142,73 @@ function buildReadablePO(items, title) {
 
 function ItemCard({ item, onUpdate, onRemove, editable }) {
   return (
-    <div className="bg-white rounded-xl px-2.5 py-2 border border-gray-100 shadow-sm">
-      <div className="flex items-start justify-between gap-1 mb-1">
+    <div className="stock-card bg-white rounded-xl px-2.5 py-2 border border-slate-200 shadow-sm">
+      <div className="flex items-start justify-between gap-1.5">
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1.5">
-            <span className={`text-[8px] font-bold px-1 py-0.5 rounded shrink-0 ${
-              item.entity === 'CV' ? 'bg-blue-100 text-blue-600' : 'bg-violet-100 text-violet-600'
+          <div className="flex items-center gap-1.5 mb-0.5">
+            <span className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded shrink-0 ${
+              item.entity === 'CV' ? 'bg-blue-100 text-blue-700' : 'bg-violet-100 text-violet-700'
             }`}>{item.entity}</span>
-            <p className="text-[11px] font-medium text-gray-800 truncate">{item.nama}</p>
+            <p className="text-[13px] font-bold text-slate-900 leading-tight truncate">{item.nama}</p>
           </div>
-          <p className="text-[9px] text-gray-400 mt-0.5">
-            {item.kode} · sisa {item.sisa ?? item.stok}/{item.aman}
+          <p className="text-[10px] text-slate-500 tabular-nums">
+            {item.kode} · {item.size || '—'} · {item.satuan || 'Pack'}
           </p>
         </div>
-        {editable ? (
-          <button type="button" onClick={() => onRemove(item.kode)} className="text-gray-300 p-0.5">
-            <Trash2 className="w-3 h-3" />
+        {editable && (
+          <button type="button" onClick={() => onRemove(item)} className="p-1 rounded-lg text-slate-400 hover:text-red-500 shrink-0" aria-label="Hapus">
+            <Trash2 className="w-3.5 h-3.5" />
           </button>
-        ) : (
-          <span className="text-xs font-bold text-red-600 shrink-0">-{item.kurang}</span>
         )}
       </div>
-      {editable && (
-        <div className="flex items-center gap-1">
-          <button type="button" onClick={() => onUpdate(item.kode, item.qty - 10)}
-            className="w-6 h-6 rounded bg-gray-100 flex items-center justify-center">
-            <Minus className="w-3 h-3 text-gray-500" />
-          </button>
+      <div className="mt-1.5 flex items-center gap-2">
+        {editable ? (
+          <>
+            <button type="button" onClick={() => onUpdate(item, { qty: Math.max(0, (Number(item.qty) || 0) - 1) })}
+              className="w-7 h-7 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center font-bold active:scale-95">
+              <Minus className="w-3.5 h-3.5" />
+            </button>
+            <input
+              type="number"
+              inputMode="numeric"
+              value={item.qty ?? 0}
+              onChange={(e) => onUpdate(item, { qty: Math.max(0, Number(e.target.value) || 0) })}
+              className="w-14 text-center text-sm font-extrabold text-slate-900 tabular-nums border border-slate-200 rounded-lg py-1 bg-slate-50"
+            />
+            <button type="button" onClick={() => onUpdate(item, { qty: (Number(item.qty) || 0) + 1 })}
+              className="w-7 h-7 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center font-bold active:scale-95">
+              <Plus className="w-3.5 h-3.5" />
+            </button>
+          </>
+        ) : (
+          <span className="text-sm font-extrabold text-slate-900 tabular-nums">{item.qty ?? item.kurang}</span>
+        )}
+        <div className="flex-1" />
+        <label className="flex items-center gap-1 shrink-0">
+          <span className="text-[9px] font-bold text-slate-500 uppercase">Tgl</span>
           <input
-            type="number" min="0" value={item.qty}
-            onChange={(e) => onUpdate(item.kode, parseInt(e.target.value, 10) || 0)}
-            className="w-14 text-center text-xs font-bold border border-gray-200 rounded-lg py-1"
+            type="date"
+            value={item.tglKedatangan || defaultTglISO()}
+            onChange={(e) => onUpdate && onUpdate(item, { tglKedatangan: e.target.value })}
+            disabled={!editable}
+            className="text-[11px] font-semibold text-slate-800 border border-slate-200 rounded-lg px-1.5 py-1 bg-white max-w-[8.5rem]"
           />
-          <button type="button" onClick={() => onUpdate(item.kode, item.qty + 10)}
-            className="w-6 h-6 rounded bg-gray-100 flex items-center justify-center">
-            <Plus className="w-3 h-3 text-gray-500" />
-          </button>
-          <span className="text-[9px] text-gray-400 ml-1">{item.satuan}</span>
-        </div>
-      )}
+        </label>
+      </div>
+      <p className="text-[10px] text-cyan-700 font-semibold mt-1 tabular-nums">
+        Kedatangan: {formatTglKedatangan(item.tglKedatangan || defaultTglISO())}
+      </p>
     </div>
   );
 }
 
 export default function POPage() {
+  const [density, setDensity] = useState(() => localStorage.getItem('gudangai_density') || 'comfortable');
+  const gapClass = density === 'compact' ? 'space-y-1.5' : 'space-y-2.5';
+
   const stockCV = useStock('CV');
   const stockPT = useStock('PT');
-  const [tab, setTab] = useState('cs'); // cs | produksi
+  const [tab, setTab] = useState('cs');
   const [csItems, setCsItems] = useState([]);
   const [prodItems, setProdItems] = useState([]);
   const [csGenerated, setCsGenerated] = useState(false);
@@ -206,10 +239,11 @@ export default function POPage() {
       nama: i.nama,
       entity: i.entity,
       satuan: i.satuan || 'Pack',
-      size: i.size || '',
+      size: i.size || i.ukuran || '',
       sisa: i.stok,
       aman: i.aman,
       qty: i.suggestQty,
+      tglKedatangan: defaultTglISO(),
       divisi: i.divisi,
     }));
     if (tab === 'cs') {
@@ -221,13 +255,15 @@ export default function POPage() {
     }
   };
 
-  const updateQty = (kode, qty) => {
+  const onUpdateItem = (item, patch) => {
     const setter = tab === 'cs' ? setCsItems : setProdItems;
-    setter((p) => p.map((i) => (i.kode === kode ? { ...i, qty: Math.max(0, qty) } : i)));
+    setter((p) => p.map((i) => (
+      i.kode === item.kode && i.entity === item.entity ? { ...i, ...patch } : i
+    )));
   };
-  const removeItem = (kode) => {
+  const onRemoveItem = (item) => {
     const setter = tab === 'cs' ? setCsItems : setProdItems;
-    setter((p) => p.filter((i) => i.kode !== kode));
+    setter((p) => p.filter((i) => !(i.kode === item.kode && i.entity === item.entity)));
   };
 
   const copyPO = async () => {
@@ -254,13 +290,27 @@ export default function POPage() {
   const totalKurang = activeList.reduce((s, i) => s + i.kurang, 0);
 
   return (
-    <div className="pb-28 animate-fade-in">
-      <h2 className="text-lg font-bold text-gray-800 mb-1">PO Generator</h2>
-      <p className="text-xs text-gray-400 mb-3">
-        2 jalur: <b>PO CS</b> (beli cold storage) · <b>PO Produksi</b> (prioritas proses)
-      </p>
+    <div className="pb-28 animate-fade-in px-3">
+      <div className="flex items-start justify-between gap-2 mb-1">
+        <div>
+          <h2 className="text-lg font-extrabold text-slate-900">PO Generator</h2>
+          <p className="text-xs text-slate-500 mt-0.5">
+            2 jalur: <b>PO CS</b> · <b>PO Produksi</b>
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => {
+            const next = density === 'compact' ? 'comfortable' : 'compact';
+            setDensity(next);
+            try { localStorage.setItem('gudangai_density', next); } catch (_) {}
+          }}
+          className="text-[10px] font-bold px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 shadow-sm shrink-0"
+        >
+          {density === 'compact' ? 'Grid padat' : 'Grid longgar'}
+        </button>
+      </div>
 
-      {/* Tabs 2 kolom */}
       <div className="grid grid-cols-2 gap-2 mb-3">
         <button
           type="button"
@@ -268,13 +318,13 @@ export default function POPage() {
           className={`rounded-xl px-3 py-3 flex items-center gap-2 border-2 transition-all ${
             tab === 'cs'
               ? 'border-cyan-500 bg-cyan-50 shadow-sm'
-              : 'border-gray-100 bg-white'
+              : 'border-slate-200 bg-white'
           }`}
         >
-          <Snowflake className={`w-5 h-5 ${tab === 'cs' ? 'text-cyan-600' : 'text-gray-400'}`} />
+          <Snowflake className={`w-5 h-5 ${tab === 'cs' ? 'text-cyan-600' : 'text-slate-400'}`} />
           <div className="text-left min-w-0">
-            <p className={`text-xs font-bold ${tab === 'cs' ? 'text-cyan-800' : 'text-gray-700'}`}>PO CS</p>
-            <p className="text-[9px] text-gray-400 truncate">Cold Storage · ke sheet PO</p>
+            <p className={`text-xs font-bold ${tab === 'cs' ? 'text-cyan-800' : 'text-slate-800'}`}>PO CS</p>
+            <p className="text-[9px] text-slate-500 truncate">Cold Storage · ke sheet PO</p>
           </div>
         </button>
         <button
@@ -283,18 +333,17 @@ export default function POPage() {
           className={`rounded-xl px-3 py-3 flex items-center gap-2 border-2 transition-all ${
             tab === 'produksi'
               ? 'border-orange-500 bg-orange-50 shadow-sm'
-              : 'border-gray-100 bg-white'
+              : 'border-slate-200 bg-white'
           }`}
         >
-          <ChefHat className={`w-5 h-5 ${tab === 'produksi' ? 'text-orange-600' : 'text-gray-400'}`} />
+          <ChefHat className={`w-5 h-5 ${tab === 'produksi' ? 'text-orange-600' : 'text-slate-400'}`} />
           <div className="text-left min-w-0">
-            <p className={`text-xs font-bold ${tab === 'produksi' ? 'text-orange-800' : 'text-gray-700'}`}>PO Produksi</p>
-            <p className="text-[9px] text-gray-400 truncate">Prioritas proses dapur</p>
+            <p className={`text-xs font-bold ${tab === 'produksi' ? 'text-orange-800' : 'text-slate-800'}`}>PO Produksi</p>
+            <p className="text-[9px] text-slate-500 truncate">Prioritas proses dapur</p>
           </div>
         </button>
       </div>
 
-      {/* Summary card */}
       <div className={`rounded-2xl p-4 mb-3 text-white bg-gradient-to-br ${
         tab === 'cs' ? 'from-cyan-700 to-[#0b2a55]' : 'from-orange-600 to-amber-800'
       }`}>
@@ -313,56 +362,54 @@ export default function POPage() {
         </div>
         <div className="flex gap-4">
           <div className="flex-1">
-            <p className="text-white/50 text-[10px] uppercase">Item Kritis</p>
-            <p className="text-2xl font-bold">{loading ? '…' : activeList.length}</p>
+            <p className="text-white/50 text-[10px] uppercase font-bold">Item Kritis</p>
+            <p className="text-2xl font-extrabold tabular-nums">{loading ? '…' : activeList.length}</p>
           </div>
           <div className="flex-1">
-            <p className="text-white/50 text-[10px] uppercase">Total Kurang</p>
-            <p className="text-2xl font-bold">{loading ? '…' : totalKurang.toLocaleString('id-ID')}</p>
+            <p className="text-white/50 text-[10px] uppercase font-bold">Total Kurang</p>
+            <p className="text-2xl font-extrabold tabular-nums">{loading ? '…' : totalKurang.toLocaleString('id-ID')}</p>
           </div>
         </div>
       </div>
 
-      {/* List */}
       {!generated ? (
         <>
           {loading ? (
-            <div className="space-y-2">{[...Array(5)].map((_, i) => <div key={i} className="skeleton h-14 rounded-xl" />)}</div>
+            <div className={gapClass}>{[...Array(5)].map((_, i) => <div key={i} className="skeleton h-14 rounded-xl" />)}</div>
           ) : activeList.length === 0 ? (
             <div className="text-center py-12">
               <CheckCircle className="w-12 h-12 text-emerald-400 mx-auto mb-3" />
-              <p className="text-gray-500 text-sm">
+              <p className="text-slate-600 text-sm">
                 {tab === 'cs' ? 'Stok CS aman!' : 'Tidak ada item produksi kritis'}
               </p>
             </div>
           ) : (
-            <div className="space-y-1.5 mb-2">
+            <div className={`${gapClass} mb-2`}>
               {activeList.map((item) => (
-                <ItemCard key={`${item.entity}-${item.kode}`} item={item} editable={false} />
+                <ItemCard key={`${item.entity}-${item.kode}`} item={{ ...item, qty: item.kurang, tglKedatangan: defaultTglISO() }} editable={false} />
               ))}
             </div>
           )}
         </>
       ) : (
         <>
-          <div className="space-y-1.5 mb-2">
+          <div className={`${gapClass} mb-2`}>
             {editList.map((item) => (
               <ItemCard
                 key={`${item.entity}-${item.kode}`}
                 item={item}
                 editable
-                onUpdate={updateQty}
-                onRemove={removeItem}
+                onUpdate={onUpdateItem}
+                onRemove={onRemoveItem}
               />
             ))}
           </div>
-          <p className="text-[10px] text-gray-400 text-center mb-2">
+          <p className="text-[10px] text-slate-500 text-center mb-2">
             Dibuat oleh: <b>Rudi Virawan</b> · Mengetahui: <b>Heri Suprijanto</b>
           </p>
         </>
       )}
 
-      {/* Sticky bottom actions — selalu terlihat di atas nav */}
       <div className="fixed bottom-[4.25rem] left-0 right-0 z-40 px-3 pointer-events-none">
         <div className="max-w-lg mx-auto pointer-events-auto space-y-2">
           {!generated ? (
@@ -384,7 +431,7 @@ export default function POPage() {
               <button
                 type="button"
                 onClick={() => (tab === 'cs' ? setCsGenerated(false) : setProdGenerated(false))}
-                className="flex-1 py-3 rounded-xl bg-white border border-gray-200 text-gray-700 text-sm font-medium shadow"
+                className="flex-1 py-3 rounded-xl bg-white border border-slate-200 text-slate-800 text-sm font-medium shadow"
               >
                 Kembali
               </button>
