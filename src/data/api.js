@@ -1,9 +1,10 @@
-/** GudangAI RUDY — API layer V6.7.0 + Batch Transaction + Robust Timeout */
+/** GudangAI RUDY — API layer V6.7.1 stable-chunk (BATCH=12) + tanggal YYYY-MM-DD */
 const RETRY_COUNT = 2;
 const RETRY_BASE_MS = 400;
 const REQUEST_TIMEOUT_MS = 15000;
-const BATCH_CHUNK_SIZE = 80;
-const BATCH_TIMEOUT_MS = 60000;
+/** Chunk kecil agar Apps Script + spreadsheet selesai < timeout (anti-antrian). */
+const BATCH_CHUNK_SIZE = 12;
+const BATCH_TIMEOUT_MS = 50000;
 const SINGLE_TIMEOUT_MS = 45000;
 const SCHEMA_VERSION = '1.0';
 const SAFE_WRITE_BACKEND_RE = /STOCK-READONLY|STOCK-SOURCE-LOCKED|^6\.6\.5\+BULK-STABLE$/i;
@@ -45,6 +46,29 @@ function deviceId() {
 function newIds() {
   const uuid = crypto.randomUUID ? crypto.randomUUID() : (Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
   return { requestId: 'REQ-' + uuid, transactionId: 'TX-RUDY-' + uuid };
+}
+/** Normalisasi tanggal PWA → YYYY-MM-DD (backend parseTransactionDate_ mengharapkan ini). */
+function normalizeTanggal(raw) {
+  if (!raw) return new Date().toISOString().slice(0, 10);
+  const s = String(raw).trim();
+  // already ISO
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  // dd/mm/yyyy or dd-mm-yyyy
+  const m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+  if (m) {
+    const dd = m[1].padStart(2, '0');
+    const mm = m[2].padStart(2, '0');
+    return m[3] + '-' + mm + '-' + dd;
+  }
+  // fallback Date parse
+  const d = new Date(s);
+  if (!Number.isNaN(d.getTime())) {
+    const y = d.getFullYear();
+    const mo = String(d.getMonth() + 1).padStart(2, '0');
+    const da = String(d.getDate()).padStart(2, '0');
+    return y + '-' + mo + '-' + da;
+  }
+  return new Date().toISOString().slice(0, 10);
 }
 async function fetchWithRetry(url, options = {}, retries = RETRY_COUNT, timeoutMs = REQUEST_TIMEOUT_MS) {
   let lastError;
@@ -243,7 +267,7 @@ function enqueue(type, entity, items, meta = {}) {
   queue.push({
     id: 'Q-' + Date.now(), type, entity,
     items: items.map(ensureClientItemId),
-    tanggal: meta.tanggal || new Date().toISOString().slice(0, 10),
+    tanggal: normalizeTanggal(meta.tanggal),
     createdAt: new Date().toISOString(),
   });
   commitQueueLocal(queue);
@@ -257,7 +281,7 @@ async function submitOneItem(sheetOrAction, entity, it, tanggal) {
     action: 'addTransaction',
     sheet: sheetName,
     entitas: String(entity || '').toUpperCase(),
-    tanggal: tanggal || new Date().toISOString().slice(0, 10),
+    tanggal: normalizeTanggal(tanggal),
     kodeBarang: String(it.kode || it.kodeBarang || '').trim(),
     qty: Number(it.qty) || 0,
     keterangan: String(it.keterangan || '').trim().slice(0, 200),
@@ -302,7 +326,7 @@ async function submitBatchChunk(action, entity, chunkItems, tanggal) {
     action: 'addBatchTransaction',
     sheet: sheetName,
     entitas: String(entity || '').toUpperCase(),
-    tanggal: tanggal || new Date().toISOString().slice(0, 10),
+    tanggal: normalizeTanggal(tanggal),
     items: toSend,
     requestId: newIds().requestId,
   };
@@ -453,75 +477,63 @@ export async function submitBarangKeluar({ entity, tanggal, items }) {
 export async function submitBarangRusak({ entity, tanggal, items }) {
   return submitItems('barangRusak', entity, items, tanggal);
 }
+
 export function getPendingQueue() {
   return readQueueLocal().queue;
 }
-export function removePendingByClientIds(ids) {
-  const set = new Set(ids || []);
-  const q = getPendingQueue().map((e) => ({ ...e, items: (e.items || []).filter((it) => !set.has(it.clientItemId)) })).filter((e) => e.items.length);
-  commitQueueLocal(q);
+export function clearSyncedQueue() {
+  commitQueueLocal([]);
 }
-export function clearPendingQueue() { commitQueueLocal([]); }
-export function clearSyncedQueue() { commitQueueLocal([]); }
-export async function syncPendingQueue() {
-  const url = getApiUrl();
-  if (!url || !navigator.onLine) return { synced: 0, failed: 0, skipped: true };
-  if (_syncLock) return { synced: 0, failed: 0, skipped: true, reason: 'sync-in-progress' };
+export async function processQueue() {
+  if (_syncLock) return { success: false, error: 'Sinkronisasi sedang berjalan' };
   _syncLock = true;
-  let synced = 0, failed = 0;
   try {
     const queue = getPendingQueue();
+    if (!queue.length) return { success: true, count: 0 };
+    let totalOk = 0;
     const remaining = [];
     for (const entry of queue) {
       const res = await submitItems(entry.type, entry.entity, entry.items, entry.tanggal, { fromQueue: true });
-      const resultMap = new Map((res.results || []).filter(r => r.clientItemId).map(r => [r.clientItemId, r]));
-      const remainingItems = (entry.items || []).filter(it => {
-        const r = resultMap.get(it.clientItemId);
-        return !r || (!r.success && !r.skipped);
-      });
-      const doneCount = (entry.items || []).length - remainingItems.length;
-      synced += doneCount;
-      if (remainingItems.length) {
-        failed += remainingItems.length;
-        remaining.push({ ...entry, items: remainingItems });
+      const still = (res.results || []).filter(r => !r.success && !r.skipped);
+      if (still.length) {
+        remaining.push({ ...entry, items: entry.items.filter(it => still.some(s => s.clientItemId === it.clientItemId)) });
       }
+      totalOk += (res.count || 0);
     }
     commitQueueLocal(remaining);
-    return { synced, failed };
+    return { success: true, count: totalOk, remaining: remaining.length };
   } finally {
     _syncLock = false;
   }
 }
-const HISTORY_KEY = 'gudangai_history';
-export function getTransactionHistory() {
-  try { return JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]'); } catch { return []; }
-}
 export function saveToHistory(entry) {
-  const list = getTransactionHistory();
-  list.unshift({ ...entry, id: 'H-' + Date.now() });
-  try { localStorage.setItem(HISTORY_KEY, JSON.stringify(list.slice(0, 200))); } catch (_) {}
+  try {
+    const key = 'gudangai_history';
+    const list = JSON.parse(localStorage.getItem(key) || '[]');
+    list.unshift(entry);
+    localStorage.setItem(key, JSON.stringify(list.slice(0, 200)));
+  } catch (_) {}
+}
+export function getHistory() {
+  try { return JSON.parse(localStorage.getItem('gudangai_history') || '[]'); } catch { return []; }
 }
 export function pushNotification(n) {
-  const list = getNotifications();
-  const item = { ...n, id: 'N-' + Date.now(), read: false, at: Date.now() };
-  list.unshift(item);
-  try { localStorage.setItem(NOTIF_KEY, JSON.stringify(list.slice(0, 50))); } catch (_) {}
-  try { window.dispatchEvent(new CustomEvent('gudangai-notification', { detail: item })); } catch (_) {}
+  try {
+    const list = JSON.parse(localStorage.getItem(NOTIF_KEY) || '[]');
+    list.unshift({ ...n, id: 'N-' + Date.now(), at: Date.now(), read: false });
+    localStorage.setItem(NOTIF_KEY, JSON.stringify(list.slice(0, 50)));
+    window.dispatchEvent(new Event('gudangai-notification'));
+  } catch (_) {}
 }
 export function getNotifications() {
   try { return JSON.parse(localStorage.getItem(NOTIF_KEY) || '[]'); } catch { return []; }
 }
 export function markNotificationsRead() {
-  const list = getNotifications().map((n) => ({ ...n, read: true }));
-  try { localStorage.setItem(NOTIF_KEY, JSON.stringify(list)); } catch (_) {}
+  try {
+    const list = getNotifications().map(n => ({ ...n, read: true }));
+    localStorage.setItem(NOTIF_KEY, JSON.stringify(list));
+  } catch (_) {}
 }
 export function unreadNotificationCount() {
-  return getNotifications().filter((n) => !n.read).length;
-}
-export async function submitPO(payload) {
-  try {
-    return await postJson({ action: 'submitPO', ...(payload || {}), requestId: newIds().requestId });
-  } catch (err) {
-    return { success: false, error: err.message };
-  }
+  return getNotifications().filter(n => !n.read).length;
 }
