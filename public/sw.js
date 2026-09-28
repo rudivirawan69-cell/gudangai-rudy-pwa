@@ -1,22 +1,19 @@
 /**
- * GudangAI RUDY — Service Worker V6.8.1 (Android performance)
+ * GudangAI RUDY — Service Worker V6.8.2 (Android performance)
  * Strategi:
  * - API Google Apps Script: network-only (no-store)
  * - Navigasi + JS/CSS: network-first, fallback cache
  * - Aset statis (ikon, foto): cache-first
  * - Version bump setiap rilis UI agar klien Android mendapat update
  */
-const CACHE_NAME = 'gudangai-v6.8.1-prod-sync';
+const CACHE_NAME = 'gudangai-v6.8.2-icons';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
   '/favicon.svg',
-  '/icon.svg',
-  '/logo-app.svg',
   '/manifest.json',
-  '/icon-192.png',
-  '/icon-512.png',
-  '/apple-touch-icon.png',
+  '/icons/icon-192x192.png',
+  '/icons/icon-512x512.png',
 ];
 
 self.addEventListener('install', (event) => {
@@ -55,6 +52,7 @@ function isStaticAsset(url) {
     p.endsWith('.webp') ||
     p.endsWith('.woff2') ||
     p.startsWith('/assets/') ||
+    p.startsWith('/icons/') ||
     p === '/manifest.json' ||
     p === '/favicon.svg'
   );

@@ -5,9 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "node scripts/write-icons.mjs && vite build",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "write-icons": "node scripts/write-icons.mjs",
+    "predev": "node scripts/write-icons.mjs"
   },
   "dependencies": {
     "@vercel/speed-insights": "^2.0.0",
