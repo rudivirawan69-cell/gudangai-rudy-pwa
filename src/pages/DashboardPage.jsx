@@ -476,12 +476,15 @@ export default function DashboardPage() {
 
   return (
     <div className="px-3 pt-3 pb-24 space-y-3 max-w-lg mx-auto">
-      <div className="rounded-2xl bg-white border border-slate-100 shadow-sm p-4">
+      <div className="rounded-2xl bg-gradient-to-br from-cyan-50 via-white to-violet-50 border border-cyan-100 shadow-sm px-4 pt-5 pb-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
-            <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">{greeting}</p>
-            <h1 className="text-xl font-extrabold text-slate-900 truncate mt-0.5 leading-tight">{name}</h1>
-            <p className="text-[13px] text-slate-600 mt-1 leading-snug">{reminder}</p>
+            <p className="text-[12px] font-bold text-cyan-700 tracking-wide flex items-center gap-1.5">
+              <span className="text-base leading-none">{hour >= 4 && hour < 10 ? '🌅' : hour >= 10 && hour < 15 ? '☀️' : hour >= 15 && hour < 18 ? '🌤️' : '🌙'}</span>
+              {greeting}
+            </p>
+            <h1 className="text-2xl font-extrabold text-slate-900 truncate mt-1 leading-tight">{name} 👋</h1>
+            <p className="text-[13px] text-slate-700 mt-2 leading-snug font-medium">✨ {reminder}</p>
           </div>
           <button
             type="button"
@@ -497,7 +500,6 @@ export default function DashboardPage() {
         )}
       </div>
 
-      {/* Rest of the original dashboard content continues below - stats cards, division, PO card */}
       <div className="grid grid-cols-2 gap-2.5">
         <div className="rounded-2xl bg-white border border-slate-100 shadow-sm p-3.5">
           <div className="flex items-start justify-between mb-1">
