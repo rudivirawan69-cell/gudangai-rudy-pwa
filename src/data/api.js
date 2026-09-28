@@ -344,10 +344,9 @@ async function submitItems(action, entity, items, tanggal, options = {}) {
   const list = (items || []).map(ensureClientItemId);
   if (!list.length) return { success: false, error: 'Tidak ada item' };
 
-  if (navigator.onLine && getApiUrl()) {
-    await assertSafeWriteBackend();
-  }
-
+  // Do not gate a real write on the health/ping flag.
+  // The write endpoint itself is authoritative: attempt the batch first,
+  // then queue only on an actual transport/backend failure.
   if (!navigator.onLine || !getApiUrl()) {
     if (!options.fromQueue) enqueue(action, entity, list, { tanggal });
     const msg = list.length + ' item masuk Antrian Sinkronisasi (offline)';
@@ -360,33 +359,9 @@ async function submitItems(action, entity, items, tanggal, options = {}) {
   let totalFail = 0;
   let totalQueued = 0;
 
-  // Safe backend contract: if health reports batch unsupported, never downgrade
-  // to per-item writes. Keep the whole payload queued until the backend is fixed.
-  if (_batchSupported === false) {
-    if (!options.fromQueue) enqueue(action, entity, list, { tanggal });
-    totalQueued = list.length;
-    totalFail = list.length;
-    allResults.push(...list.map(it => ({
-      success: false,
-      queued: true,
-      uncertain: true,
-      clientItemId: it.clientItemId,
-      error: 'Batch transaction belum didukung backend'
-    })));
-    pushNotification({
-      type: 'warning',
-      title: 'Transaksi diamankan di antrian',
-      body: list.length + ' item masuk Antrian Sinkronisasi. Backend batch belum terdeteksi; tidak ada fallback satu-per-satu.'
-    });
-    return {
-      success: true,
-      count: 0,
-      failed: totalFail,
-      queuedCount: totalQueued,
-      total: list.length,
-      results: allResults
-    };
-  }
+  // Batch capability is determined by the actual addBatchTransaction call.
+  // A stale health flag must never send a valid online transaction straight
+  // to the queue. UNKNOWN_ACTION is handled by submitBatchChunk.
 
   for (let i = 0; i < list.length; i += BATCH_CHUNK_SIZE) {
     const chunk = list.slice(i, i + BATCH_CHUNK_SIZE);
