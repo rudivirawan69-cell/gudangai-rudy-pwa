@@ -141,6 +141,13 @@ async function assertSafeWriteBackend() {
   if (!SAFE_WRITE_BACKEND_RE.test(version)) {
     throw new Error('WRITE DITAHAN: backend belum LOCK Stock CV/PT. Versi: ' + (version || 'tidak diketahui'));
   }
+
+  // A verified 6.6.5+BULK-STABLE backend is explicitly batch-capable.
+  // Do not let a stale/missing health.batchSupported=false flag divert a
+  // normal write straight into the offline queue. The real capability check
+  // is addBatchTransaction; UNKNOWN_ACTION is handled below.
+  if (/^6\.6\.5\+BULK-STABLE$/i.test(version)) _batchSupported = true;
+
   return health;
 }
 function mapStockItem(it, entity) {
