@@ -67,7 +67,7 @@ function Avatar({ name, size = 'lg' }) {
   );
 }
 
-export default function SettingsPage() {
+export default function SettingsPage({ onNavigate }) {
   const { user, updateProfile, changePin, logout } = useAuth();
   const [apiUrl, setApiUrlState] = useState('');
   const [apiSecret, setApiSecretState] = useState('');
@@ -117,7 +117,6 @@ export default function SettingsPage() {
     const result = await healthCheck();
     if (result.ok) {
       setConnStatus('ok');
-      // Merge raw fields so spreadsheet name is visible
       const payload = {
         ...result.data,
         spreadsheet: result.data?.spreadsheet || result.data?.raw?.spreadsheet,
@@ -195,7 +194,7 @@ export default function SettingsPage() {
         <MenuRow icon={Link2} iconBg="bg-cyan-50 text-cyan-700" title="Koneksi Google Sheets" subtitle={connSubtitle}
           onClick={() => setPanel(panel === 'koneksi' ? null : 'koneksi')}
           right={connStatus === 'ok' ? <CheckCircle2 className="w-5 h-5 text-emerald-500" /> : connStatus === 'fail' ? <XCircle className="w-5 h-5 text-red-500" /> : <ChevronRight className="w-4 h-4 text-slate-300" />} />
-        <MenuRow icon={Cloud} iconBg="bg-violet-50 text-violet-600" title="Mode Offline & Sync" subtitle={pendingCount ? `${pendingCount} transaksi pending` : 'Antrian kosong'} onClick={() => setPanel(panel === 'sync' ? null : 'sync')} />
+        <MenuRow icon={Cloud} iconBg="bg-violet-50 text-violet-600" title="Antrian Sinkronisasi" subtitle={pendingCount ? `${pendingCount} item di keranjang antrian` : 'Antrian kosong'} onClick={() => onNavigate ? onNavigate('sync') : setPanel(panel === 'sync' ? null : 'sync')} />
         <MenuRow icon={KeyRound} iconBg="bg-amber-50 text-amber-700" title="Ganti PIN" subtitle="Keamanan login 4–6 digit" onClick={() => setPanel(panel === 'pin' ? null : 'pin')} />
         <MenuRow icon={SettingsIcon} iconBg="bg-slate-100 text-slate-600" title="Tentang Aplikasi" subtitle="GudangAI · Backend V6.4.4" onClick={() => setPanel(panel === 'about' ? null : 'about')} />
       </div>
