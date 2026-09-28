@@ -1,52 +1,41 @@
 import { useState, useEffect, useCallback } from 'react';
+import {
+  User, Link2, KeyRound, Settings as SettingsIcon, LogOut, Shield,
+  CheckCircle2, XCircle, ChevronRight, Cloud,
+} from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import {
-  getApiUrl, setApiUrl, getApiSecret, setApiSecret,
-  healthCheck, getPendingQueue, syncPendingQueue, clearSyncedQueue,
+  getApiUrl, setApiUrl, getApiSecret, setApiSecret, healthCheck,
+  getPendingQueue, clearSyncedQueue,
 } from '../data/api';
-import {
-  Wifi, CheckCircle2, XCircle, Loader2, Link2, KeyRound, User,
-  RefreshCw, Trash2, Shield, ChevronRight, LogOut, Settings as SettingsIcon, Cloud,
-} from 'lucide-react';
-import { AVATAR_DATA_URL } from '../assets/imageAssets';
 
-const AVATAR_SRC = AVATAR_DATA_URL;
+const AVATAR_SRC = '/icons/icon-192x192.png';
 
 function formatConnLabel(data) {
-  if (!data) return 'OK';
-  const ver = data.version || data.title || '';
-  const sheet =
-    data.spreadsheet ||
-    data.raw?.spreadsheet ||
-    (typeof data.activeMonth === 'string'
-      ? data.activeMonth
-      : data.activeMonth?.nama
-        ? `${data.activeMonth.nama} ${data.activeMonth.tahun || ''}`.trim()
-        : data.raw?.activeMonth?.nama
-          ? `${data.raw.activeMonth.nama} ${data.raw.activeMonth.tahun || ''}`.trim()
-          : '');
-  const ts = data.timestamp || data.serverTime || data.raw?.serverTime;
-  const when = ts ? new Date(ts).toLocaleString('id-ID') : '';
-  return ['Terhubung', ver, sheet, when].filter(Boolean).join(' · ');
+  if (!data) return 'Terhubung';
+  const v = data.version || data.data?.version || '';
+  return v ? `Terhubung · ${v}` : 'Terhubung';
 }
 
 function MenuRow({ icon: Icon, iconBg, title, subtitle, onClick, right, danger }) {
   return (
     <button type="button" onClick={onClick}
-      className="menu-row w-full flex items-center gap-3 px-4 py-3.5 text-left active:bg-slate-50 transition-colors">
-      <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${iconBg || 'bg-slate-100 text-slate-600'}`}>
-        <Icon className="w-5 h-5" />
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className={`text-sm font-semibold ${danger ? 'text-red-600' : 'text-slate-800'}`}>{title}</p>
-        {subtitle && <p className="text-[11px] text-slate-400 truncate mt-0.5">{subtitle}</p>}
-      </div>
-      {right || <ChevronRight className={`w-4 h-4 shrink-0 ${danger ? 'text-red-300' : 'text-slate-300'}`} />}
+      className={`menu-row w-full flex items-center gap-3 px-4 py-3.5 text-left active:bg-slate-50 ${
+        danger ? 'text-red-600' : ''
+      }`}>
+      <span className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${iconBg}`}>
+        <Icon className="w-4.5 h-4.5" />
+      </span>
+      <span className="flex-1 min-w-0">
+        <span className={`block text-sm font-semibold ${danger ? 'text-red-600' : 'text-slate-800'}`}>{title}</span>
+        {subtitle && <span className="block text-[11px] text-slate-400 truncate mt-0.5">{subtitle}</span>}
+      </span>
+      {right || <ChevronRight className="w-4 h-4 text-slate-300 shrink-0" />}
     </button>
   );
 }
 
-function Avatar({ name, size = 'lg' }) {
+function Avatar({ name, size = 'md' }) {
   const [err, setErr] = useState(false);
   const dim = size === 'lg' ? 'w-14 h-14' : 'w-10 h-10';
   const text = size === 'lg' ? 'text-xl' : 'text-sm';
@@ -118,35 +107,19 @@ export default function SettingsPage({ onNavigate }) {
     setApiUrl(apiUrl.trim());
     setApiSecret(apiSecret.trim());
     setConnMessage('URL & secret disimpan.');
-    setConnStatus('idle');
   };
 
   const handleSaveProfile = () => {
-    updateProfile({ name: username.trim() || 'Rudi' });
+    updateProfile?.({ name: username.trim() || 'Rudi' });
     setProfileMsg('Nama disimpan.');
   };
 
   const handleChangePin = () => {
-    if (newPin.length < 4 || newPin.length > 6) {
-      setPinMsg('PIN harus 4–6 digit');
-      return;
-    }
-    if (newPin !== confirmPin) {
-      setPinMsg('Konfirmasi PIN tidak sama');
-      return;
-    }
-    changePin(newPin);
-    setPinMsg('PIN berhasil diubah');
-    setNewPin('');
-    setConfirmPin('');
-  };
-
-  const handleSync = async () => {
-    setSyncing(true); setSyncResult(null);
-    const result = await syncPendingQueue();
-    setSyncResult(result);
-    setPendingCount(getPendingQueue().length);
-    setSyncing(false);
+    if (!newPin || newPin.length < 4) { setPinMsg('PIN minimal 4 digit'); return; }
+    if (newPin !== confirmPin) { setPinMsg('Konfirmasi PIN tidak cocok'); return; }
+    changePin?.(newPin);
+    setPinMsg('PIN diperbarui.');
+    setNewPin(''); setConfirmPin('');
   };
 
   const handleClearSynced = () => {
@@ -162,7 +135,7 @@ export default function SettingsPage({ onNavigate }) {
     'Uji koneksi ke Apps Script';
 
   return (
-    <div className="space-y-3 pb-6">
+    <div className="space-y-4 pb-6 px-1">
       <div className="flex items-center gap-3 px-1">
         <Avatar name={user?.name || 'Rudi'} size="lg" />
         <div className="flex-1 min-w-0">
@@ -172,14 +145,21 @@ export default function SettingsPage({ onNavigate }) {
         <span className="status-pill status-pill-neutral">Lokal</span>
       </div>
 
-      <div className="menu-group">
-        <MenuRow icon={User} iconBg="bg-blue-50 text-blue-600" title="Profil Saya" subtitle="Nama tampilan di dashboard" onClick={() => setPanel(panel === 'profile' ? null : 'profile')} />
-        <MenuRow icon={Link2} iconBg="bg-cyan-50 text-cyan-700" title="Koneksi Google Sheets" subtitle={connSubtitle}
-          onClick={() => setPanel(panel === 'koneksi' ? null : 'koneksi')}
-          right={connStatus === 'ok' ? <CheckCircle2 className="w-5 h-5 text-emerald-500" /> : connStatus === 'fail' ? <XCircle className="w-5 h-5 text-red-500" /> : <ChevronRight className="w-4 h-4 text-slate-300" />} />
-        <MenuRow icon={Cloud} iconBg="bg-violet-50 text-violet-600" title="Antrian Sinkronisasi" subtitle={pendingCount ? `${pendingCount} item di keranjang antrian` : 'Antrian kosong'} onClick={() => onNavigate ? onNavigate('sync') : setPanel(panel === 'sync' ? null : 'sync')} />
-        <MenuRow icon={KeyRound} iconBg="bg-amber-50 text-amber-700" title="Ganti PIN" subtitle="Keamanan login 4–6 digit" onClick={() => setPanel(panel === 'pin' ? null : 'pin')} />
-        <MenuRow icon={SettingsIcon} iconBg="bg-slate-100 text-slate-600" title="Tentang Aplikasi" subtitle="GudangAI · Backend V6.6.5+BULK-STABLE" onClick={() => setPanel(panel === 'about' ? null : 'about')} />
+      <div className="space-y-2.5">
+        <div className="card overflow-hidden">
+          <MenuRow icon={User} iconBg="bg-blue-50 text-blue-600" title="Profil Saya" subtitle="Nama tampilan di dashboard" onClick={() => setPanel(panel === 'profile' ? null : 'profile')} />
+        </div>
+        <div className="card overflow-hidden">
+          <MenuRow icon={Link2} iconBg="bg-cyan-50 text-cyan-700" title="Koneksi Google Sheets" subtitle={connSubtitle}
+            onClick={() => setPanel(panel === 'koneksi' ? null : 'koneksi')}
+            right={connStatus === 'ok' ? <CheckCircle2 className="w-5 h-5 text-emerald-500" /> : connStatus === 'fail' ? <XCircle className="w-5 h-5 text-red-500" /> : <ChevronRight className="w-4 h-4 text-slate-300" />} />
+        </div>
+        <div className="card overflow-hidden">
+          <MenuRow icon={KeyRound} iconBg="bg-amber-50 text-amber-700" title="Ganti PIN" subtitle="Keamanan login 4–6 digit" onClick={() => setPanel(panel === 'pin' ? null : 'pin')} />
+        </div>
+        <div className="card overflow-hidden">
+          <MenuRow icon={SettingsIcon} iconBg="bg-slate-100 text-slate-600" title="Tentang Aplikasi" subtitle="GudangAI · Backend V6.6.5+BULK-STABLE" onClick={() => setPanel(panel === 'about' ? null : 'about')} />
+        </div>
       </div>
 
       {panel === 'profile' && (
@@ -198,43 +178,20 @@ export default function SettingsPage({ onNavigate }) {
       {panel === 'koneksi' && (
         <div className="section-card p-4 space-y-3">
           <p className="text-xs font-semibold text-slate-600">URL Web App Apps Script</p>
-          <input value={apiUrl} onChange={(e) => setApiUrlState(e.target.value)} className="form-control px-3 py-2.5 text-xs font-mono" placeholder="https://script.google.com/macros/s/.../exec" />
-          <p className="text-xs font-semibold text-slate-600">API Secret (Script Properties)</p>
-          <input type="password" value={apiSecret} onChange={(e) => setApiSecretState(e.target.value)} className="form-control px-3 py-2.5 text-sm" placeholder="API_SECRET backend" />
+          <input value={apiUrl} onChange={(e) => setApiUrlState(e.target.value)} className="form-control px-3 py-2.5 text-sm" placeholder="https://script.google.com/.../exec" />
+          <p className="text-xs font-semibold text-slate-600">API Secret</p>
+          <input type="password" value={apiSecret} onChange={(e) => setApiSecretState(e.target.value)} className="form-control px-3 py-2.5 text-sm" placeholder="Secret (Script Properties)" />
           <div className="flex gap-2">
             <button type="button" onClick={handleSaveUrl} className="flex-1 py-2.5 rounded-xl bg-slate-100 text-slate-700 text-sm font-semibold">Simpan</button>
-            <button type="button" onClick={handleTestConnection} className="flex-1 py-2.5 rounded-xl bg-[#0b2a55] text-white text-sm font-semibold flex items-center justify-center gap-1.5">
-              {connStatus === 'testing' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wifi className="w-4 h-4" />} Uji Koneksi
-            </button>
+            <button type="button" onClick={handleTestConnection} className="flex-1 py-2.5 rounded-xl bg-cyan-600 text-white text-sm font-semibold">Uji Koneksi</button>
           </div>
-          {connMessage && (
-            <p className={`text-[11px] px-3 py-2.5 rounded-xl border ${
-              connStatus === 'ok' ? 'info-box-ok' : connStatus === 'fail' ? 'info-box-danger' : 'info-box'
-            }`}>{connMessage}</p>
-          )}
-        </div>
-      )}
-
-      {panel === 'sync' && (
-        <div className="card p-4 space-y-3">
-          <div className="info-box info-box-warn px-3 py-2.5 text-xs"><p className="font-semibold">Antrian Sinkronisasi (fallback)</p><p className="mt-0.5 text-amber-800/80">Lebih baik buka halaman Antrian penuh lewat menu di atas.</p></div>
-          <div className="flex gap-2">
-            <button type="button" onClick={handleSync} disabled={syncing || pendingCount === 0}
-              className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-500 text-white text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-50">
-              {syncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />} Sinkronkan ({pendingCount})
-            </button>
-            <button type="button" onClick={handleClearSynced} className="px-4 py-2.5 rounded-xl bg-slate-100 text-slate-600"><Trash2 className="w-4 h-4" /></button>
-          </div>
-          {syncResult && (
-            <p className="info-box px-3 py-2.5 text-xs">
-              {syncResult.message ? syncResult.message : syncResult.skipped ? 'Lewati — offline atau URL belum diatur.' : `Berhasil: ${syncResult.synced} · Gagal: ${syncResult.failed}`}
-            </p>
-          )}
+          {connMessage && <p className={`text-xs ${connStatus === 'ok' ? 'text-emerald-600' : connStatus === 'fail' ? 'text-red-600' : 'text-slate-500'}`}>{connMessage}</p>}
+          <div className="info-box info-box-warn px-3 py-2.5 text-xs"><p className="font-semibold">Antrian Sinkronisasi</p><p className="mt-0.5 text-amber-800/80">Buka Antrian dari halaman Riwayat (tombol Antrian di kanan atas).</p></div>
         </div>
       )}
 
       {panel === 'pin' && (
-        <div className="card p-4 space-y-3">
+        <div className="section-card p-4 space-y-3">
           <input type="password" inputMode="numeric" value={newPin} onChange={(e) => setNewPin(e.target.value)} className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm" placeholder="PIN baru (4–6 digit)" />
           <input type="password" inputMode="numeric" value={confirmPin} onChange={(e) => setConfirmPin(e.target.value)} className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm" placeholder="Konfirmasi PIN" />
           <button type="button" onClick={handleChangePin} className="w-full py-2.5 rounded-xl bg-[#0b2a55] text-white text-sm font-semibold">Ubah PIN</button>
