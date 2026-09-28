@@ -50,6 +50,7 @@ export default function InputPage() {
   const fileImgRef = useRef(null);
   const videoRef = useRef(null);
   const [scanning, setScanning] = useState(false);
+  const [dense, setDense] = useState(() => (localStorage.getItem('gudangai_density') || 'comfortable') === 'compact');
   const submittingRef = useRef(false);
   const cartRef = useRef(null);
   const scanAbortRef = useRef(false);
@@ -298,14 +299,23 @@ export default function InputPage() {
 
   return (
     <div className="pb-24 space-y-3">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold flex items-center gap-2 text-white drop-shadow-sm">
+      <div className="flex items-center justify-between gap-2">
+        <h1 className="text-xl font-extrabold flex items-center gap-2 text-white drop-shadow-sm">
           <PackagePlus className="w-6 h-6 text-cyan-300" /> Input
         </h1>
-        <button type="button" onClick={openNotif} className="relative p-2 rounded-xl bg-white border border-slate-200 shadow-sm text-slate-700">
-          <Bell className="w-5 h-5" />
-          {unread > 0 && <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-rose-500 text-[10px] text-white flex items-center justify-center">{unread}</span>}
-        </button>
+        <div className="flex items-center gap-1.5">
+          <button type="button" onClick={() => {
+            const next = !dense;
+            setDense(next);
+            try { localStorage.setItem('gudangai_density', next ? 'compact' : 'comfortable'); } catch (_) {}
+          }} className="text-[10px] font-semibold px-2.5 py-1.5 rounded-lg bg-white border border-slate-200 text-slate-600 shadow-sm">
+            {dense ? 'Grid padat' : 'Grid longgar'}
+          </button>
+          <button type="button" onClick={openNotif} className="relative p-2 rounded-xl bg-white border border-slate-200 shadow-sm text-slate-700">
+            <Bell className="w-5 h-5" />
+            {unread > 0 && <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-rose-500 text-[10px] text-white flex items-center justify-center">{unread}</span>}
+          </button>
+        </div>
       </div>
 
       <div className="flex items-center gap-2 flex-wrap">
@@ -420,7 +430,7 @@ export default function InputPage() {
       )}
 
       {cart.length > 0 && (
-        <div ref={cartRef} className="space-y-2 pb-16">
+        <div ref={cartRef} className={`${dense ? 'space-y-1.5' : 'space-y-2.5'} pb-16`}>
           <div className="flex items-center justify-between">
             <p className="text-sm font-bold text-white drop-shadow-sm">Keranjang ({cart.length})</p>
             <button type="button" onClick={() => setCart([])} className="text-[11px] text-rose-200 font-semibold">Kosongkan</button>
