@@ -1,32 +1,26 @@
-/** Assemble R-rocket logo icons for PWA install. */
+/** Decode R-rocket logo icons for PWA install. */
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const outDir = path.join(__dirname, '..', 'public', 'icons');
-const partsDir = path.join(__dirname, 'icons_parts');
+
+let raw = '';
+const single = path.join(__dirname, 'icon-b64.json');
+const p1 = path.join(__dirname, 'icon-b64-p1.txt');
+const p2 = path.join(__dirname, 'icon-b64-p2.txt');
+if (fs.existsSync(single)) {
+  raw = fs.readFileSync(single, 'utf8');
+} else {
+  raw = fs.readFileSync(p1, 'utf8') + fs.readFileSync(p2, 'utf8');
+}
+const data = JSON.parse(raw);
+
 fs.mkdirSync(outDir, { recursive: true });
-
-function readPart(name) {
-  const p = path.join(partsDir, name);
-  return fs.existsSync(p) ? fs.readFileSync(p, 'utf8').trim() : '';
-}
-
-function writePng(name, b64) {
-  if (!b64) return false;
+for (const [name, b64] of Object.entries(data)) {
   fs.writeFileSync(path.join(outDir, name), Buffer.from(b64, 'base64'));
-  return true;
 }
-
-let n = 0;
-const b512 = readPart('icon_512_part0.txt') + readPart('icon_512_part1.txt') + readPart('icon_512_part2.txt');
-if (writePng('icon-512x512.png', b512)) n++;
-if (writePng('icon-maskable-512x512.png', b512)) n++;
-if (writePng('icon-192x192.png', readPart('icon_192.txt'))) n++;
-if (writePng('icon-maskable-192x192.png', readPart('icon_192.txt'))) n++;
-if (writePng('apple-touch-icon.png', readPart('apple.txt'))) n++;
-if (writePng('icon-96x96.png', readPart('icon_96.txt'))) n++;
 
 const aliases = {
   'icon-72x72.png': 'icon-96x96.png',
@@ -42,4 +36,4 @@ for (const [dest, src] of Object.entries(aliases)) {
   const to = path.join(outDir, dest);
   if (fs.existsSync(from)) fs.copyFileSync(from, to);
 }
-console.log('Wrote', n, 'PWA logo icons to public/icons');
+console.log('Wrote PWA logo icons to public/icons');
