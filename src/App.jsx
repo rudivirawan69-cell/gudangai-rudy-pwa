@@ -156,8 +156,8 @@ function AppShell() {
       case 'input': return <InputPage />;
       case 'po': return <POPage />;
       case 'riwayat': return <RiwayatPage />;
-      case 'settings': return <SettingsPage />;
-      case 'sync': return <SyncQueuePage />;
+      case 'settings': return <SettingsPage onNavigate={goTab} />;
+      case 'sync': return <SyncQueuePage onBack={() => goTab('settings')} />;
       default: return <DashboardPage onNavigate={goTab} />;
     }
   };
