@@ -1,7 +1,8 @@
-/** GudangAI RUDY — API layer V6.7.1 stable-chunk (BATCH=12) + tanggal YYYY-MM-DD — RESTORED */
+/** GudangAI RUDY — API layer V6.7.1 stable-chunk (BATCH=12) + tanggal YYYY-MM-DD */
 const RETRY_COUNT = 2;
 const RETRY_BASE_MS = 400;
 const REQUEST_TIMEOUT_MS = 15000;
+/** Chunk kecil agar Apps Script + spreadsheet selesai < timeout (anti-antrian). */
 const BATCH_CHUNK_SIZE = 12;
 const BATCH_TIMEOUT_MS = 50000;
 const SINGLE_TIMEOUT_MS = 45000;
@@ -46,6 +47,7 @@ function newIds() {
   const uuid = crypto.randomUUID ? crypto.randomUUID() : (Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
   return { requestId: 'REQ-' + uuid, transactionId: 'TX-RUDY-' + uuid };
 }
+/** Normalisasi tanggal PWA → YYYY-MM-DD (backend parseTransactionDate_ mengharapkan ini). */
 function normalizeTanggal(raw) {
   if (!raw) return new Date().toISOString().slice(0, 10);
   const s = String(raw).trim();
