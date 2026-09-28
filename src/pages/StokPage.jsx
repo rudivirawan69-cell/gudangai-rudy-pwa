@@ -2,8 +2,7 @@ import { useState, useMemo } from 'react';
 import { useStock } from '../hooks/useStock';
 import { DIVISIONS } from '../data/master';
 import {
-  Package, RefreshCw, Search, AlertTriangle,
-  CheckCircle2, XCircle,
+  Package, RefreshCw, Search,
 } from 'lucide-react';
 
 function levelOf(stok) {
@@ -27,16 +26,10 @@ function StockCard({ item }) {
     danger: 'text-red-600',
     zero: 'text-slate-400',
   }[level];
-  const badge = {
-    safe: <span className="chip-safe text-[10px] px-2 py-0.5 rounded-full font-bold">Aman</span>,
-    warning: <span className="chip-warning text-[10px] px-2 py-0.5 rounded-full font-bold">Menipis</span>,
-    danger: <span className="chip-danger text-[10px] px-2 py-0.5 rounded-full font-bold">Kritis</span>,
-    zero: <span className="chip-zero text-[10px] px-2 py-0.5 rounded-full font-bold">Habis</span>,
-  }[level];
 
   return (
-    <div className={`stock-card border-l-4 ${border}`}>
-      <div className="flex items-start justify-between gap-2">
+    <div className={`rounded-2xl bg-white border border-slate-200 shadow-sm border-l-4 ${border} px-3.5 py-3`}>
+      <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
           <p className="text-[11px] text-slate-400 font-mono font-medium">{item.kode}</p>
           <p className="text-[13px] font-bold text-slate-900 truncate leading-tight mt-0.5">{item.nama}</p>
@@ -44,7 +37,6 @@ function StockCard({ item }) {
         </div>
         <div className="text-right flex-shrink-0">
           <p className={`text-2xl font-extrabold tabular-nums leading-none ${numColor}`}>{item.stok}</p>
-          <div className="mt-1 flex justify-end">{badge}</div>
         </div>
       </div>
     </div>
@@ -81,19 +73,12 @@ export default function StokPage() {
   }, [items, search, filterDiv, filterStatus]);
 
   const divisions = ['Semua', ...DIVISIONS];
-  const statusFilters = [
-    { id: 'Semua', label: 'Semua', icon: Package },
-    { id: 'Aman', label: 'Aman', icon: CheckCircle2 },
-    { id: 'Menipis', label: 'Menipis', icon: AlertTriangle },
-    { id: 'Kritis', label: 'Kritis', icon: XCircle },
-    { id: 'Habis', label: 'Habis', icon: XCircle },
-  ];
 
   const topStats = [
-    { key: 'total', label: 'TOTAL', value: stats.total ?? items?.length ?? 0, color: 'text-slate-900', border: 'border-slate-100', filter: 'Semua' },
-    { key: 'aman', label: 'AMAN', value: stats.safe ?? stats.aman ?? 0, color: 'text-emerald-600', border: 'border-emerald-100', filter: 'Aman' },
-    { key: 'menipis', label: 'MENIPIS', value: stats.warning ?? stats.waspada ?? 0, color: 'text-amber-600', border: 'border-amber-100', filter: 'Menipis' },
-    { key: 'kritis', label: 'KRITIS', value: (stats.danger ?? stats.kritis ?? 0) + (stats.zero ?? 0), color: 'text-red-600', border: 'border-red-100', filter: 'Kritis' },
+    { key: 'total', label: 'TOTAL', value: stats.total ?? items?.length ?? 0, color: 'text-slate-900', border: 'border-slate-200', filter: 'Semua' },
+    { key: 'aman', label: 'AMAN', value: stats.safe ?? stats.aman ?? 0, color: 'text-emerald-600', border: 'border-emerald-200', filter: 'Aman' },
+    { key: 'menipis', label: 'MENIPIS', value: stats.warning ?? stats.waspada ?? 0, color: 'text-amber-600', border: 'border-amber-200', filter: 'Menipis' },
+    { key: 'kritis', label: 'KRITIS', value: (stats.danger ?? stats.kritis ?? 0) + (stats.zero ?? 0), color: 'text-red-600', border: 'border-red-200', filter: 'Kritis' },
   ];
 
   return (
@@ -115,14 +100,15 @@ export default function StokPage() {
         ))}
       </div>
 
+      {/* Kartu statistik atas — bisa diklik untuk filter */}
       <div className="grid grid-cols-4 gap-2">
         {topStats.map((s) => (
           <button
             key={s.key}
             type="button"
             onClick={() => setFilterStatus(s.filter)}
-            className={`stat-tile p-2.5 text-center border ${s.border} ${
-              filterStatus === s.filter ? 'is-active' : ''
+            className={`rounded-2xl bg-white border ${s.border} shadow-sm p-2.5 text-center transition ${
+              filterStatus === s.filter ? 'ring-2 ring-cyan-400 ring-offset-1' : ''
             }`}
           >
             <p className="text-[9px] font-extrabold uppercase tracking-wider text-slate-400">{s.label}</p>
@@ -140,33 +126,24 @@ export default function StokPage() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Cari kode atau nama barang…"
-          className="form-control w-full pl-10 pr-4 py-3 text-sm font-medium shadow-sm"
+          className="form-control w-full pl-10 pr-4 py-3 text-sm font-medium shadow-sm bg-white border border-slate-200 rounded-2xl"
         />
       </div>
 
-      <div className="flex gap-1.5 overflow-x-auto pb-0.5 -mx-0.5 px-0.5">
-        {divisions.map((d) => (
-          <button
-            key={d}
-            type="button"
-            onClick={() => setFilterDiv(d)}
-            className={`chip-btn shrink-0 ${filterDiv === d ? 'is-active' : ''}`}
-          >
-            {d}
-          </button>
-        ))}
-      </div>
-
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex gap-1.5 overflow-x-auto flex-1">
-          {statusFilters.map((s) => (
+      <div className="flex items-center gap-1.5">
+        <div className="flex gap-1.5 overflow-x-auto flex-1 pb-0.5">
+          {divisions.map((d) => (
             <button
-              key={s.id}
+              key={d}
               type="button"
-              onClick={() => setFilterStatus(s.id)}
-              className={`chip-btn shrink-0 ${filterStatus === s.id ? 'is-active' : ''}`}
+              onClick={() => setFilterDiv(d)}
+              className={`shrink-0 px-3 py-1.5 rounded-xl text-[11px] font-semibold border shadow-sm ${
+                filterDiv === d
+                  ? 'bg-cyan-600 text-white border-cyan-600'
+                  : 'bg-white text-slate-600 border-slate-200'
+              }`}
             >
-              {s.label}
+              {d}
             </button>
           ))}
         </div>
@@ -188,11 +165,11 @@ export default function StokPage() {
       {loading ? (
         <div className="space-y-2">
           {[...Array(6)].map((_, i) => (
-            <div key={i} className="skeleton h-[72px] rounded-xl" />
+            <div key={i} className="skeleton h-[72px] rounded-2xl bg-white/60" />
           ))}
         </div>
       ) : filtered.length === 0 ? (
-        <div className="rounded-2xl bg-white border border-slate-100 shadow-sm py-12 text-center">
+        <div className="rounded-2xl bg-white border border-slate-200 shadow-sm py-12 text-center">
           <Package className="w-11 h-11 text-slate-300 mx-auto mb-2" />
           <p className="text-slate-500 text-sm font-medium">Tidak ada item ditemukan</p>
         </div>
