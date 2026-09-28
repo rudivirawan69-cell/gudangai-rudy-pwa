@@ -22,7 +22,7 @@ function qtyOf(h) {
   return (h.items || []).reduce((s, it) => s + (Number(it.qty) || 0), 0);
 }
 
-export default function RiwayatPage() {
+export default function RiwayatPage({ onNavigate }) {
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState('all');
   const [filterEntity, setFilterEntity] = useState('all');
@@ -64,12 +64,13 @@ export default function RiwayatPage() {
   }, [filtered]);
 
   const stats = useMemo(() => {
-    const total = history.length;
-    const ok = history.filter((h) => h.success !== false && !h.offline).length;
-    const offline = history.filter((h) => h.offline).length;
-    const fail = history.filter((h) => h.success === false).length;
-    const itemsCount = history.reduce((s, h) => s + (h.items?.length || 0), 0);
-    return { total, ok, offline, fail, itemsCount };
+    let ok = 0, offline = 0, fail = 0;
+    history.forEach((h) => {
+      if (h.status === 'offline' || h.queued) offline += 1;
+      else if (h.status === 'error' || h.failed) fail += 1;
+      else ok += 1;
+    });
+    return { ok, offline, fail, total: history.length };
   }, [history]);
 
   const typeFilters = [
@@ -78,25 +79,27 @@ export default function RiwayatPage() {
     { id: 'keluar', label: 'Keluar' },
     { id: 'rusak', label: 'Rusak' },
   ];
-  const entityFilters = [
-    { id: 'all', label: 'CV+PT' },
-    { id: 'CV', label: 'CV' },
-    { id: 'PT', label: 'PT' },
-  ];
 
   return (
-    <div className="pb-2 animate-fade-in space-y-3">
-      <div className="flex items-center justify-between gap-2">
+    <div className="px-3 pt-3 pb-24 space-y-3 max-w-lg mx-auto">
+      <div className="flex items-start justify-between gap-2">
         <div>
-          <h1 className="text-lg font-bold text-slate-900">Riwayat</h1>
-          <p className="text-[11px] text-slate-400">
-            {stats.total} transaksi · {stats.itemsCount} baris item · lokal perangkat
+          <p className="text-[10px] font-bold uppercase tracking-wider text-cyan-600">Riwayat</p>
+          <h1 className="text-xl font-extrabold text-white drop-shadow-sm">Transaksi</h1>
+          <p className="text-[11px] text-slate-400 mt-0.5">
+            {history.length} transaksi · lokal perangkat
           </p>
         </div>
-        <button type="button" onClick={() => setDense((v) => !v)}
-          className="text-[10px] font-semibold px-2.5 py-1.5 rounded-lg bg-slate-100 text-slate-600">
-          {dense ? 'Grid padat' : 'List longgar'}
-        </button>
+        <div className="flex items-center gap-1.5 shrink-0">
+          <button type="button" onClick={() => onNavigate?.('sync')}
+            className="text-[10px] font-bold px-2.5 py-1.5 rounded-lg bg-amber-50 text-amber-700 border border-amber-200">
+            Antrian
+          </button>
+          <button type="button" onClick={() => setDense((v) => !v)}
+            className="text-[10px] font-semibold px-2.5 py-1.5 rounded-lg bg-slate-100 text-slate-600">
+            {dense ? 'Grid padat' : 'Grid longgar'}
+          </button>
+        </div>
       </div>
 
       {stats.total > 0 && (
@@ -132,8 +135,6 @@ export default function RiwayatPage() {
             placeholder="Cari kode, nama, keterangan…"
             className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 bg-white text-sm focus:outline-none focus:border-cyan-400" />
         </div>
-
-        {/* Filter Tipe — center */}
         <div className="flex justify-center gap-1.5">
           {typeFilters.map((f) => (
             <button key={f.id} type="button" onClick={() => setFilterType(f.id)}
@@ -142,87 +143,44 @@ export default function RiwayatPage() {
               }`}>{f.label}</button>
           ))}
         </div>
-
-        {/* Filter Entitas — center, baris terpisah */}
         <div className="flex justify-center gap-1.5">
-          {entityFilters.map((f) => (
-            <button key={f.id} type="button" onClick={() => setFilterEntity(f.id)}
+          {['all', 'CV', 'PT'].map((e) => (
+            <button key={e} type="button" onClick={() => setFilterEntity(e)}
               className={`px-3 py-1.5 rounded-full text-[11px] font-semibold ${
-                filterEntity === f.id ? 'bg-cyan-600 text-white' : 'bg-white border border-slate-200 text-slate-600'
-              }`}>{f.label}</button>
+                filterEntity === e ? 'bg-cyan-600 text-white' : 'bg-white border border-slate-200 text-slate-600'
+              }`}>{e === 'all' ? 'Semua' : e}</button>
           ))}
         </div>
-
-        <p className="text-[10px] text-slate-400 px-0.5 text-center">
-          Menampilkan <span className="font-semibold text-slate-600">{filtered.length}</span> dari {history.length}
-        </p>
       </div>
 
-      {filtered.length === 0 ? (
-        <div className="card p-6 text-center space-y-2">
-          <Clock className="w-10 h-10 text-slate-200 mx-auto" />
+      {grouped.length === 0 ? (
+        <div className="rounded-2xl bg-white border border-slate-200 p-8 text-center">
+          <Clock className="w-10 h-10 mx-auto text-slate-300 mb-2" />
           <p className="text-sm font-semibold text-slate-600">Belum ada riwayat</p>
-          <p className="text-[11px] text-slate-400 leading-relaxed max-w-xs mx-auto">
-            Transaksi dari Input (manual, PDF, atau Suara) tersimpan di sini setelah dikirim — termasuk offline.
-          </p>
-          <div className="grid grid-cols-3 gap-2 pt-2 text-left">
-            <div className="rounded-lg bg-slate-50 p-2">
-              <Package className="w-3.5 h-3.5 text-slate-500 mb-1" />
-              <p className="text-[10px] font-medium text-slate-700">Input item</p>
-              <p className="text-[9px] text-slate-400">Masuk / keluar / rusak</p>
-            </div>
-            <div className="rounded-lg bg-slate-50 p-2">
-              <TrendingUp className="w-3.5 h-3.5 text-slate-500 mb-1" />
-              <p className="text-[10px] font-medium text-slate-700">Grafik terisi</p>
-              <p className="text-[9px] text-slate-400">Otomatis 7 hari</p>
-            </div>
-            <div className="rounded-lg bg-slate-50 p-2">
-              <CheckCircle2 className="w-3.5 h-3.5 text-slate-500 mb-1" />
-              <p className="text-[10px] font-medium text-slate-700">Status kirim</p>
-              <p className="text-[9px] text-slate-400">OK / offline / gagal</p>
-            </div>
-          </div>
+          <p className="text-xs text-slate-400 mt-1">Transaksi berhasil akan muncul di sini</p>
         </div>
       ) : dense ? (
         <div className="space-y-3">
           {grouped.map((g) => (
             <div key={g.label}>
-              <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-1.5 px-0.5">
-                {g.label} · {g.items.length} tx
-              </p>
-              <div className="grid grid-cols-2 gap-2">
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1.5 px-1">{g.label}</p>
+              <div className="space-y-1.5">
                 {g.items.map((h, idx) => {
                   const m = typeMeta(h.type);
-                  const q = Math.round(qtyOf(h) * 10) / 10;
-                  const time = new Date(h.savedAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
                   return (
-                    <div key={`${h.savedAt}-${idx}`} className="card p-2.5 flex flex-col gap-1.5 min-h-[88px]">
-                      <div className="flex items-start gap-1.5">
-                        <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${m.bg}`}>
-                          <TypeIcon type={h.type} className="w-3.5 h-3.5" />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-1 flex-wrap">
-                            <span className={`text-[9px] font-bold px-1 py-0.5 rounded ${m.chip}`}>{m.label}</span>
-                            <span className={`text-[9px] font-semibold px-1 py-0.5 rounded ${
-                              h.entity === 'CV' ? 'bg-blue-50 text-blue-600' : 'bg-violet-50 text-violet-600'
-                            }`}>{h.entity}</span>
-                          </div>
-                          <p className="text-[10px] text-slate-400 mt-0.5">{time}</p>
-                        </div>
+                    <div key={h.id || idx} className={`rounded-xl border border-slate-200 bg-white px-3 py-2.5 flex items-center gap-2.5 shadow-sm`}>
+                      <div className={`w-8 h-8 rounded-lg ${m.bg} flex items-center justify-center shrink-0`}>
+                        <TypeIcon type={h.type} className="w-4 h-4" />
                       </div>
-                      <p className="text-[11px] font-semibold text-slate-800 tabular-nums">
-                        {q} <span className="font-normal text-slate-400">qty · {h.items?.length || 0} item</span>
-                      </p>
-                      <p className="text-[10px] text-slate-500 truncate">
-                        {(h.items || []).map((i) => i.nama || i.kode).filter(Boolean).slice(0, 2).join(', ')}
-                        {(h.items || []).length > 2 ? '…' : ''}
-                      </p>
-                      <div className="flex gap-1 mt-auto">
-                        {h.offline && <span className="text-[8px] px-1 py-0.5 rounded bg-amber-100 text-amber-700 font-medium">Offline</span>}
-                        {h.success === false && <span className="text-[8px] px-1 py-0.5 rounded bg-red-100 text-red-700 font-medium">Gagal</span>}
-                        {h.success !== false && !h.offline && <span className="text-[8px] px-1 py-0.5 rounded bg-emerald-100 text-emerald-700 font-medium">OK</span>}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[13px] font-bold text-slate-900 truncate">
+                          {h.items?.[0]?.nama || h.type} {h.items?.length > 1 ? `+${h.items.length - 1}` : ''}
+                        </p>
+                        <p className="text-[10px] text-slate-500 tabular-nums">
+                          {h.entity} · {qtyOf(h)} unit · {new Date(h.savedAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+                        </p>
                       </div>
+                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${m.chip}`}>{m.label}</span>
                     </div>
                   );
                 })}
@@ -231,42 +189,35 @@ export default function RiwayatPage() {
           ))}
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-4">
           {grouped.map((g) => (
             <div key={g.label}>
-              <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-1.5 px-0.5">{g.label}</p>
-              <div className="space-y-2">
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-2 px-1">{g.label}</p>
+              <div className="space-y-2.5">
                 {g.items.map((h, idx) => {
                   const m = typeMeta(h.type);
-                  const time = new Date(h.savedAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
                   return (
-                    <div key={`${h.savedAt}-${idx}`} className="card overflow-hidden">
-                      <div className="px-3 py-2.5 flex items-center gap-2.5">
-                        <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${m.bg}`}>
+                    <div key={h.id || idx} className="rounded-2xl border border-slate-200 bg-white p-3.5 shadow-sm">
+                      <div className="flex items-center gap-2 mb-2">
+                        <div className={`w-9 h-9 rounded-xl ${m.bg} flex items-center justify-center`}>
                           <TypeIcon type={h.type} />
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <p className="text-sm font-semibold text-slate-800">Barang {m.label}</p>
-                            <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
-                              h.entity === 'CV' ? 'bg-blue-100 text-blue-600' : 'bg-violet-100 text-violet-600'
-                            }`}>{h.entity}</span>
-                          </div>
-                          <p className="text-[11px] text-slate-400">
-                            {time} · {h.items?.length || 0} item · qty {Math.round(qtyOf(h) * 10) / 10}
-                          </p>
+                        <div className="flex-1">
+                          <p className="text-sm font-bold text-slate-900">{m.label} · {h.entity}</p>
+                          <p className="text-[10px] text-slate-400">{new Date(h.savedAt).toLocaleString('id-ID')}</p>
                         </div>
+                        <span className="text-sm font-extrabold text-slate-900 tabular-nums">{qtyOf(h)}</span>
                       </div>
-                      {h.items && (
-                        <div className="px-3 pb-2.5 space-y-1">
-                          {h.items.map((item, j) => (
-                            <div key={j} className="flex items-center justify-between text-xs bg-slate-50 rounded-lg px-2.5 py-1.5">
-                              <span className="text-slate-600 truncate flex-1">{item.nama || item.kode}</span>
-                              <span className="font-semibold text-slate-800 ml-2 tabular-nums">{item.qty}</span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
+                      <div className="space-y-1">
+                        {(h.items || []).slice(0, 5).map((it, j) => (
+                          <p key={j} className="text-[11px] text-slate-600 truncate">
+                            <span className="font-mono text-slate-400">{it.kode}</span> {it.nama} × {it.qty}
+                          </p>
+                        ))}
+                        {(h.items || []).length > 5 && (
+                          <p className="text-[10px] text-slate-400">+{(h.items || []).length - 5} item lainnya</p>
+                        )}
+                      </div>
                     </div>
                   );
                 })}
