@@ -1,4 +1,4 @@
-/** Decode committed logo icons into public/icons for PWA install. */
+/** Assemble R-rocket logo icons for PWA install. */
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -6,34 +6,27 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const outDir = path.join(__dirname, '..', 'public', 'icons');
 const partsDir = path.join(__dirname, 'icons_parts');
-
-const nameMap = {
-  icon_512x512: 'icon-512x512.png',
-  icon_192x192: 'icon-192x192.png',
-  apple_touch_icon: 'apple-touch-icon.png',
-  icon_96x96: 'icon-96x96.png',
-  icon_maskable_512x512: 'icon-maskable-512x512.png',
-  icon_maskable_192x192: 'icon-maskable-192x192.png',
-};
-
 fs.mkdirSync(outDir, { recursive: true });
+
+function readPart(name) {
+  const p = path.join(partsDir, name);
+  return fs.existsSync(p) ? fs.readFileSync(p, 'utf8').trim() : '';
+}
+
+function writePng(name, b64) {
+  if (!b64) return false;
+  fs.writeFileSync(path.join(outDir, name), Buffer.from(b64, 'base64'));
+  return true;
+}
+
 let n = 0;
-if (fs.existsSync(partsDir)) {
-  for (const [key, outName] of Object.entries(nameMap)) {
-    const p = path.join(partsDir, `${key}.b64`);
-    if (!fs.existsSync(p)) continue;
-    fs.writeFileSync(path.join(outDir, outName), Buffer.from(fs.readFileSync(p, 'utf8'), 'base64'));
-    n++;
-  }
-}
-const j = path.join(__dirname, 'icon-b64.json');
-if (n === 0 && fs.existsSync(j)) {
-  const data = JSON.parse(fs.readFileSync(j, 'utf8'));
-  for (const [name, b64] of Object.entries(data)) {
-    fs.writeFileSync(path.join(outDir, name), Buffer.from(b64, 'base64'));
-    n++;
-  }
-}
+const b512 = readPart('icon_512_part0.txt') + readPart('icon_512_part1.txt') + readPart('icon_512_part2.txt');
+if (writePng('icon-512x512.png', b512)) n++;
+if (writePng('icon-maskable-512x512.png', b512)) n++;
+if (writePng('icon-192x192.png', readPart('icon_192.txt'))) n++;
+if (writePng('icon-maskable-192x192.png', readPart('icon_192.txt'))) n++;
+if (writePng('apple-touch-icon.png', readPart('apple.txt'))) n++;
+if (writePng('icon-96x96.png', readPart('icon_96.txt'))) n++;
 
 const aliases = {
   'icon-72x72.png': 'icon-96x96.png',
