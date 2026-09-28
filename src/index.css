@@ -334,3 +334,11 @@ html, body, #root {
 .section-card .text-slate-800,.section-card-header .text-slate-800,.menu-group .text-slate-800,.card .text-slate-800,.surface .text-slate-800{color:#0f172a!important}
 .metric-value,.page-title,.menu-row .font-semibold,.menu-row .font-bold{color:#0f172a}
 @media(max-width:380px){.page-header{padding:.75rem}.page-title{font-size:1rem}.page-subtitle{font-size:10px}.menu-row{padding-left:.75rem;padding-right:.75rem}}
+
+
+/* v6.8.9 density + contrast */
+.page-title{font-size:1.15rem!important;font-weight:800;color:#0f172a}
+.page-kicker{font-size:11px!important;font-weight:800;color:#0e7490}
+.metric-value{font-size:1.35rem;font-weight:800;color:#0f172a;font-variant-numeric:tabular-nums}
+.stock-card,.card,.section-card{border-color:#e2e8f0}
+.space-y-page > * + *{margin-top:0.85rem}
