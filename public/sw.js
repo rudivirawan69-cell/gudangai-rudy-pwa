@@ -1,12 +1,12 @@
 /**
- * GudangAI RUDY — Service Worker V6.8.5 (R-rocket logo icons full set)
+ * GudangAI RUDY — Service Worker V6.8.6 (logo R-rocket ORIGINAL user file)
  * Strategi:
  * - API Google Apps Script: network-only (no-store)
  * - Navigasi + JS/CSS: network-first, fallback cache
  * - Aset statis (ikon, foto): cache-first
  * - Version bump setiap rilis UI agar klien Android mendapat update
  */
-const CACHE_NAME = 'gudangai-v6.8.5-rocket-logo';
+const CACHE_NAME = 'gudangai-v6.8.6-rocket-original';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
