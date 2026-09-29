@@ -3,13 +3,13 @@ import {
   User, Link2, KeyRound, Settings as SettingsIcon, LogOut, Shield,
   CheckCircle2, XCircle, ChevronRight, Cloud,
 } from 'lucide-react';
-import { useAuth } from '../hooks/useAuth';
+import { useAuth, DEFAULT_PROFILE_PHOTO } from '../hooks/useAuth';
 import {
   getApiUrl, setApiUrl, getApiSecret, setApiSecret, healthCheck,
   getPendingQueue, clearSyncedQueue,
 } from '../data/api';
 
-const AVATAR_SRC = '/icons/icon-96x96.png';
+const AVATAR_SRC = DEFAULT_PROFILE_PHOTO;
 
 function formatConnLabel(data) {
   if (!data) return 'Terhubung';
@@ -48,7 +48,7 @@ function Avatar({ name, photo, size = 'md' }) {
   if (err || !src) return letter;
   return (
     <img
-      key={src.slice(0, 40)}
+      key={String(src).slice(0, 48)}
       src={src}
       alt={name || 'Avatar'}
       onError={() => setErr(true)}
@@ -124,8 +124,7 @@ export default function SettingsPage({ onNavigate }) {
     }
     const reader = new FileReader();
     reader.onload = () => {
-      const dataUrl = String(reader.result || '');
-      setPhotoPreview(dataUrl);
+      setPhotoPreview(String(reader.result || ''));
       setProfileMsg('Foto siap — tekan Simpan Profil.');
     };
     reader.readAsDataURL(file);
@@ -134,7 +133,7 @@ export default function SettingsPage({ onNavigate }) {
   const handleClearPhoto = () => {
     setPhotoPreview('');
     updateProfile?.({ photo: '' });
-    setProfileMsg('Foto dihapus.');
+    setProfileMsg('Foto dihapus — pakai default.');
   };
 
   const handleSaveProfile = () => {
@@ -150,12 +149,6 @@ export default function SettingsPage({ onNavigate }) {
     changePin?.(newPin);
     setPinMsg('PIN diperbarui.');
     setNewPin(''); setConfirmPin('');
-  };
-
-  const handleClearSynced = () => {
-    clearSyncedQueue();
-    setPendingCount(getPendingQueue().length);
-    setSyncResult({ message: 'Antrian tersinkron dibersihkan.' });
   };
 
   const connSubtitle =
@@ -199,11 +192,11 @@ export default function SettingsPage({ onNavigate }) {
             <div className="flex-1 min-w-0">
               <p className="text-[11px] text-slate-500 mb-1.5">Foto profil (disimpan di perangkat)</p>
               <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-cyan-50 text-cyan-700 text-xs font-semibold border border-cyan-200 cursor-pointer">
-                Pilih foto
+                Ganti foto
                 <input type="file" accept="image/*" className="hidden" onChange={handlePhotoPick} />
               </label>
               {(photoPreview || user?.photo) && (
-                <button type="button" onClick={handleClearPhoto} className="ml-2 text-[11px] text-red-500 font-medium">Hapus</button>
+                <button type="button" onClick={handleClearPhoto} className="ml-2 text-[11px] text-red-500 font-medium">Reset</button>
               )}
             </div>
           </div>
