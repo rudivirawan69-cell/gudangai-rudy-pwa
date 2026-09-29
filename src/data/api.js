@@ -155,10 +155,30 @@ async function assertSafeWriteBackend() {
   if (/6\.6\.5|BULK[-_]?STABLE/i.test(version)) _batchSupported = true;
   return health;
 }
+/** Parse angka sheet aman — abaikan #ERROR! / #N/A. PWA HANYA BACA stok, tidak menulis ke sheet Stock CV/PT. */
+function toNum(v) {
+  if (v == null || v === '') return 0;
+  if (typeof v === 'number') return Number.isFinite(v) ? v : 0;
+  const s = String(v).trim();
+  if (!s || s.charAt(0) === '#' || /error|n\/a|null|undefined/i.test(s)) return 0;
+  const n = Number(s.replace(/,/g, ''));
+  return Number.isFinite(n) ? n : 0;
+}
 function mapStockItem(it, entity) {
-  const stockAkhir = Number(it.stockAkhir ?? it.stok ?? it.qty ?? it.sisa ?? 0) || 0;
-  const stockAman = Number(it.stockAman ?? it.stokAman ?? it.aman ?? it.min ?? 0) || 0;
-  return { kode: it.kode || it.kodeBarang || '', nama: it.nama || '', satuan: it.satuan || 'Pack', stok: stockAkhir, stockAkhir, stockAman, min: stockAman || 5, divisi: it.divisi || '', entitas: (it.entitas || entity || '').toUpperCase(), entity: (it.entitas || entity || '').toUpperCase() };
+  const stockAkhir = toNum(it.stockAkhir ?? it.stok ?? it.qty ?? it.sisa ?? 0);
+  const stockAman = toNum(it.stockAman ?? it.stokAman ?? it.aman ?? it.min ?? 0);
+  return {
+    kode: it.kode || it.kodeBarang || '',
+    nama: it.nama || '',
+    satuan: it.satuan || 'Pack',
+    stok: stockAkhir,
+    stockAkhir,
+    stockAman,
+    min: stockAman || 5,
+    divisi: it.divisi || '',
+    entitas: (it.entitas || entity || '').toUpperCase(),
+    entity: (it.entitas || entity || '').toUpperCase(),
+  };
 }
 export async function fetchStock(entity, options = {}) {
   const url = getApiUrl();
