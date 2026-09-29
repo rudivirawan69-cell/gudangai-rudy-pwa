@@ -1,7 +1,7 @@
 /* GudangAI RUDY — Service Worker
  * - Version bump setiap rilis UI agar klien Android mendapat update
  */
-const CACHE_NAME = 'gudangai-v6.9.0-layout-stock';
+const CACHE_NAME = 'gudangai-v6.9.1-profile-photo';
 const PRECACHE = [
   '/',
   '/index.html',
@@ -28,11 +28,9 @@ self.addEventListener('fetch', (event) => {
   const req = event.request;
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
-  // Network-first for API / Apps Script
   if (url.hostname.includes('google') || url.hostname.includes('script.google')) {
     return;
   }
-  // Navigation: network first, fallback cache
   if (req.mode === 'navigate') {
     event.respondWith(
       fetch(req).then((res) => {
@@ -43,7 +41,6 @@ self.addEventListener('fetch', (event) => {
     );
     return;
   }
-  // Assets: cache first
   event.respondWith(
     caches.match(req).then((cached) => {
       if (cached) return cached;
