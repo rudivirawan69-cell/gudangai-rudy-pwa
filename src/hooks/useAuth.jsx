@@ -12,7 +12,13 @@ export function AuthProvider({ children }) {
     const saved = localStorage.getItem('gudangai_user');
     if (saved) {
       try {
-        setUser(JSON.parse(saved));
+        const parsed = JSON.parse(saved);
+        // restore photo from dedicated key if missing in user blob
+        if (!parsed.photo) {
+          const photo = localStorage.getItem('gudangai_photo') || '';
+          if (photo) parsed.photo = photo;
+        }
+        setUser(parsed);
       } catch {
         /* ignore */
       }
@@ -24,6 +30,7 @@ export function AuthProvider({ children }) {
     if (pin === (localStorage.getItem('gudangai_pin') || DEFAULT_PIN)) {
       const u = {
         name: localStorage.getItem('gudangai_username') || 'Rudi Virawan',
+        photo: localStorage.getItem('gudangai_photo') || '',
         role: 'owner',
         loginAt: new Date().toISOString(),
       };
@@ -39,12 +46,20 @@ export function AuthProvider({ children }) {
     localStorage.removeItem('gudangai_user');
   };
 
-  const updateProfile = ({ name }) => {
+  const updateProfile = ({ name, photo }) => {
     if (!user) return;
-    const updated = { ...user, name: name || user.name };
+    const updated = {
+      ...user,
+      name: name != null ? (name || user.name) : user.name,
+      photo: photo !== undefined ? photo : (user.photo || ''),
+    };
     setUser(updated);
     localStorage.setItem('gudangai_user', JSON.stringify(updated));
-    if (name) localStorage.setItem('gudangai_username', name);
+    if (name != null && name) localStorage.setItem('gudangai_username', name);
+    if (photo !== undefined) {
+      if (photo) localStorage.setItem('gudangai_photo', photo);
+      else localStorage.removeItem('gudangai_photo');
+    }
   };
 
   const changePin = (newPin) => {
