@@ -39,16 +39,19 @@ function Avatar({ name, size = 'md' }) {
   const [err, setErr] = useState(false);
   const dim = size === 'lg' ? 'w-14 h-14' : 'w-10 h-10';
   const text = size === 'lg' ? 'text-xl' : 'text-sm';
-  if (err) {
-    return (
-      <div className={`${dim} rounded-2xl bg-gradient-to-br from-[#0b2a55] to-[#164e8a] flex items-center justify-center text-white ${text} font-bold shadow-md`}>
-        {(name || 'R').charAt(0).toUpperCase()}
-      </div>
-    );
-  }
+  const letter = (
+    <div className={`${dim} rounded-2xl bg-gradient-to-br from-cyan-500 to-[#0b2a55] flex items-center justify-center text-white ${text} font-extrabold shadow-md ring-2 ring-white/40 shrink-0`}>
+      {(name || 'R').charAt(0).toUpperCase()}
+    </div>
+  );
+  if (err) return letter;
   return (
-    <img src={AVATAR_SRC} alt={name || 'Avatar'} onError={() => setErr(true)}
-      className={`${dim} rounded-2xl object-cover shadow-md`} />
+    <img
+      src={AVATAR_SRC}
+      alt={name || 'Avatar'}
+      onError={() => setErr(true)}
+      className={`${dim} rounded-2xl object-cover shadow-md ring-2 ring-white/40 shrink-0 bg-slate-200`}
+    />
   );
 }
 
@@ -135,14 +138,14 @@ export default function SettingsPage({ onNavigate }) {
     'Uji koneksi ke Apps Script';
 
   return (
-    <div className="space-y-4 pb-6 px-1">
-      <div className="flex items-center gap-3 px-1">
+    <div className="space-y-3 pb-6">
+      <div className="flex items-center gap-3 rounded-2xl bg-white/95 border border-slate-200 shadow-sm px-3.5 py-3">
         <Avatar name={user?.name || 'Rudi'} size="lg" />
         <div className="flex-1 min-w-0">
-          <p className="text-base font-bold text-slate-800 truncate">{user?.name || 'Rudi'}</p>
-          <p className="text-[11px] text-slate-400">PIN aktif · data lokal aman</p>
+          <p className="text-base font-extrabold text-slate-900 truncate">{user?.name || 'Rudi'}</p>
+          <p className="text-[11px] text-slate-600 font-medium">PIN aktif · data lokal aman</p>
         </div>
-        <span className="status-pill status-pill-neutral">Lokal</span>
+        <span className="status-pill status-pill-neutral shrink-0">Lokal</span>
       </div>
 
       <div className="space-y-2.5">
