@@ -126,9 +126,12 @@ function AppShell() {
   }
 
   return (
-    <div className="min-h-screen bg-[#06101f] text-slate-100">
+    <div className="min-h-screen text-slate-100 relative overflow-x-hidden">
+      {/* Latar foto + overlay — jangan solid hitam */}
+      <div className="app-bg" aria-hidden="true" />
+      <div className="app-shell relative z-10">
       <ConnBanner online={online} hasUrl={hasUrl} status={status} message={message} syncing={syncing} />
-      <main className="max-w-lg mx-auto min-h-screen pb-20">
+      <main className="max-w-lg mx-auto min-h-screen pb-24 px-3 overflow-x-hidden">
         <div key={pageKey} className="animate-page-in">
           <ErrorBoundary>
             <Suspense fallback={<div className="flex justify-center py-20"><Loader2 className="w-7 h-7 text-cyan-400 animate-spin" /></div>}>
@@ -168,6 +171,7 @@ function AppShell() {
         </div>
       </nav>
       <SpeedInsights />
+      </div>
     </div>
   );
 }
