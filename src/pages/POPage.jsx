@@ -121,7 +121,6 @@ function buildSheetTSV(items) {
     if (it.tglKedatangan) row.tglKedatangan = it.tglKedatangan;
   });
   const rows = Array.from(map.values()).filter((r) => r.poCV + r.poPT > 0);
-  // B=NO C=NAMA D=SIZE E=SATUAN F=PO CV G=PO PT H=TOTAL I=TGL (29-Sep-2026)
   return rows
     .map((r, idx) => {
       const total = r.poCV + r.poPT;
@@ -293,7 +292,7 @@ export default function POPage() {
     <div className="pb-28 animate-fade-in">
       <div className="flex items-start justify-between gap-2 mb-2">
         <div className="min-w-0">
-          <h2 className="text-lg font-extrabold text-white drop-shadow-sm">PO Generator</h2>
+          <h2 className="text-lg font-extrabold text-white drop-shadow-md">PO Generator</h2>
           <p className="text-xs text-slate-300 mt-0.5">
             2 jalur: <b className="text-white">PO CS</b> · <b className="text-white">PO Produksi</b>
           </p>
@@ -350,10 +349,10 @@ export default function POPage() {
         <div className="flex items-center gap-3 mb-3">
           <ShoppingCart className="w-6 h-6 text-white/90" />
           <div>
-            <p className="text-sm font-bold">
+            <p className="text-sm font-bold text-white">
               {tab === 'cs' ? 'Rekomendasi PO · Divisi CS' : 'Prioritas · Team Produksi'}
             </p>
-            <p className="text-[11px] text-white/70">
+            <p className="text-[11px] text-white/80">
               {tab === 'cs'
                 ? 'Stok kritis CS → generate ke purchase order'
                 : 'Item non-CS / non-rekanan yang harus diproses dulu'}
@@ -362,12 +361,12 @@ export default function POPage() {
         </div>
         <div className="flex gap-4">
           <div className="flex-1">
-            <p className="text-white/50 text-[10px] uppercase font-bold">Item Kritis</p>
-            <p className="text-2xl font-extrabold tabular-nums">{loading ? '…' : activeList.length}</p>
+            <p className="text-white/60 text-[10px] uppercase font-bold">Item Kritis</p>
+            <p className="text-2xl font-extrabold tabular-nums text-white">{loading ? '…' : activeList.length}</p>
           </div>
           <div className="flex-1">
-            <p className="text-white/50 text-[10px] uppercase font-bold">Total Kurang</p>
-            <p className="text-2xl font-extrabold tabular-nums">{loading ? '…' : totalKurang.toLocaleString('id-ID')}</p>
+            <p className="text-white/60 text-[10px] uppercase font-bold">Total Kurang</p>
+            <p className="text-2xl font-extrabold tabular-nums text-white">{loading ? '…' : totalKurang.toLocaleString('id-ID')}</p>
           </div>
         </div>
       </div>
