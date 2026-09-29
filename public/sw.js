@@ -1,30 +1,19 @@
-/**
- * GudangAI RUDY — Service Worker V6.8.9 (logo R-rocket ORIGINAL user file)
- * Strategi:
- * - API Google Apps Script: network-only (no-store)
- * - Navigasi + JS/CSS: network-first, fallback cache
- * - Aset statis (ikon, foto): cache-first
+/* GudangAI RUDY — Service Worker
  * - Version bump setiap rilis UI agar klien Android mendapat update
  */
-const CACHE_NAME = 'gudangai-v6.8.9-ui-priority';
-const STATIC_ASSETS = [
+const CACHE_NAME = 'gudangai-v6.9.0-layout-stock';
+const PRECACHE = [
   '/',
   '/index.html',
-  '/favicon.svg',
   '/manifest.json',
-  '/icons/icon-192x192.png',
-  '/icons/icon-512x512.png',
-  '/icons/icon-maskable-192x192.png',
-  '/icons/icon-maskable-512x512.png',
 ];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) =>
-      cache.addAll(STATIC_ASSETS).catch(() => undefined)
-    )
+      cache.addAll(PRECACHE).catch(() => undefined)
+    ).then(() => self.skipWaiting())
   );
-  self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
@@ -35,103 +24,40 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-function isApiRequest(url) {
-  return (
-    url.hostname.includes('script.google.com') ||
-    url.hostname.includes('googleusercontent.com') ||
-    url.pathname.includes('/exec') ||
-    url.searchParams.has('action')
-  );
-}
-
-function isStaticAsset(url) {
-  const p = url.pathname;
-  return (
-    p.endsWith('.svg') ||
-    p.endsWith('.png') ||
-    p.endsWith('.jpg') ||
-    p.endsWith('.jpeg') ||
-    p.endsWith('.webp') ||
-    p.endsWith('.woff2') ||
-    p.startsWith('/assets/') ||
-    p.startsWith('/icons/') ||
-    p === '/manifest.json' ||
-    p === '/favicon.svg'
-  );
-}
-
-function isAppShell(request, url) {
-  return (
-    request.mode === 'navigate' ||
-    url.pathname.endsWith('.js') ||
-    url.pathname.endsWith('.css') ||
-    url.pathname === '/' ||
-    url.pathname === '/index.html'
-  );
-}
-
 self.addEventListener('fetch', (event) => {
-  if (event.request.method !== 'GET') return;
-  const url = new URL(event.request.url);
-
-  if (isApiRequest(url)) {
+  const req = event.request;
+  if (req.method !== 'GET') return;
+  const url = new URL(req.url);
+  // Network-first for API / Apps Script
+  if (url.hostname.includes('google') || url.hostname.includes('script.google')) {
+    return;
+  }
+  // Navigation: network first, fallback cache
+  if (req.mode === 'navigate') {
     event.respondWith(
-      fetch(event.request, { cache: 'no-store' }).catch(
-        () =>
-          new Response(JSON.stringify({ success: false, error: 'Offline', offline: true }), {
-            status: 503,
-            headers: { 'Content-Type': 'application/json' },
-          })
-      )
+      fetch(req).then((res) => {
+        const copy = res.clone();
+        caches.open(CACHE_NAME).then((c) => c.put(req, copy));
+        return res;
+      }).catch(() => caches.match(req).then((r) => r || caches.match('/index.html')))
     );
     return;
   }
-
-  if (isStaticAsset(url)) {
-    event.respondWith(
-      caches.match(event.request).then(
-        (cached) =>
-          cached ||
-          fetch(event.request).then((res) => {
-            if (res && res.ok) {
-              const copy = res.clone();
-              caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
-            }
-            return res;
-          })
-      )
-    );
-    return;
-  }
-
-  if (isAppShell(event.request, url)) {
-    event.respondWith(
-      fetch(event.request)
-        .then((res) => {
-          if (res && res.ok) {
-            const copy = res.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
-          }
-          return res;
-        })
-        .catch(() =>
-          caches.match(event.request).then((c) => c || caches.match('/index.html'))
-        )
-    );
-    return;
-  }
-
+  // Assets: cache first
   event.respondWith(
-    caches.match(event.request).then(
-      (cached) =>
-        cached ||
-        fetch(event.request).then((res) => {
-          if (res && res.ok) {
-            const copy = res.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
-          }
-          return res;
-        })
-    )
+    caches.match(req).then((cached) => {
+      if (cached) return cached;
+      return fetch(req).then((res) => {
+        if (res.ok && (url.origin === self.location.origin)) {
+          const copy = res.clone();
+          caches.open(CACHE_NAME).then((c) => c.put(req, copy));
+        }
+        return res;
+      }).catch(() => cached);
+    })
   );
+});
+
+self.addEventListener('message', (event) => {
+  if (event.data === 'SKIP_WAITING') self.skipWaiting();
 });
