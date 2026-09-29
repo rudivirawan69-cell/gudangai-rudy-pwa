@@ -10,7 +10,8 @@ function levelOf(stok) {
 }
 
 function StockCard({ item }) {
-  const level = levelOf(Number(item.stok) || 0);
+  const qty = Number(item.stok ?? item.stockAkhir ?? item.sisa ?? 0) || 0;
+  const level = levelOf(qty);
   const border = {
     safe: 'border-l-emerald-500',
     warning: 'border-l-amber-400',
@@ -25,15 +26,16 @@ function StockCard({ item }) {
   }[level];
 
   return (
-    <div className={`rounded-2xl bg-white border border-slate-200 shadow-sm border-l-4 ${border} px-3 py-2.5 overflow-hidden`}>
-      <div className="flex items-start justify-between gap-2 min-w-0">
-        <div className="flex-1 min-w-0 overflow-hidden">
+    <div className={`rounded-2xl bg-white border border-slate-200 shadow-sm border-l-4 ${border} px-3 py-2.5`}>
+      <div className="flex items-center justify-between gap-3 min-w-0">
+        <div className="flex-1 min-w-0">
           <p className="text-[11px] text-slate-400 font-mono font-medium truncate">{item.kode}</p>
           <p className="text-[13px] font-bold text-slate-900 truncate leading-tight mt-0.5">{item.nama}</p>
-          <p className="text-[11px] text-slate-500 mt-1 font-medium truncate">{item.divisi} · {item.satuan}</p>
+          <p className="text-[11px] text-slate-500 mt-1 font-medium truncate">{item.divisi || '—'} · {item.satuan || 'Pack'}</p>
         </div>
-        <div className="text-right shrink-0 max-w-[40%]">
-          <p className={`text-xl font-extrabold tabular-nums leading-none ${numColor}`}>{item.stok}</p>
+        <div className="text-right shrink-0 pl-1">
+          <p className={`text-xl font-extrabold tabular-nums leading-none ${numColor}`}>{qty}</p>
+          <p className="text-[9px] text-slate-400 mt-0.5 font-medium">sisa</p>
         </div>
       </div>
     </div>
@@ -63,14 +65,14 @@ export default function StokPage() {
   const filtered = useMemo(() => {
     let list = (items || []).filter((it) => (it.entity || it.entitas || 'CV') === entity);
     if (divisi !== 'Semua') list = list.filter((it) => it.divisi === divisi);
-    if (search.trim()) {
-      const q = search.trim().toLowerCase();
+    const q = search.trim().toLowerCase();
+    if (q) {
       list = list.filter((it) => (it.kode || '').toLowerCase().includes(q) || (it.nama || '').toLowerCase().includes(q));
     }
-    if (filterStatus === 'aman') list = list.filter((it) => levelOf(Number(it.stok) || 0) === 'safe');
-    if (filterStatus === 'menipis') list = list.filter((it) => levelOf(Number(it.stok) || 0) === 'warning');
+    if (filterStatus === 'aman') list = list.filter((it) => levelOf(Number(it.stok ?? it.stockAkhir ?? 0) || 0) === 'safe');
+    if (filterStatus === 'menipis') list = list.filter((it) => levelOf(Number(it.stok ?? it.stockAkhir ?? 0) || 0) === 'warning');
     if (filterStatus === 'kritis') list = list.filter((it) => {
-      const l = levelOf(Number(it.stok) || 0);
+      const l = levelOf(Number(it.stok ?? it.stockAkhir ?? 0) || 0);
       return l === 'danger' || l === 'zero';
     });
     return list;
@@ -85,24 +87,20 @@ export default function StokPage() {
 
   return (
     <div className="pb-28 animate-fade-in space-y-3 overflow-x-hidden">
-      <div className="flex items-center justify-between px-1">
-        <h1 className="text-lg font-extrabold text-white drop-shadow-sm">Stok</h1>
-        <button type="button" onClick={() => {
-          const next = !dense;
-          setDense(next);
-          try { localStorage.setItem('gudangai_density', next ? 'compact' : 'comfortable'); } catch (_) {}
-        }} className="text-[10px] font-semibold px-2.5 py-1.5 rounded-lg bg-white border border-slate-200 text-slate-600 shadow-sm">
-          {dense ? 'Grid padat' : 'Grid longgar'}
-        </button>
+      <div className="flex items-center justify-between gap-2">
+        <h1 className="text-xl font-extrabold text-white drop-shadow-sm">Stok</h1>
       </div>
-      <div className={`grid grid-cols-2 ${dense ? 'gap-1.5' : 'gap-2.5'}`}>
+
+      <div className="flex rounded-2xl bg-white/95 p-1 shadow-sm border border-slate-200">
         {['CV', 'PT'].map((e) => (
           <button
             key={e}
             type="button"
             onClick={() => setEntity(e)}
-            className={`rounded-2xl py-3 text-sm font-bold border shadow-sm ${
-              entity === e ? 'bg-cyan-600 text-white border-cyan-600' : 'bg-white text-slate-700 border-slate-200'
+            className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all ${
+              entity === e
+                ? 'bg-cyan-600 text-white shadow'
+                : 'text-slate-500'
             }`}
           >
             {e}
@@ -110,18 +108,18 @@ export default function StokPage() {
         ))}
       </div>
 
-      <div className={`grid grid-cols-4 ${dense ? 'gap-1.5' : 'gap-2.5'}`}>
+      <div className="flex gap-1.5">
         {topStats.map((s) => (
           <button
             key={s.key}
             type="button"
             onClick={() => setFilterStatus(s.filter)}
-            className={`rounded-xl bg-white border ${s.border} px-2 py-2 text-center shadow-sm ${
+            className={`flex-1 min-w-0 rounded-xl bg-white border ${s.border} px-1.5 py-2 text-center shadow-sm ${
               filterStatus === s.filter ? 'ring-2 ring-cyan-400' : ''
             }`}
           >
-            <p className="text-[9px] font-bold text-slate-400 uppercase">{s.label}</p>
-            <p className={`text-lg font-extrabold tabular-nums ${s.color}`}>{s.value}</p>
+            <p className="text-[8px] font-bold text-slate-400 uppercase tracking-wide truncate">{s.label}</p>
+            <p className={`text-base font-extrabold tabular-nums leading-tight ${s.color}`}>{s.value}</p>
           </button>
         ))}
       </div>
