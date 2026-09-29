@@ -35,7 +35,7 @@ function MenuRow({ icon: Icon, iconBg, title, subtitle, onClick, right, danger }
   );
 }
 
-function Avatar({ name, size = 'md' }) {
+function Avatar({ name, photo, size = 'md' }) {
   const [err, setErr] = useState(false);
   const dim = size === 'lg' ? 'w-14 h-14' : 'w-10 h-10';
   const text = size === 'lg' ? 'text-xl' : 'text-sm';
@@ -44,10 +44,12 @@ function Avatar({ name, size = 'md' }) {
       {(name || 'R').charAt(0).toUpperCase()}
     </div>
   );
-  if (err) return letter;
+  const src = photo || AVATAR_SRC;
+  if (err || !src) return letter;
   return (
     <img
-      src={AVATAR_SRC}
+      key={src.slice(0, 40)}
+      src={src}
       alt={name || 'Avatar'}
       onError={() => setErr(true)}
       className={`${dim} rounded-2xl object-cover shadow-md ring-2 ring-white/40 shrink-0 bg-slate-200`}
@@ -63,6 +65,7 @@ export default function SettingsPage({ onNavigate }) {
   const [connMessage, setConnMessage] = useState('');
   const [username, setUsername] = useState(user?.name || '');
   const [profileMsg, setProfileMsg] = useState('');
+  const [photoPreview, setPhotoPreview] = useState('');
   const [newPin, setNewPin] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
   const [pinMsg, setPinMsg] = useState('');
@@ -112,9 +115,33 @@ export default function SettingsPage({ onNavigate }) {
     setConnMessage('URL & secret disimpan.');
   };
 
+  const handlePhotoPick = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 1.5 * 1024 * 1024) {
+      setProfileMsg('Foto max 1,5 MB.');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = String(reader.result || '');
+      setPhotoPreview(dataUrl);
+      setProfileMsg('Foto siap — tekan Simpan Profil.');
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleClearPhoto = () => {
+    setPhotoPreview('');
+    updateProfile?.({ photo: '' });
+    setProfileMsg('Foto dihapus.');
+  };
+
   const handleSaveProfile = () => {
-    updateProfile?.({ name: username.trim() || 'Rudi' });
-    setProfileMsg('Nama disimpan.');
+    const payload = { name: username.trim() || 'Rudi' };
+    if (photoPreview) payload.photo = photoPreview;
+    updateProfile?.(payload);
+    setProfileMsg('Profil disimpan.');
   };
 
   const handleChangePin = () => {
@@ -140,7 +167,7 @@ export default function SettingsPage({ onNavigate }) {
   return (
     <div className="space-y-3 pb-6">
       <div className="flex items-center gap-3 rounded-2xl bg-white/95 border border-slate-200 shadow-sm px-3.5 py-3">
-        <Avatar name={user?.name || 'Rudi'} size="lg" />
+        <Avatar name={user?.name || 'Rudi'} photo={user?.photo} size="lg" />
         <div className="flex-1 min-w-0">
           <p className="text-base font-extrabold text-slate-900 truncate">{user?.name || 'Rudi'}</p>
           <p className="text-[11px] text-slate-600 font-medium">PIN aktif · data lokal aman</p>
@@ -150,7 +177,7 @@ export default function SettingsPage({ onNavigate }) {
 
       <div className="space-y-2.5">
         <div className="card overflow-hidden">
-          <MenuRow icon={User} iconBg="bg-blue-50 text-blue-600" title="Profil Saya" subtitle="Nama tampilan di dashboard" onClick={() => setPanel(panel === 'profile' ? null : 'profile')} />
+          <MenuRow icon={User} iconBg="bg-blue-50 text-blue-600" title="Profil Saya" subtitle="Nama & foto tampilan" onClick={() => setPanel(panel === 'profile' ? null : 'profile')} />
         </div>
         <div className="card overflow-hidden">
           <MenuRow icon={Link2} iconBg="bg-cyan-50 text-cyan-700" title="Koneksi Google Sheets" subtitle={connSubtitle}
@@ -168,12 +195,21 @@ export default function SettingsPage({ onNavigate }) {
       {panel === 'profile' && (
         <div className="section-card p-4 space-y-3">
           <div className="flex items-center gap-3">
-            <Avatar name={username} size="lg" />
-            <p className="text-[11px] text-slate-500">Foto profil aktif</p>
+            <Avatar name={username} photo={photoPreview || user?.photo} size="lg" />
+            <div className="flex-1 min-w-0">
+              <p className="text-[11px] text-slate-500 mb-1.5">Foto profil (disimpan di perangkat)</p>
+              <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-cyan-50 text-cyan-700 text-xs font-semibold border border-cyan-200 cursor-pointer">
+                Pilih foto
+                <input type="file" accept="image/*" className="hidden" onChange={handlePhotoPick} />
+              </label>
+              {(photoPreview || user?.photo) && (
+                <button type="button" onClick={handleClearPhoto} className="ml-2 text-[11px] text-red-500 font-medium">Hapus</button>
+              )}
+            </div>
           </div>
           <p className="text-xs font-semibold text-slate-600">Nama tampilan</p>
           <input value={username} onChange={(e) => setUsername(e.target.value)} className="form-control px-3 py-2.5 text-sm" placeholder="Nama" />
-          <button type="button" onClick={handleSaveProfile} className="w-full py-2.5 rounded-xl bg-[#0b2a55] text-white text-sm font-semibold">Simpan Nama</button>
+          <button type="button" onClick={handleSaveProfile} className="w-full py-2.5 rounded-xl bg-[#0b2a55] text-white text-sm font-semibold">Simpan Profil</button>
           {profileMsg && <p className="text-xs text-emerald-600">{profileMsg}</p>}
         </div>
       )}
