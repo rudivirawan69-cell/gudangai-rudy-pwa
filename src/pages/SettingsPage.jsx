@@ -9,7 +9,7 @@ import {
   getPendingQueue, clearSyncedQueue,
 } from '../data/api';
 
-const AVATAR_SRC = '/icons/icon-192x192.png';
+const AVATAR_SRC = '/icons/icon-96x96.png';
 
 function formatConnLabel(data) {
   if (!data) return 'Terhubung';
