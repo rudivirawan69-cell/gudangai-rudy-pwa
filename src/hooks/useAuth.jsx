@@ -4,6 +4,9 @@ const AuthContext = createContext(null);
 
 const DEFAULT_PIN = '6969'; // Rudi can change later
 
+/** Foto profil default (Rudi) — data URL lokal */
+export const DEFAULT_PROFILE_PHOTO = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAYEBAUEBAYFBQUGBgYHCQ4JCQgJCQ8QDAwMDAwQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQH/2wBDAQcHBw0MDRgQEBgUEhIUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFP/wAARCACgAKADASIAAhEBAxEB/8QAHQAAAQQDAQEAAAAAAAAAAAAAAAECAwQFBgcICf/EAEAQAAIBAwMCBAMFBgQEBQUAAAECAwAEERIhBTFBBhMiUWEycYGRoQcjQrHB0RRSYvDxFSNDcpLhCDRi/8QAGgEAAgMBAQAAAAAAAAAAAAAAAQIAAwQFBv/EACkRAAICAQQBAwQDAQEAAAAAAAABAhEDBBIhMRNBURQiMmEFcYGRof/aAAwDAQACEQMRAD8A9/ooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooA//2Q==';
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -13,10 +16,9 @@ export function AuthProvider({ children }) {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        // restore photo from dedicated key if missing in user blob
         if (!parsed.photo) {
-          const photo = localStorage.getItem('gudangai_photo') || '';
-          if (photo) parsed.photo = photo;
+          const photo = localStorage.getItem('gudangai_photo') || DEFAULT_PROFILE_PHOTO;
+          parsed.photo = photo;
         }
         setUser(parsed);
       } catch {
@@ -30,7 +32,7 @@ export function AuthProvider({ children }) {
     if (pin === (localStorage.getItem('gudangai_pin') || DEFAULT_PIN)) {
       const u = {
         name: localStorage.getItem('gudangai_username') || 'Rudi Virawan',
-        photo: localStorage.getItem('gudangai_photo') || '',
+        photo: localStorage.getItem('gudangai_photo') || DEFAULT_PROFILE_PHOTO,
         role: 'owner',
         loginAt: new Date().toISOString(),
       };
@@ -51,7 +53,7 @@ export function AuthProvider({ children }) {
     const updated = {
       ...user,
       name: name != null ? (name || user.name) : user.name,
-      photo: photo !== undefined ? photo : (user.photo || ''),
+      photo: photo !== undefined ? photo : (user.photo || DEFAULT_PROFILE_PHOTO),
     };
     setUser(updated);
     localStorage.setItem('gudangai_user', JSON.stringify(updated));
