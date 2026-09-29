@@ -290,12 +290,12 @@ export default function POPage() {
   const totalKurang = activeList.reduce((s, i) => s + i.kurang, 0);
 
   return (
-    <div className="pb-28 animate-fade-in px-3">
-      <div className="flex items-start justify-between gap-2 mb-1">
-        <div>
-          <h2 className="text-lg font-extrabold text-slate-900">PO Generator</h2>
-          <p className="text-xs text-slate-500 mt-0.5">
-            2 jalur: <b>PO CS</b> · <b>PO Produksi</b>
+    <div className="pb-28 animate-fade-in">
+      <div className="flex items-start justify-between gap-2 mb-2">
+        <div className="min-w-0">
+          <h2 className="text-lg font-extrabold text-white drop-shadow-sm">PO Generator</h2>
+          <p className="text-xs text-slate-300 mt-0.5">
+            2 jalur: <b className="text-white">PO CS</b> · <b className="text-white">PO Produksi</b>
           </p>
         </div>
         <button
