@@ -1,12 +1,6 @@
-/* GudangAI RUDY — Service Worker
- * - Version bump setiap rilis UI agar klien Android mendapat update
- */
-const CACHE_NAME = 'gudangai-v6.9.2-install-icons';
-const PRECACHE = [
-  '/',
-  '/index.html',
-  '/manifest.json',
-];
+/* GudangAI RUDY — Service Worker */
+const CACHE_NAME = 'gudangai-v6.9.3-rocket-logo';
+const PRECACHE = ['/', '/index.html', '/manifest.json'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -28,9 +22,7 @@ self.addEventListener('fetch', (event) => {
   const req = event.request;
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
-  if (url.hostname.includes('google') || url.hostname.includes('script.google')) {
-    return;
-  }
+  if (url.hostname.includes('google') || url.hostname.includes('script.google')) return;
   if (req.mode === 'navigate') {
     event.respondWith(
       fetch(req).then((res) => {
