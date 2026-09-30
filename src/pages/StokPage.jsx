@@ -180,7 +180,7 @@ export default function StokPage() {
         ))}
       </div>
 
-      <p className="text-[12px] text-slate-300 font-medium px-0.5">
+      <p className="text-[12px] text-slate-600 font-medium px-0.5">
         {filtered.length} item · {entity}
         {filterStatus !== 'all' ? ` · filter ${filterStatus}` : ''}
       </p>
