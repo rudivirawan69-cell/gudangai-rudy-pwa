@@ -202,7 +202,7 @@ export default function SettingsPage({ onNavigate }) {
           </div>
           <p className="text-xs font-semibold text-slate-600">Nama tampilan</p>
           <input value={username} onChange={(e) => setUsername(e.target.value)} className="form-control px-3 py-2.5 text-sm" placeholder="Nama" />
-          <button type="button" onClick={handleSaveProfile} className="w-full py-2.5 rounded-xl bg-[#0b2a55] text-white text-sm font-semibold">Simpan Profil</button>
+          <button type="button" onClick={handleSaveProfile} className="w-full py-2.5 rounded-xl bg-cyan-700 text-white text-sm font-semibold">Simpan Profil</button>
           {profileMsg && <p className="text-xs text-emerald-600">{profileMsg}</p>}
         </div>
       )}
@@ -226,7 +226,7 @@ export default function SettingsPage({ onNavigate }) {
         <div className="section-card p-4 space-y-3">
           <input type="password" inputMode="numeric" value={newPin} onChange={(e) => setNewPin(e.target.value)} className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm" placeholder="PIN baru (4–6 digit)" />
           <input type="password" inputMode="numeric" value={confirmPin} onChange={(e) => setConfirmPin(e.target.value)} className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm" placeholder="Konfirmasi PIN" />
-          <button type="button" onClick={handleChangePin} className="w-full py-2.5 rounded-xl bg-[#0b2a55] text-white text-sm font-semibold">Ubah PIN</button>
+          <button type="button" onClick={handleChangePin} className="w-full py-2.5 rounded-xl bg-cyan-700 text-white text-sm font-semibold">Ubah PIN</button>
           {pinMsg && <p className="text-xs text-emerald-600">{pinMsg}</p>}
         </div>
       )}
