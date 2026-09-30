@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
-import { KeyRound, Snowflake, Eye, EyeOff } from 'lucide-react';
+import { Snowflake } from 'lucide-react';
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -31,59 +31,57 @@ export default function LoginPage() {
   };
 
   const dots = Array.from({ length: 4 }, (_, i) => (
-    <div key={i} className={`w-4 h-4 rounded-full transition-all duration-200 ${
-      i < pin.length
-        ? 'bg-cyan-400 scale-110 shadow-[0_0_12px_rgba(34,211,238,0.5)]'
-        : 'bg-white/20 border border-white/30'
-    }`} />
+    <div key={i} className={`w-3.5 h-3.5 rounded-full transition-all duration-200 ${i < pin.length
+      ? 'bg-cyan-300 scale-110 shadow-[0_0_12px_rgba(103,232,249,0.7)]'
+      : 'bg-white/25 border border-white/40'}`} />
   ));
 
   const keys = [1, 2, 3, 4, 5, 6, 7, 8, 9, null, 0, 'del'];
-
   return (
-    <div className="min-h-dvh bg-gradient-to-br from-[#0a1628] via-[#0b2a55] to-[#0f3a73] flex flex-col items-center justify-center px-6">
-      {/* Logo */}
-      <div className="mb-8 animate-fade-in">
-        <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-cyan-400 to-blue-500 flex items-center justify-center shadow-[0_0_40px_rgba(34,211,238,0.3)] mb-4 mx-auto">
-          <Snowflake className="w-10 h-10 text-white" />
-        </div>
-        <h1 className="text-white text-2xl font-bold tracking-tight text-center">GudangAI <span className="text-cyan-400 font-extrabold">RUDY</span></h1>
-        <p className="text-cyan-300/60 text-sm text-center mt-1">Cold Storage Control System</p>
-      </div>
+    <div className="min-h-dvh relative overflow-hidden bg-slate-950 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: "url('/assets/login-meeting.jpg')" }} />
+      <div className="absolute inset-0 bg-slate-950/55" />
+      <div className="absolute inset-0 bg-gradient-to-b from-slate-950/20 via-slate-950/35 to-slate-950/80" />
 
-      {/* PIN Display */}
-      <div className={`flex gap-4 mb-2 ${shake ? 'animate-[shake_0.5s_ease-in-out]' : ''}`}
-           style={shake ? { animation: 'shake 0.5s ease-in-out' } : {}}>
-        {dots}
-      </div>
+      <main className={`relative z-10 w-full max-w-sm ${shake ? 'animate-[shake_0.5s_ease-in-out]' : ''}`}>
+        <section className="rounded-[2rem] border border-white/20 bg-white/10 backdrop-blur-xl shadow-2xl px-6 py-7">
+          <div className="text-center mb-6">
+            <div className="mx-auto mb-3 w-14 h-14 rounded-2xl bg-gradient-to-br from-cyan-400 to-teal-600 flex items-center justify-center shadow-lg ring-1 ring-white/30">
+              <Snowflake className="w-7 h-7 text-white" />
+            </div>
+            <h1 className="text-white text-2xl font-extrabold tracking-tight">GudangAI <span className="text-cyan-300">RUDY</span></h1>
+            <p className="text-white/75 text-xs mt-1">Cold Storage Control System</p>
+          </div>
 
-      {/* Error */}
-      <div className="h-6 mb-4">
-        {error && <p className="text-red-400 text-sm animate-fade-in">{error}</p>}
-        {!error && <p className="text-white/40 text-sm">Masukkan PIN</p>}
-      </div>
+          <div className="flex justify-center gap-4 mb-2">
+            {dots}
+          </div>
 
-      {/* Keypad */}
-      <div className="grid grid-cols-3 gap-3 w-full max-w-[280px]">
-        {keys.map((k, i) => {
-          if (k === null) return <div key={i} />;
-          if (k === 'del') return (
-            <button key={i} onClick={handleDelete}
-              className="h-16 rounded-2xl bg-white/5 backdrop-blur-sm border border-white/10 text-white/70 text-sm font-medium active:bg-white/15 transition-all flex items-center justify-center">
-              ←
-            </button>
-          );
-          return (
-            <button key={i} onClick={() => handleDigit(String(k))}
-              className="h-16 rounded-2xl bg-white/10 backdrop-blur-sm border border-white/15 text-white text-xl font-semibold active:bg-cyan-500/30 active:border-cyan-400/50 active:scale-95 transition-all">
-              {k}
-            </button>
-          );
-        })}
-      </div>
+          <div className="h-6 mb-3 text-center">
+            {error ? <p className="text-rose-300 text-sm font-semibold">{error}</p> : <p className="text-white/65 text-xs">Masukkan PIN</p>}
+          </div>
 
-      {/* Footer */}
-      <p className="text-white/20 text-xs mt-10">Nasi Goreng 69 · Cold Storage</p>
+          <div className="grid grid-cols-3 gap-2.5">
+            {keys.map((k, i) => {
+              if (k === null) return <div key={i} />;
+              if (k === 'del') return (
+                <button key={i} type="button" onClick={handleDelete} aria-label="Hapus angka terakhir"
+                  className="h-14 rounded-2xl bg-white/10 border border-white/20 text-white/80 text-sm font-semibold backdrop-blur-md active:bg-white/20 active:scale-95 transition-all">
+                  ←
+                </button>
+              );
+              return (
+                <button key={i} type="button" onClick={() => handleDigit(String(k))}
+                  className="h-14 rounded-2xl bg-white/12 border border-white/20 text-white text-lg font-bold backdrop-blur-md active:bg-cyan-400/30 active:border-cyan-300/60 active:scale-95 transition-all">
+                  {k}
+                </button>
+              );
+            })}
+          </div>
+
+          <p className="text-white/55 text-[10px] text-center mt-6">Nasi Goreng 69 · Cold Storage</p>
+        </section>
+      </main>
 
       <style>{`
         @keyframes shake {
