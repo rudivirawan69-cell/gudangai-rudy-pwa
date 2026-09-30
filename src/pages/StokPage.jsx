@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Search, RefreshCw } from 'lucide-react';
+import { Search, RefreshCw, LayoutGrid } from 'lucide-react';
 import { useStock } from '../hooks/useStock';
 
 function levelOf(stok) {
@@ -27,16 +27,20 @@ function StockCard({ item }) {
   }[level];
 
   return (
-    <div className={`rounded-2xl bg-white border border-slate-200 shadow-sm border-l-4 ${border} px-3 py-3`}>
-      <div className="flex items-center gap-3">
+    <div className={`w-full rounded-2xl bg-white border border-slate-100 shadow-sm border-l-4 ${border} px-4 py-3 box-border`}>
+      <div className="flex items-center gap-3 min-w-0">
         <div className="flex-1 min-w-0">
           <p className="text-[11px] text-slate-400 font-mono font-medium truncate">{item.kode}</p>
-          <p className="text-[13px] font-bold text-slate-900 truncate leading-tight mt-0.5">{item.nama}</p>
-          <p className="text-[11px] text-slate-500 mt-1 font-medium truncate">{item.divisi || '—'} · {item.satuan || 'Pack'}</p>
+          <p className="text-[14px] font-bold text-slate-900 truncate leading-snug mt-0.5">{item.nama}</p>
+          <p className="text-[11px] text-slate-500 mt-1 font-medium truncate">
+            {item.divisi || '—'} · {item.satuan || 'Pack'}
+          </p>
         </div>
-        <div className="shrink-0 text-right w-16">
-          <p className={`text-xl font-extrabold tabular-nums leading-none ${numColor}`}>{qty.toLocaleString('id-ID')}</p>
-          <p className="text-[9px] text-slate-400 mt-0.5 font-semibold uppercase">sisa</p>
+        <div className="shrink-0 text-right min-w-[3.25rem]">
+          <p className={`text-xl font-extrabold tabular-nums leading-none ${numColor}`}>
+            {qty.toLocaleString('id-ID')}
+          </p>
+          <p className="text-[9px] text-slate-400 mt-1 font-semibold uppercase tracking-wide">sisa</p>
         </div>
       </div>
     </div>
@@ -49,9 +53,6 @@ export default function StokPage() {
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
   const [divisi, setDivisi] = useState('Semua');
-  const [dense, setDense] = useState(() => {
-    try { return localStorage.getItem('gudangai_density') === 'compact'; } catch { return false; }
-  });
 
   const entityItems = useMemo(
     () => (items || []).filter((it) => (it.entity || it.entitas || 'CV') === entity),
@@ -64,7 +65,6 @@ export default function StokPage() {
     return ['Semua', ...Array.from(set).sort()];
   }, [entityItems]);
 
-  // Stats dari item entity aktif (bukan seluruh CV+PT)
   const stats = useMemo(() => {
     let aman = 0, waspada = 0, kritis = 0, habis = 0;
     entityItems.forEach((it) => {
@@ -75,13 +75,7 @@ export default function StokPage() {
       else if (l === 'danger') kritis += 1;
       else habis += 1;
     });
-    return {
-      total: entityItems.length,
-      aman,
-      waspada,
-      kritis,
-      habis,
-    };
+    return { total: entityItems.length, aman, waspada, kritis: kritis + habis };
   }, [entityItems]);
 
   const filtered = useMemo(() => {
@@ -89,8 +83,10 @@ export default function StokPage() {
     if (divisi !== 'Semua') list = list.filter((it) => it.divisi === divisi);
     const q = search.trim().toLowerCase();
     if (q) {
-      list = list.filter((it) =>
-        (it.kode || '').toLowerCase().includes(q) || (it.nama || '').toLowerCase().includes(q)
+      list = list.filter(
+        (it) =>
+          (it.kode || '').toLowerCase().includes(q) ||
+          (it.nama || '').toLowerCase().includes(q)
       );
     }
     if (filterStatus === 'aman') list = list.filter((it) => levelOf(it.stok ?? it.stockAkhir) === 'safe');
@@ -105,39 +101,34 @@ export default function StokPage() {
   }, [entityItems, divisi, search, filterStatus]);
 
   const topStats = [
-    { key: 'total', label: 'TOTAL', value: stats.total, color: 'text-slate-900', border: 'border-slate-200', filter: 'all' },
-    { key: 'aman', label: 'AMAN', value: stats.aman, color: 'text-emerald-600', border: 'border-emerald-200', filter: 'aman' },
-    { key: 'menipis', label: 'MENIPIS', value: stats.waspada, color: 'text-amber-600', border: 'border-amber-200', filter: 'menipis' },
-    { key: 'kritis', label: 'KRITIS', value: stats.kritis + stats.habis, color: 'text-red-600', border: 'border-red-200', filter: 'kritis' },
+    { key: 'total', label: 'TOTAL', value: stats.total, color: 'text-slate-900', sub: 'item', filter: 'all', ring: 'ring-slate-300' },
+    { key: 'kritis', label: 'KRITIS', value: stats.kritis, color: 'text-red-600', sub: 'item', filter: 'kritis', ring: 'ring-red-300' },
+    { key: 'menipis', label: 'MENIPIS', value: stats.waspada, color: 'text-amber-600', sub: 'item', filter: 'menipis', ring: 'ring-amber-300' },
+    { key: 'aman', label: 'AMAN', value: stats.aman, color: 'text-emerald-600', sub: 'item', filter: 'aman', ring: 'ring-emerald-300' },
   ];
 
   return (
-    <div className="pb-28 animate-fade-in space-y-3.5 overflow-x-hidden">
-      {/* Header */}
-      <div className="flex items-center justify-between gap-2 pt-1">
+    <div className="w-full max-w-full box-border space-y-3 pb-28 animate-fade-in overflow-x-hidden">
+      <div className="flex items-center justify-between gap-2">
         <h1 className="text-xl font-extrabold text-white drop-shadow-sm">Stok</h1>
         <button
           type="button"
-          onClick={() => {
-            const next = !dense;
-            setDense(next);
-            try { localStorage.setItem('gudangai_density', next ? 'compact' : 'comfortable'); } catch (_) {}
-          }}
-          className="text-[10px] font-bold px-2.5 py-1.5 rounded-lg bg-white border border-slate-200 text-slate-600 shadow-sm shrink-0"
+          onClick={() => refresh?.({ force: true })}
+          className="w-10 h-10 rounded-xl bg-white/95 border border-slate-200 shadow-sm flex items-center justify-center"
+          aria-label="Refresh"
         >
-          {dense ? 'Grid padat' : 'Grid longgar'}
+          <RefreshCw className={`w-4 h-4 text-slate-600 ${loading ? 'animate-spin' : ''}`} />
         </button>
       </div>
 
-      {/* CV / PT */}
-      <div className="flex rounded-2xl bg-white p-1 shadow-sm border border-slate-200">
+      <div className="w-full rounded-2xl bg-white border border-slate-100 shadow-sm p-1.5 flex gap-1">
         {['CV', 'PT'].map((e) => (
           <button
             key={e}
             type="button"
             onClick={() => { setEntity(e); setDivisi('Semua'); setFilterStatus('all'); }}
             className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all ${
-              entity === e ? 'bg-cyan-600 text-white shadow' : 'text-slate-500'
+              entity === e ? 'bg-cyan-600 text-white shadow-sm' : 'text-slate-500'
             }`}
           >
             {e}
@@ -145,77 +136,75 @@ export default function StokPage() {
         ))}
       </div>
 
-      {/* Stats 4 kolom sejajar — grid agar tidak terpotong */}
-      <div className="grid grid-cols-4 gap-1.5">
+      <div className="grid grid-cols-2 gap-2.5 w-full">
         {topStats.map((s) => (
           <button
             key={s.key}
             type="button"
             onClick={() => setFilterStatus(s.filter)}
-            className={`rounded-xl bg-white border ${s.border} px-1 py-2.5 text-center shadow-sm min-w-0 ${
-              filterStatus === s.filter ? 'ring-2 ring-cyan-400' : ''
+            className={`rounded-2xl bg-white border border-slate-100 shadow-sm px-3 py-3 text-left transition ${
+              filterStatus === s.filter ? `ring-2 ${s.ring}` : ''
             }`}
           >
-            <p className="text-[8px] font-bold text-slate-400 uppercase tracking-wide truncate">{s.label}</p>
-            <p className={`text-[15px] font-extrabold tabular-nums leading-tight mt-0.5 ${s.color}`}>{s.value}</p>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">{s.label}</p>
+            <p className={`text-2xl font-extrabold tabular-nums leading-none mt-1 ${s.color}`}>{s.value}</p>
+            <p className="text-[11px] text-slate-400 mt-1 font-medium">{s.sub}</p>
           </button>
         ))}
       </div>
 
-      {/* Search */}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+      <div className="relative w-full">
+        <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Cari kode / nama…"
-          className="w-full pl-10 pr-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm text-slate-900 shadow-sm"
+          className="w-full pl-10 pr-3 py-3 rounded-2xl border border-slate-100 bg-white text-sm text-slate-900 shadow-sm font-medium placeholder:text-slate-400"
         />
       </div>
 
-      {/* Divisi chips */}
-      <div className="flex gap-1.5 overflow-x-auto pb-0.5 -mx-0.5 px-0.5">
+      <div className="flex gap-2 overflow-x-auto pb-0.5 w-full">
         {divisions.map((d) => (
           <button
             key={d}
             type="button"
             onClick={() => setDivisi(d)}
-            className={`chip-btn shrink-0 ${divisi === d ? 'is-active' : ''}`}
+            className={`shrink-0 px-3.5 py-1.5 rounded-full text-[12px] font-semibold border transition ${
+              divisi === d
+                ? 'bg-cyan-600 text-white border-cyan-600 shadow-sm'
+                : 'bg-white text-slate-600 border-slate-200'
+            }`}
           >
             {d}
           </button>
         ))}
       </div>
 
-      {/* Count + refresh */}
-      <div className="flex items-center justify-between">
-        <p className="text-[11px] text-slate-300 font-medium">{filtered.length} item · {entity}</p>
-        <button
-          type="button"
-          onClick={() => refresh?.({ force: true })}
-          className="p-2 rounded-full bg-white border border-slate-200 shadow-sm"
-          aria-label="Refresh"
-        >
-          <RefreshCw className={`w-4 h-4 text-slate-600 ${loading ? 'animate-spin' : ''}`} />
-        </button>
-      </div>
+      <p className="text-[12px] text-slate-300 font-medium px-0.5">
+        {filtered.length} item · {entity}
+        {filterStatus !== 'all' ? ` · filter ${filterStatus}` : ''}
+      </p>
 
       {error && (
-        <div className="rounded-xl bg-red-50 border border-red-200 px-3 py-2 text-xs text-red-700">{error}</div>
+        <div className="rounded-2xl bg-red-50 border border-red-200 px-3 py-2.5 text-xs text-red-700">{error}</div>
       )}
 
-      {/* List */}
-      <div className={dense ? 'space-y-1.5' : 'space-y-2.5'}>
+      <div className="space-y-2.5 w-full">
         {loading && !filtered.length && (
           <div className="space-y-2">
-            {[1, 2, 3, 4].map((i) => <div key={i} className="h-16 skeleton" />)}
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="h-[4.5rem] rounded-2xl skeleton" />
+            ))}
           </div>
         )}
         {filtered.map((item) => (
           <StockCard key={(item.kode || '') + (item.entity || '')} item={item} />
         ))}
         {!loading && !filtered.length && (
-          <p className="text-center text-sm text-slate-400 py-10">Tidak ada item</p>
+          <div className="rounded-2xl bg-white border border-slate-100 shadow-sm py-12 text-center">
+            <LayoutGrid className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+            <p className="text-sm text-slate-400 font-medium">Tidak ada item</p>
+          </div>
         )}
       </div>
     </div>
