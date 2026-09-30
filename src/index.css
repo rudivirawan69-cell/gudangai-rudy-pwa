@@ -536,10 +536,10 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 }
 button{min-height:40px}
 
-/* Preserve page-specific dark/alert components while preventing accidental low contrast. */
-.app-content .text-slate-300{color:#64748b!important}
-.app-content .text-slate-400{color:#64748b!important}
-.app-content .text-slate-500{color:#475569!important}
+/* Contrast policy: muted text is darkened only inside light surfaces; dark hero/media components keep their own contrast. */
+.section-card .text-slate-300,.section-card-header .text-slate-300,.menu-group .text-slate-300,.card .text-slate-300,.surface .text-slate-300,.stat-tile .text-slate-300{color:#64748b!important}
+.section-card .text-slate-400,.section-card-header .text-slate-400,.menu-group .text-slate-400,.card .text-slate-400,.surface .text-slate-400,.stat-tile .text-slate-400{color:#64748b!important}
+.section-card .text-slate-500,.section-card-header .text-slate-500,.menu-group .text-slate-500,.card .text-slate-500,.surface .text-slate-500,.stat-tile .text-slate-500{color:#475569!important}
 
 /* Small screens */
 @media(max-width:380px){
@@ -557,3 +557,44 @@ button{min-height:40px}
 @media(min-width:600px){
   .app-header-inner,.conn-strip,.more-sheet{max-width:32rem}
 }
+
+
+/* GUDANGAI RUDY — unified visual audit v7.1
+   Scope: presentation only. No data, API, stock source, queue or transaction behavior is changed. */
+:root{
+  --brand-teal:#0f9f9a;
+  --brand-cyan:#06b6d4;
+  --brand-orange:#f59e0b;
+  --ink:#0f172a;
+  --muted:#475569;
+  --soft:#f8fafc;
+}
+.app-content{color:var(--ink);}
+.app-content h1,.app-content h2,.app-content h3,.app-content h4{color:var(--ink);}
+.app-content .metric-value,.app-content .tabular-nums{font-variant-numeric:tabular-nums;}
+.dashboard-panel{overflow:hidden;}
+.dashboard-total-card{
+  min-height:92px;
+  padding:14px;
+  border-radius:1rem;
+  background:linear-gradient(145deg,#ffffff,#f8fafc);
+  border:1px solid;
+  box-shadow:var(--shadow-sm);
+}
+.dashboard-total-card p{margin:0;}
+.dashboard-chart-wrap{width:100%;}
+.dashboard-chart-wrap [title]{cursor:default;}
+/* Keep interactive controls visually consistent across all functional pages. */
+.app-content button:focus-visible,.app-content a:focus-visible,.app-content input:focus-visible,.app-content select:focus-visible,.app-content textarea:focus-visible{
+  outline:2px solid rgba(6,182,212,.55);
+  outline-offset:2px;
+}
+.app-content input,.app-content select,.app-content textarea{
+  color:#0f172a;
+}
+.app-content input::placeholder,.app-content textarea::placeholder{color:#94a3b8;}
+/* Legacy navy CTAs converge on the same teal brand family. */
+.app-content .bg-\[\#0b2a55\]{background-color:#0e7490!important;}
+.app-content .from-\[\#0b2a55\]{--tw-gradient-from:#0e7490 var(--tw-gradient-from-position);--tw-gradient-to:rgb(14 116 144 / 0) var(--tw-gradient-to-position);}
+.app-content .to-\[\#0b2a55\]{--tw-gradient-to:#0f766e var(--tw-gradient-to-position);}
+/* Stock list supporting copy sits on the light surface, never the photo background. */
