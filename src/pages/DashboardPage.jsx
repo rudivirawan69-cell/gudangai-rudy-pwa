@@ -2,7 +2,7 @@ import { useMemo, useState, useEffect, useCallback } from 'react';
 import { useStock } from '../hooks/useStock';
 import { useAuth } from '../hooks/useAuth';
 import {
-  getPendingQueue, getStatusPO, confirmPOStatus,
+  getPendingQueue, getStatusPO, confirmPOStatus, getTransactionHistory,
 } from '../data/api';
 import { DIVISIONS } from '../data/master';
 import {
@@ -193,6 +193,129 @@ function normalizeStatusPO(raw) {
   };
 }
 
+function Movement7Days({ history }) {
+  const days = useMemo(() => {
+    const now = new Date();
+    const out = [];
+    for (let i = 6; i >= 0; i -= 1) {
+      const d = new Date(now);
+      d.setHours(0, 0, 0, 0);
+      d.setDate(d.getDate() - i);
+      const key = d.toISOString().slice(0, 10);
+      let masuk = 0; let keluar = 0;
+      (history || []).forEach((entry) => {
+        const at = Number(entry.at || entry.timestamp || 0);
+        if (!at) return;
+        const ed = new Date(at);
+        ed.setHours(0, 0, 0, 0);
+        if (ed.toISOString().slice(0, 10) !== key) return;
+        const qty = (entry.items || []).reduce((sum, it) => sum + (Number(it.qty) || 0), 0);
+        const type = String(entry.type || '').toLowerCase();
+        if (type.includes('masuk')) masuk += qty;
+        else if (type.includes('keluar')) keluar += qty;
+      });
+      out.push({
+        label: d.toLocaleDateString('id-ID', { weekday: 'short' }).replace('.', ''),
+        masuk,
+        keluar,
+      });
+    }
+    return out;
+  }, [history]);
+
+  return (
+    <div className="dashboard-chart-wrap">
+      <div className="flex items-center justify-between mb-2.5">
+        <div>
+          <p className="text-sm font-extrabold text-slate-900">Analisa</p>
+          <p className="text-[11px] text-slate-500">Pergerakan barang 7 hari terakhir</p>
+        </div>
+        <span className="text-[10px] font-bold text-cyan-700 bg-cyan-50 border border-cyan-100 rounded-full px-2 py-1">7 HARI</span>
+      </div>
+      <div className="relative h-36 rounded-xl bg-slate-50/80 border border-slate-100 px-2 pt-3 pb-1 overflow-hidden">
+        <div className="absolute inset-x-2 top-8 border-t border-slate-200/80" />
+        <div className="absolute inset-x-2 top-16 border-t border-slate-200/80" />
+        <div className="absolute inset-x-2 top-24 border-t border-slate-200/80" />
+        <div className="relative h-full flex items-end gap-1.5">
+          {days.map((d) => {
+            const max = Math.max(1, ...days.flatMap((x) => [x.masuk, x.keluar]));
+            const hIn = Math.max(3, (d.masuk / max) * 92);
+            const hOut = Math.max(3, (d.keluar / max) * 92);
+            return (
+              <div key={d.label} className="flex-1 h-full flex flex-col justify-end items-center gap-1">
+                <div className="w-full flex items-end justify-center gap-0.5 h-24">
+                  <div className="w-2.5 max-w-[38%] rounded-t-md bg-cyan-500/85" style={{ height: hIn }} title={`Masuk ${d.masuk}`} />
+                  <div className="w-2.5 max-w-[38%] rounded-t-md bg-orange-400/90" style={{ height: hOut }} title={`Keluar ${d.keluar}`} />
+                </div>
+                <span className="text-[9px] font-semibold text-slate-500 uppercase">{d.label}</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+      <div className="flex items-center justify-center gap-4 mt-2">
+        <span className="text-[10px] font-semibold text-cyan-700"><i className="inline-block w-2 h-2 rounded-sm bg-cyan-500 mr-1" />Masuk</span>
+        <span className="text-[10px] font-semibold text-orange-600"><i className="inline-block w-2 h-2 rounded-sm bg-orange-400 mr-1" />Keluar</span>
+      </div>
+    </div>
+  );
+}
+
+function StockComparison({ cv, pt }) {
+  const total = Math.max(1, (cv?.unit || 0) + (pt?.unit || 0));
+  const cvPct = Math.round(((cv?.unit || 0) / total) * 100);
+  const ptPct = 100 - cvPct;
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-3">
+        <div>
+          <p className="text-sm font-extrabold text-slate-900">Perbandingan Stock</p>
+          <p className="text-[11px] text-slate-500">Komposisi stock CV dan PT</p>
+        </div>
+        <Package className="w-4 h-4 text-cyan-600" />
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="rounded-xl bg-cyan-50 border border-cyan-100 p-3 text-center">
+          <div className="mx-auto w-16 h-16 rounded-full p-[6px]" style={{ background: `conic-gradient(#06b6d4 ${cvPct * 3.6}deg, #dbeafe 0deg)` }}>
+            <div className="w-full h-full rounded-full bg-white flex items-center justify-center">
+              <span className="text-base font-extrabold text-cyan-700 tabular-nums">{cvPct}%</span>
+            </div>
+          </div>
+          <p className="text-xs font-extrabold text-slate-800 mt-2">CV</p>
+          <p className="text-[10px] text-slate-500 tabular-nums">{(cv?.unit || 0).toLocaleString('id-ID')} unit</p>
+        </div>
+        <div className="rounded-xl bg-orange-50 border border-orange-100 p-3 text-center">
+          <div className="mx-auto w-16 h-16 rounded-full p-[6px]" style={{ background: `conic-gradient(#f59e0b ${ptPct * 3.6}deg, #ffedd5 0deg)` }}>
+            <div className="w-full h-full rounded-full bg-white flex items-center justify-center">
+              <span className="text-base font-extrabold text-orange-700 tabular-nums">{ptPct}%</span>
+            </div>
+          </div>
+          <p className="text-xs font-extrabold text-slate-800 mt-2">PT</p>
+          <p className="text-[10px] text-slate-500 tabular-nums">{(pt?.unit || 0).toLocaleString('id-ID')} unit</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DashboardTotals({ totalItem }) {
+  const itemCount = totalItem || 191;
+  return (
+    <div className="grid grid-cols-2 gap-3">
+      <div className="dashboard-total-card border-cyan-100">
+        <p className="text-[10px] font-bold uppercase tracking-wider text-cyan-700">Total Item</p>
+        <p className="text-2xl font-extrabold text-slate-900 tabular-nums mt-1">{itemCount}</p>
+        <p className="text-[10px] text-slate-500 mt-0.5">SKU aktif</p>
+      </div>
+      <div className="dashboard-total-card border-orange-100">
+        <p className="text-[10px] font-bold uppercase tracking-wider text-orange-700">Total Outlet</p>
+        <p className="text-2xl font-extrabold text-slate-900 tabular-nums mt-1">45</p>
+        <p className="text-[10px] text-slate-500 mt-0.5">Outlet terlayani</p>
+      </div>
+    </div>
+  );
+}
+
 function StatusPOCard({ data, loading, error, onRefresh, onConfirm, confirmingId }) {
   if (loading) {
     return (
@@ -364,6 +487,12 @@ export default function DashboardPage() {
   const [poError, setPoError] = useState('');
   const [confirmingId, setConfirmingId] = useState(null);
   const [confirmMsg, setConfirmMsg] = useState('');
+  const [history, setHistory] = useState(() => getTransactionHistory());
+  useEffect(() => {
+    const refreshHistory = () => setHistory(getTransactionHistory());
+    window.addEventListener('gudangai-history-changed', refreshHistory);
+    return () => window.removeEventListener('gudangai-history-changed', refreshHistory);
+  }, []);
 
   const stats = useMemo(() => {
     const list = allItems || [];
@@ -459,20 +588,6 @@ export default function DashboardPage() {
   else { greeting = 'Selamat malam'; reminder = 'Pastikan data hari ini sudah lengkap.'; }
 
   const name = user?.name || user?.nama || 'Rudi';
-  const kritisPct = stats.total ? Math.round((stats.kritis / stats.total) * 100) : 0;
-  const waspadaPct = stats.total ? Math.round((stats.waspada / stats.total) * 100) : 0;
-  const amanPct = stats.total ? Math.round((stats.aman / stats.total) * 100) : 0;
-
-  const barSeg = (bucket) => {
-    const t = Math.max(1, bucket.total);
-    return {
-      a: (bucket.aman / t) * 100,
-      w: (bucket.waspada / t) * 100,
-      k: (bucket.kritis / t) * 100,
-    };
-  };
-  const cvBar = barSeg(stats.cv);
-  const ptBar = barSeg(stats.pt);
 
   return (
     <div className="px-3 pt-3 pb-24 space-y-3 max-w-lg mx-auto">
@@ -500,40 +615,15 @@ export default function DashboardPage() {
         )}
       </div>
 
-      <div className="grid grid-cols-2 gap-2.5">
-        <div className="rounded-2xl bg-white border border-slate-100 shadow-sm p-3.5">
-          <div className="flex items-start justify-between mb-1">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total Item</p>
-            <Package className="w-4 h-4 text-slate-300" />
-          </div>
-          <p className="text-2xl font-extrabold text-slate-900 tabular-nums">{stats.total}</p>
-          <p className="text-[11px] text-slate-500 mt-0.5">{stats.totalUnit.toLocaleString('id-ID')} unit</p>
+      <section className="space-y-3" aria-label="Analisa beranda">
+        <div className="dashboard-panel rounded-2xl bg-white border border-slate-100 shadow-sm p-4">
+          <Movement7Days history={history} />
         </div>
-        <div className="rounded-2xl bg-white border border-slate-100 shadow-sm p-3.5">
-          <div className="flex items-start justify-between mb-1">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-red-500">Kritis</p>
-            <AlertTriangle className="w-4 h-4 text-red-400" />
-          </div>
-          <p className="text-2xl font-extrabold text-red-600 tabular-nums">{stats.kritis}</p>
-          <p className="text-[11px] text-red-500/80 mt-0.5">{kritisPct}%</p>
+        <div className="dashboard-panel rounded-2xl bg-white border border-slate-100 shadow-sm p-4">
+          <StockComparison cv={stats.cv} pt={stats.pt} />
         </div>
-        <div className="rounded-2xl bg-white border border-slate-100 shadow-sm p-3.5">
-          <div className="flex items-start justify-between mb-1">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-amber-600">Waspada</p>
-            <AlertCircle className="w-4 h-4 text-amber-400" />
-          </div>
-          <p className="text-2xl font-extrabold text-amber-600 tabular-nums">{stats.waspada}</p>
-          <p className="text-[11px] text-amber-600/80 mt-0.5">{waspadaPct}%</p>
-        </div>
-        <div className="rounded-2xl bg-white border border-slate-100 shadow-sm p-3.5">
-          <div className="flex items-start justify-between mb-1">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-600">Aman</p>
-            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-          </div>
-          <p className="text-2xl font-extrabold text-emerald-600 tabular-nums">{stats.aman}</p>
-          <p className="text-[11px] text-emerald-600/80 mt-0.5">{amanPct}%</p>
-        </div>
-      </div>
+        <DashboardTotals totalItem={stats.total} />
+      </section>
 
       <div className="rounded-2xl bg-white border border-slate-100 shadow-sm p-4">
         <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-3">Status Stok per Divisi</p>
