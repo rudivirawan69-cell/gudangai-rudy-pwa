@@ -278,9 +278,12 @@ async function submitBatchChunk(action, entity, chunkItems, tanggal) {
   _batchSupported = true;
   const batchResults = [];
   if (data && Array.isArray(data.results)) {
+    const cidByTx = new Map(toSend.map((it) => [it.transactionId, it.clientItemId]));
     for (const r of data.results) {
-      if (r.success && r.clientItemId) markApplied(r.clientItemId);
-      batchResults.push(r);
+      const clientItemId = r.clientItemId || cidByTx.get(r.transactionId);
+      const normalized = clientItemId ? { ...r, clientItemId } : r;
+      if (normalized.success && normalized.clientItemId) markApplied(normalized.clientItemId);
+      batchResults.push(normalized);
     }
   }
   return { success: (data && data.success) || false, successCount: (data && data.successCount) || batchResults.filter((r) => r.success).length, failCount: (data && data.failCount) || batchResults.filter((r) => !r.success).length, results: [...skipped, ...batchResults] };
