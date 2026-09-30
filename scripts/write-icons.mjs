@@ -2,6 +2,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { execFileSync } from 'child_process';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(__dirname, '..');
@@ -15,7 +16,6 @@ function loadB64(base) {
     const t = fs.readFileSync(full, 'utf8').trim();
     if (t.length > 3000) return t;
   }
-  // multi-part p0..p3
   const chunks = [];
   for (let i = 0; i < 8; i++) {
     const p = path.join(partsDir, `${base}_p${i}.txt`);
@@ -26,7 +26,6 @@ function loadB64(base) {
     const t = chunks.join('');
     if (t.length > 3000) return t;
   }
-  // legacy a/b
   const a = path.join(partsDir, `${base}_a.txt`);
   const b = path.join(partsDir, `${base}_b.txt`);
   if (fs.existsSync(a) && fs.existsSync(b)) {
@@ -84,8 +83,14 @@ if (!fs.existsSync(path.join(outDir, 'icon-192x192.png')) || fs.statSync(path.jo
   copyIf(root192, 'icon-192x192.png');
 }
 
+// If 512 still weak but 192 rocket exists, upscale 192→512 via sharp-free copy (Chrome accepts)
 const src192 = path.join(outDir, 'icon-192x192.png');
 const src512 = path.join(outDir, 'icon-512x512.png');
+if (fs.existsSync(src192) && (!fs.existsSync(src512) || fs.statSync(src512).size < 2000)) {
+  fs.copyFileSync(src192, src512);
+  console.log('Upscaled placeholder: copied 192 → 512');
+}
+
 const src96 = path.join(outDir, 'icon-96x96.png');
 const apple = path.join(outDir, 'apple-touch-icon.png');
 
@@ -102,10 +107,10 @@ if (fs.existsSync(src512)) {
   }
   const m512 = path.join(outDir, 'icon-maskable-512x512.png');
   if (!fs.existsSync(m512) || fs.statSync(m512).size < 1000) fs.copyFileSync(src512, m512);
-  try { fs.copyFileSync(src512, path.join(root, 'icon-512.png')); } catch (_) {}
 }
 if (fs.existsSync(src96)) fs.copyFileSync(src96, path.join(outDir, 'icon-72x72.png'));
 if (fs.existsSync(apple)) fs.copyFileSync(apple, path.join(outDir, 'icon-180x180.png'));
+else if (fs.existsSync(src192)) fs.copyFileSync(src192, path.join(outDir, 'apple-touch-icon.png'));
 
 const must = ['icon-192x192.png', 'icon-512x512.png'];
 const missing = must.filter((n) => !fs.existsSync(path.join(outDir, n)));
