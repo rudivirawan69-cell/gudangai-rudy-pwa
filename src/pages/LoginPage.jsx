@@ -1,12 +1,10 @@
 import { useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
-import { Snowflake } from 'lucide-react';
 
 export default function LoginPage() {
   const { login } = useAuth();
   const [pin, setPin] = useState('');
   const [error, setError] = useState('');
-  const [showPin, setShowPin] = useState(false);
   const [shake, setShake] = useState(false);
 
   const handleDigit = (d) => {
@@ -46,8 +44,8 @@ export default function LoginPage() {
       <main className={`relative z-10 w-full max-w-sm ${shake ? 'animate-[shake_0.5s_ease-in-out]' : ''}`}>
         <section className="rounded-[2rem] border border-white/20 bg-white/10 backdrop-blur-xl shadow-2xl px-6 py-7">
           <div className="text-center mb-6">
-            <div className="mx-auto mb-3 w-14 h-14 rounded-2xl bg-gradient-to-br from-cyan-400 to-teal-600 flex items-center justify-center shadow-lg ring-1 ring-white/30">
-              <Snowflake className="w-7 h-7 text-white" />
+            <div className="mx-auto mb-3 w-16 h-16 rounded-2xl bg-white flex items-center justify-center shadow-lg ring-1 ring-white/30 overflow-hidden p-1">
+              <img src="/icons/icon-192x192.png" alt="GudangAI RUDY" className="w-full h-full object-contain" />
             </div>
             <h1 className="text-white text-2xl font-extrabold tracking-tight">GudangAI <span className="text-cyan-300">RUDY</span></h1>
             <p className="text-white/75 text-xs mt-1">Cold Storage Control System</p>
