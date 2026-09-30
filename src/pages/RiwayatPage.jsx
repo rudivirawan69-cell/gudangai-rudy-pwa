@@ -85,7 +85,7 @@ export default function RiwayatPage({ onNavigate }) {
       <div className="flex items-start justify-between gap-2">
         <div>
           <p className="text-[10px] font-bold uppercase tracking-wider text-cyan-600">Riwayat</p>
-          <h1 className="text-xl font-extrabold text-white drop-shadow-sm">Transaksi</h1>
+          <h1 className="text-xl font-extrabold text-slate-900">Transaksi</h1>
           <p className="text-[11px] text-slate-400 mt-0.5">
             {history.length} transaksi · lokal perangkat
           </p>
