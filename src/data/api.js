@@ -1,10 +1,10 @@
-/** GudangAI RUDY — API layer V6.7.1 STOCK-SOURCE-LOCK (BATCH=12) + tanggal YYYY-MM-DD */
+/** GudangAI RUDY — API layer V6.7.1 STOCK-SOURCE-LOCK (BATCH=20) + tanggal YYYY-MM-DD */
 const RETRY_COUNT = 2;
 const RETRY_BASE_MS = 400;
 const REQUEST_TIMEOUT_MS = 15000;
 /** Chunk kecil agar Apps Script + spreadsheet selesai < timeout (anti-antrian). */
-const BATCH_CHUNK_SIZE = 12;
-const BATCH_TIMEOUT_MS = 90000;
+const BATCH_CHUNK_SIZE = 20;
+const BATCH_TIMEOUT_MS = 120000;
 const SINGLE_TIMEOUT_MS = 60000;
 const SCHEMA_VERSION = '1.0';
 const SAFE_WRITE_BACKEND_RE = /(?:^|[^0-9])6\.7\.1\+STOCK[-_]?SOURCE[-_]?LOCK(?:$|[^A-Z0-9])|STOCK-SOURCE-LOCKED/i;
@@ -152,7 +152,6 @@ async function assertSafeWriteBackend() {
   const version = String(health?.data?.version ?? health?.data?.data?.version ?? '').trim();
   if (!health?.ok) throw new Error('WRITE DITAHAN: backend tidak terverifikasi. Tidak ada transaksi yang dikirim.');
   if (!SAFE_WRITE_BACKEND_RE.test(version)) throw new Error('WRITE DITAHAN: backend belum LOCK Stock CV/PT. Versi: ' + (version || 'tidak diketahui'));
-  if (/6\.6\.5|BULK[-_]?STABLE/i.test(version)) _batchSupported = true;
   return health;
 }
 /** Parse angka sheet aman — abaikan #ERROR! / #N/A. PWA HANYA BACA stok, tidak menulis ke sheet Stock CV/PT. */
@@ -269,7 +268,8 @@ async function submitBatchChunk(action, entity, chunkItems, tanggal) {
     else toSend.push({ kodeBarang: String(it.kode || it.kodeBarang || '').trim(), kode: String(it.kode || it.kodeBarang || '').trim(), qty: Number(it.qty) || 0, keterangan: String(it.keterangan || '').trim().slice(0, 200), clientItemId: cid, requestId: cid, transactionId: 'TX-' + cid });
   }
   if (!toSend.length) return { success: true, successCount: skipped.length, failCount: 0, results: skipped };
-  const payload = { action: 'addTransactionBatch', sheet: sheetName, entitas: String(entity || '').toUpperCase(), tanggal: normalizeTanggal(tanggal), items: toSend, requestId: newIds().requestId };
+  const stableBatchId = 'BATCH-' + toSend[0].clientItemId + '-' + toSend[toSend.length - 1].clientItemId;
+  const payload = { action: 'addTransactionBatch', sheet: sheetName, entitas: String(entity || '').toUpperCase(), tanggal: normalizeTanggal(tanggal), items: toSend, batchId: stableBatchId, requestId: newIds().requestId };
   const data = await postJson(payload, { retries: 1, timeoutMs: BATCH_TIMEOUT_MS });
   if (data && (data.code === 'UNKNOWN_ACTION' || data.error === 'UNKNOWN_ACTION' || (data.error && /tidak dikenali/i.test(data.error)))) {
     _batchSupported = false;
