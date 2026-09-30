@@ -1,7 +1,7 @@
 /* GudangAI RUDY — Service Worker
  * - Version bump setiap rilis UI agar klien Android mendapat update
  */
-const CACHE_NAME = 'gudangai-v6.9.1-profile-photo';
+const CACHE_NAME = 'gudangai-v6.9.2-install-icons';
 const PRECACHE = [
   '/',
   '/index.html',
@@ -43,18 +43,18 @@ self.addEventListener('fetch', (event) => {
   }
   event.respondWith(
     caches.match(req).then((cached) => {
-      if (cached) return cached;
-      return fetch(req).then((res) => {
-        if (res.ok && (url.origin === self.location.origin)) {
+      const network = fetch(req).then((res) => {
+        if (res && res.ok && url.origin === self.location.origin) {
           const copy = res.clone();
           caches.open(CACHE_NAME).then((c) => c.put(req, copy));
         }
         return res;
       }).catch(() => cached);
+      return cached || network;
     })
   );
 });
 
 self.addEventListener('message', (event) => {
-  if (event.data === 'SKIP_WAITING') self.skipWaiting();
+  if (event.data === 'skipWaiting') self.skipWaiting();
 });

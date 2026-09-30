@@ -1,4 +1,4 @@
-/** Decode R-rocket logo (user original 468928.jpg) for PWA install icons. */
+/** Decode R-rocket logo for PWA install icons. Requires 192+512 for Chrome install. */
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -30,6 +30,7 @@ function writePng(name, b64) {
     return false;
   }
   fs.writeFileSync(path.join(outDir, name), buf);
+  console.log('Wrote', name, buf.length, 'bytes');
   return true;
 }
 
@@ -47,7 +48,6 @@ for (const [key, outName] of Object.entries(map)) {
   if (writePng(outName, loadB64(key))) ok += 1;
 }
 
-// Aliases from nearest source
 const src192 = path.join(outDir, 'icon-192x192.png');
 const src512 = path.join(outDir, 'icon-512x512.png');
 const src96 = path.join(outDir, 'icon-96x96.png');
@@ -69,8 +69,6 @@ if (fs.existsSync(src96)) {
 if (fs.existsSync(apple)) {
   fs.copyFileSync(apple, path.join(outDir, 'icon-180x180.png'));
 }
-
-// Fallback maskable
 if (!fs.existsSync(path.join(outDir, 'icon-maskable-192x192.png')) && fs.existsSync(src192)) {
   fs.copyFileSync(src192, path.join(outDir, 'icon-maskable-192x192.png'));
 }
@@ -78,4 +76,11 @@ if (!fs.existsSync(path.join(outDir, 'icon-maskable-512x512.png')) && fs.existsS
   fs.copyFileSync(src512, path.join(outDir, 'icon-maskable-512x512.png'));
 }
 
-console.log('Wrote PWA logo icons from user original (R-rocket). OK sources:', ok);
+const must = ['icon-192x192.png', 'icon-512x512.png'];
+const missing = must.filter((n) => !fs.existsSync(path.join(outDir, n)));
+if (missing.length) {
+  console.error('PWA install icons MISSING (Chrome needs 192+512):', missing.join(', '));
+  console.error('OK sources:', ok);
+} else {
+  console.log('PWA icons OK (192+512 present). Sources written:', ok);
+}
