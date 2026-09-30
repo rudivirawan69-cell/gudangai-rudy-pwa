@@ -292,9 +292,9 @@ export default function POPage() {
     <div className="pb-28 animate-fade-in">
       <div className="flex items-start justify-between gap-2 mb-2">
         <div className="min-w-0">
-          <h2 className="text-lg font-extrabold text-white drop-shadow-md">PO Generator</h2>
-          <p className="text-xs text-slate-300 mt-0.5">
-            2 jalur: <b className="text-white">PO CS</b> · <b className="text-white">PO Produksi</b>
+          <h2 className="text-lg font-extrabold text-slate-900">PO Generator</h2>
+          <p className="text-xs text-slate-500 mt-0.5">
+            2 jalur: <b className="text-cyan-700">PO CS</b> · <b className="text-orange-700">PO Produksi</b>
           </p>
         </div>
         <button
@@ -344,7 +344,7 @@ export default function POPage() {
       </div>
 
       <div className={`rounded-2xl p-4 mb-3 text-white bg-gradient-to-br ${
-        tab === 'cs' ? 'from-cyan-700 to-[#0b2a55]' : 'from-orange-600 to-amber-800'
+        tab === 'cs' ? 'from-cyan-600 to-teal-700' : 'from-orange-600 to-amber-800'
       }`}>
         <div className="flex items-center gap-3 mb-3">
           <ShoppingCart className="w-6 h-6 text-white/90" />
@@ -418,7 +418,7 @@ export default function POPage() {
               disabled={loading || activeList.length === 0}
               className={`w-full py-3.5 rounded-xl text-white text-sm font-bold flex items-center justify-center gap-2 shadow-xl disabled:opacity-50 ${
                 tab === 'cs'
-                  ? 'bg-gradient-to-r from-cyan-600 to-[#0b2a55]'
+                  ? 'bg-gradient-to-r from-cyan-600 to-teal-700'
                   : 'bg-gradient-to-r from-orange-500 to-amber-700'
               }`}
             >
@@ -448,7 +448,7 @@ export default function POPage() {
                 type="button"
                 onClick={copyPO}
                 className={`flex-1 py-3 rounded-xl text-white text-xs font-semibold flex items-center justify-center gap-1 shadow ${
-                  copied ? 'bg-emerald-500' : tab === 'cs' ? 'bg-[#0b2a55]' : 'bg-orange-600'
+                  copied ? 'bg-emerald-500' : tab === 'cs' ? 'bg-cyan-700' : 'bg-orange-600'
                 }`}
               >
                 <Download className="w-3.5 h-3.5" />
