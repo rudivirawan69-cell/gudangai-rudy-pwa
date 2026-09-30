@@ -1,5 +1,5 @@
 /* GudangAI RUDY — Service Worker */
-const CACHE_NAME = 'gudangai-v6.9.3-rocket-logo';
+const CACHE_NAME = 'gudangai-v7.0.0-rocket-r-official';
 const PRECACHE = ['/', '/index.html', '/manifest.json'];
 
 self.addEventListener('install', (event) => {
@@ -25,28 +25,17 @@ self.addEventListener('fetch', (event) => {
   if (url.hostname.includes('google') || url.hostname.includes('script.google')) return;
   if (req.mode === 'navigate') {
     event.respondWith(
-      fetch(req).then((res) => {
-        const copy = res.clone();
-        caches.open(CACHE_NAME).then((c) => c.put(req, copy));
-        return res;
-      }).catch(() => caches.match(req).then((r) => r || caches.match('/index.html')))
+      fetch(req).catch(() => caches.match('/index.html'))
     );
     return;
   }
   event.respondWith(
-    caches.match(req).then((cached) => {
-      const network = fetch(req).then((res) => {
-        if (res && res.ok && url.origin === self.location.origin) {
-          const copy = res.clone();
-          caches.open(CACHE_NAME).then((c) => c.put(req, copy));
-        }
-        return res;
-      }).catch(() => cached);
-      return cached || network;
-    })
+    caches.match(req).then((cached) => cached || fetch(req).then((res) => {
+      const copy = res.clone();
+      if (res.ok && (url.pathname.startsWith('/icons/') || url.pathname.startsWith('/assets/'))) {
+        caches.open(CACHE_NAME).then((c) => c.put(req, copy)).catch(() => undefined);
+      }
+      return res;
+    }).catch(() => cached))
   );
-});
-
-self.addEventListener('message', (event) => {
-  if (event.data === 'skipWaiting') self.skipWaiting();
 });
