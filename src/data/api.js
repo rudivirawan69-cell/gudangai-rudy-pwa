@@ -1,4 +1,4 @@
-/** GudangAI RUDY — API layer V6.7.1 stable-chunk (BATCH=12) + tanggal YYYY-MM-DD */
+/** GudangAI RUDY — API layer V6.7.1 STOCK-SOURCE-LOCK (BATCH=12) + tanggal YYYY-MM-DD */
 const RETRY_COUNT = 2;
 const RETRY_BASE_MS = 400;
 const REQUEST_TIMEOUT_MS = 15000;
@@ -7,7 +7,7 @@ const BATCH_CHUNK_SIZE = 12;
 const BATCH_TIMEOUT_MS = 90000;
 const SINGLE_TIMEOUT_MS = 60000;
 const SCHEMA_VERSION = '1.0';
-const SAFE_WRITE_BACKEND_RE = /STOCK-READONLY|STOCK-SOURCE-LOCKED|6\.6\.5\+?BULK[-_]?STABLE|6\.6\.[5-9]|V?6\.6\.[5-9]/i;
+const SAFE_WRITE_BACKEND_RE = /(?:^|[^0-9])6\.7\.1\+STOCK[-_]?SOURCE[-_]?LOCK(?:$|[^A-Z0-9])|STOCK-SOURCE-LOCKED/i;
 
 const APPLIED_KEY = 'gudangai_applied';
 const QUEUE_KEY = 'gudangai_queue';
