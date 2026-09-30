@@ -269,7 +269,7 @@ async function submitBatchChunk(action, entity, chunkItems, tanggal) {
     else toSend.push({ kodeBarang: String(it.kode || it.kodeBarang || '').trim(), kode: String(it.kode || it.kodeBarang || '').trim(), qty: Number(it.qty) || 0, keterangan: String(it.keterangan || '').trim().slice(0, 200), clientItemId: cid, requestId: cid, transactionId: 'TX-' + cid });
   }
   if (!toSend.length) return { success: true, successCount: skipped.length, failCount: 0, results: skipped };
-  const payload = { action: 'addBatchTransaction', sheet: sheetName, entitas: String(entity || '').toUpperCase(), tanggal: normalizeTanggal(tanggal), items: toSend, requestId: newIds().requestId };
+  const payload = { action: 'addTransactionBatch', sheet: sheetName, entitas: String(entity || '').toUpperCase(), tanggal: normalizeTanggal(tanggal), items: toSend, requestId: newIds().requestId };
   const data = await postJson(payload, { retries: 1, timeoutMs: BATCH_TIMEOUT_MS });
   if (data && (data.code === 'UNKNOWN_ACTION' || data.error === 'UNKNOWN_ACTION' || (data.error && /tidak dikenali/i.test(data.error)))) {
     _batchSupported = false;
