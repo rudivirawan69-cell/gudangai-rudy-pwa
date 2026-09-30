@@ -211,7 +211,7 @@ export default function ValidasiPage() {
       <div className="flex gap-2">
         {['CV', 'PT'].map((e) => (
           <button key={e} onClick={() => { setEntity(e); if (rawText) runValidation(rawText); }}
-            className={`flex-1 py-2.5 rounded-xl text-sm font-semibold ${entity === e ? 'bg-[#0b2a55] text-white shadow' : 'bg-white border border-gray-200 text-gray-600'}`}>{e}</button>
+            className={`flex-1 py-2.5 rounded-xl text-sm font-semibold ${entity === e ? 'bg-cyan-700 text-white shadow' : 'bg-white border border-gray-200 text-gray-600'}`}>{e}</button>
         ))}
       </div>
 
@@ -235,7 +235,7 @@ export default function ValidasiPage() {
           {mode === 'camera' && (
             <div className="mt-3 space-y-2">
               {!cameraOn ? (
-                <button onClick={startCamera} className="w-full py-2.5 rounded-xl bg-[#0b2a55] text-white text-sm font-semibold flex items-center justify-center gap-2">
+                <button onClick={startCamera} className="w-full py-2.5 rounded-xl bg-cyan-700 text-white text-sm font-semibold flex items-center justify-center gap-2">
                   <Camera className="w-4 h-4" /> Buka Kamera
                 </button>
               ) : (
@@ -266,7 +266,7 @@ export default function ValidasiPage() {
           placeholder={'Contoh:\n2x Ayam Fillet Dada\nUdang 5\nBakso Sapi Halus x3'}
           className="mt-1.5 w-full px-3 py-2 bg-gray-50 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-cyan-400" />
         <button onClick={() => runValidation(rawText)} disabled={!rawText.trim() || busy}
-          className="mt-2 w-full py-2.5 rounded-xl bg-gradient-to-r from-[#0b2a55] to-[#164e8a] text-white text-sm font-semibold disabled:opacity-50">
+          className="mt-2 w-full py-2.5 rounded-xl bg-gradient-to-r from-cyan-600 to-teal-700 text-white text-sm font-semibold disabled:opacity-50">
           Validasi ke Master {entity}
         </button>
       </div>
