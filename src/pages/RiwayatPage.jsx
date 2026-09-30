@@ -139,7 +139,7 @@ export default function RiwayatPage({ onNavigate }) {
           {typeFilters.map((f) => (
             <button key={f.id} type="button" onClick={() => setFilterType(f.id)}
               className={`px-3 py-1.5 rounded-full text-[11px] font-semibold ${
-                filterType === f.id ? 'bg-[#0b2a55] text-white' : 'bg-white border border-slate-200 text-slate-600'
+                filterType === f.id ? 'bg-cyan-700 text-white' : 'bg-white border border-slate-200 text-slate-600'
               }`}>{f.label}</button>
           ))}
         </div>
