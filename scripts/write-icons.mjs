@@ -15,6 +15,18 @@ function loadB64(base) {
     const t = fs.readFileSync(full, 'utf8').trim();
     if (t.length > 3000) return t;
   }
+  // multi-part p0..p3
+  const chunks = [];
+  for (let i = 0; i < 8; i++) {
+    const p = path.join(partsDir, `${base}_p${i}.txt`);
+    if (!fs.existsSync(p)) break;
+    chunks.push(fs.readFileSync(p, 'utf8').trim());
+  }
+  if (chunks.length) {
+    const t = chunks.join('');
+    if (t.length > 3000) return t;
+  }
+  // legacy a/b
   const a = path.join(partsDir, `${base}_a.txt`);
   const b = path.join(partsDir, `${base}_b.txt`);
   if (fs.existsSync(a) && fs.existsSync(b)) {
@@ -90,7 +102,7 @@ if (fs.existsSync(src512)) {
   }
   const m512 = path.join(outDir, 'icon-maskable-512x512.png');
   if (!fs.existsSync(m512) || fs.statSync(m512).size < 1000) fs.copyFileSync(src512, m512);
-  fs.copyFileSync(src512, path.join(root, 'icon-512.png'));
+  try { fs.copyFileSync(src512, path.join(root, 'icon-512.png')); } catch (_) {}
 }
 if (fs.existsSync(src96)) fs.copyFileSync(src96, path.join(outDir, 'icon-72x72.png'));
 if (fs.existsSync(apple)) fs.copyFileSync(apple, path.join(outDir, 'icon-180x180.png'));
