@@ -219,7 +219,7 @@ export default function SyncQueuePage({ onBack }) {
           <p className="text-sm font-semibold text-slate-700">Antrian kosong</p>
           <p className="text-xs text-slate-500">Semua transaksi sudah tersinkron atau dihapus.</p>
           <button type="button" onClick={onBack}
-            className="mt-2 px-4 py-2.5 rounded-xl bg-[#0b2a55] text-white text-sm font-semibold">
+            className="mt-2 px-4 py-2.5 rounded-xl bg-cyan-700 text-white text-sm font-semibold">
             Kembali
           </button>
         </div>
@@ -276,7 +276,7 @@ export default function SyncQueuePage({ onBack }) {
           <div className="sticky bottom-0 pt-2 pb-1">
             <button type="button" onClick={() => setReviewing(true)}
               disabled={syncing || total === 0 || circuit.open}
-              className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-cyan-500 to-blue-500 text-white text-sm font-semibold flex items-center justify-center gap-2 shadow-lg disabled:opacity-50">
+              className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-cyan-600 to-teal-600 text-white text-sm font-semibold flex items-center justify-center gap-2 shadow-lg disabled:opacity-50">
               <ClipboardList className="w-4 h-4" />
               {circuit.open ? 'Dijeda Sementara' : 'Tinjau Keranjang & Sinkronisasi (' + total + ')'}
             </button>
