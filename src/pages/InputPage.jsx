@@ -14,7 +14,7 @@ import {
   saveToHistory,
   pushNotification, getNotifications, markNotificationsRead, unreadNotificationCount,
 } from '../data/api';
-import { searchMaster } from '../data/master';
+import { searchMaster, hydrateMasterFromStock } from '../data/master';
 
 const TX = [
   { id: 'masuk', label: 'Masuk', icon: PackagePlus },
@@ -69,9 +69,24 @@ export default function InputPage() {
     window.addEventListener('gudangai-submit-progress', handler);
     return () => window.removeEventListener('gudangai-submit-progress', handler);
   }, []);
+  // Input search harus memakai master live dari backend, bukan daftar statis yang bisa tertinggal.
+  // Fetch sekali saat halaman dibuka; hasil disimpan sebagai cache master untuk pencarian offline.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const live = await fetchStock('ALL', { allowDemo: false });
+        if (!cancelled && Array.isArray(live) && live.length) hydrateMasterFromStock(live);
+      } catch (_) {
+        // Static master tetap menjadi fallback offline.
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
   useEffect(() => {
     if (!query.trim()) { setHits([]); return; }
-    const t = setTimeout(() => setHits(searchMaster(entity, query).slice(0, 12)), 180);
+    const t = setTimeout(() => setHits(searchMaster(entity, query).slice(0, 12)), 120);
     return () => clearTimeout(t);
   }, [query, entity]);
 

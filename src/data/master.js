@@ -1,4 +1,4 @@
-// Master data 189 items + Alias-based search
+// Master data baseline + live master hydration (191 item source) + Alias-based search
 import aliasConfig from './alias-config.json';
 
 const MASTER_CV = [
@@ -48,7 +48,9 @@ const MASTER_PT = [
   {kode:"PT-0024",nama:"Bumbu Nasi Goreng Jawa",satuan:"Pack",divisi:"PACKING"},{kode:"PT-0025",nama:"Bumbu Pedas",satuan:"Pack",divisi:"PACKING"},
 ];
 
-function getAliasLookup(entity) {
+let LIVE_MASTER = { CV: [], PT: [] };
+
+/** Hydrate search master from the authoritative backend stock/master payload.\n *  Never hardcodes the 191-item list in the UI; static arrays remain offline fallback.\n */\nexport function hydrateMasterFromStock(items) {\n  if (!Array.isArray(items)) return getAllMaster();\n  const next = { CV: [], PT: [] };\n  for (const raw of items) {\n    const entity = String(raw?.entitas || raw?.entity || raw?.ent || "").toUpperCase();\n    const kode = String(raw?.kode || raw?.kodeBarang || raw?.code || "").trim();\n    const nama = String(raw?.nama || raw?.name || "").trim();\n    if (!/^(CV|PT)$/.test(entity) || !kode || !nama) continue;\n    next[entity].push({\n      kode, nama, satuan: raw?.satuan || "Pack", divisi: raw?.divisi || ""\n    });\n  }\n  if (next.CV.length) LIVE_MASTER.CV = next.CV;\n  if (next.PT.length) LIVE_MASTER.PT = next.PT;\n  try { localStorage.setItem("gudangai_live_master", JSON.stringify(LIVE_MASTER)); } catch (_) {}\n  return getAllMaster();\n}\n\nfunction loadPersistedMaster() {\n  try {\n    const raw = JSON.parse(localStorage.getItem("gudangai_live_master") || "null");\n    if (raw?.CV?.length) LIVE_MASTER.CV = raw.CV;\n    if (raw?.PT?.length) LIVE_MASTER.PT = raw.PT;\n  } catch (_) {}\n}\nloadPersistedMaster();\n\nfunction getSearchList(entity) {\n  const key = String(entity || "").toUpperCase() === "PT" ? "PT" : "CV";\n  return LIVE_MASTER[key].length ? LIVE_MASTER[key] : getMasterByEntity(key);\n}\n\nfunction getAliasLookup(entity) {
   const aliases = (aliasConfig && aliasConfig.aliases && aliasConfig.aliases[entity]) || {};
   const lookup = {};
   for (const [kode, list] of Object.entries(aliases)) {
@@ -59,12 +61,20 @@ function getAliasLookup(entity) {
   return lookup;
 }
 
-export function getMasterByEntity(entity) { return entity === "CV" ? MASTER_CV : MASTER_PT; }
-export function getAllMaster() { return { CV: MASTER_CV, PT: MASTER_PT }; }
+export function getMasterByEntity(entity) {
+  const key = String(entity || "").toUpperCase() === "PT" ? "PT" : "CV";
+  return LIVE_MASTER[key].length ? LIVE_MASTER[key] : (key === "CV" ? MASTER_CV : MASTER_PT);
+}
+export function getAllMaster() {
+  return {
+    CV: LIVE_MASTER.CV.length ? LIVE_MASTER.CV : MASTER_CV,
+    PT: LIVE_MASTER.PT.length ? LIVE_MASTER.PT : MASTER_PT,
+  };
+}
 export function findByKode(kode) { return [...MASTER_CV, ...MASTER_PT].find(i => i.kode === kode); }
 
 export function searchMaster(entity, query) {
-  const list = getMasterByEntity(entity);
+  const list = getSearchList(entity);
   if (!query) return list;
   const q = query.toLowerCase().trim();
   const aliasLookup = getAliasLookup(entity);
@@ -96,7 +106,7 @@ export function matchByAlias(entity, name) {
     .replace(/[-–—]+/g, ' ')
     .replace(/\s+/g, ' ').trim();
   const lookup = getAliasLookup(entity);
-  const list = getMasterByEntity(entity);
+  const list = getSearchList(entity);
   if (lookup[normalized]) {
     const item = list.find(i => i.kode === lookup[normalized]);
     if (item) return { item, matchType: 'alias-exact' };
