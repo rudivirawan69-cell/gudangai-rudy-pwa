@@ -2,7 +2,7 @@ import { useMemo, useState, useEffect, useCallback } from 'react';
 import { useStock } from '../hooks/useStock';
 import { useAuth } from '../hooks/useAuth';
 import {
-  getPendingQueue, getStatusPO, confirmPOStatus, getTransactionHistory,
+  getPendingQueue, getStatusPO, confirmPOStatus, getTransactionHistory, fetchRemoteTransactionHistory,
 } from '../data/api';
 import { DIVISIONS } from '../data/master';
 import {
@@ -201,14 +201,17 @@ function Movement7Days({ history }) {
       const d = new Date(now);
       d.setHours(0, 0, 0, 0);
       d.setDate(d.getDate() - i);
-      const key = d.toISOString().slice(0, 10);
+      const key = [d.getFullYear(), String(d.getMonth() + 1).padStart(2, '0'), String(d.getDate()).padStart(2, '0')].join('-');
       let masuk = 0; let keluar = 0;
       (history || []).forEach((entry) => {
-        const at = Number(entry.at || entry.timestamp || 0);
-        if (!at) return;
-        const ed = new Date(at);
-        ed.setHours(0, 0, 0, 0);
-        if (ed.toISOString().slice(0, 10) !== key) return;
+        const rawAt = entry?.at ?? entry?.timestamp ?? entry?.time ?? entry?.createdAt ?? entry?.created_at ?? '';
+        if (!rawAt) return;
+        const rawDate = String(rawAt).trim();
+        const dateOnly = /^\\d{4}-\\d{2}-\\d{2}$/.test(rawDate) ? rawDate : '';
+        const ed = new Date(rawAt);
+        if (Number.isNaN(ed.getTime())) return;
+        const entryKey = dateOnly || [ed.getFullYear(), String(ed.getMonth() + 1).padStart(2, '0'), String(ed.getDate()).padStart(2, '0')].join('-');
+        if (entryKey !== key) return;
         const qty = (entry.items || []).reduce((sum, it) => sum + (Number(it.qty) || 0), 0);
         const type = String(entry.type || '').toLowerCase();
         if (type.includes('masuk')) masuk += qty;
@@ -488,11 +491,49 @@ export default function DashboardPage() {
   const [confirmingId, setConfirmingId] = useState(null);
   const [confirmMsg, setConfirmMsg] = useState('');
   const [history, setHistory] = useState(() => getTransactionHistory());
-  useEffect(() => {
-    const refreshHistory = () => setHistory(getTransactionHistory());
-    window.addEventListener('gudangai-history-changed', refreshHistory);
-    return () => window.removeEventListener('gudangai-history-changed', refreshHistory);
+  const loadMovementHistory = useCallback(async () => {
+    const local = getTransactionHistory();
+    setHistory(local);
+    if (!navigator.onLine) return;
+    try {
+      const remote = await fetchRemoteTransactionHistory(7);
+      const merged = [...remote, ...local];
+      const seen = new Set();
+      const unique = merged.filter((entry) => {
+        const itemsQty = Array.isArray(entry?.items)
+          ? entry.items.reduce((sum, it) => sum + (Number(it?.qty ?? it?.quantity ?? it?.jumlah ?? 0) || 0), 0)
+          : (Number(entry?.qty ?? entry?.quantity ?? entry?.jumlah ?? 0) || 0);
+        const id = entry?.transactionId || entry?.requestId;
+        const time = entry?.at || entry?.timestamp || entry?.time || entry?.createdAt || '';
+        const type = String(entry?.type || entry?.jenis || entry?.action || '').toLowerCase();
+        const key = id ? String(id) : String(time) + '|' + type + '|' + itemsQty;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+      setHistory(unique);
+    } catch (_) {
+      // Backend analytics is read-only; keep local history if it is unavailable.
+    }
   }, []);
+
+  useEffect(() => {
+    const refreshHistory = () => { setHistory(getTransactionHistory()); void loadMovementHistory(); };
+    window.addEventListener('gudangai-history-changed', refreshHistory);
+    void loadMovementHistory();
+    const timer = setInterval(() => {
+      if (document.visibilityState === 'visible' && navigator.onLine) void loadMovementHistory();
+    }, 60000);
+    const onOnline = () => { void loadMovementHistory(); };
+    document.addEventListener('visibilitychange', refreshHistory);
+    window.addEventListener('online', onOnline);
+    return () => {
+      window.removeEventListener('gudangai-history-changed', refreshHistory);
+      document.removeEventListener('visibilitychange', refreshHistory);
+      window.removeEventListener('online', onOnline);
+      clearInterval(timer);
+    };
+  }, [loadMovementHistory]);
 
   const stats = useMemo(() => {
     const list = allItems || [];
