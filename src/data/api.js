@@ -295,7 +295,32 @@ async function submitItems(action, entity, items, tanggal, options = {}) {
   const list = (items || []).map(ensureClientItemId);
   if (!list.length) return { success: false, error: 'Tidak ada item' };
   if (navigator.onLine && getApiUrl()) {
-    await assertSafeWriteBackend();
+    try {
+      await assertSafeWriteBackend();
+    } catch (err) {
+      if (!options.fromQueue) enqueue(action, entity, list, { tanggal });
+      const msg = err?.message || 'Backend belum terverifikasi';
+      pushNotification({
+        type: 'warning',
+        title: 'Write ditahan — masuk Antrian Sinkronisasi',
+        body: list.length + ' item diamankan. ' + msg
+      });
+      return {
+        success: true,
+        queued: true,
+        count: 0,
+        queuedCount: list.length,
+        failed: list.length,
+        blocked: true,
+        results: list.map(it => ({
+          success: false,
+          queued: true,
+          blocked: true,
+          clientItemId: it.clientItemId,
+          error: msg
+        }))
+      };
+    }
   }
   if (!navigator.onLine || !getApiUrl()) {
     if (!options.fromQueue) enqueue(action, entity, list, { tanggal });
