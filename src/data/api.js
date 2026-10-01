@@ -127,6 +127,45 @@ async function getJson(action, extraParams = {}) {
   const text = await res.text();
   try { return JSON.parse(text); } catch { throw new Error('Respons bukan JSON'); }
 }
+export async function fetchRemoteTransactionHistory(days = 7) {
+  const safeDays = Math.max(1, Math.min(31, Number(days) || 7));
+  const params = { days: String(safeDays) };
+  let data = null;
+  try {
+    data = await getJson('getTransactionHistory', params);
+  } catch (_) {
+    try {
+      data = await postJson({ action: 'getTransactionHistory', days: safeDays, requestId: newIds().requestId });
+    } catch (err) {
+      throw new Error(err?.message || 'Gagal mengambil riwayat transaksi backend');
+    }
+  }
+  if (!data || data.success === false || data.code === 'UNAUTHORIZED') {
+    throw new Error(data?.error || 'Gagal mengambil riwayat transaksi backend');
+  }
+  const raw = data.items || data.history || data.transactions || data.data?.items ||
+    data.data?.history || data.data?.transactions || data.rows || data.data || [];
+  const list = Array.isArray(raw) ? raw : [];
+  return list.map((entry) => {
+    const items = Array.isArray(entry?.items) ? entry.items.map((it) => ({
+      qty: toNum(it.qty ?? it.quantity ?? it.jumlah ?? 0),
+      kode: it.kode || it.kodeBarang || '',
+      nama: it.nama || it.name || '',
+    })) : [];
+    const qty = toNum(entry?.qty ?? entry?.quantity ?? entry?.jumlah ?? 0);
+    return {
+      ...entry,
+      at: entry?.at ?? entry?.timestamp ?? entry?.time ?? entry?.createdAt ?? entry?.created_at ?? 0,
+      timestamp: entry?.timestamp ?? entry?.at ?? entry?.time ?? entry?.createdAt ?? entry?.created_at ?? 0,
+      type: entry?.type ?? entry?.jenis ?? entry?.action ?? entry?.sheet ?? entry?.sheetName ?? '',
+      transactionId: entry?.transactionId ?? entry?.transaction_id ?? entry?.id ?? '',
+      requestId: entry?.requestId ?? entry?.request_id ?? '',
+      qty,
+      items,
+    };
+  });
+}
+
 export async function healthCheck() {
   if (!getApiUrl()) return { ok: false, offline: true, error: 'URL API belum diatur' };
   try {
