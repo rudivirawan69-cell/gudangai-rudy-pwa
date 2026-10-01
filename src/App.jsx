@@ -85,6 +85,29 @@ function ConnBanner({ online, hasUrl, status, message, syncing }) {
 }
 
 function AppShell() {
+  const [installPrompt, setInstallPrompt] = useState(null);
+
+  useEffect(() => {
+    const onBeforeInstall = (event) => {
+      event.preventDefault();
+      setInstallPrompt(event);
+    };
+    const onInstalled = () => setInstallPrompt(null);
+    window.addEventListener('beforeinstallprompt', onBeforeInstall);
+    window.addEventListener('appinstalled', onInstalled);
+    return () => {
+      window.removeEventListener('beforeinstallprompt', onBeforeInstall);
+      window.removeEventListener('appinstalled', onInstalled);
+    };
+  }, []);
+
+  const installApp = async () => {
+    if (!installPrompt) return;
+    installPrompt.prompt();
+    await installPrompt.userChoice.catch(() => null);
+    setInstallPrompt(null);
+  };
+
   const { user, loading } = useAuth();
   const [tab, setTab] = useState('dashboard');
   const [pageKey, setPageKey] = useState(0);
@@ -128,6 +151,11 @@ function AppShell() {
   return (
     <div className="min-h-screen bg-[#06101f] text-slate-100">
       <ConnBanner online={online} hasUrl={hasUrl} status={status} message={message} syncing={syncing} />
+      {installPrompt && (
+        <button type="button" onClick={installApp} className="fixed top-3 right-3 z-[60] rounded-full bg-[#0f9f9a] px-4 py-2 text-xs font-extrabold text-white shadow-lg border border-white/30">
+          Pasang Aplikasi
+        </button>
+      )}
       <main className="max-w-lg mx-auto min-h-screen pb-20">
         <div key={pageKey} className="animate-page-in">
           <ErrorBoundary>
