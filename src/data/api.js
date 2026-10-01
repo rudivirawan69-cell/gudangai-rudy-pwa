@@ -269,8 +269,30 @@ async function submitBatchChunk(action, entity, chunkItems, tanggal) {
     else toSend.push({ kodeBarang: String(it.kode || it.kodeBarang || '').trim(), kode: String(it.kode || it.kodeBarang || '').trim(), qty: Number(it.qty) || 0, keterangan: String(it.keterangan || '').trim().slice(0, 200), clientItemId: cid, requestId: cid, transactionId: 'TX-' + cid });
   }
   if (!toSend.length) return { success: true, successCount: skipped.length, failCount: 0, results: skipped };
-  const payload = { action: 'addTransactionBatch', sheet: sheetName, entitas: String(entity || '').toUpperCase(), tanggal: normalizeTanggal(tanggal), items: toSend, requestId: newIds().requestId };
-  const data = await postJson(payload, { retries: 1, timeoutMs: BATCH_TIMEOUT_MS });
+  const common = {
+    sheet: sheetName,
+    entitas: String(entity || '').toUpperCase(),
+    entity: String(entity || '').toUpperCase(),
+    tanggal: normalizeTanggal(tanggal),
+    items: toSend,
+    transactions: toSend,
+    data: toSend,
+    requestId: newIds().requestId,
+    queueApproved: true,
+  };
+  // V6.6.5 BULK STABLE exposes bulkTransaction. Keep addTransactionBatch
+  // as compatibility fallback so older deployments remain usable.
+  let data = null;
+  try {
+    data = await postJson({ action: 'bulkTransaction', ...common }, { retries: 1, timeoutMs: BATCH_TIMEOUT_MS });
+  } catch (_) {
+    data = null;
+  }
+  const unknownBulk = !data || data.code === 'UNKNOWN_ACTION' || data.error === 'UNKNOWN_ACTION' ||
+    (data.error && /tidak dikenali|unknown action|not found/i.test(String(data.error)));
+  if (unknownBulk) {
+    data = await postJson({ action: 'addTransactionBatch', ...common }, { retries: 1, timeoutMs: BATCH_TIMEOUT_MS });
+  }
   if (data && (data.code === 'UNKNOWN_ACTION' || data.error === 'UNKNOWN_ACTION' || (data.error && /tidak dikenali/i.test(data.error)))) {
     _batchSupported = false;
     throw new Error('BATCH_NOT_SUPPORTED');
@@ -299,6 +321,19 @@ async function submitItems(action, entity, items, tanggal, options = {}) {
     const msg = list.length + ' item masuk Antrian Sinkronisasi (offline)';
     pushNotification({ type: 'warning', title: 'Koneksi terputus', body: msg + '. Tidak ada item yang dibuang.' });
     return { success: true, queued: true, count: 0, queuedCount: list.length, failed: list.length, results: list.map(it => ({ success: false, queued: true, clientItemId: it.clientItemId })) };
+  }
+  // Never silently queue a write while the API is reachable.
+  // Verify the exact write-capable backend before attempting any transaction.
+  try {
+    await assertSafeWriteBackend();
+  } catch (err) {
+    if (!options.fromQueue) enqueue(action, entity, list, { tanggal });
+    const msg = err?.message || 'Backend write belum terverifikasi';
+    pushNotification({ type: 'error', title: 'Write ditahan', body: msg });
+    return {
+      success: true, count: 0, failed: list.length, queuedCount: list.length, total: list.length,
+      results: list.map(it => ({ success: false, queued: true, clientItemId: it.clientItemId, error: msg }))
+    };
   }
   const allResults = [];
   let totalSuccess = 0, totalFail = 0, totalQueued = 0;
