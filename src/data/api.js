@@ -294,6 +294,9 @@ function emitProgress(sent, total, chunkResult) {
 async function submitItems(action, entity, items, tanggal, options = {}) {
   const list = (items || []).map(ensureClientItemId);
   if (!list.length) return { success: false, error: 'Tidak ada item' };
+  if (navigator.onLine && getApiUrl()) {
+    await assertSafeWriteBackend();
+  }
   if (!navigator.onLine || !getApiUrl()) {
     if (!options.fromQueue) enqueue(action, entity, list, { tanggal });
     const msg = list.length + ' item masuk Antrian Sinkronisasi (offline)';
