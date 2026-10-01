@@ -74,6 +74,23 @@ for (const [key, outName] of Object.entries(map)) {
   if (writePng(outName, loadB64(key))) ok += 1;
 }
 
+// Official rocket-R 96px is committed in the repository and is the canonical
+// fallback source for install icons. Never allow the old PLACEHOLDER 192px file
+// to become the PWA identity.
+const canonical96 = path.join(outDir, 'icon-96x96.png');
+const canonical192 = path.join(outDir, 'icon-192x192.png');
+const canonical512 = path.join(outDir, 'icon-512x512.png');
+if (fs.existsSync(canonical96) && fs.statSync(canonical96).size >= 1000) {
+  if (!fs.existsSync(canonical192) || fs.statSync(canonical192).size < 1000) {
+    fs.copyFileSync(canonical96, canonical192);
+    console.log('Canonical fallback: rocket-R 96 → 192');
+  }
+  if (!fs.existsSync(canonical512) || fs.statSync(canonical512).size < 1000) {
+    fs.copyFileSync(canonical96, canonical512);
+    console.log('Canonical fallback: rocket-R 96 → 512');
+  }
+}
+
 const root512 = path.join(root, 'icon-512.png');
 const root192 = path.join(root, 'icon-192.png');
 if (!fs.existsSync(path.join(outDir, 'icon-512x512.png')) || fs.statSync(path.join(outDir, 'icon-512x512.png')).size < 1000) {
