@@ -207,12 +207,12 @@ function Movement7Days({ history }) {
         const rawAt = entry?.at ?? entry?.timestamp ?? entry?.time ?? entry?.createdAt ?? entry?.created_at ?? '';
         if (!rawAt) return;
         const rawDate = String(rawAt).trim();
-        const dateOnly = /^\\d{4}-\\d{2}-\\d{2}$/.test(rawDate) ? rawDate : '';
+        const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(rawDate) ? rawDate : '';
         const ed = new Date(rawAt);
         if (Number.isNaN(ed.getTime())) return;
         const entryKey = dateOnly || [ed.getFullYear(), String(ed.getMonth() + 1).padStart(2, '0'), String(ed.getDate()).padStart(2, '0')].join('-');
         if (entryKey !== key) return;
-        const qty = (entry.items || []).reduce((sum, it) => sum + (Number(it.qty) || 0), 0);
+        const qty = (entry.items || []).reduce((sum, it) => sum + (Number(it.qty) || 0), 0) || (Number(entry.qty) || 0);
         const type = String(entry.type || '').toLowerCase();
         if (type.includes('masuk')) masuk += qty;
         else if (type.includes('keluar')) keluar += qty;
