@@ -1,6 +1,13 @@
 /* GudangAI RUDY — Service Worker */
-const CACHE_NAME = 'gudangai-v7.0.0-rocket-r-official';
-const PRECACHE = ['/', '/index.html', '/manifest.json'];
+const CACHE_NAME = 'gudangai-v7.1.0-rocket-r-install';
+const PRECACHE = [
+  '/',
+  '/index.html',
+  '/manifest.json',
+  '/icons/icon-192x192.png',
+  '/icons/icon-512x512.png',
+  '/icons/apple-touch-icon.png',
+];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
