@@ -141,6 +141,7 @@ export function useBootstrap() {
           masterVersion: backendData.masterVersion,
           stockVersion: backendData.stockVersion,
         });
+        try { window.dispatchEvent(new CustomEvent('gudangai-bootstrap-updated', { detail: { masterVersion: backendData.masterVersion, stockVersion: backendData.stockVersion, count: merged.length, snapshotId: backendData.snapshotId || null } })); } catch (_) {}
 
         setState({
           items: merged,
@@ -207,8 +208,12 @@ export function useBootstrap() {
     }
   }, []);
 
-  // Initial load on mount
+  // Initial load on mount + refresh whenever connectivity returns.
   useEffect(() => {
+    const onOnline = () => {
+      if (getApiUrl()) refresh().catch(() => {});
+    };
+    window.addEventListener('online', onOnline);
     const cached = loadCachedBootstrap();
 
     // If cached data is fresh, use it immediately
@@ -258,6 +263,7 @@ export function useBootstrap() {
         }));
       }
     }
+    return () => window.removeEventListener('online', onOnline);
   }, [refresh]);
 
   return {
