@@ -14,6 +14,14 @@ const QUEUE_KEY = 'gudangai_queue';
 const APPLIED_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const NOTIF_KEY = 'gudangai_notif';
 const DEFAULT_API_URL = 'https://script.google.com/macros/s/AKfycbxVpw0_waeCautJTG0R-jZQKBoxjTLXl5PGYCUBULccKhW8IQAoGRQFEqaCy6MkcnZqlQ/exec';
+/**
+ * Oktober V6.6.5 BULK STABLE.
+ * Secret is seeded only for existing PWA installs so an older localStorage
+ * value cannot leave the write path permanently queued. It is still overridable
+ * from Atur and is never sent unless a request is made.
+ */
+const DEFAULT_API_SECRET = 'adadd47759234a7f94acb230c0cc7ff479c4e4f79a674714';
+const LEGACY_API_URL = 'https://script.google.com/macros/s/AKfycbzTN_W44k-llBaTba7yMlK5RARIqJCMi3Rt8jBtyOmKTnqdrG7IQeDmH0V2gtyVAyk-xQ/exec';
 let _syncLock = false;
 let _queueRevision = 0;
 let _batchSupported = null;
@@ -22,6 +30,12 @@ import { hydrateQueueBackup, persistQueueBackup } from './offlineStore';
 function emitConn(detail) { try { window.dispatchEvent(new CustomEvent('gudangai-conn', { detail })); } catch (_) {} }
 export function getApiUrl() {
   const stored = (localStorage.getItem('gudangai_api_url') || '').trim();
+  // Migrate only the known pre-October endpoint. Preserve any intentional
+  // custom endpoint configured by the user.
+  if (stored === LEGACY_API_URL) {
+    localStorage.setItem('gudangai_api_url', DEFAULT_API_URL);
+    return DEFAULT_API_URL;
+  }
   if (stored) return stored;
   localStorage.setItem('gudangai_api_url', DEFAULT_API_URL);
   return DEFAULT_API_URL;
@@ -31,7 +45,13 @@ export function setApiUrl(url) {
   localStorage.setItem('gudangai_api_url', c || DEFAULT_API_URL);
   _batchSupported = null;
 }
-export function getApiSecret() { return (localStorage.getItem('gudangai_api_secret') || '').trim(); }
+export function getApiSecret() {
+  const stored = (localStorage.getItem('gudangai_api_secret') || '').trim();
+  if (stored) return stored;
+  // Seed October secret for existing installs that never had a local secret.
+  try { localStorage.setItem('gudangai_api_secret', DEFAULT_API_SECRET); } catch (_) {}
+  return DEFAULT_API_SECRET;
+}
 export function setApiSecret(secret) {
   const c = (secret || '').trim();
   if (c) localStorage.setItem('gudangai_api_secret', c);
@@ -186,11 +206,25 @@ export function getConnectionStatus() { return { online: navigator.onLine, apiUr
 export function getWriteCircuitState() {
   return { failures: 0, openedAt: 0, lastError: '', open: false, retryAfterMs: 0 };
 }
+function extractBackendVersion(data) {
+  const candidates = [
+    data?.version,
+    data?.backendVersion,
+    data?.appVersion,
+    data?.data?.version,
+    data?.data?.backendVersion,
+    data?.data?.appVersion,
+    data?.data?.status?.version,
+  ];
+  return candidates.map(v => String(v ?? '').trim()).find(Boolean) || '';
+}
 async function assertSafeWriteBackend() {
   const health = await healthCheck();
-  const version = String(health?.data?.version ?? health?.data?.data?.version ?? '').trim();
-  if (!health?.ok) throw new Error('WRITE DITAHAN: backend tidak terverifikasi. Tidak ada transaksi yang dikirim.');
-  if (!SAFE_WRITE_BACKEND_RE.test(version)) throw new Error('WRITE DITAHAN: backend belum LOCK Stock CV/PT. Versi: ' + (version || 'tidak diketahui'));
+  const version = extractBackendVersion(health?.data);
+  if (!health?.ok) throw new Error('WRITE DITAHAN: backend Oktober V6.6.5 belum terverifikasi. Cek Web App/API Secret.');
+  if (!SAFE_WRITE_BACKEND_RE.test(version)) {
+    throw new Error('WRITE DITAHAN: backend belum LOCK Stock CV/PT. Versi: ' + (version || 'tidak diketahui'));
+  }
   if (/6\.6\.5|BULK[-_]?STABLE/i.test(version)) _batchSupported = true;
   return health;
 }
