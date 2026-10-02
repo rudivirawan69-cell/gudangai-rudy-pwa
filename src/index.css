@@ -12,6 +12,9 @@
   --border: #e2e8f0;
   --shadow: 0 4px 16px rgb(6 16 31 / 0.10);
   --shadow-sm: 0 1px 6px rgb(6 16 31 / 0.07);
+  --space-page: 0.875rem;
+  --space-card: 0.75rem;
+  --focus-ring: 0 0 0 3px rgb(34 211 238 / 0.24);
   --cyan: #06b6d4;
   --cyan-soft: rgba(6, 182, 212, 0.14);
   --app-bg-image: url('/assets/grok_1790510736004.jpg');
@@ -23,6 +26,7 @@
 
 html, body, #root {
   height: 100%;
+  min-width: 0;
   margin: 0;
   background: #061018;
   -webkit-tap-highlight-color: transparent;
@@ -69,7 +73,11 @@ html, body, #root {
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
-/* ── Solid white cards ── */
+/* ── Shared responsive surface system ── */
+.card, .surface, .stat-tile, .stock-card {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
 .card, .surface {
   background: #ffffff;
   border-radius: var(--radius-lg);
@@ -85,6 +93,21 @@ html, body, #root {
     background-color 0.16s ease,
     border-color 0.16s ease;
   will-change: transform;
+}
+.card-interactive:hover,
+.pressable:hover {
+  border-color: rgb(34 211 238 / 0.45);
+  box-shadow: 0 8px 22px rgb(6 16 31 / 0.12);
+}
+.card-interactive:focus-visible,
+.pressable:focus-visible,
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
 }
 .card-interactive:active,
 .pressable:active {
@@ -242,6 +265,16 @@ html, body, #root {
 @keyframes pageIn {
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+@media (max-width: 420px) {
+  .page-content { padding-left: var(--space-page); padding-right: var(--space-page); }
+  .card, .surface, .stat-tile, .stock-card { border-radius: 0.875rem; }
+  table { display: block; overflow-x: auto; max-width: 100%; }
+  th, td { white-space: nowrap; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
 }
 .animate-fade-in {
   animation: fadeIn 0.22s var(--ease-out) both;

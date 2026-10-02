@@ -142,6 +142,43 @@ function DivisionStatus3D({ items }) {
   );
 }
 
+function normalizeMatch(value) {
+  return String(value || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '');
+}
+
+function mergeIncomingWithPO(poData, history) {
+  if (!poData?.items?.length || !history?.length) return poData;
+  const arrivals = new Map();
+  for (const entry of history) {
+    const type = String(entry?.type || entry?.jenis || entry?.action || '').toLowerCase();
+    if (!type.includes('masuk')) continue;
+    const rows = Array.isArray(entry?.items) ? entry.items : [entry];
+    for (const row of rows) {
+      const key = normalizeMatch(row?.kode || row?.kodeBarang || row?.itemNo || row?.nama || row?.name);
+      if (!key) continue;
+      const qty = Number(row?.qty ?? row?.quantity ?? row?.jumlah ?? 0) || 0;
+      arrivals.set(key, (arrivals.get(key) || 0) + qty);
+    }
+  }
+  if (!arrivals.size) return poData;
+  const items = poData.items.map((item) => {
+    const key = normalizeMatch(item.kode || item.kodeBarang || item.itemNo || item.nama);
+    const extra = arrivals.get(key) || 0;
+    if (!extra) return item;
+    const qtyDatang = Math.max(Number(item.qtyDatang) || 0, extra);
+    const qtyPO = Number(item.qtyPO) || 0;
+    const status = qtyPO > 0 && qtyDatang >= qtyPO ? 'Selesai' : 'Sebagian';
+    return { ...item, qtyDatang, status };
+  });
+  const summary = items.reduce((acc, item) => {
+    if (item.status === 'Selesai') acc.itemSelesai += 1;
+    else if (item.status === 'Sebagian') acc.itemSebagian += 1;
+    else acc.itemMenunggu += 1;
+    return acc;
+  }, { itemMenunggu: 0, itemSebagian: 0, itemSelesai: 0 });
+  return { ...poData, items, summary: { ...poData.summary, ...summary, totalAktif: summary.itemMenunggu + summary.itemSebagian, totalKonfirmasi: summary.itemSelesai } };
+}
+
 function normalizeStatusPO(raw) {
   if (!raw || typeof raw !== 'object') return null;
   const ok = raw.success === true || raw.status === 'OK' || raw.status === 'ok' || raw.status === 'APPLIED';
@@ -570,9 +607,13 @@ export default function DashboardPage() {
     setPoLoading(true);
     setPoError('');
     try {
-      const res = await getStatusPO();
+      const [res, remoteHistory] = await Promise.all([
+        getStatusPO(),
+        fetchRemoteTransactionHistory(31).catch(() => []),
+      ]);
       const norm = normalizeStatusPO(res);
-      if (norm?.success) setPoData(norm);
+      const synced = norm?.success ? mergeIncomingWithPO(norm, remoteHistory) : norm;
+      if (synced?.success) setPoData(synced);
       else {
         setPoData(null);
         setPoError(norm?.error || res?.error || 'Gagal memuat Status PO');
