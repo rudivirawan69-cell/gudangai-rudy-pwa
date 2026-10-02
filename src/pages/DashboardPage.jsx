@@ -148,12 +148,14 @@ function normalizeStatusPO(raw) {
   if (!ok) return { success: false, error: raw.error || 'Gagal memuat Status PO' };
   const itemsRaw = raw.items || raw.data?.items || raw.list || [];
   const items = (Array.isArray(itemsRaw) ? itemsRaw : []).map((it, idx) => {
-    const statusRaw = String(it.status || it.Status || '').trim();
-    let status = statusRaw || 'Menunggu';
+    const statusRaw = String(it.status || it.Status || it.statusPO || it.statusPo || '').trim();
+    const qtyPO = Number(it.qtyPO ?? it.qty ?? it.quantity ?? 0) || 0;
+    const qtyDatang = Number(it.qtyDatang ?? it.datang ?? it.received ?? it.qtyReceived ?? 0) || 0;
+    let status = statusRaw || (qtyPO > 0 && qtyDatang >= qtyPO ? 'Selesai' : qtyDatang > 0 ? 'Sebagian' : 'Menunggu');
     const low = status.toLowerCase();
-    if (low.includes('sebagian') || low.includes('progress')) status = 'Sebagian';
-    else if (low.includes('selesai') || low === 'datang' || low.includes('complete')) status = 'Selesai';
-    else if (low.includes('belum') || low.includes('menunggu') || low.includes('pending')) status = 'Menunggu';
+    if (low.includes('sebagian') || low.includes('progress') || low.includes('partial')) status = 'Sebagian';
+    else if (low.includes('selesai') || low === 'datang' || low.includes('complete') || low.includes('received')) status = 'Selesai';
+    else if (low.includes('belum') || low.includes('menunggu') || low.includes('pending') || low.includes('waiting')) status = 'Menunggu';
     return {
       itemNo: it.itemNo || it.no || idx + 1,
       nama: it.nama || it.Nama || it.name || '—',
@@ -583,7 +585,20 @@ export default function DashboardPage() {
     }
   }, []);
 
-  useEffect(() => { loadPO(); }, [loadPO]);
+  useEffect(() => {
+    void loadPO();
+    const refreshPO = () => { if (document.visibilityState === 'visible' && navigator.onLine) void loadPO(); };
+    const timer = setInterval(refreshPO, 15000);
+    window.addEventListener('online', refreshPO);
+    window.addEventListener('gudangai-po-changed', refreshPO);
+    document.addEventListener('visibilitychange', refreshPO);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener('online', refreshPO);
+      window.removeEventListener('gudangai-po-changed', refreshPO);
+      document.removeEventListener('visibilitychange', refreshPO);
+    };
+  }, [loadPO]);
 
   const handleConfirm = useCallback(async (item, status = 'Selesai', qtyDatang) => {
     if (!item) return;
@@ -601,7 +616,8 @@ export default function DashboardPage() {
       if (res?.success || res?.status === 'OK' || res?.status === 'APPLIED') {
         const label = status === 'Selesai' ? 'Datang' : status === 'Sebagian' ? 'Sebagian' : 'Belum';
         setConfirmMsg(`✓ ${item.nama} → ${label}`);
-        await loadPO();
+        try { window.dispatchEvent(new CustomEvent('gudangai-po-changed', { detail: { item, status, qtyDatang: finalQty } })); } catch (_) {}
+        await Promise.all([loadPO(), stockCV.refresh({ force: true }), stockPT.refresh({ force: true })]);
       } else {
         setConfirmMsg(res?.error || 'Gagal update status');
       }
@@ -611,7 +627,7 @@ export default function DashboardPage() {
       setConfirmingId(null);
       setTimeout(() => setConfirmMsg(''), 3200);
     }
-  }, [loadPO, poData?.noPO]);
+  }, [loadPO, poData?.noPO, stockCV.refresh, stockPT.refresh]);
 
   const pending = useMemo(() => {
     try {
