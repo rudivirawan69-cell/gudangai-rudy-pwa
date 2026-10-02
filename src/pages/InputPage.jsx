@@ -556,5 +556,5 @@ export default function InputPage() {
       )}
     </div>
   );
-}
-PLACEHOLDER
+  }
+

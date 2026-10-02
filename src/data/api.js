@@ -310,8 +310,13 @@ function ensureClientItemId(it) {
 function enqueue(type, entity, items, meta = {}) {
   if (!items?.length) return;
   const queue = getPendingQueue();
-  queue.push({ id: 'Q-' + Date.now(), type, entity, items: items.map(ensureClientItemId), tanggal: normalizeTanggal(meta.tanggal), createdAt: new Date().toISOString() });
+  const normalized = items.map(ensureClientItemId);
+  const existing = new Set(queue.flatMap((entry) => (entry.items || []).map((item) => item.clientItemId).filter(Boolean)));
+  const fresh = normalized.filter((item) => item.clientItemId && !existing.has(item.clientItemId) && !isApplied(item.clientItemId));
+  if (!fresh.length) return;
+  queue.push({ id: 'Q-' + Date.now(), type, entity, items: fresh, tanggal: normalizeTanggal(meta.tanggal), createdAt: new Date().toISOString() });
   commitQueueLocal(queue);
+  try { window.dispatchEvent(new CustomEvent('gudangai-queue-changed')); } catch (_) {}
 }
 async function submitOneItem(sheetOrAction, entity, it, tanggal) {
   const cid = it.clientItemId || ensureClientItemId(it).clientItemId;
@@ -409,7 +414,12 @@ async function submitBatchChunk(action, entity, chunkItems, tanggal) {
 }
 
 async function submitItems(action, entity, items, tanggal, options = {}) {
-  const list = (items || []).map(ensureClientItemId);
+  const seenIds = new Set();
+  const list = (items || []).map(ensureClientItemId).filter((item) => {
+    if (!item.clientItemId || seenIds.has(item.clientItemId)) return false;
+    seenIds.add(item.clientItemId);
+    return true;
+  });
   if (!list.length) return { success: false, error: 'Tidak ada item' };
   if (!navigator.onLine || !getApiUrl()) {
     if (!options.fromQueue) enqueue(action, entity, list, { tanggal });
