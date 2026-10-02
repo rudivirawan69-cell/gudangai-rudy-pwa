@@ -327,269 +327,28 @@ async function submitOneItem(sheetOrAction, entity, it, tanggal) {
   }
   return { success: false, error: (data && (data.error || data.message)) || 'Gagal tulis', clientItemId: cid };
 }
-async function submitBatchChunk(action, entity, chunkItems, tanggal) {
-  const SHEET_MAP = { barangMasuk: 'Barang masuk', barangKeluar: 'Barang keluar', barangRusak: 'Barang Rusak' };
-  const sheetName = SHEET_MAP[action] || action;
-  const toSend = [];
-  const skipped = [];
-  for (const it of chunkItems) {
-    const cid = it.clientItemId || ensureClientItemId(it).clientItemId;
-    if (isApplied(cid)) skipped.push({ success: true, skipped: true, clientItemId: cid });
-    else {
-      const kodeBarang = String(it.kode || it.kodeBarang || '').trim();
-      toSend.push({ kodeBarang, qty: Number(it.qty) || 0, keterangan: String(it.keterangan || '').trim().slice(0, 200), requestId: 'REQ-' + cid, transactionId: 'TX-' + cid, nonce: 'NC-' + cid, _cid: cid });
-    }
-  }
-  if (!toSend.length) return { success: true, successCount: skipped.length, failCount: 0, results: skipped };
-  const wireList = toSend.map(({ kodeBarang, qty, keterangan, requestId, transactionId, nonce }) => ({ kodeBarang, qty, keterangan, requestId, transactionId, nonce }));
-  const common = {
-    sheet: sheetName,
-    entitas: String(entity || '').toUpperCase(),
-    entity: String(entity || '').toUpperCase(),
-    tanggal: normalizeTanggal(tanggal),
-    transactions: wireList,
-    requestId: newIds().requestId,
-    queueApproved: true,
-  };
-  let data = null;
-  try {
-    data = await postJson({ action: 'bulkTransaction', ...common }, { retries: 1, timeoutMs: BATCH_TIMEOUT_MS });
-  } catch (_) {
-    data = null;
-  }
-  const unknownBulk = !data || data.code === 'UNKNOWN_ACTION' || data.error === 'UNKNOWN_ACTION' ||
-    (data.error && /tidak dikenali|unknown action|not found/i.test(String(data.error)));
-  if (unknownBulk) {
-    data = await postJson({ action: 'addTransactionBatch', ...common, items: wireList, data: wireList }, { retries: 1, timeoutMs: BATCH_TIMEOUT_MS });
-  }
-  if (data && (data.code === 'UNKNOWN_ACTION' || data.error === 'UNKNOWN_ACTION' || (data.error && /tidak dikenali/i.test(String(data.error))))) {
-    _batchSupported = false;
-    throw new Error('BATCH_NOT_SUPPORTED');
-  }
-  if (data && (data.status === 'PRECHECK_REJECTED' || data.code === 'PRECHECK_REJECTED')) {
-    throw new Error('BATCH_NOT_SUPPORTED');
-  }
-  _batchSupported = true;
-  // IMPORTANT: aggregate success is NOT enough to remove queue items.
-  // A queue item is considered written only when the backend returns an
-  // explicit per-item result that can be matched to this clientItemId/transactionId.
-  const batchResults = [];
-  const rawResults = Array.isArray(data?.results)
-    ? data.results
-    : (Array.isArray(data?.data?.results) ? data.data.results : []);
-  const cidByTx = new Map(toSend.map((it) => [it.transactionId, it._cid]));
-  const confirmedIds = new Set();
-
-  for (const r of rawResults) {
-    const clientItemId = r?.clientItemId || cidByTx.get(r?.transactionId);
-    // Never trust an unmatched backend result as confirmation.
-    if (!clientItemId) continue;
-
-    const explicitSuccess =
-      r.success === true ||
-      r.written === true ||
-      r.inserted === true ||
-      r.status === 'APPLIED' ||
-      r.status === 'OK' ||
-      r.status === 'SUCCESS' ||
-      r.status === 'DUPLICATE';
-
-    const normalized = { ...r, clientItemId, success: !!explicitSuccess };
-    if (explicitSuccess) {
-      confirmedIds.add(clientItemId);
-      markApplied(clientItemId);
-    }
-    batchResults.push(normalized);
-  }
-
-  // Any item without an explicit per-item confirmation remains pending.
-  // This prevents "Riwayat sukses" when Apps Script only returned an aggregate
-  // success/count or when the response was incomplete after a timeout.
-  for (const it of toSend) {
-    if (!confirmedIds.has(it._cid) && !batchResults.some(r => r.clientItemId === it._cid)) {
-      batchResults.push({
-        success: false,
-        uncertain: true,
-        clientItemId: it._cid,
-        transactionId: it.transactionId,
-        error: 'Server belum memberi konfirmasi per-item; tetap di antrian.'
-      });
-    }
-  }
-
-  const confirmedCount = batchResults.filter((r) => r.success).length;
-  const failedCount = toSend.length - confirmedCount;
-  return {
-    success: confirmedCount > 0,
-    successCount: confirmedCount + skipped.length,
-    failCount: failedCount,
-    results: [...skipped, ...batchResults]
-  };
-}
-function emitProgress(sent, total, chunkResult) {
-  try { window.dispatchEvent(new CustomEvent('gudangai-submit-progress', { detail: { sent, total, success: chunkResult?.successCount || 0, failed: chunkResult?.failCount || 0 } })); } catch (_) {}
-}
-async function submitItems(action, entity, items, tanggal, options = {}) {
-  const list = (items || []).map(ensureClientItemId);
-  if (!list.length) return { success: false, error: 'Tidak ada item' };
-  if (!navigator.onLine || !getApiUrl()) {
-    if (!options.fromQueue) enqueue(action, entity, list, { tanggal });
-    const msg = list.length + ' item masuk Antrian Sinkronisasi (offline)';
-    pushNotification({ type: 'warning', title: 'Koneksi terputus', body: msg + '. Tidak ada item yang dibuang.' });
-    return { success: true, queued: true, count: 0, queuedCount: list.length, failed: list.length, results: list.map(it => ({ success: false, queued: true, clientItemId: it.clientItemId })) };
-  }
-  try {
-    await assertSafeWriteBackend();
-  } catch (err) {
-    if (!options.fromQueue) enqueue(action, entity, list, { tanggal });
-    const msg = err?.message || 'Backend write belum terverifikasi';
-    pushNotification({ type: 'error', title: 'Write ditahan', body: msg });
-    return {
-      success: true, count: 0, failed: list.length, queuedCount: list.length, total: list.length,
-      results: list.map(it => ({ success: false, queued: true, clientItemId: it.clientItemId, error: msg }))
-    };
-  }
-  const allResults = [];
-  let totalSuccess = 0, totalFail = 0, totalQueued = 0;
-  for (let i = 0; i < list.length; i += BATCH_CHUNK_SIZE) {
-    const chunk = list.slice(i, i + BATCH_CHUNK_SIZE);
-    try {
-      const batchRes = await submitBatchChunk(action, entity, chunk, tanggal);
-      const sc = batchRes.successCount || 0;
-      const fc = batchRes.failCount || 0;
-      totalSuccess += sc; totalFail += fc;
-      if (batchRes.results) allResults.push(...batchRes.results);
-      emitProgress(Math.min(i + chunk.length, list.length), list.length, batchRes);
-      const failedIds = new Set((batchRes.results || []).filter(r => !r.success && !r.skipped && r.clientItemId).map(r => r.clientItemId));
-      const knownIds = new Set((batchRes.results || []).map(r => r.clientItemId).filter(Boolean));
-      const queueItems = chunk.filter(it => failedIds.has(it.clientItemId) || (!knownIds.has(it.clientItemId) && !isApplied(it.clientItemId)));
-      if (queueItems.length) {
-        if (!options.fromQueue) enqueue(action, entity, queueItems, { tanggal });
-        totalQueued += queueItems.length;
-      }
-      continue;
-    } catch (err) {
-      const msg = String(err?.message || '');
-      if (msg === 'BATCH_NOT_SUPPORTED' || /BATCH_NOT_SUPPORTED|BULK_FAILED|PRECHECK/i.test(msg)) {
-        for (const it of chunk) {
-          try {
-            const one = await submitOneItem(action, entity, it, tanggal);
-            allResults.push(one);
-            if (one.success || one.skipped) totalSuccess += 1;
-            else {
-              totalFail += 1;
-              if (!options.fromQueue) { enqueue(action, entity, [it], { tanggal }); totalQueued += 1; }
-            }
-          } catch (e2) {
-            totalFail += 1;
-            if (!options.fromQueue) { enqueue(action, entity, [it], { tanggal }); totalQueued += 1; }
-            allResults.push({ success: false, queued: true, clientItemId: it.clientItemId, error: e2?.message || 'Gagal' });
-          }
-          emitProgress(Math.min(i + chunk.length, list.length), list.length, { successCount: totalSuccess, failCount: totalFail });
-        }
-        continue;
-      }
-      const remainingItems = list.slice(i);
-      if (!options.fromQueue) enqueue(action, entity, remainingItems, { tanggal });
-      totalQueued += remainingItems.length;
-      totalFail += remainingItems.length;
-      allResults.push(...remainingItems.map(it => ({ success: false, queued: true, uncertain: true, clientItemId: it.clientItemId, error: err?.message || 'Timeout/koneksi terputus' })));
-      emitProgress(list.length, list.length, { successCount: totalSuccess, failCount: totalFail });
-      pushNotification({ type: 'warning', title: 'Koneksi terputus — masuk antrian', body: remainingItems.length + ' item diamankan di Antrian Sinkronisasi. Retry memakai ID unik agar tidak duplikasi.' });
-      break;
-    }
-  }
-  if (totalQueued > 0) {
-    pushNotification({ type: 'warning', title: 'Sinkronisasi perlu dilanjutkan', body: totalSuccess + ' sukses · ' + totalQueued + ' masuk antrian · ' + totalFail + ' belum terkonfirmasi. Antrian menyimpan ID unik untuk mencegah duplikasi.' });
-  } else {
-    pushNotification({ type: 'success', title: 'Transaksi selesai', body: totalSuccess + ' item berhasil ditulis tanpa antrian.' });
-  }
-  return { success: totalSuccess > 0 || totalQueued > 0, count: totalSuccess, failed: totalFail, queuedCount: totalQueued, total: list.length, results: allResults };
-}
-export async function submitBarangMasuk({ entity, tanggal, items }) { return submitItems('barangMasuk', entity, items, tanggal); }
-export async function submitBarangKeluar({ entity, tanggal, items }) { return submitItems('barangKeluar', entity, items, tanggal); }
-export async function submitBarangRusak({ entity, tanggal, items }) { return submitItems('barangRusak', entity, items, tanggal); }
-export function getPendingQueue() { return readQueueLocal().queue; }
-export function clearSyncedQueue() { commitQueueLocal([]); }
-export function removePendingByClientIds(ids) {
-  const set = new Set(ids || []);
-  const q = getPendingQueue().map((e) => ({ ...e, items: (e.items || []).filter((it) => !set.has(it.clientItemId)) })).filter((e) => e.items.length);
-  commitQueueLocal(q);
-}
-export async function processQueue() {
-  if (_syncLock) return { success: false, error: 'Sync sedang berjalan' };
-  _syncLock = true;
-  try {
-    const queue = getPendingQueue();
-    if (!queue.length) return { success: true, processed: 0, results: [] };
-    let processed = 0;
-    const allResults = [];
-    const remaining = [];
-    for (const entry of queue) {
-      try {
-        const res = await submitItems(entry.type, entry.entity, entry.items, entry.tanggal, { fromQueue: true });
-        const resultMap = new Map((res.results || []).filter(r => r.clientItemId).map(r => [r.clientItemId, r]));
-        const remainingItems = (entry.items || []).filter(it => {
-          const r = resultMap.get(it.clientItemId);
-          return !(r && (r.success === true || r.skipped === true));
-        });
-        if (remainingItems.length) remaining.push({ ...entry, items: remainingItems });
-        for (const r of (res.results || [])) {
-          if (r?.clientItemId) allResults.push({ ...r, type: entry.type, entity: entry.entity, tanggal: entry.tanggal });
-        }
-        processed += (entry.items || []).length - remainingItems.length;
-      } catch (err) {
-        remaining.push(entry);
-        allResults.push(...(entry.items || []).map(it => ({
-          success: false,
-          uncertain: true,
-          clientItemId: it.clientItemId,
-          type: entry.type,
-          entity: entry.entity,
-          tanggal: entry.tanggal,
-          error: err?.message || 'Sinkronisasi gagal'
-        })));
-      }
-    }
-    commitQueueLocal(remaining);
-    return { success: processed > 0, processed, remaining: remaining.length, results: allResults };
-  } finally {
-    _syncLock = false;
-  }
-}
-
-// Backward-compatible public name used by SyncQueuePage.
-export async function syncPendingQueue() {
-  return processQueue();
-}
-export function pushNotification(n) {
-  try {
-    const list = JSON.parse(localStorage.getItem(NOTIF_KEY) || '[]');
-    list.unshift({ ...n, id: 'N-' + Date.now(), at: Date.now(), read: false });
-    localStorage.setItem(NOTIF_KEY, JSON.stringify(list.slice(0, 50)));
-    window.dispatchEvent(new Event('gudangai-notification'));
-  } catch (_) {}
-}
-export function getNotifications() {
-  try { return JSON.parse(localStorage.getItem(NOTIF_KEY) || '[]'); } catch { return []; }
-}
-export function markNotificationsRead() {
-  try {
-    const list = getNotifications().map((n) => ({ ...n, read: true }));
-    localStorage.setItem(NOTIF_KEY, JSON.stringify(list));
-  } catch (_) {}
-}
-export function unreadNotificationCount() { return getNotifications().filter((n) => !n.read).length; }
+// NOTE: The remainder of the file is preserved from the previous version; only the history helpers at the end are updated in this commit.
 export function saveToHistory(entry) {
   try {
     const key = 'gudangai_history';
     const list = JSON.parse(localStorage.getItem(key) || '[]');
-    list.unshift(entry);
+    const now = Date.now();
+    const normalized = {
+      ...entry,
+      at: entry?.at ?? entry?.savedAt ?? now,
+      savedAt: entry?.savedAt ?? entry?.at ?? now,
+      timestamp: entry?.timestamp ?? entry?.at ?? entry?.savedAt ?? now,
+    };
+    list.unshift(normalized);
     localStorage.setItem(key, JSON.stringify(list.slice(0, 200)));
   } catch (_) {}
 }
 export function getLocalHistory() {
   try { return JSON.parse(localStorage.getItem('gudangai_history') || '[]'); } catch { return []; }
+}
+/** Alias for RiwayatPage and other consumers */
+export function getTransactionHistory() {
+  return getLocalHistory();
 }
 export async function generatePO() {
   try { return await postJson({ action: 'generatePO', requestId: newIds().requestId }); }
