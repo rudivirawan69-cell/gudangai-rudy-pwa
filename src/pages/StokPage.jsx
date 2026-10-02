@@ -1,4 +1,5 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
+import { useBootstrapRevision } from '../hooks/useBootstrapRevision';
 import { Search, RefreshCw, LayoutGrid } from 'lucide-react';
 import { useStock } from '../hooks/useStock';
 
@@ -49,6 +50,11 @@ function StockCard({ item }) {
 
 export default function StokPage() {
   const { items, loading, error, refresh } = useStock();
+  const bootstrapRevision = useBootstrapRevision();
+
+  useEffect(() => {
+    refresh?.({ force: true });
+  }, [bootstrapRevision, refresh]);
   const [entity, setEntity] = useState('CV');
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
