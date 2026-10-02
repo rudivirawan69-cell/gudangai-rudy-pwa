@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { getTransactionHistory } from '../data/api';
+import { getLocalHistory } from '../data/api';
 import {
   Clock, ArrowUpRight, ArrowDownRight, Search,
   AlertTriangle, Package, WifiOff, CheckCircle2, TrendingUp
@@ -35,7 +35,7 @@ export default function RiwayatPage({ onNavigate }) {
   const [filterType, setFilterType] = useState('all');
   const [filterEntity, setFilterEntity] = useState('all');
   const [dense, setDense] = useState(true);
-  const history = getTransactionHistory();
+  const history = getLocalHistory();
 
   const filtered = useMemo(() => {
     let list = history;
@@ -122,7 +122,7 @@ export default function RiwayatPage({ onNavigate }) {
           <div className="flex items-center gap-1.5 rounded-lg bg-amber-50 px-2 py-1.5">
             <WifiOff className="w-3.5 h-3.5 text-amber-600 shrink-0" />
             <div>
-              <p className="text-[11px] font-bold text-emerald-700 tabular-nums">{stats.offline}</p>
+              <p className="text-[11px] font-bold text-amber-700 tabular-nums">{stats.offline}</p>
               <p className="text-[9px] text-amber-600/80">Offline</p>
             </div>
           </div>
