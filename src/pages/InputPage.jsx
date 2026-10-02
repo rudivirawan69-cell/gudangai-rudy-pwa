@@ -289,22 +289,55 @@ export default function InputPage() {
         const okCount = Number(res.count || 0);
         const queuedCount = Number(res.queuedCount || 0);
         const failCount = Number(res.failed || 0);
-        saveToHistory({
-          type: txType, entity, items: cart, tanggal, at: Date.now(),
-          syncSummary: { total: cart.length, success: okCount, queued: queuedCount, failed: failCount }
+        const resultMap = new Map((res.results || [])
+          .filter(r => r?.clientItemId)
+          .map(r => [r.clientItemId, r]));
+        const confirmedItems = cart.filter((item) => {
+          const r = resultMap.get(item.clientItemId);
+          return r?.success === true || r?.skipped === true;
         });
+
+        // Riwayat hanya boleh dibuat dari konfirmasi per-item backend.
+        // Item yang hanya masuk antrian tidak boleh tampil sebagai "berhasil".
+        if (confirmedItems.length > 0) {
+          saveToHistory({
+            type: txType,
+            entity,
+            items: confirmedItems,
+            tanggal,
+            at: Date.now(),
+            status: 'sukses',
+            source: 'backend-confirmed',
+            syncSummary: {
+              total: cart.length,
+              success: confirmedItems.length,
+              queued: queuedCount,
+              failed: Math.max(0, cart.length - confirmedItems.length - queuedCount)
+            }
+          });
+        }
+
         if (queuedCount > 0) {
           pushNotification({
             type: 'warning',
-            title: 'Sebagian transaksi masuk Antrian Sinkronisasi',
-            body: okCount + ' sukses · ' + queuedCount + ' masuk antrian · ' +
-              Math.max(0, cart.length - okCount - queuedCount) + ' belum teridentifikasi. Tidak ada item dibuang.'
+            title: confirmedItems.length > 0 ? 'Sebagian transaksi masuk Antrian Sinkronisasi' : 'Transaksi masuk Antrian Sinkronisasi',
+            body: confirmedItems.length + ' terkonfirmasi · ' + queuedCount + ' masuk antrian · ' +
+              Math.max(0, cart.length - confirmedItems.length - queuedCount) + ' belum teridentifikasi. Tidak ada item dibuang.'
           });
-          setStatusBanner('SUKSES ' + okCount + ' · ANTRIAN ' + queuedCount + (failCount ? ' · BELUM TERKONFIRMASI ' + failCount : '') + ' — data diamankan.');
+          setStatusBanner(
+            (confirmedItems.length > 0 ? 'TERKONFIRMASI ' + confirmedItems.length + ' · ' : '') +
+            'ANTRIAN ' + queuedCount +
+            (failCount ? ' · BELUM TERKONFIRMASI ' + failCount : '') +
+            ' — belum ditulis dianggap pending.'
+          );
+        } else if (confirmedItems.length === cart.length) {
+          pushNotification({ type: 'success', title: 'Transaksi selesai', body: confirmedItems.length + ' item ' + txType + ' ' + entity + ' terkonfirmasi ditulis backend.' });
+          setStatusBanner('Berhasil dikonfirmasi · ' + confirmedItems.length + ' item');
         } else {
-          pushNotification({ type: 'success', title: 'Transaksi selesai', body: okCount + ' item ' + txType + ' ' + entity + ' berhasil ditulis tanpa antrian.' });
-          setStatusBanner('Berhasil dikirim · ' + okCount + ' item');
+          pushNotification({ type: 'error', title: 'Belum ada konfirmasi penulisan', body: 'Tidak ada item yang dinyatakan tertulis per-item oleh backend.' });
+          setStatusBanner('Belum terkonfirmasi — item tetap diamankan di antrian');
         }
+
         setCart([]); setAccuracy(null);
         window.dispatchEvent(new Event('gudangai-stock-refresh'));
       } else {
