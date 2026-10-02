@@ -74,6 +74,17 @@ html, body, #root {
 }
 
 /* ── Shared responsive surface system ── */
+.page-content {
+  width: 100%;
+  box-sizing: border-box;
+  padding-top: 0.75rem;
+}
+.page-content > * { min-width: 0; }
+.page-content [class*="rounded-"][class*="border"],
+.page-content [class*="rounded-"][class*="shadow"] {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
 .card, .surface, .stat-tile, .stock-card {
   min-width: 0;
   overflow-wrap: anywhere;
@@ -84,6 +95,15 @@ html, body, #root {
   border: 1px solid var(--border);
   box-shadow: var(--shadow-sm);
   color: var(--text-main);
+}
+.page-content button:not(.nav-btn),
+.page-content a,
+.card-interactive,
+.pressable {
+  -webkit-tap-highlight-color: transparent;
+}
+.page-content button:not(.nav-btn) {
+  min-height: 2.5rem;
 }
 .card-interactive,
 .pressable {

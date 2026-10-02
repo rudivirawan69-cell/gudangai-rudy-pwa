@@ -149,14 +149,15 @@ function AppShell() {
   }
 
   return (
-    <div className="min-h-screen bg-[#06101f] text-slate-100">
+    <div className="app-shell min-h-screen text-slate-100">
+      <div className="app-bg" aria-hidden="true" />
       <ConnBanner online={online} hasUrl={hasUrl} status={status} message={message} syncing={syncing} />
       {installPrompt && (
         <button type="button" onClick={installApp} className="fixed top-3 right-3 z-[60] rounded-full bg-[#0f9f9a] px-4 py-2 text-xs font-extrabold text-white shadow-lg border border-white/30">
           Pasang Aplikasi
         </button>
       )}
-      <main className="max-w-lg mx-auto min-h-screen pb-20">
+      <main className="page-content max-w-lg mx-auto min-h-screen px-3 pb-24">
         <div key={pageKey} className="animate-page-in">
           <ErrorBoundary>
             <Suspense fallback={<div className="flex justify-center py-20"><Loader2 className="w-7 h-7 text-cyan-400 animate-spin" /></div>}>
