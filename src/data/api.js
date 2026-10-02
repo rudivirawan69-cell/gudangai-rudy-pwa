@@ -424,8 +424,6 @@ async function submitItems(action, entity, items, tanggal, options = {}) {
     const msg = err?.message || 'Backend write belum terverifikasi';
     pushNotification({ type: 'error', title: 'Write ditahan', body: msg });
     return {
-      success: true, count: 0, failed: list.length, queuedCou```javascript
-    return {
       success: true, count: 0, failed: list.length, queuedCount: list.length, total: list.length,
       results: list.map(it => ({ success: false, queued: true, clientItemId: it.clientItemId, error: msg }))
     };
@@ -487,4 +485,169 @@ async function submitItems(action, entity, items, tanggal, options = {}) {
   }
   return { success: totalSuccess > 0 || totalQueued > 0, count: totalSuccess, failed: totalFail, queuedCount: totalQueued, total: list.length, results: allResults };
 }
-```
+
+function emitProgress(sent, total, result = {}) {
+  try {
+    window.dispatchEvent(new CustomEvent('gudangai-submit-progress', {
+      detail: {
+        sent: Number(sent) || 0,
+        total: Number(total) || 0,
+        success: Number(result.successCount ?? result.count ?? 0) || 0,
+        failed: Number(result.failCount ?? result.failed ?? 0) || 0,
+      }
+    }));
+  } catch (_) {}
+}
+
+export function getPendingQueue() {
+  return readQueueLocal().queue || [];
+}
+
+export function removePendingByClientIds(clientItemIds = []) {
+  const ids = new Set((clientItemIds || []).filter(Boolean));
+  if (!ids.size) return;
+  const queue = getPendingQueue();
+  const next = [];
+  for (const entry of queue) {
+    const items = (entry.items || []).filter(it => !ids.has(it?.clientItemId));
+    if (items.length) next.push({ ...entry, items });
+  }
+  commitQueueLocal(next);
+  try { window.dispatchEvent(new CustomEvent('gudangai-queue-changed')); } catch (_) {}
+}
+
+export function clearSyncedQueue() {
+  commitQueueLocal([]);
+  try { window.dispatchEvent(new CustomEvent('gudangai-queue-changed')); } catch (_) {}
+}
+
+export function saveToHistory(entry = {}) {
+  const key = 'gudangai_history';
+  try {
+    const raw = JSON.parse(localStorage.getItem(key) || '[]');
+    const list = Array.isArray(raw) ? raw : [];
+    list.unshift({
+      ...entry,
+      at: entry.at || Date.now(),
+      timestamp: entry.timestamp || Date.now(),
+      status: entry.status || 'sukses',
+    });
+    localStorage.setItem(key, JSON.stringify(list.slice(0, 2000)));
+    try { window.dispatchEvent(new CustomEvent('gudangai-history-changed')); } catch (_) {}
+  } catch (_) {}
+}
+
+export function getLocalHistory() {
+  try {
+    const raw = JSON.parse(localStorage.getItem('gudangai_history') || '[]');
+    return Array.isArray(raw) ? raw : [];
+  } catch (_) { return []; }
+}
+
+export function getTransactionHistory() {
+  return getLocalHistory();
+}
+
+export function pushNotification(notification = {}) {
+  const key = NOTIF_KEY;
+  try {
+    const raw = JSON.parse(localStorage.getItem(key) || '[]');
+    const list = Array.isArray(raw) ? raw : [];
+    list.unshift({ ...notification, at: Date.now(), read: false });
+    localStorage.setItem(key, JSON.stringify(list.slice(0, 300)));
+    try { window.dispatchEvent(new CustomEvent('gudangai-notification')); } catch (_) {}
+  } catch (_) {}
+}
+
+export function getNotifications() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(NOTIF_KEY) || '[]');
+    return Array.isArray(raw) ? raw : [];
+  } catch (_) { return []; }
+}
+
+export function markNotificationsRead() {
+  const list = getNotifications().map(n => ({ ...n, read: true }));
+  try { localStorage.setItem(NOTIF_KEY, JSON.stringify(list)); } catch (_) {}
+  try { window.dispatchEvent(new CustomEvent('gudangai-notification')); } catch (_) {}
+}
+
+export function unreadNotificationCount() {
+  return getNotifications().filter(n => !n?.read).length;
+}
+
+export async function submitBarangMasuk({ entity, tanggal, items } = {}) {
+  return submitItems('barangMasuk', entity, items, tanggal);
+}
+
+export async function submitBarangKeluar({ entity, tanggal, items } = {}) {
+  return submitItems('barangKeluar', entity, items, tanggal);
+}
+
+export async function submitBarangRusak({ entity, tanggal, items } = {}) {
+  return submitItems('barangRusak', entity, items, tanggal);
+}
+
+/**
+ * Manual queue sync:
+ * - never marks history success merely because a request was sent;
+ * - removes an item only when submitItems returns per-item success/skipped;
+ * - keeps every unconfirmed item in the queue for the next retry;
+ * - preserves clientItemId so backend idempotency prevents duplicates.
+ */
+export async function syncPendingQueue() {
+  if (_syncLock) return { synced: 0, failed: getPendingQueue().reduce((n, e) => n + (e.items?.length || 0), 0), skipped: true };
+  if (!navigator.onLine || !getApiUrl()) {
+    return { synced: 0, failed: getPendingQueue().reduce((n, e) => n + (e.items?.length || 0), 0), skipped: true };
+  }
+
+  _syncLock = true;
+  try {
+    await assertSafeWriteBackend();
+    const queue = getPendingQueue();
+    let synced = 0;
+    let failed = 0;
+    const remaining = [];
+
+    for (const entry of queue) {
+      const items = Array.isArray(entry?.items) ? entry.items.map(ensureClientItemId) : [];
+      if (!items.length) continue;
+
+      const res = await submitItems(entry.type || 'barangMasuk', entry.entity || '', items, entry.tanggal, { fromQueue: true });
+      const results = new Map((res?.results || [])
+        .filter(r => r?.clientItemId)
+        .map(r => [r.clientItemId, r]));
+
+      const keep = [];
+      for (const item of items) {
+        const r = results.get(item.clientItemId);
+        if (r?.success === true || r?.skipped === true || isApplied(item.clientItemId)) {
+          markApplied(item.clientItemId);
+          synced += 1;
+          saveToHistory({
+            type: entry.type,
+            entity: entry.entity,
+            kode: item.kode,
+            nama: item.nama,
+            qty: item.qty,
+            keterangan: item.keterangan || '',
+            tanggal: entry.tanggal,
+            source: 'sync-queue',
+            clientItemId: item.clientItemId,
+            status: 'sukses',
+          });
+        } else {
+          keep.push(item);
+          failed += 1;
+        }
+      }
+      if (keep.length) remaining.push({ ...entry, items: keep });
+    }
+
+    commitQueueLocal(remaining);
+    try { window.dispatchEvent(new CustomEvent('gudangai-queue-changed')); } catch (_) {}
+    return { synced, failed, skipped: false, remaining: failed };
+  } finally {
+    _syncLock = false;
+  }
+}
