@@ -1,4 +1,5 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
+import { useBootstrapRevision } from '../hooks/useBootstrapRevision';
 import { useStock } from '../hooks/useStock';
 import {
   FileText, Trash2, Plus, Minus, Download, ShoppingCart,
@@ -207,6 +208,12 @@ export default function POPage() {
 
   const stockCV = useStock('CV');
   const stockPT = useStock('PT');
+  const bootstrapRevision = useBootstrapRevision();
+
+  useEffect(() => {
+    stockCV.refresh?.({ force: true });
+    stockPT.refresh?.({ force: true });
+  }, [bootstrapRevision, stockCV.refresh, stockPT.refresh]);
   const [tab, setTab] = useState('cs');
   const [csItems, setCsItems] = useState([]);
   const [prodItems, setProdItems] = useState([]);
