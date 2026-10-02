@@ -22,6 +22,14 @@ function qtyOf(h) {
   return (h.items || []).reduce((s, it) => s + (Number(it.qty) || 0), 0);
 }
 
+/** Resolve a safe Date from history entry (supports at / savedAt / timestamp). */
+function entryDate(h) {
+  const raw = h?.savedAt ?? h?.at ?? h?.timestamp ?? h?.createdAt ?? null;
+  if (raw == null || raw === '') return new Date();
+  const d = new Date(raw);
+  return Number.isNaN(d.getTime()) ? new Date() : d;
+}
+
 export default function RiwayatPage({ onNavigate }) {
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState('all');
@@ -52,7 +60,7 @@ export default function RiwayatPage({ onNavigate }) {
   const grouped = useMemo(() => {
     const groups = {};
     filtered.forEach((h) => {
-      const d = new Date(h.savedAt);
+      const d = entryDate(h);
       const key = d.toDateString();
       const label = d.toLocaleDateString('id-ID', {
         weekday: 'short', day: 'numeric', month: 'short', year: 'numeric',
@@ -114,7 +122,7 @@ export default function RiwayatPage({ onNavigate }) {
           <div className="flex items-center gap-1.5 rounded-lg bg-amber-50 px-2 py-1.5">
             <WifiOff className="w-3.5 h-3.5 text-amber-600 shrink-0" />
             <div>
-              <p className="text-[11px] font-bold text-amber-700 tabular-nums">{stats.offline}</p>
+              <p className="text-[11px] font-bold text-emerald-700 tabular-nums">{stats.offline}</p>
               <p className="text-[9px] text-amber-600/80">Offline</p>
             </div>
           </div>
@@ -167,6 +175,7 @@ export default function RiwayatPage({ onNavigate }) {
               <div className="space-y-1.5">
                 {g.items.map((h, idx) => {
                   const m = typeMeta(h.type);
+                  const d = entryDate(h);
                   return (
                     <div key={h.id || idx} className={`rounded-xl border border-slate-200 bg-white px-3 py-2.5 flex items-center gap-2.5 shadow-sm`}>
                       <div className={`w-8 h-8 rounded-lg ${m.bg} flex items-center justify-center shrink-0`}>
@@ -177,7 +186,7 @@ export default function RiwayatPage({ onNavigate }) {
                           {h.items?.[0]?.nama || h.type} {h.items?.length > 1 ? `+${h.items.length - 1}` : ''}
                         </p>
                         <p className="text-[10px] text-slate-500 tabular-nums">
-                          {h.entity} · {qtyOf(h)} unit · {new Date(h.savedAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+                          {h.entity} · {qtyOf(h)} unit · {d.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
                         </p>
                       </div>
                       <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${m.chip}`}>{m.label}</span>
@@ -196,6 +205,7 @@ export default function RiwayatPage({ onNavigate }) {
               <div className="space-y-2.5">
                 {g.items.map((h, idx) => {
                   const m = typeMeta(h.type);
+                  const d = entryDate(h);
                   return (
                     <div key={h.id || idx} className="rounded-2xl border border-slate-200 bg-white p-3.5 shadow-sm">
                       <div className="flex items-center gap-2 mb-2">
@@ -204,7 +214,7 @@ export default function RiwayatPage({ onNavigate }) {
                         </div>
                         <div className="flex-1">
                           <p className="text-sm font-bold text-slate-900">{m.label} · {h.entity}</p>
-                          <p className="text-[10px] text-slate-400">{new Date(h.savedAt).toLocaleString('id-ID')}</p>
+                          <p className="text-[10px] text-slate-400">{d.toLocaleString('id-ID')}</p>
                         </div>
                         <span className="text-sm font-extrabold text-slate-900 tabular-nums">{qtyOf(h)}</span>
                       </div>
