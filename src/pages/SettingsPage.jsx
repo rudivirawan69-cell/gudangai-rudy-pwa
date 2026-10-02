@@ -4,6 +4,7 @@ import {
   CheckCircle2, XCircle, ChevronRight, Cloud,
 } from 'lucide-react';
 import { useAuth, DEFAULT_PROFILE_PHOTO } from '../hooks/useAuth';
+import { useBootstrapRevision } from '../hooks/useBootstrapRevision';
 import {
   getApiUrl, setApiUrl, getApiSecret, setApiSecret, healthCheck,
   getPendingQueue, clearSyncedQueue,
@@ -74,6 +75,7 @@ export default function SettingsPage({ onNavigate }) {
   const [pendingCount, setPendingCount] = useState(0);
   const [panel, setPanel] = useState(null);
   const [showLogout, setShowLogout] = useState(false);
+  const bootstrapRevision = useBootstrapRevision();
 
   useEffect(() => {
     setApiUrlState(getApiUrl());
@@ -82,7 +84,7 @@ export default function SettingsPage({ onNavigate }) {
     const onQueue = () => setPendingCount(getPendingQueue().length);
     window.addEventListener('gudangai-queue-changed', onQueue);
     return () => window.removeEventListener('gudangai-queue-changed', onQueue);
-  }, []);
+  }, [bootstrapRevision]);
 
   const handleTestConnection = useCallback(async () => {
     if (!apiUrl.trim() && !getApiUrl()) {
