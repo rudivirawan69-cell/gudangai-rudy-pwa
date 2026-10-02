@@ -370,19 +370,61 @@ async function submitBatchChunk(action, entity, chunkItems, tanggal) {
     throw new Error('BATCH_NOT_SUPPORTED');
   }
   _batchSupported = true;
+  // IMPORTANT: aggregate success is NOT enough to remove queue items.
+  // A queue item is considered written only when the backend returns an
+  // explicit per-item result that can be matched to this clientItemId/transactionId.
   const batchResults = [];
-  if (data && Array.isArray(data.results)) {
-    const cidByTx = new Map(toSend.map((it) => [it.transactionId, it._cid]));
-    for (const r of data.results) {
-      const clientItemId = r.clientItemId || cidByTx.get(r.transactionId);
-      const normalized = clientItemId ? { ...r, clientItemId } : r;
-      const ok = !!(normalized.success || normalized.status === 'APPLIED' || normalized.status === 'OK' || normalized.status === 'DUPLICATE');
-      normalized.success = ok;
-      if (ok && normalized.clientItemId) markApplied(normalized.clientItemId);
-      batchResults.push(normalized);
+  const rawResults = Array.isArray(data?.results)
+    ? data.results
+    : (Array.isArray(data?.data?.results) ? data.data.results : []);
+  const cidByTx = new Map(toSend.map((it) => [it.transactionId, it._cid]));
+  const confirmedIds = new Set();
+
+  for (const r of rawResults) {
+    const clientItemId = r?.clientItemId || cidByTx.get(r?.transactionId);
+    // Never trust an unmatched backend result as confirmation.
+    if (!clientItemId) continue;
+
+    const explicitSuccess =
+      r.success === true ||
+      r.written === true ||
+      r.inserted === true ||
+      r.status === 'APPLIED' ||
+      r.status === 'OK' ||
+      r.status === 'SUCCESS' ||
+      r.status === 'DUPLICATE';
+
+    const normalized = { ...r, clientItemId, success: !!explicitSuccess };
+    if (explicitSuccess) {
+      confirmedIds.add(clientItemId);
+      markApplied(clientItemId);
+    }
+    batchResults.push(normalized);
+  }
+
+  // Any item without an explicit per-item confirmation remains pending.
+  // This prevents "Riwayat sukses" when Apps Script only returned an aggregate
+  // success/count or when the response was incomplete after a timeout.
+  for (const it of toSend) {
+    if (!confirmedIds.has(it._cid) && !batchResults.some(r => r.clientItemId === it._cid)) {
+      batchResults.push({
+        success: false,
+        uncertain: true,
+        clientItemId: it._cid,
+        transactionId: it.transactionId,
+        error: 'Server belum memberi konfirmasi per-item; tetap di antrian.'
+      });
     }
   }
-  return { success: (data && data.success) || false, successCount: (data && data.successCount) || batchResults.filter((r) => r.success).length, failCount: (data && data.failCount) || batchResults.filter((r) => !r.success).length, results: [...skipped, ...batchResults] };
+
+  const confirmedCount = batchResults.filter((r) => r.success).length;
+  const failedCount = toSend.length - confirmedCount;
+  return {
+    success: confirmedCount > 0,
+    successCount: confirmedCount + skipped.length,
+    failCount: failedCount,
+    results: [...skipped, ...batchResults]
+  };
 }
 function emitProgress(sent, total, chunkResult) {
   try { window.dispatchEvent(new CustomEvent('gudangai-submit-progress', { detail: { sent, total, success: chunkResult?.successCount || 0, failed: chunkResult?.failCount || 0 } })); } catch (_) {}
@@ -479,8 +521,9 @@ export async function processQueue() {
   _syncLock = true;
   try {
     const queue = getPendingQueue();
-    if (!queue.length) return { success: true, processed: 0 };
+    if (!queue.length) return { success: true, processed: 0, results: [] };
     let processed = 0;
+    const allResults = [];
     const remaining = [];
     for (const entry of queue) {
       try {
@@ -488,19 +531,36 @@ export async function processQueue() {
         const resultMap = new Map((res.results || []).filter(r => r.clientItemId).map(r => [r.clientItemId, r]));
         const remainingItems = (entry.items || []).filter(it => {
           const r = resultMap.get(it.clientItemId);
-          return !(r && (r.success || r.skipped));
+          return !(r && (r.success === true || r.skipped === true));
         });
         if (remainingItems.length) remaining.push({ ...entry, items: remainingItems });
+        for (const r of (res.results || [])) {
+          if (r?.clientItemId) allResults.push({ ...r, type: entry.type, entity: entry.entity, tanggal: entry.tanggal });
+        }
         processed += (entry.items || []).length - remainingItems.length;
-      } catch (_) {
+      } catch (err) {
         remaining.push(entry);
+        allResults.push(...(entry.items || []).map(it => ({
+          success: false,
+          uncertain: true,
+          clientItemId: it.clientItemId,
+          type: entry.type,
+          entity: entry.entity,
+          tanggal: entry.tanggal,
+          error: err?.message || 'Sinkronisasi gagal'
+        })));
       }
     }
     commitQueueLocal(remaining);
-    return { success: true, processed, remaining: remaining.length };
+    return { success: processed > 0, processed, remaining: remaining.length, results: allResults };
   } finally {
     _syncLock = false;
   }
+}
+
+// Backward-compatible public name used by SyncQueuePage.
+export async function syncPendingQueue() {
+  return processQueue();
 }
 export function pushNotification(n) {
   try {
