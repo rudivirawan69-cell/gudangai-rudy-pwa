@@ -48,6 +48,28 @@ const MASTER_PT = [
   {kode:"PT-0024",nama:"Bumbu Nasi Goreng Jawa",satuan:"Pack",divisi:"PACKING"},{kode:"PT-0025",nama:"Bumbu Pedas",satuan:"Pack",divisi:"PACKING"},
 ];
 
+function getBootstrapMaster() {
+  try {
+    const raw = localStorage.getItem('gudangai_bootstrap_items');
+    const items = raw ? JSON.parse(raw) : null;
+    if (!Array.isArray(items) || items.length < 100) return null;
+    const normalized = items.map((it) => {
+      const kode = String(it?.kode || it?.kodeBarang || it?.code || '').trim();
+      const nama = String(it?.nama || it?.namaBarang || it?.name || '').trim();
+      const satuan = String(it?.satuan || it?.unit || it?.satuanBarang || '').trim();
+      const divisi = String(it?.divisi || it?.division || it?.departemen || '').trim();
+      const entity = String(it?.entitas || it?.entity || (kode.startsWith('PT-') ? 'PT' : 'CV')).toUpperCase();
+      return { kode, nama, satuan, divisi, entity };
+    }).filter((it) => it.kode && it.nama && (it.entity === 'CV' || it.entity === 'PT'));
+    const cv = normalized.filter((it) => it.entity === 'CV').map(({ entity, ...it }) => it);
+    const pt = normalized.filter((it) => it.entity === 'PT').map(({ entity, ...it }) => it);
+    if (cv.length === 0 || pt.length === 0 || (cv.length + pt.length) < 100) return null;
+    return { CV: cv, PT: pt };
+  } catch (_) {
+    return null;
+  }
+}
+
 function getAliasLookup(entity) {
   const aliases = (aliasConfig && aliasConfig.aliases && aliasConfig.aliases[entity]) || {};
   const lookup = {};
@@ -59,9 +81,20 @@ function getAliasLookup(entity) {
   return lookup;
 }
 
-export function getMasterByEntity(entity) { return entity === "CV" ? MASTER_CV : MASTER_PT; }
-export function getAllMaster() { return { CV: MASTER_CV, PT: MASTER_PT }; }
-export function findByKode(kode) { return [...MASTER_CV, ...MASTER_PT].find(i => i.kode === kode); }
+export function getMasterByEntity(entity) {
+  const boot = getBootstrapMaster();
+  const key = String(entity || '').toUpperCase() === 'CV' ? 'CV' : 'PT';
+  return boot?.[key] || (key === 'CV' ? MASTER_CV : MASTER_PT);
+}
+export function getAllMaster() {
+  const boot = getBootstrapMaster();
+  return boot || { CV: MASTER_CV, PT: MASTER_PT };
+}
+export function findByKode(kode) {
+  const boot = getBootstrapMaster();
+  const list = boot ? [...boot.CV, ...boot.PT] : [...MASTER_CV, ...MASTER_PT];
+  return list.find(i => i.kode === kode);
+}
 
 export function searchMaster(entity, query) {
   const list = getMasterByEntity(entity);
