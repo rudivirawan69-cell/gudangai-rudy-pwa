@@ -15,6 +15,7 @@ import {
   pushNotification, getNotifications, markNotificationsRead, unreadNotificationCount,
 } from '../data/api';
 import { searchMaster } from '../data/master';
+import { useBootstrapRevision } from '../hooks/useBootstrapRevision';
 import { searchLiveStock } from '../data/liveSearch';
 
 const TX = [
@@ -56,6 +57,7 @@ export default function InputPage() {
   const submittingRef = useRef(false);
   const cartRef = useRef(null);
   const scanAbortRef = useRef(false);
+  const bootstrapRevision = useBootstrapRevision();
 
   useEffect(() => {
     const refreshUnread = () => setUnread(unreadNotificationCount());
@@ -100,7 +102,7 @@ export default function InputPage() {
       setHits(merged.slice(0, 80));
     }, 180);
     return () => clearTimeout(t);
-  }, [query, entity, stockCatalog]);
+  }, [query, entity, stockCatalog, bootstrapRevision]);
 
   const addToCart = useCallback((item, qty = 1) => {
     setCart((prev) => {
