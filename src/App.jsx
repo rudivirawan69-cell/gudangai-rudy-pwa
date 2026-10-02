@@ -3,6 +3,7 @@ import { SpeedInsights } from '@vercel/speed-insights/react';
 import { AuthProvider, useAuth } from './hooks/useAuth';
 import LoginPage from './pages/LoginPage';
 import { useConnection } from './hooks/useConnection';
+import { useBootstrap } from './hooks/useBootstrap';
 import {
   LayoutDashboard, Package, PackagePlus, FileText, Clock, Settings,
   Wifi, WifiOff, AlertTriangle, Loader2,
@@ -112,6 +113,8 @@ function AppShell() {
   const [tab, setTab] = useState('dashboard');
   const [pageKey, setPageKey] = useState(0);
   const { online, hasUrl, status, message, syncing } = useConnection({ pollMs: 90000 });
+  // Bootstrap master/stock dari backend menjadi source of truth; cache dipakai offline.
+  useBootstrap();
 
   const goTab = (id) => {
     setTab(id);
