@@ -469,7 +469,7 @@ export default function InputPage() {
       {cart.length > 0 && (
         <div ref={cartRef} className={`${dense ? 'space-y-2' : 'space-y-3'} pb-20`}>
           <div className="flex items-center justify-between">
-            <p className="text-sm font-bold text-white drop-shadow-sm">Keranjang ({cart.length})</p>
+            <p className="text-sm font-bold text-slate-900">Keranjang ({cart.length})</p>
             <button type="button" onClick={() => setCart([])} className="text-xs text-rose-300 font-semibold">Kosongkan</button>
           </div>
           {cart.map((c, idx) => (
@@ -502,7 +502,7 @@ export default function InputPage() {
           ))}
           <div className="fixed bottom-16 left-0 right-0 px-4 z-20">
             {submitProgress && (
-              <p className="text-center text-xs text-cyan-100 mb-1">
+              <p className="text-center text-xs text-cyan-700 mb-1 font-semibold">
                 Mengirim {submitProgress.sent}/{submitProgress.total} · ok {submitProgress.success} · antri {submitProgress.failed}
               </p>
             )}
