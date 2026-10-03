@@ -630,6 +630,21 @@ button{min-height:40px}
 .app-content h1,.app-content h2,.app-content h3,.app-content h4{color:var(--ink);}
 .app-content .metric-value,.app-content .tabular-nums{font-variant-numeric:tabular-nums;}
 .dashboard-panel{overflow:hidden;}
+.dashboard-panel,.dashboard-total-card,.dashboard-po-card{
+  position:relative;
+  background:linear-gradient(145deg,#ffffff 0%,#fbfdfd 58%,#f2f7f8 100%);
+  border:1px solid #dbe8ea;
+  box-shadow:8px 10px 0 rgba(11,123,128,.045),0 10px 24px rgba(24,55,62,.08),inset 0 1px 0 rgba(255,255,255,.92);
+  transform:translateZ(0);
+}
+.dashboard-panel::after,.dashboard-total-card::after,.dashboard-po-card::after{
+  content:"";position:absolute;inset:0;pointer-events:none;border-radius:inherit;
+  background:linear-gradient(120deg,rgba(255,255,255,.44),transparent 32% 72%,rgba(11,157,161,.035));
+}
+.dashboard-po-card{overflow:hidden;}
+.dashboard-panel:hover,.dashboard-total-card:hover,.dashboard-po-card:hover{
+  box-shadow:10px 12px 0 rgba(11,123,128,.055),0 14px 28px rgba(24,55,62,.1),inset 0 1px 0 rgba(255,255,255,.92);
+}
 .dashboard-total-card{
   min-height:92px;
   padding:14px;

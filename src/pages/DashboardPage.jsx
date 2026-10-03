@@ -2,7 +2,7 @@ import { useMemo, useState, useEffect, useCallback } from 'react';
 import { useStock } from '../hooks/useStock';
 import { useAuth } from '../hooks/useAuth';
 import {
-  getPendingQueue, getStatusPO, confirmPOStatus, getTransactionHistory, fetchRemoteTransactionHistory,
+  getPendingQueue, getStatusPO, getDashboardData, confirmPOStatus, getTransactionHistory, fetchRemoteTransactionHistory,
 } from '../data/api';
 import { DIVISIONS } from '../data/master';
 import {
@@ -80,8 +80,17 @@ function DonutPO({ complete, progress, pending, size = 140 }) {
   );
 }
 
-function DivisionStatus3D({ items }) {
+function DivisionStatus3D({ items, sourceRows }) {
   const rows = useMemo(() => {
+    if (Array.isArray(sourceRows) && sourceRows.length > 0) {
+      return sourceRows.map((r) => ({
+        divisi: r.divisi || r.division || 'LAINNYA',
+        total: Number(r.total || r.totalItem || 0) || 0,
+        aman: Number(r.aman || 0) || 0,
+        waspada: Number(r.waspada || 0) || 0,
+        kritis: Number(r.kritis || 0) || 0,
+      })).filter((r) => r.total > 0);
+    }
     const map = {};
     DIVISIONS.forEach((d) => { map[d] = { divisi: d, total: 0, aman: 0, waspada: 0, kritis: 0 }; });
     (items || []).forEach((it) => {
@@ -220,6 +229,10 @@ function normalizeStatusPO(raw) {
   return {
     success: true,
     noPO: raw.noPO || summaryRaw.noPO || '',
+    weekKey: raw.weekKey || raw.week || raw.data?.weekKey || '',
+    poStartDate: raw.poStartDate || raw.data?.poStartDate || '',
+    poEndDate: raw.poEndDate || raw.data?.poEndDate || '',
+    previousWeek: raw.previousWeek || raw.previous || raw.lastWeek || raw.data?.previousWeek || null,
     items,
     summary: {
       totalItem,
@@ -402,16 +415,16 @@ function StatusPOCard({ data, loading, error, onRefresh, onConfirm, confirmingId
   const pct = (n) => (totalItem > 0 ? Math.round((n / totalItem) * 1000) / 10 : 0);
 
   return (
-    <div className="rounded-2xl bg-white border border-slate-100 shadow-sm p-4 space-y-4">
+    <div className="dashboard-po-card rounded-2xl bg-white border border-slate-100 shadow-sm p-4 space-y-4">
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2.5 min-w-0">
           <div className="w-9 h-9 rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center shrink-0">
             <FileText className="w-4 h-4 text-white" />
           </div>
           <div className="min-w-0">
-            <h3 className="text-sm font-bold text-slate-800">Status PO Aktif</h3>
+            <h3 className="text-sm font-bold text-slate-800">Status PO Minggu Ini</h3>
             <p className="text-[11px] text-slate-500 truncate">
-              {data.noPO ? `No. PO ${data.noPO}` : 'PO aktif'} · {totalItem} item
+              {data.weekKey ? `${data.weekKey} · ` : ''}{data.noPO ? `No. PO ${data.noPO}` : 'PO aktif'} · {totalItem} item
             </p>
           </div>
         </div>
@@ -505,6 +518,31 @@ function StatusPOCard({ data, loading, error, onRefresh, onConfirm, confirmingId
           })}
         </div>
       )}
+      {(() => {
+        const previous = data.previousWeek || data.previous || data.lastWeek;
+        const previousItems = Array.isArray(previous?.items) ? previous.items : [];
+        if (!previous || previousItems.length === 0) return null;
+        return (
+          <div className="mt-1 rounded-xl border border-slate-200 bg-slate-50/80 p-3">
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <div>
+                <p className="text-[11px] font-extrabold uppercase tracking-wide text-slate-700">Status PO Minggu Lalu</p>
+                <p className="text-[10px] text-slate-500">{previous.weekKey || 'Snapshot sebelumnya'} · belum selesai</p>
+              </div>
+              <span className="status-pill status-pill-neutral">{previousItems.length} item</span>
+            </div>
+            <div className="space-y-1.5">
+              {previousItems.slice(0, 6).map((it, idx) => (
+                <div key={`${it.itemNo || idx}-${it.nama || ''}`} className="flex items-center justify-between gap-2 text-[11px]">
+                  <span className="min-w-0 truncate text-slate-700">#{it.itemNo || idx + 1} {it.nama || '—'}</span>
+                  <span className="shrink-0 font-bold tabular-nums text-slate-600">{Number(it.qtyDatang || 0)}/{Number(it.qtyPO || 0)}</span>
+                </div>
+              ))}
+            </div>
+            {previousItems.length > 6 && <p className="mt-2 text-[10px] text-slate-500">+{previousItems.length - 6} item lainnya</p>}
+          </div>
+        );
+      })()}
     </div>
   );
 }
@@ -527,6 +565,7 @@ export default function DashboardPage() {
   const [poData, setPoData] = useState(null);
   const [poLoading, setPoLoading] = useState(true);
   const [poError, setPoError] = useState('');
+  const [dashboardData, setDashboardData] = useState(null);
   const [confirmingId, setConfirmingId] = useState(null);
   const [confirmMsg, setConfirmMsg] = useState('');
   const [history, setHistory] = useState(() => getTransactionHistory());
@@ -626,20 +665,32 @@ export default function DashboardPage() {
     }
   }, []);
 
+  const loadDashboardData = useCallback(async () => {
+    try {
+      const res = await getDashboardData();
+      if (res?.success) setDashboardData(res);
+    } catch (_) {
+      // The local stock view remains available if the read-only aggregate is unavailable.
+    }
+  }, []);
+
   useEffect(() => {
     void loadPO();
+    void loadDashboardData();
     const refreshPO = () => { if (document.visibilityState === 'visible' && navigator.onLine) void loadPO(); };
     const timer = setInterval(refreshPO, 15000);
+    const dashboardTimer = setInterval(() => { if (document.visibilityState === 'visible' && navigator.onLine) void loadDashboardData(); }, 15000);
     window.addEventListener('online', refreshPO);
     window.addEventListener('gudangai-po-changed', refreshPO);
     document.addEventListener('visibilitychange', refreshPO);
     return () => {
       clearInterval(timer);
+      clearInterval(dashboardTimer);
       window.removeEventListener('online', refreshPO);
       window.removeEventListener('gudangai-po-changed', refreshPO);
       document.removeEventListener('visibilitychange', refreshPO);
     };
-  }, [loadPO]);
+  }, [loadPO, loadDashboardData]);
 
   const handleConfirm = useCallback(async (item, status = 'Selesai', qtyDatang) => {
     if (!item) return;
@@ -701,7 +752,7 @@ export default function DashboardPage() {
           </div>
           <button
             type="button"
-            onClick={() => { refresh?.(); loadPO(); }}
+            onClick={() => { refresh?.(); loadPO(); loadDashboardData(); }}
             className="w-10 h-10 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-600 shrink-0 active:scale-95"
             aria-label="Refresh"
           >
@@ -725,7 +776,7 @@ export default function DashboardPage() {
 
       <div className="rounded-2xl bg-white border border-slate-100 shadow-sm p-4">
         <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-3">Status Stok per Divisi</p>
-        <DivisionStatus3D items={allItems} />
+        <DivisionStatus3D items={allItems} sourceRows={dashboardData?.statusPerDivisi} />
       </div>
 
       <StatusPOCard
