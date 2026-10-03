@@ -191,7 +191,7 @@ export default function SyncQueuePage({ onBack }) {
         </button>
         <div className="min-w-0 flex-1">
           <h1 className="text-base font-bold text-slate-900">Antrian Sinkronisasi</h1>
-          <p className="text-[11px] text-cyan-100/80">
+          <p className="text-[11px] text-slate-500">
             {total === 0 ? 'Tidak ada item pending' : `${total} item di keranjang antrian`}
           </p>
         </div>
