@@ -1,5 +1,7 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useAuth } from '../hooks/useAuth';
+
+const DEFAULT_PIN = '6969';
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -7,12 +9,19 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [shake, setShake] = useState(false);
 
+  // PIN length follows stored value (4–6). Default remains 4 digits (6969).
+  const pinLength = useMemo(() => {
+    const stored = localStorage.getItem('gudangai_pin') || DEFAULT_PIN;
+    const len = String(stored).length;
+    return Math.min(6, Math.max(4, len || 4));
+  }, []);
+
   const handleDigit = (d) => {
-    if (pin.length >= 6) return;
+    if (pin.length >= pinLength) return;
     const next = pin + d;
     setPin(next);
     setError('');
-    if (next.length === 4) {
+    if (next.length === pinLength) {
       setTimeout(() => {
         if (!login(next)) {
           setError('PIN salah');
@@ -28,7 +37,7 @@ export default function LoginPage() {
     setError('');
   };
 
-  const dots = Array.from({ length: 4 }, (_, i) => (
+  const dots = Array.from({ length: pinLength }, (_, i) => (
     <div key={i} className={`w-3.5 h-3.5 rounded-full transition-all duration-200 ${i < pin.length
       ? 'bg-cyan-300 scale-110 shadow-[0_0_12px_rgba(103,232,249,0.7)]'
       : 'bg-white/25 border border-white/40'}`} />
@@ -56,7 +65,7 @@ export default function LoginPage() {
           </div>
 
           <div className="h-6 mb-3 text-center">
-            {error ? <p className="text-rose-300 text-sm font-semibold">{error}</p> : <p className="text-white/65 text-xs">Masukkan PIN</p>}
+            {error ? <p className="text-rose-300 text-sm font-semibold">{error}</p> : <p className="text-white/65 text-xs">Masukkan PIN ({pinLength} digit)</p>}
           </div>
 
           <div className="grid grid-cols-3 gap-2.5">
