@@ -671,15 +671,15 @@ button{min-height:40px}
 .nav-bar>div{min-height:var(--nav-height);}
 .nav-btn{min-height:var(--nav-height);}
 .text-cyan-100{color:#0e7490!important;}
-.app-content .text-cyan-100\/80{color:#0e7490!important;}
+.text-cyan-100\/80{color:#0e7490!important;}
 .section-card .text-cyan-100,.card .text-cyan-100,.surface .text-cyan-100{color:#0e7490!important;}
 /* Fixed action surfaces must clear the global bottom navigation. */
 .fixed.bottom-16{bottom:var(--safe-action-bottom)!important;}
-.app-content .fixed.bottom-\[4\.25rem\]{bottom:var(--safe-action-bottom)!important;}
+.fixed.bottom-\[4\.25rem\]{bottom:var(--safe-action-bottom)!important;}
 /* White surfaces never use low-contrast white body copy. */
 .text-white.drop-shadow-sm{color:#0f172a!important;text-shadow:none!important;}
 /* Give fixed action controls a clear separation from the navigation bar. */
-.app-content .fixed.bottom-16>*,.app-content .fixed.bottom-\[4\.25rem\]>*{
+.fixed.bottom-16>*,.fixed.bottom-\[4\.25rem\]>*{
   box-shadow:0 8px 24px rgba(15,23,42,.12);
 }
 @media(max-width:380px){
