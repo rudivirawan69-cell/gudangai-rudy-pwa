@@ -101,7 +101,7 @@ async function fetchWithRetry(url, options = {}, retries = RETRY_COUNT, timeoutM
   }
   throw lastError;
 }
-export async function postJson(payload, { retries = RETRY_COUNT, timeoutMs = REQUEST_TIMEOUT_MS } = {}) {
+async function postJson(payload, { retries = RETRY_COUNT, timeoutMs = REQUEST_TIMEOUT_MS } = {}) {
   const url = getApiUrl();
   if (!url) throw new Error('URL API belum diatur');
   const body = JSON.stringify({ schemaVersion: SCHEMA_VERSION, secret: getApiSecret() || undefined, client: { app: 'gudangai-rudy-pwa', deviceId: deviceId() }, ...payload });
@@ -134,7 +134,7 @@ export async function hydrateOfflineQueue() {
     } catch (_) {}
   });
 }
-export async function getJson(action, extraParams = {}) {
+async function getJson(action, extraParams = {}) {
   const url = getApiUrl();
   if (!url) throw new Error('URL API belum diatur');
   const secret = getApiSecret();
