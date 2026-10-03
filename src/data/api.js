@@ -154,7 +154,14 @@ export async function getStatusPO() {
     return { success: false, items: [], error: err?.message || String(err) };
   }
 }
-
+export async function getDashboardData() {
+  try {
+    const data = await getJson('getDashboardData');
+    return data || { success: false, error: 'Respons Dashboard kosong' };
+  } catch (err) {
+    return { success: false, error: err?.message || 'Gagal memuat Dashboard' };
+  }
+}
 export async function confirmPOStatus({ itemNo, nama, status, qtyDatang, keterangan, requestId } = {}) {
   const rid = requestId || newIds().requestId;
   try {
