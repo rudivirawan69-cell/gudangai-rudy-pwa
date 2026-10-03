@@ -655,3 +655,34 @@ button{min-height:40px}
 .app-content .from-\[\#0b2a55\]{--tw-gradient-from:#0e7490 var(--tw-gradient-from-position);--tw-gradient-to:rgb(14 116 144 / 0) var(--tw-gradient-to-position);}
 .app-content .to-\[\#0b2a55\]{--tw-gradient-to:#0f766e var(--tw-gradient-to-position);}
 /* Stock list supporting copy sits on the light surface, never the photo background. */
+
+
+/* GUDANGAI RUDY — UI FIX v7.2
+   Presentation-only: contrast, mobile safe-area spacing and visual consistency.
+   No transaction/data/API behavior is changed.
+*/
+:root{
+  --nav-height:67px;
+  --safe-action-bottom:calc(var(--nav-height) + env(safe-area-inset-bottom,0px) + 12px);
+}
+.app-shell{color:var(--ink);}
+.page-content{padding-bottom:calc(7.5rem + env(safe-area-inset-bottom,0px));}
+.nav-bar{min-height:var(--nav-height);padding-bottom:env(safe-area-inset-bottom,0px);}
+.nav-bar>div{min-height:var(--nav-height);}
+.nav-btn{min-height:var(--nav-height);}
+.app-content .text-cyan-100{color:#0e7490!important;}
+.app-content .text-cyan-100\/80{color:#0e7490!important;}
+.section-card .text-cyan-100,.card .text-cyan-100,.surface .text-cyan-100{color:#0e7490!important;}
+/* Fixed action surfaces must clear the global bottom navigation. */
+.app-content .fixed.bottom-16{bottom:var(--safe-action-bottom)!important;}
+.app-content .fixed.bottom-\[4\.25rem\]{bottom:var(--safe-action-bottom)!important;}
+/* White surfaces never use low-contrast white body copy. */
+.app-content .text-white.drop-shadow-sm{color:#0f172a!important;text-shadow:none!important;}
+/* Give fixed action controls a clear separation from the navigation bar. */
+.app-content .fixed.bottom-16>*,.app-content .fixed.bottom-\[4\.25rem\]>*{
+  box-shadow:0 8px 24px rgba(15,23,42,.12);
+}
+@media(max-width:380px){
+  :root{--nav-height:64px;}
+  .page-content{padding-bottom:calc(7.25rem + env(safe-area-inset-bottom,0px));}
+}
