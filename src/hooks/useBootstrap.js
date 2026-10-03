@@ -1,15 +1,15 @@
 import { useState, useEffect, useCallback } from 'react';
-import { getJson, postJson, getApiUrl } from '../data/api';
+import { getApiUrl, getApiSecret } from '../data/api';
 
 /**
  * useBootstrap — Master data & stock sync from BACKEND
- * 
+ *
  * Executes on app startup:
  * 1. Fetch bootstrap data (masterVersion + stockVersion + all items)
  * 2. Validate versions match cached versions
  * 3. If mismatch → refresh cache (localStorage)
  * 4. If no backend → use fallback local master
- * 
+ *
  * PENTING: BACKEND v6.6.5 adalah sumber kebenaran (source of truth).
  * PWA hanya replika untuk offline + performance.
  */
@@ -20,9 +20,6 @@ const CACHE_KEY_STOCK_VERSION = 'gudangai_stock_version';
 const CACHE_KEY_BOOTSTRAP_AT = 'gudangai_bootstrap_at';
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 jam
 
-/**
- * Load cached bootstrap data from localStorage
- */
 function loadCachedBootstrap() {
   try {
     const items = localStorage.getItem(CACHE_KEY_ITEMS);
@@ -47,9 +44,6 @@ function loadCachedBootstrap() {
   return null;
 }
 
-/**
- * Save bootstrap data to localStorage
- */
 function saveBootstrapCache(data) {
   try {
     const now = Date.now();
@@ -62,60 +56,61 @@ function saveBootstrapCache(data) {
   }
 }
 
-/**
- * Fetch bootstrap data from backend
- */
 async function fetchBootstrapFromBackend() {
   const apiUrl = getApiUrl();
   if (!apiUrl) return null;
 
+  const secret = (typeof getApiSecret === 'function' ? getApiSecret() : '') || '';
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 15000);
+
   try {
-    // Try GET first (faster, read-only)
-    let data = await getJson('bootstrap', { entitas: 'ALL' });
+    // Prefer GET
+    const q = new URLSearchParams({ action: 'bootstrap', entitas: 'ALL' });
+    if (secret) q.set('secret', secret);
+    let res = await fetch(apiUrl + '?' + q.toString(), { method: 'GET', redirect: 'follow', signal: controller.signal });
+    let text = await res.text();
+    let data;
+    try { data = JSON.parse(text); } catch { data = null; }
     if (data && data.success && data.items) {
+      clearTimeout(timer);
       return data;
     }
 
-    // Fallback to POST
-    data = await postJson({
+    // Fallback POST
+    const body = JSON.stringify({
+      schemaVersion: '1.0',
+      secret: secret || undefined,
+      client: { app: 'gudangai-rudy-pwa' },
       action: 'bootstrap',
       entitas: 'ALL',
     });
-
+    res = await fetch(apiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body,
+      redirect: 'follow',
+      signal: controller.signal,
+    });
+    text = await res.text();
+    try { data = JSON.parse(text); } catch { data = null; }
     if (data && data.success && data.items) {
+      clearTimeout(timer);
       return data;
     }
-
+    clearTimeout(timer);
     return null;
   } catch (err) {
+    clearTimeout(timer);
     console.warn('Bootstrap fetch failed:', err.message);
     return null;
   }
 }
 
-/**
- * Merge offline changes into bootstrap items (future enhancement)
- */
 function mergeOfflineChanges(bootstrapItems) {
-  // TODO: When implementing sync queue, merge offline transaction history
-  // into stock values for accurate display during offline -> online transition
   return bootstrapItems;
 }
 
-/**
- * Main hook: useBootstrap()
- * 
- * Returns:
- * - items: array of stock items from bootstrap
- * - masterVersion: hash of master data (kode + nama + divisi, etc)
- * - stockVersion: hash of stock values (stockAkhir, nilaiStok)
- * - synced: true if fetched from backend in this session
- * - loading: true while first fetch in progress
- * - error: string if fetch failed
- * - refresh: function to force re-fetch from backend
- * - cachedAt: timestamp when data was cached
- * - snapshotId: unique ID for this snapshot (SNAP-yyyymmdd-hhmmss-checksum)
- */
 export function useBootstrap() {
   const [state, setState] = useState({
     items: null,
@@ -141,7 +136,16 @@ export function useBootstrap() {
           masterVersion: backendData.masterVersion,
           stockVersion: backendData.stockVersion,
         });
-        try { window.dispatchEvent(new CustomEvent('gudangai-bootstrap-updated', { detail: { masterVersion: backendData.masterVersion, stockVersion: backendData.stockVersion, count: merged.length, snapshotId: backendData.snapshotId || null } })); } catch (_) {}
+        try {
+          window.dispatchEvent(new CustomEvent('gudangai-bootstrap-updated', {
+            detail: {
+              masterVersion: backendData.masterVersion,
+              stockVersion: backendData.stockVersion,
+              count: merged.length,
+              snapshotId: backendData.snapshotId || null,
+            },
+          }));
+        } catch (_) {}
 
         setState({
           items: merged,
@@ -157,30 +161,26 @@ export function useBootstrap() {
         return { success: true, synced: true };
       }
 
-      // Backend unavailable — use cache if available
       const cached = loadCachedBootstrap();
       if (cached && cached.items && cached.items.length > 0) {
         setState({
           items: cached.items,
           masterVersion: cached.masterVersion,
           stockVersion: cached.stockVersion,
-          synced: false, // Not from backend
+          synced: false,
           loading: false,
           error: 'Backend unavailable, using cached data',
           cachedAt: cached.cachedAt,
           snapshotId: null,
         });
-
         return { success: false, reason: 'backend_unavailable', usingCache: true };
       }
 
-      // No cache and no backend
       setState((prev) => ({
         ...prev,
         loading: false,
         error: 'Backend unavailable and no cached data',
       }));
-
       return { success: false, reason: 'no_data' };
     } catch (err) {
       const cached = loadCachedBootstrap();
@@ -203,12 +203,10 @@ export function useBootstrap() {
         loading: false,
         error: err.message || 'Bootstrap failed',
       }));
-
       return { success: false, reason: 'fetch_error' };
     }
   }, []);
 
-  // Initial load on mount + refresh whenever connectivity returns.
   useEffect(() => {
     const onOnline = () => {
       if (getApiUrl()) refresh().catch(() => {});
@@ -216,52 +214,43 @@ export function useBootstrap() {
     window.addEventListener('online', onOnline);
     const cached = loadCachedBootstrap();
 
-    // If cached data is fresh, use it immediately
     if (cached && cached.isFresh && cached.items && cached.items.length > 0) {
       setState({
         items: cached.items,
         masterVersion: cached.masterVersion,
         stockVersion: cached.stockVersion,
-        synced: false, // From cache, not fresh backend fetch
+        synced: false,
         loading: false,
         error: null,
         cachedAt: cached.cachedAt,
         snapshotId: null,
       });
 
-      // Background refresh if online
       if (navigator.onLine && getApiUrl()) {
-        refresh().catch(() => {
-          /* ignore background errors */
-        });
+        refresh().catch(() => {});
       }
-
-      return;
+      return () => window.removeEventListener('online', onOnline);
     }
 
-    // Cache missing or stale — fetch from backend
     if (navigator.onLine) {
       refresh();
+    } else if (cached && cached.items && cached.items.length > 0) {
+      setState({
+        items: cached.items,
+        masterVersion: cached.masterVersion,
+        stockVersion: cached.stockVersion,
+        synced: false,
+        loading: false,
+        error: 'Offline mode (using cached data)',
+        cachedAt: cached.cachedAt,
+        snapshotId: null,
+      });
     } else {
-      // Offline and no cache
-      if (cached && cached.items && cached.items.length > 0) {
-        setState({
-          items: cached.items,
-          masterVersion: cached.masterVersion,
-          stockVersion: cached.stockVersion,
-          synced: false,
-          loading: false,
-          error: 'Offline mode (using cached data)',
-          cachedAt: cached.cachedAt,
-          snapshotId: null,
-        });
-      } else {
-        setState((prev) => ({
-          ...prev,
-          loading: false,
-          error: 'Offline and no cached data available',
-        }));
-      }
+      setState((prev) => ({
+        ...prev,
+        loading: false,
+        error: 'Offline and no cached data available',
+      }));
     }
     return () => window.removeEventListener('online', onOnline);
   }, [refresh]);
