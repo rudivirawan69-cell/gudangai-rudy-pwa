@@ -3,7 +3,7 @@
  * V6.8.0: OCR foto uses same validation pipeline as PDF for consistent accuracy
  */
 import { matchByAlias, getMasterByEntity } from './master';
-import { resolvePdfNameDeterministic, normalizeOcr } from './pdfDeterministicRules';
+import { resolvePdfNameDeterministic } from './pdfDeterministicRules';
 
 let pdfjsLib = null;
 async function loadPdfjs() {
@@ -65,9 +65,50 @@ export async function extractTextFromPdf(file, onProgress) {
       allLines.push(...lines);
       fullText += lines.join('\n') + '\n';
     }
-    return { ok: true, text: fullText, lines: allLines, pageCount: pdf.numPages };
+    // PDF hasil scan sering mempunyai content stream kosong. Jalankan OCR
+    // per halaman sebagai fallback, tanpa menggandakan teks PDF digital.
+    if (allLines.length < 3 || !/\d/.test(fullText)) {
+      const ocr = await extractPdfPagesWithOcr(pdf, onProgress);
+      if (ocr.text.trim()) {
+        return { ok: true, text: ocr.text, lines: ocr.lines, pageCount: pdf.numPages, method: 'ocr' };
+      }
+    }
+    return { ok: true, text: fullText, lines: allLines, pageCount: pdf.numPages, method: 'text' };
   } catch (err) {
     return { ok: false, error: err.message || 'Gagal baca PDF' };
+  }
+}
+
+async function extractPdfPagesWithOcr(pdf, onProgress) {
+  try {
+    const Tesseract = (await import('tesseract.js')).default;
+    const pages = [];
+    for (let pageNo = 1; pageNo <= pdf.numPages; pageNo++) {
+      if (onProgress) onProgress(`OCR PDF halaman ${pageNo}/${pdf.numPages}...`);
+      const page = await pdf.getPage(pageNo);
+      const viewport = page.getViewport({ scale: 2 });
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.min(Math.ceil(viewport.width), 2400);
+      canvas.height = Math.min(Math.ceil(viewport.height), 3400);
+      const scaleX = canvas.width / viewport.width;
+      const scaleY = canvas.height / viewport.height;
+      await page.render({
+        canvasContext: canvas.getContext('2d', { willReadFrequently: true }),
+        viewport: viewport.clone({ scale: 2 * Math.min(scaleX, scaleY) }),
+      }).promise;
+      const result = await Tesseract.recognize(canvas, 'ind+eng', {
+        logger: (m) => {
+          if (m.status === 'recognizing text' && onProgress) {
+            onProgress(`OCR PDF ${pageNo}/${pdf.numPages} ${Math.round((m.progress || 0) * 100)}%`);
+          }
+        },
+      });
+      pages.push(cleanOcrText(result?.data?.text || ''));
+    }
+    const text = pages.filter(Boolean).join('\n');
+    return { text, lines: text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean) };
+  } catch {
+    return { text: '', lines: [] };
   }
 }
 
@@ -100,31 +141,28 @@ export async function extractTextFromImage(file, onProgress) {
  * Clean OCR text — fix common misreads for Indonesian food/stock items
  */
 function cleanOcrText(text) {
-  return String(text || '')
-    // Fix common OCR character substitutions
-    .replace(/[|l](?=\d)/gi, '1')        // |5 or l5 → 15
-    .replace(/(?<=\d)[oO]/g, '0')         // 1o → 10
-    .replace(/\bAyarn\b/gi, 'Ayam')       // Ayarn → Ayam
-    .replace(/\bDag[il]ng\b/gi, 'Daging') // Dagiing/Daging
-    .replace(/\bBaks[oO0]\b/gi, 'Bakso')  // Baks0 → Bakso
-    .replace(/\bNugge[t7]\b/gi, 'Nugget') // Nugge7 → Nugget
-    .replace(/\bS[ao0]s[il]s\b/gi, 'Sosis') // S0sis, Sasis
-    .replace(/\bBumb[uU0]\b/gi, 'Bumbu')  // Bumb0
-    .replace(/\bSa[oO0]s\b/gi, 'Saos')    // Sa0s
-    .replace(/\bSamba[l1]\b/gi, 'Sambal')  // Sambal
-    .replace(/\bF[il1]llet\b/gi, 'Fillet') // F1llet
+  return String(text || '').split(/\r?\n/).map((line) => line
+    // Fix common OCR character substitutions, per row.
+    .replace(/[|l](?=\d)/gi, '1')
+    .replace(/(?<=\d)[oO]/g, '0')
+    .replace(/\bAyarn\b/gi, 'Ayam')
+    .replace(/\bDag[il]ng\b/gi, 'Daging')
+    .replace(/\bBaks[oO0]\b/gi, 'Bakso')
+    .replace(/\bNugge[t7]\b/gi, 'Nugget')
+    .replace(/\bS[ao0]s[il]s\b/gi, 'Sosis')
+    .replace(/\bBumb[uU0]\b/gi, 'Bumbu')
+    .replace(/\bSa[oO0]s\b/gi, 'Saos')
+    .replace(/\bSamba[l1]\b/gi, 'Sambal')
+    .replace(/\bF[il1]llet\b/gi, 'Fillet')
     .replace(/\b[Kk]atsu\b/g, 'Katsu')
-    .replace(/\bCh[il1]ken\b/gi, 'Chiken') // Ch1ken → Chiken (matching master data spelling)
-    // Fix unit/satuan OCR
+    .replace(/\bCh[il1]ken\b/gi, 'Chiken')
     .replace(/\bPa[ck]k\b/gi, 'Pack')
     .replace(/\bpc[s5]\b/gi, 'pcs')
     .replace(/\bGR[A4]M\b/gi, 'GRAM')
-    // Fix number-space issues
     .replace(/(\d)\s*[xX×]\s*(\d)/g, '$1 x $2')
-    // Remove stray special characters from OCR noise
     .replace(/[~`^{}[\]\\]/g, '')
-    // Normalize whitespace
-    .replace(/\s+/g, ' ');
+    .replace(/[ \t]+/g, ' ')
+    .trim()).filter(Boolean).join('\n');
 }
 
 function stripLeadingNo(name) {

@@ -21,6 +21,7 @@ export default function ValidasiPage() {
   const [cameraOn, setCameraOn] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitMsg, setSubmitMsg] = useState(null);
+  const [tanggal, setTanggal] = useState(new Date().toISOString().slice(0, 10));
   const fileRef = useRef(null);
   const videoRef = useRef(null);
   const streamRef = useRef(null);
@@ -180,13 +181,17 @@ export default function ValidasiPage() {
 
   const sendAsKeluar = async () => {
     if (!summary.matchedItems.length) return;
+    if (!tanggal) {
+      setSubmitMsg({ success: false, error: 'Tanggal transaksi wajib diisi.' });
+      return;
+    }
     setSubmitting(true); setSubmitMsg(null);
     try {
       const payload = summary.matchedItems.map((i) => ({
         kode: i.kode, qty: i.qty,
         keterangan: (i.keterangan || 'Validasi PDF/Nota').slice(0, 200),
       }));
-      const res = await submitBarangKeluar(entity, payload);
+      const res = await submitBarangKeluar({ entity, tanggal, items: payload });
       saveToHistory({
         type: 'keluar', entity,
         items: summary.matchedItems.map((i) => ({ kode: i.kode, nama: i.nama, qty: i.qty, keterangan: i.keterangan })),
@@ -269,6 +274,12 @@ export default function ValidasiPage() {
           className="mt-2 w-full py-2.5 rounded-xl bg-gradient-to-r from-cyan-600 to-teal-700 text-white text-sm font-semibold disabled:opacity-50">
           Validasi ke Master {entity}
         </button>
+      </div>
+
+      <div className="bg-white rounded-2xl border border-gray-100 p-3">
+        <label htmlFor="pdf-transaction-date" className="text-[11px] font-medium text-gray-500 uppercase tracking-wider">Tanggal transaksi</label>
+        <input id="pdf-transaction-date" type="date" value={tanggal} onChange={(e) => setTanggal(e.target.value)}
+          className="mt-1.5 w-full px-3 py-2 bg-gray-50 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-cyan-400" />
       </div>
 
       {error && <div className="text-xs px-3 py-2 rounded-lg bg-amber-50 text-amber-800 border border-amber-100">{error}</div>}
