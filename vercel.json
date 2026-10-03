@@ -3,5 +3,6 @@
   "installCommand": "npm install",
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
+  "ignoreCommand": "git diff --quiet HEAD^ HEAD -- src/ public/ index.html package.json package-lock.json vite.config.js vercel.json",
   "rewrites": [{ "source": "/((?!icons/|assets/).*)", "destination": "/index.html" }]
 }
