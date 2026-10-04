@@ -313,12 +313,46 @@ async function submitBulk(type, entity, tanggal, items) {
         }
         enqueue(type, entity, chunk, { tanggal: tgl });
       }
-    } catch (err) {
-      enqueue(type, entity, chunk, { tanggal: tgl });
+    } catch (batchErr) {
+      // Fallback: bila bulk batch gagal/timeout, coba satu-per-satu memakai action
+      // yang sama. Ini mencegah tombol terlihat "macet" hanya karena satu batch.
       for (const it of chunk) {
-        results.push({ clientItemId: it.clientItemId, success: false, queued: true, error: err?.message || 'timeout/network' });
+        const singleWire = {
+          kodeBarang: String(it.kode || '').trim(),
+          qty: Number(it.qty) || 0,
+          keterangan: String(it.keterangan || '').trim().slice(0, 200),
+          requestId: 'REQ-' + String(it.clientItemId),
+          transactionId: 'TX-' + String(it.clientItemId),
+          nonce: 'NC-' + String(it.clientItemId),
+        };
+        try {
+          const single = await postJson({
+            action: 'bulkTransaction',
+            sheet: sheetName,
+            entitas: ent,
+            entity: ent,
+            tanggal: tgl,
+            transactions: [singleWire],
+            items: [singleWire],
+            queueApproved: true,
+            batchId: 'SINGLE-' + String(it.clientItemId),
+            requestId: 'REQ-' + String(it.clientItemId),
+          }, { retries: 1, timeoutMs: 12000 });
+          if (single?.success === true || single?.written === true || single?.status === 'OK' ||
+              single?.status === 'APPLIED' || single?.status === 'SUCCESS' ||
+              single?.status === 'DUPLICATE' || single?.results?.[0]?.success === true ||
+              single?.results?.[0]?.status === 'APPLIED') {
+            results.push({ clientItemId: it.clientItemId, success: true, fallback: true });
+            successCount++;
+            continue;
+          }
+          throw new Error(single?.error || 'Gagal menyimpan item');
+        } catch (singleErr) {
+          enqueue(type, entity, [it], { tanggal: tgl });
+          results.push({ clientItemId: it.clientItemId, success: false, queued: true, error: singleErr?.message || batchErr?.message || 'timeout/network' });
+          failed++;
+        }
       }
-      failed += chunk.length;
     }
     try {
       window.dispatchEvent(new CustomEvent('gudangai-submit-progress', {
