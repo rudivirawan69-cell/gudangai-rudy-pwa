@@ -3,7 +3,7 @@ const RETRY_COUNT = 2;
 const RETRY_BASE_MS = 400;
 const REQUEST_TIMEOUT_MS = 15000;
 /** Chunk kecil agar Apps Script + spreadsheet selesai < timeout (anti-antrian). */
-const BATCH_CHUNK_SIZE = 12;
+const BATCH_CHUNK_SIZE = 80;
 const BATCH_TIMEOUT_MS = 90000;
 const SINGLE_TIMEOUT_MS = 60000;
 const SCHEMA_VERSION = '1.0';
@@ -363,23 +363,18 @@ async function submitItems(action, entity, items, tanggal, options = {}) {
     } catch (err) {
       const msg = String(err?.message || '');
       if (msg === 'BATCH_NOT_SUPPORTED' || /BATCH_NOT_SUPPORTED/i.test(msg)) {
-        for (const it of chunk) {
-          try {
-            const one = await submitOneItem(action, entity, it, tanggal);
-            allResults.push(one);
-            if (one.success || one.skipped) totalSuccess += 1;
-            else {
-              totalFail += 1;
-              if (!options.fromQueue) { enqueue(action, entity, [it], { tanggal }); totalQueued += 1; }
-            }
-          } catch (e2) {
-            totalFail += 1;
-            if (!options.fromQueue) { enqueue(action, entity, [it], { tanggal }); totalQueued += 1; }
-            allResults.push({ success: false, queued: true, clientItemId: it.clientItemId, error: e2?.message || 'Gagal' });
-          }
-          emitProgress(Math.min(i + chunk.length, list.length), list.length, { successCount: totalSuccess, failCount: totalFail });
-        }
-        continue;
+        // Never downgrade a bulk send to one-by-one requests.
+        if (!options.fromQueue) enqueue(action, entity, chunk, { tanggal });
+        totalQueued += chunk.length;
+        totalFail += chunk.length;
+        allResults.push(...chunk.map(it => ({
+          success: false,
+          queued: true,
+          clientItemId: it.clientItemId,
+          error: 'Backend bulkTransaction belum tersedia'
+        })));
+        emitProgress(Math.min(i + chunk.length, list.length), list.length, { successCount: totalSuccess, failCount: totalFail });
+        break;
       }
       const remainingItems = list.slice(i);
       if (!options.fromQueue) enqueue(action, entity, remainingItems, { tanggal });
