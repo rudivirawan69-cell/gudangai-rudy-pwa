@@ -163,7 +163,9 @@ export default function InputPage() {
       const validation = validateItems(rows, useEntity);
       let stock = null;
       try { stock = await fetchStock(useEntity, { allowDemo: false }); } catch (_) { stock = null; }
-      const matched = applyStockAwareFallback(validation.matched || [], useEntity, stock);
+      const matched = applyStockAwareFallback(validation.matched || [], useEntity, stock)
+        .filter((m) => !/\b\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4}\b/.test(String(m?.nameFromPdf || m?.rawName || '')))
+        .filter((m) => !/\b(?:periode|period|minggu)\b.*\d{4}/i.test(String(m?.nameFromPdf || m?.rawName || '')));
       const amb = validation.ambiguous || [];
       const un = validation.unmatched || [];
       const review = [...amb, ...un].map((r, idx) => ({
