@@ -184,29 +184,53 @@ function stripLeadingNo(name) {
 export function parsePdfLinesToItems(text) {
   const lines = String(text || '').split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
   const items = [];
+  let sourceIndex = 0;
+
   for (const line of lines) {
-    if (/^(no\.?|total|grand|sub\s*total|jumlah|halaman|page|tanggal|alamat|telepon|telp|invoice|nota)/i.test(line)) continue;
-    if (/^(nama\s*barang|kode|satuan|qty|quantity|unit|harga|jumlah\s*harga)/i.test(line)) continue;
+    if (/^(no\.?|total|grand|sub\s*total|jumlah|halaman|page|tanggal|alamat|telepon|telp|invoice|nota)\b/i.test(line)) continue;
+    if (/^(nama\s*barang|barang|kode|satuan|unit|qty|quantity|harga|jumlah\s*harga)\b/i.test(line)) continue;
+    if (/^(frozen\s*&\s*kering|rekap\s*order|keterangan|pt\.|cv\.)/i.test(line)) continue;
 
     const nums = [...line.matchAll(/(\d+(?:[.,]\d+)?)/g)];
     if (!nums.length) continue;
 
+    // The right-most numeric value is the TOTAL column in the source table.
     const last = nums[nums.length - 1];
     const qty = parseFloat(last[1].replace(',', '.'));
     if (!(qty > 0) || qty > 99999) continue;
 
-    let rawName = line.slice(0, last.index).trim();
-    rawName = stripLeadingNo(rawName)
-      .replace(/\b(pack|pcs|pail|ekor|kg|box|unit|porsi|gram|liter)\b/gi, '')
-      .replace(/\s+/g, ' ')
-      .trim();
+    let rawName = '';
 
+    // Primary table parser: NO -> NAMA BARANG -> UNIT -> KODE -> outlet quantities -> TOTAL.
+    // Capture everything before the first UNIT token, so numbers inside item descriptions
+    // (0.5 Kg, 4pcs, 10 pcs, etc.) are not mistaken for the quantity.
+    const unitMatch = line.match(/\b(pack|pcs|pail|ekor|kg|box|unit|porsi|gram|liter|lusin|botol|kaleng|karung)\b/i);
+    if (unitMatch && unitMatch.index != null) {
+      rawName = line.slice(0, unitMatch.index).trim();
+      rawName = stripLeadingNo(rawName);
+    } else {
+      // Fallback for simpler CV/handwritten/text formats: use the text before TOTAL.
+      rawName = line.slice(0, last.index).trim();
+      rawName = stripLeadingNo(rawName)
+        .replace(/\b(pack|pcs|pail|ekor|kg|box|unit|porsi|gram|liter|lusin|botol|kaleng|karung)\b/gi, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+    }
+
+    // If a row has a leading NO but no recognized unit, reject only obvious non-item rows.
     if (rawName.length < 2 || /^\d[\d\s./-]*$/.test(rawName)) continue;
-    items.push({ rawName, qty });
+
+    sourceIndex += 1;
+    items.push({
+      rawName: rawName.replace(/\s+/g, ' ').trim(),
+      qty,
+      sourceIndex,
+      pdfNo: (line.match(/^\s*(\d{1,4})\b/) || [])[1] || null,
+      sourceLine: line,
+    });
   }
   return items;
 }
-
 function normalizeMatchText(value) {
   return String(value || '')
     .normalize('NFKC')
@@ -279,9 +303,9 @@ export function validatePdfItems(entity, textOrItems, masterOverride) {
   const master = masterOverride || getMasterByEntity(entity) || [];
   const items = Array.isArray(textOrItems) ? textOrItems : parsePdfLinesToItems(textOrItems);
   const results = [];
-  const seenKodes = new Set();
 
-  for (const it of items) {
+  for (let i = 0; i < items.length; i++) {
+    const it = items[i] || {};
     const rawNameOriginal = it.rawName || it.nama || it.name || '';
     const qty = Number(it.qty) || 0;
     if (!rawNameOriginal || qty <= 0) continue;
@@ -320,16 +344,11 @@ export function validatePdfItems(entity, textOrItems, masterOverride) {
     const masterItem = match?.kode ? match : (match?.item || null);
     const kode = masterItem?.kode || match?.kode || null;
 
-    if (kode && seenKodes.has(kode)) {
-      const existing = results.find((r) => r.kode === kode && r.status === 'matched');
-      if (existing) {
-        existing.qty = +(existing.qty + qty).toFixed(2);
-        continue;
-      }
-    }
-    if (kode) seenKodes.add(kode);
-
     results.push({
+      no: i + 1,
+      sourceIndex: Number(it.sourceIndex) || (i + 1),
+      pdfNo: it.pdfNo || null,
+      sourceLine: it.sourceLine || '',
       rawName: rawNameOriginal,
       qty,
       status,
@@ -337,18 +356,22 @@ export function validatePdfItems(entity, textOrItems, masterOverride) {
       kode,
       nama: masterItem?.nama || match?.nama || null,
       satuan: masterItem?.satuan || match?.satuan || null,
-      match: masterItem || match,
+      match: masterItem || match || null,
     });
   }
   return results;
 }
 
 export function parseLinesFromText(text, _lines = []) {
-  return parsePdfLinesToItems(text).map((it) => ({
+  return parsePdfLinesToItems(text).map((it, idx) => ({
+    no: idx + 1,
+    sourceIndex: Number(it.sourceIndex) || (idx + 1),
+    pdfNo: it.pdfNo || null,
     name: it.rawName,
     rawName: it.rawName,
     qty: it.qty,
     nameFromPdf: it.rawName,
+    sourceLine: it.sourceLine || '',
   }));
 }
 
