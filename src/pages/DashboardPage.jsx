@@ -2,7 +2,7 @@ import { useMemo, useState, useEffect, useCallback } from 'react';
 import { useStock } from '../hooks/useStock';
 import { useAuth } from '../hooks/useAuth';
 import {
-  getPendingQueue, getStatusPO, getDashboardData, confirmPOStatus, getTransactionHistory, fetchRemoteTransactionHistory,
+  getPendingQueue, getStatusPO, getDashboardData, confirmPOStatus, getLocalHistory, fetchRemoteTransactionHistory,
 } from '../data/api';
 import { DIVISIONS } from '../data/master';
 import {
@@ -583,9 +583,9 @@ export default function DashboardPage() {
   const [dashboardData, setDashboardData] = useState(null);
   const [confirmingId, setConfirmingId] = useState(null);
   const [confirmMsg, setConfirmMsg] = useState('');
-  const [history, setHistory] = useState(() => getTransactionHistory());
+  const [history, setHistory] = useState(() => getLocalHistory());
   const loadMovementHistory = useCallback(async () => {
-    const local = getTransactionHistory();
+    const local = getLocalHistory();
     setHistory(local);
     if (!navigator.onLine) return;
     try {
@@ -611,7 +611,7 @@ export default function DashboardPage() {
   }, []);
 
   useEffect(() => {
-    const refreshHistory = () => { setHistory(getTransactionHistory()); void loadMovementHistory(); };
+    const refreshHistory = () => { setHistory(getLocalHistory()); void loadMovementHistory(); };
     window.addEventListener('gudangai-history-changed', refreshHistory);
     void loadMovementHistory();
     const timer = setInterval(() => {
