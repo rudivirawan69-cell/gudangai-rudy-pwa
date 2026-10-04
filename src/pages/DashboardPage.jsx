@@ -226,13 +226,28 @@ function normalizeStatusPO(raw) {
     }
   }
   const totalItem = Number(summaryRaw.totalItem ?? 0) || items.length || (menunggu + sebagian + selesai);
+  const previousRaw = raw.previousWeek || raw.previous || raw.lastWeek || raw.data?.previousWeek || null;
+  const legacyLastWeekItems = raw.lastWeekItems || raw.data?.lastWeekItems || [];
+  const legacyLastWeekKey = raw.lastWeekWeekKey || raw.data?.lastWeekWeekKey || '';
+  const previousWeek = previousRaw || (Array.isArray(legacyLastWeekItems) && legacyLastWeekItems.length
+    ? {
+        weekKey: legacyLastWeekKey,
+        items: legacyLastWeekItems.map((it, idx) => ({
+          itemNo: it.itemNo || it.no || idx + 1,
+          nama: it.nama || it.Nama || it.name || '—',
+          qtyPO: Number(it.qtyPO ?? it.qty ?? 0) || 0,
+          qtyDatang: Number(it.qtyDatang ?? it.datang ?? 0) || 0,
+          status: it.status || it.keterangan || 'Menunggu',
+        })),
+      }
+    : null);
   return {
     success: true,
     noPO: raw.noPO || summaryRaw.noPO || '',
     weekKey: raw.weekKey || raw.week || raw.data?.weekKey || '',
     poStartDate: raw.poStartDate || raw.data?.poStartDate || '',
     poEndDate: raw.poEndDate || raw.data?.poEndDate || '',
-    previousWeek: raw.previousWeek || raw.previous || raw.lastWeek || raw.data?.previousWeek || null,
+    previousWeek,
     items,
     summary: {
       totalItem,
