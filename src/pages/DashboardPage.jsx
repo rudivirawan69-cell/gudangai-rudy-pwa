@@ -103,7 +103,7 @@ function DivisionStatus3D({ items, sourceRows }) {
     return Object.values(map)
       .filter((r) => r.total > 0)
       .sort((a, b) => (b.kritis / b.total) - (a.kritis / a.total) || b.total - a.total);
-  }, [items]);
+  }, [items, sourceRows]);
 
   if (rows.length === 0) {
     return <p className="text-[12px] text-slate-400 text-center py-4">Belum ada data divisi</p>;
