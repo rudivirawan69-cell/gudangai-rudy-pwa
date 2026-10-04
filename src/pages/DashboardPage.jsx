@@ -838,7 +838,6 @@ export default function DashboardPage() {
         setConfirmMsg(`✓ ${item.nama} → ${label}`);
         try { window.dispatchEvent(new CustomEvent('gudangai-po-changed', { detail: { item, status, qtyDatang: finalQty } })); } catch (_) {}
         await Promise.all([loadPO(), stockCV.refresh({ force: true }), stockPT.refresh({ force: true })]);
-        return true;
       } else {
         setConfirmMsg(res?.error || 'Gagal update status');
        return false;
