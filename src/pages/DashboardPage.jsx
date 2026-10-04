@@ -6,7 +6,7 @@ import {
 } from '../data/api';
 import { DIVISIONS } from '../data/master';
 import {
-  AlertTriangle, RefreshCw, FileText, Package, ShieldAlert, CheckCircle2, AlertCircle,
+  AlertTriangle, RefreshCw, FileText, Package, Users, Boxes, ShieldAlert, CheckCircle2, AlertCircle,
 } from 'lucide-react';
 
 function classifyItem(it) {
@@ -748,14 +748,10 @@ export default function DashboardPage() {
     void loadPO();
     void loadDashboardData();
     const refreshPO = () => { if (document.visibilityState === 'visible' && navigator.onLine) void loadPO({ silent: true }); };
-    const timer = setInterval(refreshPO, 60000);
-    const dashboardTimer = setInterval(() => { if (document.visibilityState === 'visible' && navigator.onLine) void loadDashboardData(); }, 60000);
     window.addEventListener('online', refreshPO);
     window.addEventListener('gudangai-po-changed', refreshPO);
     document.addEventListener('visibilitychange', refreshPO);
     return () => {
-      clearInterval(timer);
-      clearInterval(dashboardTimer);
       window.removeEventListener('online', refreshPO);
       window.removeEventListener('gudangai-po-changed', refreshPO);
       document.removeEventListener('visibilitychange', refreshPO);
