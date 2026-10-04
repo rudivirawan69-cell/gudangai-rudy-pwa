@@ -260,6 +260,46 @@ function normalizeStatusPO(raw) {
   };
 }
 
+function getPODataSignature(data) {
+  if (!data) return '';
+  const canonicalItems = (Array.isArray(data.items) ? data.items : [])
+    .map((it) => ({
+      id: String(it.id ?? ''),
+      itemNo: String(it.itemNo ?? ''),
+      nama: String(it.nama ?? ''),
+      qtyPO: Number(it.qtyPO) || 0,
+      qtyDatang: Number(it.qtyDatang) || 0,
+      status: String(it.status ?? ''),
+      tglRencana: String(it.tglRencana ?? ''),
+    }))
+    .sort((a, b) => (a.id || a.itemNo || a.nama).localeCompare(b.id || b.itemNo || b.nama));
+
+  const previous = data.previousWeek
+    ? {
+        weekKey: String(data.previousWeek.weekKey ?? ''),
+        items: (Array.isArray(data.previousWeek.items) ? data.previousWeek.items : [])
+          .map((it) => ({
+            itemNo: String(it.itemNo ?? ''),
+            nama: String(it.nama ?? ''),
+            qtyPO: Number(it.qtyPO) || 0,
+            qtyDatang: Number(it.qtyDatang) || 0,
+            status: String(it.status ?? ''),
+          }))
+          .sort((a, b) => (a.itemNo + a.nama).localeCompare(b.itemNo + b.nama)),
+      }
+    : null;
+
+  return JSON.stringify({
+    noPO: String(data.noPO ?? ''),
+    weekKey: String(data.weekKey ?? ''),
+    poStartDate: String(data.poStartDate ?? ''),
+    poEndDate: String(data.poEndDate ?? ''),
+    summary: data.summary || {},
+    items: canonicalItems,
+    previousWeek: previous,
+  });
+}
+
 function Movement7Days({ history }) {
   const days = useMemo(() => {
     const now = new Date();
@@ -671,7 +711,7 @@ export default function DashboardPage() {
       const norm = normalizeStatusPO(res);
       const synced = norm?.success ? mergeIncomingWithPO(norm, remoteHistory) : norm;
       if (synced?.success) {
-        const signature = JSON.stringify(synced);
+        const signature = getPODataSignature(synced);
         if (signature !== poSignatureRef.current) {
           poSignatureRef.current = signature;
           poDataRef.current = synced;
