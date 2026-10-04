@@ -3,7 +3,7 @@ const RETRY_COUNT = 2;
 const RETRY_BASE_MS = 400;
 const REQUEST_TIMEOUT_MS = 15000;
 /** Chunk aman agar Apps Script + spreadsheet selesai < timeout (anti-antrian). 20 item per POST. */
-const BATCH_CHUNK_SIZE = 20;
+const BATCH_CHUNK_SIZE = 80;
 const BATCH_TIMEOUT_MS = 90000;
 const SINGLE_TIMEOUT_MS = 60000;
 const SCHEMA_VERSION = '1.0';
@@ -274,54 +274,70 @@ async function submitOneItem(sheetOrAction, entity, it, tanggal) {
 async function submitBatchChunk(action, entity, chunkItems, tanggal) {
   const SHEET_MAP = { barangMasuk: 'Barang masuk', barangKeluar: 'Barang keluar', barangRusak: 'Barang Rusak' };
   const sheetName = SHEET_MAP[action] || action;
-  const toSend = [];
-  const skipped = [];
-  for (const it of chunkItems) {
-    const cid = it.clientItemId || ensureClientItemId(it).clientItemId;
-    if (isApplied(cid)) skipped.push({ success: true, skipped: true, clientItemId: cid });
-    else toSend.push({ kodeBarang: String(it.kode || it.kodeBarang || '').trim(), kode: String(it.kode || it.kodeBarang || '').trim(), qty: Number(it.qty) || 0, keterangan: String(it.keterangan || '').trim().slice(0, 200), clientItemId: cid, requestId: cid, transactionId: 'TX-' + cid });
-  }
-  if (!toSend.length) return { success: true, successCount: skipped.length, failCount: 0, results: skipped };
-  const common = {
+  const normalized = (chunkItems || []).map((it) => ({
+    kode: it.kode || it.kodeBarang,
+    nama: it.nama,
+    qty: Number(it.qty) || 0,
+    satuan: it.satuan || '',
+    keterangan: it.keterangan || '',
+    clientItemId: it.clientItemId || ensureClientItemId(it).clientItemId,
+  })).filter((it) => it.kode && Number(it.qty) > 0);
+  if (!normalized.length) return { success: false, successCount: 0, failCount: 0, results: [] };
+
+  const ent = String(entity || '').toUpperCase();
+  const wire = normalized.map((it) => ({
+    kodeBarang: String(it.kode || '').trim(),
+    kode: String(it.kode || '').trim(),
+    qty: Number(it.qty) || 0,
+    keterangan: String(it.keterangan || '').trim().slice(0, 200),
+    requestId: 'REQ-' + String(it.clientItemId),
+    transactionId: 'TX-' + String(it.clientItemId),
+    nonce: 'NC-' + String(it.clientItemId),
+    clientItemId: String(it.clientItemId),
+  }));
+  const batchId = newIds().requestId;
+  const payload = {
+    action: 'bulkTransaction',
     sheet: sheetName,
-    entitas: String(entity || '').toUpperCase(),
-    entity: String(entity || '').toUpperCase(),
+    entitas: ent,
+    entity: ent,
     tanggal: normalizeTanggal(tanggal),
-    items: toSend,
-    transactions: toSend,
-    data: toSend,
-    requestId: newIds().requestId,
+    transactions: wire,
+    items: wire,
     queueApproved: true,
+    batchId,
+    requestId: batchId,
   };
-  // V6.6.5 BULK STABLE exposes bulkTransaction. Keep addTransactionBatch
-  // as compatibility fallback so older deployments remain usable.
-  let data = null;
-  try {
-    data = await postJson({ action: 'bulkTransaction', ...common }, { retries: 1, timeoutMs: BATCH_TIMEOUT_MS });
-  } catch (_) {
-    data = null;
+
+  const data = await postJson(payload, { retries: 2, timeoutMs: 90000 });
+  const rawResults = data?.results || data?.data?.results || [];
+  const cidByTx = new Map(wire.map((it) => [String(it.transactionId), String(it.clientItemId)]));
+  const results = Array.isArray(rawResults) ? rawResults.map((r) => {
+    const clientItemId = r?.clientItemId || cidByTx.get(String(r?.transactionId || ''));
+    const ok = r?.success === true || r?.skipped === true || r?.idempotent === true ||
+      r?.status === 'APPLIED' || r?.status === 'OK' || r?.status === 'SUCCESS' || r?.status === 'DUPLICATE';
+    return { ...r, clientItemId, success: ok };
+  }) : [];
+
+  // Backend V6.6.5 dapat mengembalikan success/written tanpa array results.
+  // Dalam kondisi ini, hanya anggap sukses jika backend menyatakan seluruh batch tertulis.
+  if (!results.length && data?.success === true &&
+      (data?.successCount == null || Number(data.successCount) >= normalized.length)) {
+    for (const it of normalized) results.push({ clientItemId: it.clientItemId, success: true });
+  } else if (!results.length && data?.written === true &&
+      (data?.writtenCount == null || Number(data.writtenCount) >= normalized.length)) {
+    for (const it of normalized) results.push({ clientItemId: it.clientItemId, success: true });
   }
-  const unknownBulk = !data || data.code === 'UNKNOWN_ACTION' || data.error === 'UNKNOWN_ACTION' ||
-    (data.error && /tidak dikenali|unknown action|not found/i.test(String(data.error)));
-  if (unknownBulk) {
-    data = await postJson({ action: 'addTransactionBatch', ...common }, { retries: 1, timeoutMs: BATCH_TIMEOUT_MS });
+  if (!results.length) {
+    throw new Error(data?.error || data?.message || 'Backend tidak mengonfirmasi seluruh batch');
   }
-  if (data && (data.code === 'UNKNOWN_ACTION' || data.error === 'UNKNOWN_ACTION' || (data.error && /tidak dikenali/i.test(data.error)))) {
-    _batchSupported = false;
-    throw new Error('BATCH_NOT_SUPPORTED');
+
+  for (const r of results) {
+    if (r.success && r.clientItemId) markApplied(r.clientItemId);
   }
-  _batchSupported = true;
-  const batchResults = [];
-  if (data && Array.isArray(data.results)) {
-    const cidByTx = new Map(toSend.map((it) => [it.transactionId, it.clientItemId]));
-    for (const r of data.results) {
-      const clientItemId = r.clientItemId || cidByTx.get(r.transactionId);
-      const normalized = clientItemId ? { ...r, clientItemId } : r;
-      if (normalized.success && normalized.clientItemId) markApplied(normalized.clientItemId);
-      batchResults.push(normalized);
-    }
-  }
-  return { success: (data && data.success) || false, successCount: (data && data.successCount) || batchResults.filter((r) => r.success).length, failCount: (data && data.failCount) || batchResults.filter((r) => !r.success).length, results: [...skipped, ...batchResults] };
+  const successCount = results.filter((r) => r.success).length;
+  const failCount = results.length - successCount;
+  return { success: successCount === normalized.length, successCount, failCount, results };
 }
 function emitProgress(sent, total, chunkResult) {
   try { window.dispatchEvent(new CustomEvent('gudangai-submit-progress', { detail: { sent, total, success: chunkResult?.successCount || 0, failed: chunkResult?.failCount || 0 } })); } catch (_) {}
