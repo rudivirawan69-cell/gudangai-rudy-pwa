@@ -21,6 +21,18 @@ if ('serviceWorker' in navigator) {
       const requestUpdate = () => registration.update().catch(() => {})
       requestUpdate()
       window.addEventListener('pageshow', requestUpdate)
+      registration.addEventListener('updatefound', () => {
+        const installing = registration.installing
+        if (!installing) return
+        installing.addEventListener('statechange', () => {
+          if (installing.state === 'installed' && navigator.serviceWorker.controller) {
+            reloadPending = true
+            if (document.visibilityState === 'visible') {
+              reloadTimer = window.setTimeout(safeReload, 1200)
+            }
+          }
+        })
+      })
       document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'visible') requestUpdate()
       })
@@ -52,7 +64,6 @@ if ('serviceWorker' in navigator) {
         }
       })
 
-      window.addEventListener('blur', safeReload)
       document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'visible') safeReload()
       })
