@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "node scripts/write-icons.mjs && vite build",
+    "build": "node scripts/write-icons.mjs && node scripts/write-sw-version.mjs && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
     "write-icons": "node scripts/write-icons.mjs",
