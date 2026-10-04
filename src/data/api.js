@@ -322,6 +322,7 @@ async function submitBulk(type, entity, tanggal, items) {
       requestId: newIds().requestId,
     };
     try {
+      window.dispatchEvent(new CustomEvent('gudangai-submit-progress', { detail: { sent: i, total: normalized.length, success: successCount, failed } }));
       const data = await postJson(payload, { retries: 1, timeoutMs: 45000 });
       const rawResults = data?.results || data?.data?.results || [];
       const cidByTx = new Map(wire.map((it) => [String(it.transactionId), chunk.find(x => String(x.clientItemId) === String(it.transactionId).replace(/^TX-/, ''))?.clientItemId]));
@@ -358,6 +359,7 @@ async function submitBulk(type, entity, tanggal, items) {
       }
       failed += chunk.length;
     }
+    window.dispatchEvent(new CustomEvent('gudangai-submit-progress', { detail: { sent: Math.min(i + chunk.length, normalized.length), total: normalized.length, success: successCount, failed } }));
   }
   return {
     success: failed === 0,
