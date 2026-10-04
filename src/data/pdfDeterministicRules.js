@@ -58,6 +58,11 @@ export function resolvePdfNameDeterministic(entity, rawName, masterList) {
     const hit = pick(ent === 'PT' ? 'PT-0044' : 'CV-0084', 'det-lowfat');
     if (hit) return hit;
   }
+  // Bumbu urap / urap-urap — PT uses Rekanan/WK code.
+  if (/bumbu\\s+urap/.test(norm) || /urap[-\\s]*urap/.test(norm)) {
+    const hit = pick(ent === 'PT' ? 'WK-0009' : 'CV-0077', 'det-bumbu-urap');
+    if (hit) return hit;
+  }
   // Daging slice YAKINIKU
   if (/daging.*(slice|sapi)/.test(norm) && /yakiniku/.test(norm)) {
     const hit = pick(ent === 'PT' ? 'PT-0009' : 'CV-0008', 'det-yakiniku');
