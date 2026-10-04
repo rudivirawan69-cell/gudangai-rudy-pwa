@@ -28,7 +28,7 @@ function StockCard({ item }) {
   }[level];
 
   return (
-    <div className={`w-full rounded-2xl bg-white border border-slate-100 shadow-sm border-l-4 ${border} px-4 py-3 box-border`}>
+    <div className={`stock-card w-full rounded-2xl bg-white border border-slate-100 shadow-sm border-l-4 ${border} px-4 py-3 box-border`}>
       <div className="flex items-center gap-3 min-w-0">
         <div className="flex-1 min-w-0">
           <p className="text-[11px] text-slate-400 font-mono font-medium truncate">{item.kode}</p>
@@ -148,7 +148,7 @@ export default function StokPage() {
             key={s.key}
             type="button"
             onClick={() => setFilterStatus(s.filter)}
-            className={`rounded-2xl bg-white border border-slate-100 shadow-sm px-3 py-3 text-left transition ${
+            className={`stock-metric-surface rounded-2xl bg-white border border-slate-100 shadow-sm px-3 py-3 text-left transition ${
               filterStatus === s.filter ? `ring-2 ${s.ring}` : ''
             }`}
           >
