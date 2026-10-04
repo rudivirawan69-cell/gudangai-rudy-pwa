@@ -178,12 +178,12 @@ function normalizeAliasText(value) {
     .toLowerCase()
     .replace(/[‘’]/g, "'")
     .replace(/[“”]/g, '"')
-    .replace(/\\bchicken\\b/g, 'chiken')
-    .replace(/\\bsambel\\b/g, 'sambal')
-    .replace(/\\bspesial\\b/g, 'special')
+    .replace(/\bchicken\b/g, 'chiken')
+    .replace(/\bsambel\b/g, 'sambal')
+    .replace(/\bspesial\b/g, 'special')
     .replace(/[-–—]+/g, ' ')
     .replace(/[^a-z0-9]+/g, ' ')
-    .replace(/\\s+/g, ' ')
+    .replace(/\s+/g, ' ')
     .trim();
 }
 
@@ -244,10 +244,10 @@ export function searchMaster(entity, query) {
 export function matchByAlias(entity, name) {
   if (!name) return null;
   const normalized = normalizeAliasText(name)
-    .replace(/\\b(kg|gram|grams|gr|pack|pcs|pc|pail|ekor|box|unit|porsi|liter|lusin|botol|kaleng|karung)\\b/g, ' ')
-    .replace(/\\s+/g, ' ').trim();
+    .replace(/\b(kg|gram|grams|gr|pack|pcs|pc|pail|ekor|box|unit|porsi|liter|lusin|botol|kaleng|karung)\b/g, ' ')
+    .replace(/\s+/g, ' ').trim();
   const lookup = getAliasLookup(entity);
-  const compact = normalized.replace(/\\s+/g, '');
+  const compact = normalized.replace(/\s+/g, '');
   const list = getMasterByEntity(entity);
   if (lookup[normalized] || lookup[compact]) {
     const item = list.find(i => i.kode === (lookup[normalized] || lookup[compact]));
@@ -258,7 +258,7 @@ export function matchByAlias(entity, name) {
   for (const [alias, kode] of Object.entries(lookup)) {
     const a = normalizeAliasText(alias);
     if (!a) continue;
-    if (a === normalized || a.replace(/\\s+/g, '') === compact || a.includes(normalized) || normalized.includes(a)) {
+    if (a === normalized || a.replace(/\s+/g, '') === compact || a.includes(normalized) || normalized.includes(a)) {
       const item = list.find(i => i.kode === kode);
       if (item) return { item, matchType: 'alias-partial' };
     }
