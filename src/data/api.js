@@ -283,6 +283,33 @@ function enqueue(type, entity, items, meta = {}) {
   return { success: false, queued: true, queuedCount: fresh.length, items: fresh };
 }
 
+async function submitSingleTransactionFallback(sheetName, entity, tanggal, item) {
+  const txId = 'TX-' + String(item.clientItemId || newIds().clientItemId);
+  const requestId = 'REQ-' + String(item.clientItemId || newIds().clientItemId);
+  const payload = {
+    action: 'addTransaction',
+    sheet: sheetName,
+    entitas: String(entity || 'CV').toUpperCase(),
+    entity: String(entity || 'CV').toUpperCase(),
+    kodeBarang: String(item.kode || item.kodeBarang || '').trim(),
+    kode: String(item.kode || item.kodeBarang || '').trim(),
+    qty: Number(item.qty) || 0,
+    keterangan: String(item.keterangan || '').trim().slice(0, 200),
+    tanggal: normalizeTanggal(tanggal),
+    requestId,
+    transactionId: txId,
+    clientItemId: item.clientItemId || '',
+  };
+  const data = await postJson(payload, { retries: 1, timeoutMs: 12000 });
+  const ok = data?.success === true || data?.status === 'OK' || data?.status === 'APPLIED' || data?.status === 'SUCCESS' || data?.skipped === true;
+  return {
+    ...data,
+    success: ok,
+    clientItemId: item.clientItemId,
+    transactionId: txId,
+  };
+}
+
 async function submitBulk(type, entity, tanggal, items) {
   const sheetMap = { masuk: 'Barang masuk', keluar: 'Barang keluar', rusak: 'Barang rusak' };
   const sheetName = sheetMap[type] || 'Barang keluar';
@@ -323,7 +350,7 @@ async function submitBulk(type, entity, tanggal, items) {
     };
     try {
       window.dispatchEvent(new CustomEvent('gudangai-submit-progress', { detail: { sent: i, total: normalized.length, success: successCount, failed } }));
-      const data = await postJson(payload, { retries: 1, timeoutMs: 45000 });
+      const data = await postJson(payload, { retries: 1, timeoutMs: 12000 });
       const rawResults = data?.results || data?.data?.results || [];
       const cidByTx = new Map(wire.map((it) => [String(it.transactionId), chunk.find(x => String(x.clientItemId) === String(it.transactionId).replace(/^TX-/, ''))?.clientItemId]));
       const chunkResults = Array.isArray(rawResults) ? rawResults.map((r) => ({
@@ -353,11 +380,29 @@ async function submitBulk(type, entity, tanggal, items) {
         }
       }
     } catch (err) {
-      enqueue(type, entity, chunk, { tanggal: tgl });
+      // Batch yang timeout/gagal tidak langsung dianggap gagal. Coba jalur
+      // single-item dengan transactionId yang sama agar item yang sempat
+      // tertulis tidak dobel dan item yang benar-benar gagal tetap bisa di-queue.
       for (const it of chunk) {
-        results.push({ clientItemId: it.clientItemId, success: false, queued: true, error: err?.message });
+        try {
+          const single = await submitSingleTransactionFallback(sheetName, ent, tgl, it);
+          if (single.success || single.skipped || single.status === 'DUPLICATE') {
+            results.push({ ...single, success: true, clientItemId: it.clientItemId });
+            successCount++;
+          } else {
+            results.push({ clientItemId: it.clientItemId, success: false, error: single.error || err?.message || 'Gagal' });
+            failed++;
+            enqueue(type, entity, [it], { tanggal: tgl });
+          }
+        } catch (singleErr) {
+          results.push({ clientItemId: it.clientItemId, success: false, queued: true, error: singleErr?.message || err?.message || 'Gagal' });
+          failed++;
+          enqueue(type, entity, [it], { tanggal: tgl });
+        }
+        window.dispatchEvent(new CustomEvent('gudangai-submit-progress', {
+          detail: { sent: Math.min(i + chunk.length, normalized.length), total: normalized.length, success: successCount, failed }
+        }));
       }
-      failed += chunk.length;
     }
     window.dispatchEvent(new CustomEvent('gudangai-submit-progress', { detail: { sent: Math.min(i + chunk.length, normalized.length), total: normalized.length, success: successCount, failed } }));
   }
