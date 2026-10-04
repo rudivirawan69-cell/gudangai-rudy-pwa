@@ -170,7 +170,9 @@ function AppShell() {
         </div>
       </main>
       <nav className="nav-bar fixed bottom-0 left-0 right-0 safe-bottom z-40">
-        <div className="max-w-lg mx-auto flex">
+        <div className="max-w-lg mx-auto flex relative" style={{ "--nav-index": TABS.findIndex((t) => t.id === tab) }}>
+          <span className="nav-moving-ball nav-moving-ball-mobile" aria-hidden="true" />
+          <span className="nav-moving-ball nav-moving-ball-desktop" aria-hidden="true" />
           {TABS.map((t) => {
             const Icon = t.icon;
             const isActive = tab === t.id;
@@ -180,13 +182,13 @@ function AppShell() {
                 type="button"
                 onClick={() => goTab(t.id)}
                 className={`nav-btn flex-1 flex flex-col items-center pt-2.5 pb-1.5 relative ${
-                  isActive ? t.active : 'text-slate-400'
+                  isActive ? t.active : 'text-slate-400' } ${isActive ? 'is-active' : ''
                 }`}
               >
                 <div className={`nav-icon-wrap p-1.5 rounded-xl ${isActive ? t.chip : ''}`}>
                   <Icon className="w-5 h-5" />
                 </div>
-                <span className={`text-[10px] mt-0.5 ${
+                <span className={`nav-label text-[10px] mt-0.5 ${
                   isActive ? 'font-bold opacity-100' : 'font-medium opacity-80'
                 }`}>
                   {t.label}
