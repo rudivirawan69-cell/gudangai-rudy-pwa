@@ -205,35 +205,24 @@ export function parsePdfLinesToItems(text) {
     const nums = [...line.matchAll(/(\d+(?:[.,]\d+)?)/g)];
     if (!nums.length) continue;
 
-    // The right-most numeric value is the TOTAL column in the source table.
+    // TOTAL selalu diambil dari angka paling kanan. Jangan memotong nama pada
+    // unit pertama karena unit seperti "0.5 kg", "10 pcs", dll. bisa berada
+    // di dalam nama barang itu sendiri.
     const last = nums[nums.length - 1];
     const qty = parseFloat(last[1].replace(',', '.'));
     if (!(qty > 0) || qty > 99999) continue;
 
-    let rawName = '';
+    let rawName = line.slice(0, last.index).trim();
+    rawName = stripLeadingNo(rawName)
+      .replace(/\b(pack|pcs|pail|ekor|kg|box|unit|porsi|gram|liter|lusin|botol|kaleng|karung)\b/gi, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
 
-    // Primary table parser: NO -> NAMA BARANG -> UNIT -> KODE -> outlet quantities -> TOTAL.
-    // Capture everything before the first UNIT token, so numbers inside item descriptions
-    // (0.5 Kg, 4pcs, 10 pcs, etc.) are not mistaken for the quantity.
-    const unitMatch = line.match(/\b(pack|pcs|pail|ekor|kg|box|unit|porsi|gram|liter|lusin|botol|kaleng|karung)\b/i);
-    if (unitMatch && unitMatch.index != null) {
-      rawName = line.slice(0, unitMatch.index).trim();
-      rawName = stripLeadingNo(rawName);
-    } else {
-      // Fallback for simpler CV/handwritten/text formats: use the text before TOTAL.
-      rawName = line.slice(0, last.index).trim();
-      rawName = stripLeadingNo(rawName)
-        .replace(/\b(pack|pcs|pail|ekor|kg|box|unit|porsi|gram|liter|lusin|botol|kaleng|karung)\b/gi, '')
-        .replace(/\s+/g, ' ')
-        .trim();
-    }
-
-    // If a row has a leading NO but no recognized unit, reject only obvious non-item rows.
     if (rawName.length < 2 || /^\d[\d\s./-]*$/.test(rawName)) continue;
 
     sourceIndex += 1;
     items.push({
-      rawName: rawName.replace(/\s+/g, ' ').trim(),
+      rawName,
       qty,
       sourceIndex,
       pdfNo: (line.match(/^\s*(\d{1,4})\b/) || [])[1] || null,
