@@ -377,12 +377,17 @@ function StockComparison({ cv, pt }) {
   const ptPct = 100 - cvPct;
   return (
     <div>
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex items-start justify-between mb-3">
         <div>
-          <p className="text-sm font-extrabold text-slate-900">Perbandingan Stock</p>
-          <p className="text-[11px] text-slate-500">Komposisi stock CV dan PT</p>
+          <p className="text-sm font-extrabold text-slate-900">Perbandingan Stok</p>
+          <p className="text-[11px] text-slate-500">Komposisi stok berdasarkan entitas</p>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-[9px] font-semibold text-slate-500">
+            <span><i className="inline-block w-2 h-2 rounded-full bg-cyan-500 mr-1" />CV</span>
+            <span><i className="inline-block w-2 h-2 rounded-full bg-orange-400 mr-1" />PT</span>
+            <span className="text-slate-400">Angka = persentase dari total</span>
+          </div>
         </div>
-        <Package className="w-4 h-4 text-cyan-600" />
+        <Package className="w-4 h-4 text-cyan-600 shrink-0 mt-0.5" />
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div className="rounded-xl bg-cyan-50 border border-cyan-100 p-3 text-center">
@@ -413,12 +418,14 @@ function DashboardTotals({ totalItem }) {
   return (
     <div className="grid grid-cols-2 gap-3">
       <div className="dashboard-total-card border-cyan-100">
-        <p className="text-[10px] font-bold uppercase tracking-wider text-cyan-700">Total Item</p>
+        <div className="flex items-start justify-between gap-2"><span className="dashboard-icon-badge dashboard-icon-cyan"><Package className="w-4 h-4" /></span><span className="text-[9px] font-extrabold text-slate-400">MASTER</span></div>
+        <p className="text-[10px] font-bold uppercase tracking-wider text-cyan-700 mt-2">Total Item</p>
         <p className="text-2xl font-extrabold text-slate-900 tabular-nums mt-1">{itemCount}</p>
         <p className="text-[10px] text-slate-500 mt-0.5">SKU aktif</p>
       </div>
       <div className="dashboard-total-card border-orange-100">
-        <p className="text-[10px] font-bold uppercase tracking-wider text-orange-700">Total Outlet</p>
+        <div className="flex items-start justify-between gap-2"><span className="dashboard-icon-badge dashboard-icon-orange"><Users className="w-4 h-4" /></span><span className="text-[9px] font-extrabold text-slate-400">JARINGAN</span></div>
+        <p className="text-[10px] font-bold uppercase tracking-wider text-orange-700 mt-2">Total Outlet</p>
         <p className="text-2xl font-extrabold text-slate-900 tabular-nums mt-1">45</p>
         <p className="text-[10px] text-slate-500 mt-0.5">Outlet terlayani</p>
       </div>
@@ -841,7 +848,16 @@ export default function DashboardPage() {
       </section>
 
       <div className="rounded-2xl bg-white border border-slate-100 shadow-sm p-4">
-        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-3">Status Stok per Divisi</p>
+        <div className="mb-3">
+        <p className="text-sm font-extrabold text-slate-900">Status Stok per Divisi</p>
+        <p className="text-[11px] text-slate-500 mt-0.5">Ringkas kondisi item di setiap divisi</p>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-[9px] font-semibold">
+          <span className="text-emerald-600"><i className="inline-block w-2 h-2 rounded-full bg-emerald-500 mr-1" />Aman</span>
+          <span className="text-amber-600"><i className="inline-block w-2 h-2 rounded-full bg-amber-400 mr-1" />Waspada</span>
+          <span className="text-red-600"><i className="inline-block w-2 h-2 rounded-full bg-red-500 mr-1" />Kritis</span>
+          <span className="text-slate-400">Ring = % kritis</span>
+        </div>
+      </div>
         <DivisionStatus3D items={allItems} sourceRows={dashboardData?.statusPerDivisi} />
       </div>
 
