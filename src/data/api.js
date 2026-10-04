@@ -283,33 +283,6 @@ function enqueue(type, entity, items, meta = {}) {
   return { success: false, queued: true, queuedCount: fresh.length, items: fresh };
 }
 
-async function submitSingleTransactionFallback(sheetName, entity, tanggal, item) {
-  const txId = 'TX-' + String(item.clientItemId || newIds().clientItemId);
-  const requestId = 'REQ-' + String(item.clientItemId || newIds().clientItemId);
-  const payload = {
-    action: 'addTransaction',
-    sheet: sheetName,
-    entitas: String(entity || 'CV').toUpperCase(),
-    entity: String(entity || 'CV').toUpperCase(),
-    kodeBarang: String(item.kode || item.kodeBarang || '').trim(),
-    kode: String(item.kode || item.kodeBarang || '').trim(),
-    qty: Number(item.qty) || 0,
-    keterangan: String(item.keterangan || '').trim().slice(0, 200),
-    tanggal: normalizeTanggal(tanggal),
-    requestId,
-    transactionId: txId,
-    clientItemId: item.clientItemId || '',
-  };
-  const data = await postJson(payload, { retries: 1, timeoutMs: 12000 });
-  const ok = data?.success === true || data?.status === 'OK' || data?.status === 'APPLIED' || data?.status === 'SUCCESS' || data?.skipped === true;
-  return {
-    ...data,
-    success: ok,
-    clientItemId: item.clientItemId,
-    transactionId: txId,
-  };
-}
-
 async function submitBulk(type, entity, tanggal, items) {
   const sheetMap = { masuk: 'Barang masuk', keluar: 'Barang keluar', rusak: 'Barang Rusak' };
   const sheetName = sheetMap[type] || 'Barang keluar';
