@@ -210,6 +210,10 @@ export async function getStatusPO() {
     return { success: false, error: err?.message || 'Gagal status PO' };
   }
 }
+export async function getDashboardData() {
+  try { const data = await getJson('getDashboard'); return data || { success: false }; }
+  catch (err) { return { success: false, error: err?.message || 'Gagal mengambil dashboard' }; }
+}
 export async function confirmPOStatus(payload) {
   try { return await postJson({ action: 'confirmPOStatus', ...(payload || {}), requestId: newIds().requestId }); }
   catch (err) { return { success: false, error: err?.message || 'Gagal konfirmasi PO' }; }
@@ -429,10 +433,32 @@ export async function syncPendingQueue() {
 }
 const HISTORY_KEY = 'gudangai_history';
 export function getTransactionHistory() { try { return JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]'); } catch { return []; } }
+export function getLocalHistory() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+    return Array.isArray(raw) ? raw : [];
+  } catch (_) { return []; }
+}
 export function saveToHistory(entry) {
   const list = getTransactionHistory();
   list.unshift({ ...entry, id: 'H-' + Date.now() });
   try { localStorage.setItem(HISTORY_KEY, JSON.stringify(list.slice(0, 200))); } catch (_) {}
+}
+export async function fetchRemoteTransactionHistory(days = 7) {
+  const safeDays = Math.max(1, Math.min(31, Number(days) || 7));
+  let data = null;
+  try { data = await getJson('getTransactionHistory', { days: String(safeDays) }); }
+  catch (_) { data = await postJson({ action: 'getTransactionHistory', days: safeDays, requestId: newIds().requestId }); }
+  if (!data || data.success === false || data.code === 'UNAUTHORIZED') throw new Error(data?.error || 'Gagal mengambil riwayat transaksi backend');
+  const raw = data.items || data.history || data.transactions || data.data?.items || data.data?.history || data.data?.transactions || data.rows || data.data || [];
+  return (Array.isArray(raw) ? raw : []).map((entry) => ({ ...entry,
+    at: entry?.at ?? entry?.timestamp ?? entry?.time ?? entry?.createdAt ?? entry?.created_at ?? 0,
+    timestamp: entry?.timestamp ?? entry?.at ?? entry?.time ?? entry?.createdAt ?? entry?.created_at ?? 0,
+    type: entry?.type ?? entry?.jenis ?? entry?.action ?? entry?.sheet ?? entry?.sheetName ?? '',
+    transactionId: entry?.transactionId ?? entry?.transaction_id ?? entry?.id ?? '', requestId: entry?.requestId ?? entry?.request_id ?? '',
+    qty: Number(entry?.qty ?? entry?.quantity ?? entry?.jumlah ?? 0) || 0,
+    items: Array.isArray(entry?.items) ? entry.items.map((it) => ({ qty: Number(it?.qty ?? it?.quantity ?? it?.jumlah ?? 0) || 0, kode: it?.kode || it?.kodeBarang || '', nama: it?.nama || it?.name || '' })) : [],
+  }));
 }
 export function pushNotification(n) {
   const list = getNotifications();
