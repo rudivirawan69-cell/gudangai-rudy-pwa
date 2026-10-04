@@ -6,7 +6,7 @@ import {
 } from '../data/api';
 import { DIVISIONS } from '../data/master';
 import {
-  AlertTriangle, RefreshCw, FileText, Package, Users, Boxes, ShieldAlert, CheckCircle2, AlertCircle,
+  AlertTriangle, RefreshCw, FileText, Package, Users, Boxes, ShieldAlert, CheckCircle2, AlertCircle, X,
 } from 'lucide-react';
 
 function classifyItem(it) {
@@ -445,6 +445,50 @@ function DashboardTotals({ totalItem }) {
 }
 
 function StatusPOCard({ data, loading, error, onRefresh, onConfirm, confirmingId }) {
+  const [arrivalItem, setArrivalItem] = useState(null);
+  const [arrivalQty, setArrivalQty] = useState('');
+  const [arrivalError, setArrivalError] = useState('');
+  const [arrivalSaving, setArrivalSaving] = useState(false);
+
+  const openArrivalCart = (item) => {
+    setArrivalItem(item);
+    setArrivalQty('');
+    setArrivalError('');
+  };
+
+  const closeArrivalCart = () => {
+    if (arrivalSaving) return;
+    setArrivalItem(null);
+    setArrivalQty('');
+    setArrivalError('');
+  };
+
+  const submitArrivalCart = async () => {
+    if (!arrivalItem) return;
+    const qty = Number(arrivalQty);
+    const qtyPO = Number(arrivalItem.qtyPO) || 0;
+    if (!arrivalQty.trim() || !Number.isFinite(qty) || qty <= 0) {
+      setArrivalError('Isi total kedatangan lebih dari 0.');
+      return;
+    }
+    if (qtyPO > 0 && qty > qtyPO) {
+      setArrivalError(`Total kedatangan tidak boleh melebihi Qty PO (${qtyPO}).`);
+      return;
+    }
+    setArrivalSaving(true);
+    setArrivalError('');
+    try {
+      const status = qty >= qtyPO && qtyPO > 0 ? 'Selesai' : 'Sebagian';
+      const ok = await onConfirm?.(arrivalItem, status, qty);
+      if (ok) closeArrivalCart();
+      else setArrivalError('Gagal menyimpan kedatangan. Periksa koneksi/API.');
+    } catch (err) {
+      setArrivalError(err?.message || 'Gagal menyimpan kedatangan.');
+    } finally {
+      setArrivalSaving(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="rounded-2xl bg-white border border-slate-100 shadow-sm p-4">
@@ -564,7 +608,7 @@ function StatusPOCard({ data, loading, error, onRefresh, onConfirm, confirmingId
                   <button
                     type="button"
                     disabled={isBusy}
-                    onClick={() => onConfirm?.(it, 'Selesai', it.qtyPO || it.qtyDatang)}
+                    onClick={() => openArrivalCart(it)}
                     className="flex-1 text-[10px] font-bold py-1.5 rounded-lg bg-emerald-600 text-white active:scale-95 disabled:opacity-50"
                   >
                     {isBusy ? '…' : 'Datang'}
@@ -796,6 +840,7 @@ export default function DashboardPage() {
         await Promise.all([loadPO(), stockCV.refresh({ force: true }), stockPT.refresh({ force: true })]);
       } else {
         setConfirmMsg(res?.error || 'Gagal update status');
+       return false;
       }
     } catch (err) {
       setConfirmMsg(err?.message || 'Gagal update status');
