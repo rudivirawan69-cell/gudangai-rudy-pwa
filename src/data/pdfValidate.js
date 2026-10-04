@@ -186,7 +186,7 @@ function isPdfNonItemLine(line) {
   if (!s) return true;
   if (/\bperiode\b|\bperiod\b|\btanggal\b|\btgl\b|\bdate\b/.test(s)) return true;
   if (/^\d{1,2}[\\/.-]\d{1,2}[\\/.-]\d{2,4}$/.test(s)) return true;
-  if (/\d{1,2}[\\/.-]\d{1,2}[\\/.-]\d{2,4}.*(?:s\\s*[/.-]?\\s*d|sd|sampai|to|-).*\d{1,2}[\\/.-]\d{1,2}[\\/.-]\d{2,4}/.test(s)) return true;
+  if (/\d{1,2}[\\/.-]\d{1,2}[\\/.-]\d{2,4}.*(?:s\s*[/.-]?\\s*d|sd|sampai|to|-).*\d{1,2}[\\/.-]\d{1,2}[\\/.-]\d{2,4}/.test(s)) return true;
   if (/^(?:jan(?:uari)?|feb(?:ruari)?|mar(?:et)?|apr(?:il)?|mei|may|jun(?:i)?|jul(?:i)?|agu(?:stus)?|sep(?:tember)?|okt(?:ober)?|nov(?:ember)?|des(?:ember)?)\s*[-/]?\s*\d{4}$/.test(s)) return true;
   return false;
 }
