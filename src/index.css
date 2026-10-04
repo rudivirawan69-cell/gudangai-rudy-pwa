@@ -713,3 +713,12 @@ button{min-height:40px}
 .nav-moving-ball-desktop{display:none}.nav-btn{transition:color .22s ease,transform .22s cubic-bezier(.22,.8,.24,1),background-color .22s ease}.nav-btn.is-active .nav-icon-wrap{box-shadow:0 5px 12px rgba(15,159,154,.14),inset 0 1px 0 rgba(255,255,255,.9);transform:translateY(-1px)}.nav-btn:active{transform:scale(.96)}.nav-underline{transition:width .22s ease,opacity .22s ease}
 @media (min-width:768px){.nav-moving-ball-mobile{display:none}.nav-moving-ball-desktop{display:block;left:50%;top:calc((var(--nav-index) * var(--nav-height) / 6) + 4px);transform:translateX(-50%)}}
 @media (prefers-reduced-motion:reduce){.nav-moving-ball{transition:none}.app-content .card:not(button),.app-content .surface:not(button),.app-content .stat-tile:not(button),.app-content .stock-card:not(button),.app-content .section-card:not(button),.app-content .dashboard-panel,.app-content .dashboard-total-card,.app-content .dashboard-po-card,.app-content .menu-group{transition:none}}
+/* v7.1 restrained 3D visual layer */
+.dashboard-3d-card,.dashboard-panel,.dashboard-po-card,.dashboard-total-card{box-shadow:0 10px 24px rgba(15,35,43,.07),0 2px 5px rgba(15,35,43,.05),inset 0 1px 0 rgba(255,255,255,.92);transform:translateZ(0);transition:transform .18s var(--ease-out),box-shadow .18s var(--ease-out)}
+.dashboard-3d-card:active,.dashboard-panel:active,.dashboard-po-card:active{transform:translateY(1px)}
+.dashboard-icon-badge,.stock-metric-icon{width:2.35rem;height:2.35rem;border-radius:.8rem;display:grid;place-items:center;box-shadow:0 5px 12px rgba(15,35,43,.10),inset 0 1px 0 rgba(255,255,255,.85)}
+.dashboard-icon-cyan,.stock-metric-icon-cyan{background:linear-gradient(145deg,#e8fbfc,#c9f2f4);color:#087b80;border:1px solid #b7e8eb}
+.dashboard-icon-orange,.stock-metric-icon-amber{background:linear-gradient(145deg,#fff4e7,#ffe0bd);color:#c56b09;border:1px solid #f5d1a5}
+.stock-metric-icon-red{background:linear-gradient(145deg,#fff0f1,#ffd9dd);color:#c52f3b;border:1px solid #f4c1c7}
+.stock-metric-icon-green{background:linear-gradient(145deg,#eafbf3,#ccefe0);color:#08724f;border:1px solid #b8e3cf}
+.dashboard-chart-wrap{box-shadow:inset 0 1px 0 rgba(255,255,255,.9),0 6px 16px rgba(15,35,43,.045)}
