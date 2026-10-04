@@ -713,6 +713,17 @@ button{min-height:40px}
 .nav-moving-ball-desktop{display:none}.nav-btn{transition:color .22s ease,transform .22s cubic-bezier(.22,.8,.24,1),background-color .22s ease}.nav-btn.is-active .nav-icon-wrap{box-shadow:0 5px 12px rgba(15,159,154,.14),inset 0 1px 0 rgba(255,255,255,.9);transform:translateY(-1px)}.nav-btn:active{transform:scale(.96)}.nav-underline{transition:width .22s ease,opacity .22s ease}
 @media (min-width:768px){.nav-moving-ball-mobile{display:none}.nav-moving-ball-desktop{display:block;left:50%;top:calc((var(--nav-index) * var(--nav-height) / 6) + 4px);transform:translateX(-50%)}}
 @media (prefers-reduced-motion:reduce){.nav-moving-ball{transition:none}.app-content .card:not(button),.app-content .surface:not(button),.app-content .stat-tile:not(button),.app-content .stock-card:not(button),.app-content .section-card:not(button),.app-content .dashboard-panel,.app-content .dashboard-total-card,.app-content .dashboard-po-card,.app-content .menu-group{transition:none}}
+/* v8.1 — refined depth for stock/dashboard surfaces */
+.app-content .stock-card,.app-content .stock-metric-surface{
+  position:relative;overflow:hidden;background:linear-gradient(145deg,rgba(255,255,255,.99) 0%,rgba(255,255,255,.98) 62%,rgba(238,247,248,.94) 100%);
+  box-shadow:0 9px 20px rgba(15,50,58,.075),0 2px 5px rgba(15,50,58,.05),inset 0 1px 0 rgba(255,255,255,.98);
+  transform:translateZ(0);transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease;
+}
+.app-content .stock-card::after,.app-content .stock-metric-surface::after,.app-content .dashboard-total-card::after,.app-content .dashboard-panel::after,.app-content .dashboard-po-card::after{
+  content:"";position:absolute;left:12px;right:12px;top:0;height:1px;background:linear-gradient(90deg,transparent,rgba(14,116,144,.18),transparent);pointer-events:none;
+}
+.app-content .stock-card:hover,.app-content .stock-metric-surface:hover{transform:translateY(-1px);box-shadow:0 13px 26px rgba(15,50,58,.10),0 4px 8px rgba(15,50,58,.055),inset 0 1px 0 rgba(255,255,255,.99)}
+.app-content .stock-card:active,.app-content .stock-metric-surface:active{transform:translateY(0) scale(.995)}
 /* v7.1 restrained 3D visual layer */
 .dashboard-3d-card,.dashboard-panel,.dashboard-po-card,.dashboard-total-card{box-shadow:0 10px 24px rgba(15,35,43,.07),0 2px 5px rgba(15,35,43,.05),inset 0 1px 0 rgba(255,255,255,.92);transform:translateZ(0);transition:transform .18s var(--ease-out),box-shadow .18s var(--ease-out)}
 .dashboard-3d-card:active,.dashboard-panel:active,.dashboard-po-card:active{transform:translateY(1px)}
