@@ -584,6 +584,7 @@ export default function DashboardPage() {
   const [confirmingId, setConfirmingId] = useState(null);
   const [confirmMsg, setConfirmMsg] = useState('');
   const poSignatureRef = useRef('');
+  const poDataRef = useRef(null);
   const dashboardSignatureRef = useRef('');
   const historySignatureRef = useRef('');
   const [history, setHistory] = useState(() => getLocalHistory());
@@ -661,7 +662,7 @@ export default function DashboardPage() {
   }, [allItems]);
 
   const loadPO = useCallback(async ({ silent = false } = {}) => {
-    if (!silent && !poData) setPoLoading(true);
+    if (!silent && !poDataRef.current) setPoLoading(true);
     try {
       const [res, remoteHistory] = await Promise.all([
         getStatusPO(),
@@ -673,19 +674,20 @@ export default function DashboardPage() {
         const signature = JSON.stringify(synced);
         if (signature !== poSignatureRef.current) {
           poSignatureRef.current = signature;
+          poDataRef.current = synced;
           setPoData(synced);
         }
         setPoError('');
-      } else if (!poData) {
+      } else if (!poDataRef.current) {
         setPoData(null);
         setPoError(norm?.error || res?.error || 'Gagal memuat Status PO');
       }
     } catch (err) {
-      if (!poData) setPoError(err?.message || 'Gagal memuat Status PO');
+      if (!poDataRef.current) setPoError(err?.message || 'Gagal memuat Status PO');
     } finally {
-      if (!silent && !poData) setPoLoading(false);
+      if (!silent && !poDataRef.current) setPoLoading(false);
     }
-  }, [poData]);
+  }, []);
 
   const loadDashboardData = useCallback(async () => {
     try {
