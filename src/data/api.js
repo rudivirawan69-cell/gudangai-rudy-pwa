@@ -6,7 +6,7 @@ const RETRY_COUNT = 2;
 const RETRY_BASE_MS = 400;
 const REQUEST_TIMEOUT_MS = 15000;
 /** 1 item per request — stabil (single sudah terbukti menulis sheet). Progress tetap ditampilkan. */
-const BULK_CHUNK_SIZE = 1;
+const BULK_CHUNK_SIZE = 8;
 const DEFAULT_API_URL = 'https://script.google.com/macros/s/AKfycbxVpw0_waeCautJTG0R-jZQKBoxjTLXl5PGYCUBULccKhW8IQAoGRQFEqaCy6MkcnZqlQ/exec';
 const DEFAULT_API_SECRET = 'adadd47759234a7f94acb230c0cc7ff479c4e4f79a674714';
 const LS_API_URL = 'gudangai_api_url';
@@ -276,7 +276,7 @@ async function submitBulk(type, entity, tanggal, items) {
       requestId: 'REQ-' + String(chunk[0]?.clientItemId || newIds().requestId),
     };
     try {
-      const data = await postJson(payload, { retries: 1, timeoutMs: 35000 });
+      const data = await postJson(payload, { retries: 1, timeoutMs: 12000 });
       const rawResults = data?.results || data?.data?.results || [];
       const isOkStatus = (r) =>
         r?.success === true || r?.skipped === true ||
