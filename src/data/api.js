@@ -1,12 +1,10 @@
-/** GudangAI RUDY — API layer: sequential write-once + progress + tanggal YYYY-MM-DD
- *  Bulk multi-item pernah stuck; sequential 1 item/request (sama seperti single yang sudah terbukti)
- *  tetap memakai transactionId/clientItemId agar tidak duplikat, progress Mengirim X/Y, gagal → antrian.
+/** GudangAI RUDY — API layer: one-click full bulk + idempotent recovery + progress + tanggal YYYY-MM-DD
+ *  Seluruh batch transaksi dikirim melalui bulkTransaction dalam satu request.
+ *  Setiap item memakai clientItemId/requestId/transactionId stabil untuk anti-duplikasi.
  */
 const RETRY_COUNT = 2;
 const RETRY_BASE_MS = 400;
 const REQUEST_TIMEOUT_MS = 15000;
-/** 1 item per request — stabil (single sudah terbukti menulis sheet). Progress tetap ditampilkan. */
-const BULK_CHUNK_SIZE = 8;
 const DEFAULT_API_URL = 'https://script.google.com/macros/s/AKfycbxVpw0_waeCautJTG0R-jZQKBoxjTLXl5PGYCUBULccKhW8IQAoGRQFEqaCy6MkcnZqlQ/exec';
 const DEFAULT_API_SECRET = 'adadd47759234a7f94acb230c0cc7ff479c4e4f79a674714';
 const LS_API_URL = 'gudangai_api_url';
