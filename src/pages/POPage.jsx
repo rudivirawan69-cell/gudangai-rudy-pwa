@@ -172,7 +172,7 @@ function ItemCard({ item, onUpdate, onRemove, editable }) {
               type="number"
               inputMode="numeric"
               value={item.qty ?? 0}
-              onChange={(e) => onUpdate(item, { qty: Math.max(0, Number(e.target.value) || 0) })}
+              onChange={(e) => onUpdate(item, { qty: e.target.value === '' ? '' : Math.max(0, Number(e.target.value) || 0) })}
               className="w-14 text-center text-sm font-extrabold text-slate-900 tabular-nums border border-slate-200 rounded-lg py-1 bg-slate-50"
             />
             <button type="button" onClick={() => onUpdate(item, { qty: (Number(item.qty) || 0) + 1 })}
@@ -211,9 +211,10 @@ export default function POPage() {
   const bootstrapRevision = useBootstrapRevision();
 
   useEffect(() => {
+    if (!bootstrapRevision) return;
     stockCV.refresh?.({ force: true });
     stockPT.refresh?.({ force: true });
-  }, [bootstrapRevision, stockCV.refresh, stockPT.refresh]);
+  }, [bootstrapRevision]);
   const [tab, setTab] = useState('cs');
   const [csItems, setCsItems] = useState([]);
   const [prodItems, setProdItems] = useState([]);
