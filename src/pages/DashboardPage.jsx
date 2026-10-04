@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect, useCallback } from 'react';
+import { useMemo, useState, useEffect, useCallback, useRef } from 'react';
 import { useStock } from '../hooks/useStock';
 import { useAuth } from '../hooks/useAuth';
 import {
@@ -583,6 +583,9 @@ export default function DashboardPage() {
   const [dashboardData, setDashboardData] = useState(null);
   const [confirmingId, setConfirmingId] = useState(null);
   const [confirmMsg, setConfirmMsg] = useState('');
+  const poSignatureRef = useRef('');
+  const dashboardSignatureRef = useRef('');
+  const historySignatureRef = useRef('');
   const [history, setHistory] = useState(() => getLocalHistory());
   const loadMovementHistory = useCallback(async () => {
     const local = getLocalHistory();
@@ -657,9 +660,8 @@ export default function DashboardPage() {
     };
   }, [allItems]);
 
-  const loadPO = useCallback(async () => {
-    setPoLoading(true);
-    setPoError('');
+  const loadPO = useCallback(async ({ silent = false } = {}) => {
+    if (!silent && !poData) setPoLoading(true);
     try {
       const [res, remoteHistory] = await Promise.all([
         getStatusPO(),
@@ -667,23 +669,34 @@ export default function DashboardPage() {
       ]);
       const norm = normalizeStatusPO(res);
       const synced = norm?.success ? mergeIncomingWithPO(norm, remoteHistory) : norm;
-      if (synced?.success) setPoData(synced);
-      else {
+      if (synced?.success) {
+        const signature = JSON.stringify(synced);
+        if (signature !== poSignatureRef.current) {
+          poSignatureRef.current = signature;
+          setPoData(synced);
+        }
+        setPoError('');
+      } else if (!poData) {
         setPoData(null);
         setPoError(norm?.error || res?.error || 'Gagal memuat Status PO');
       }
     } catch (err) {
-      setPoData(null);
-      setPoError(err?.message || 'Gagal memuat Status PO');
+      if (!poData) setPoError(err?.message || 'Gagal memuat Status PO');
     } finally {
-      setPoLoading(false);
+      if (!silent && !poData) setPoLoading(false);
     }
-  }, []);
+  }, [poData]);
 
   const loadDashboardData = useCallback(async () => {
     try {
       const res = await getDashboardData();
-      if (res?.success) setDashboardData(res);
+      if (res?.success) {
+        const signature = JSON.stringify(res);
+        if (signature !== dashboardSignatureRef.current) {
+          dashboardSignatureRef.current = signature;
+          setDashboardData(res);
+        }
+      }
     } catch (_) {
       // The local stock view remains available if the read-only aggregate is unavailable.
     }
@@ -692,9 +705,9 @@ export default function DashboardPage() {
   useEffect(() => {
     void loadPO();
     void loadDashboardData();
-    const refreshPO = () => { if (document.visibilityState === 'visible' && navigator.onLine) void loadPO(); };
-    const timer = setInterval(refreshPO, 15000);
-    const dashboardTimer = setInterval(() => { if (document.visibilityState === 'visible' && navigator.onLine) void loadDashboardData(); }, 15000);
+    const refreshPO = () => { if (document.visibilityState === 'visible' && navigator.onLine) void loadPO({ silent: true }); };
+    const timer = setInterval(refreshPO, 60000);
+    const dashboardTimer = setInterval(() => { if (document.visibilityState === 'visible' && navigator.onLine) void loadDashboardData(); }, 60000);
     window.addEventListener('online', refreshPO);
     window.addEventListener('gudangai-po-changed', refreshPO);
     document.addEventListener('visibilitychange', refreshPO);
