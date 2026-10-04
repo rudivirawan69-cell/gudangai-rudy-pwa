@@ -49,7 +49,7 @@ function StockCard({ item }) {
 }
 
 export default function StokPage() {
-  const { items, loading, error, refresh } = useStock();
+  const { items, loading, error, refresh } = useStock(entity);
   const bootstrapRevision = useBootstrapRevision();
 
   useEffect(() => {
