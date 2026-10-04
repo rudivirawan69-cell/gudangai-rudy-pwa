@@ -189,7 +189,11 @@ export default function InputPage() {
   }, [entity, mergePdfIntoCart]);
 
   const updateQty = (idx, delta) => setCart((prev) => prev.map((c, i) => (i === idx ? { ...c, qty: Math.max(0.01, +(c.qty + delta).toFixed(2)) } : c)));
-  const setQtyValue = (idx, val) => { const n = parseFloat(val); if (Number.isNaN(n)) return; setCart((prev) => prev.map((c, i) => (i === idx ? { ...c, qty: +n.toFixed(2) } : c))); };
+  const setQtyValue = (idx, val) => {
+    if (val === '') { setCart((prev) => prev.map((c, i) => (i === idx ? { ...c, qty: '' } : c))); return; }
+    const n = parseFloat(val); if (Number.isNaN(n)) return;
+    setCart((prev) => prev.map((c, i) => (i === idx ? { ...c, qty: +n.toFixed(2) } : c)));
+  };
   const removeCart = (idx) => setCart((prev) => prev.filter((_, i) => i !== idx));
   const setKet = (idx, val) => setCart((prev) => prev.map((c, i) => (i === idx ? { ...c, keterangan: val } : c)));
 
@@ -225,6 +229,9 @@ export default function InputPage() {
     }
     try {
       setBusy(true);
+      setStatusBanner('Menyiapkan tampilan kamera…');
+      setPhotoCameraOpen(true);
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
       setStatusBanner('Menyalakan kamera…');
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } },
@@ -237,7 +244,14 @@ export default function InputPage() {
       video.setAttribute('playsinline', 'true');
       video.muted = true;
       await video.play();
-      setPhotoCameraOpen(true);
+      await new Promise((resolve) => {
+        if (video.readyState >= 2) resolve();
+        else {
+          const done = () => { video.removeEventListener('loadeddata', done); resolve(); };
+          video.addEventListener('loadeddata', done, { once: true });
+          setTimeout(resolve, 1500);
+        }
+      });
       setBusy(false);
       setStatusBanner('Kamera siap — arahkan ke daftar barang lalu tekan Ambil Foto.');
     } catch (err) {
@@ -418,7 +432,9 @@ export default function InputPage() {
           const bo = Number(b.pdfSourceIndex) || 999999;
           return ao - bo;
         });
-        const items = orderedCart.map((c) => ({ kode: c.kode, nama: c.nama, qty: c.qty, satuan: c.satuan, keterangan: c.keterangan || '', clientItemId: c.clientItemId }));
+        const items = orderedCart.map((c) => ({ ...c, qty: Number(c.qty) || 0 })).filter((c) => c.qty > 0)
+          .map((c) => ({ kode: c.kode, nama: c.nama, qty: c.qty, satuan: c.satuan, keterangan: c.keterangan || '', clientItemId: c.clientItemId }));
+        if (!items.length) { setStatusBanner('Isi minimal 1 jumlah barang sebelum dikirim.'); return; }
       const fn = txType === 'masuk' ? submitBarangMasuk : txType === 'rusak' ? submitBarangRusak : submitBarangKeluar;
       const res = await fn({ entity, tanggal, items });
       if (res?.success !== false) {
