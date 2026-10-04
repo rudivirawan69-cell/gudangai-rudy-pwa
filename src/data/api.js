@@ -1,9 +1,9 @@
-/** GudangAI RUDY — API layer V6.7.1 stable-chunk (BATCH=30) + tanggal YYYY-MM-DD */
+/** GudangAI RUDY — API layer: safe bulk chunks + progress + tanggal YYYY-MM-DD */
 const RETRY_COUNT = 2;
 const RETRY_BASE_MS = 400;
 const REQUEST_TIMEOUT_MS = 15000;
 /** Chunk agar Apps Script + spreadsheet selesai < timeout (anti-antrian). */
-const BULK_CHUNK_SIZE = 30;
+const BULK_CHUNK_SIZE = 8;
 const DEFAULT_API_URL = 'https://script.google.com/macros/s/AKfycbxVpw0_waeCautJTG0R-jZQKBoxjTLXl5PGYCUBULccKhW8IQAoGRQFEqaCy6MkcnZqlQ/exec';
 const DEFAULT_API_SECRET = 'adadd47759234a7f94acb230c0cc7ff479c4e4f79a674714';
 const LS_API_URL = 'gudangai_api_url';
@@ -322,7 +322,7 @@ async function submitBulk(type, entity, tanggal, items) {
       requestId: newIds().requestId,
     };
     try {
-      const data = await postJson(payload, { timeoutMs: 60000 });
+      const data = await postJson(payload, { retries: 1, timeoutMs: 45000 });
       const rawResults = data?.results || data?.data?.results || [];
       const cidByTx = new Map(wire.map((it) => [String(it.transactionId), chunk.find(x => String(x.clientItemId) === String(it.transactionId).replace(/^TX-/, ''))?.clientItemId]));
       const chunkResults = Array.isArray(rawResults) ? rawResults.map((r) => ({
