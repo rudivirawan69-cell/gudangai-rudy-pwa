@@ -42,6 +42,7 @@ export default function InputPage() {
   const [statusBanner, setStatusBanner] = useState('');
   const [accuracy, setAccuracy] = useState(null);
   const [cart, setCart] = useState([]);
+  const [pdfReview, setPdfReview] = useState([]);
   const [submitting, setSubmitting] = useState(false);
   const [submitProgress, setSubmitProgress] = useState(null);
   const [showPaste, setShowPaste] = useState(false);
@@ -160,14 +161,23 @@ export default function InputPage() {
       const matched = applyStockAwareFallback(validation.matched || [], useEntity, stock);
       const amb = validation.ambiguous || [];
       const un = validation.unmatched || [];
+      const review = [...amb, ...un].map((r, idx) => ({
+        ...r,
+        reviewNo: idx + 1,
+        namaPdf: r.nameFromPdf || r.rawName || r.name || '',
+        qty: Number(r.qty) || 0,
+      }));
       const total = matched.length + amb.length + un.length;
       const acc = total ? Math.round((matched.length / total) * 100) : 0;
-      setAccuracy({ pct: acc, matched: matched.length, skipped: un.length, needPick: amb.length, total });
+      setAccuracy({ pct: acc, matched: matched.length, skipped: 0, needPick: review.length, total });
+      // Only confirmed master matches enter the transaction cart.
+      // Unmatched/ambiguous rows are retained for manual mapping; nothing is silently dropped.
       mergePdfIntoCart(matched);
+      setPdfReview(review);
       const parts = [];
       if (matched.length) parts.push(matched.length + ' cocok');
-      if (un.length) parts.push(un.length + ' dilewati');
-      setStatusBanner(matched.length ? (sourceLabel + ' ' + acc + '% · ' + parts.join(' · ')) : (un.length ? ('Tidak ada yang cocok master · ' + un.length + ' baris dilewati') : 'Tidak ada baris barang terdeteksi.'));
+      if (review.length) parts.push(review.length + ' perlu validasi');
+      setStatusBanner(sourceLabel + ' ' + total + ' baris · ' + parts.join(' · '));
     } catch (err) {
       setStatusBanner(err.message || 'Gagal memvalidasi ' + sourceLabel);
     } finally { setBusy(false); }
@@ -280,6 +290,31 @@ export default function InputPage() {
     } catch (err) { setBusy(false); setStatusBanner(err?.message || 'Gagal memulai rekaman suara'); }
   };
 
+  const resolvePdfReview = useCallback((reviewIndex, item) => {
+    if (!item?.kode) return;
+    setPdfReview((prev) => prev.filter((_, i) => i !== reviewIndex));
+    setCart((prev) => {
+      const qty = Number(prev.find((x) => x.kode === item.kode)?.qty || 0);
+      const review = pdfReview[reviewIndex];
+      if (!review) return prev;
+      const add = Number(review.qty) || 0;
+      const idx = prev.findIndex((x) => x.kode === item.kode);
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = { ...next[idx], qty: +(qty + add).toFixed(2) };
+        return next;
+      }
+      return [...prev, {
+        kode: item.kode,
+        nama: item.nama || review.namaPdf,
+        satuan: item.satuan || 'Pack',
+        qty: add,
+        keterangan: '',
+        clientItemId: item.kode + '-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7),
+      }];
+    });
+  }, [pdfReview]);
+
   const handleSubmit = async () => {
     if (submittingRef.current || !cart.length) return;
     submittingRef.current = true; setSubmitting(true); setSubmitProgress({ sent: 0, total: cart.length, success: 0, failed: 0 });
@@ -340,7 +375,7 @@ export default function InputPage() {
           setStatusBanner('Belum terkonfirmasi — item tetap diamankan di antrian');
         }
 
-        setCart([]); setAccuracy(null);
+        setCart([]); setAccuracy(null); setPdfReview([]);
         window.dispatchEvent(new Event('gudangai-stock-refresh'));
       } else {
         pushNotification({ type: 'error', title: 'Transaksi belum dikirim', body: res?.error || 'Tidak ada data yang dinyatakan berhasil.' });
@@ -466,6 +501,18 @@ export default function InputPage() {
         </div>
       )}
 
+      {pdfReview.length > 0 && (
+        <div className="rounded-2xl bg-white border border-amber-200 shadow-sm p-3 space-y-3">
+          <div>
+            <p className="text-sm font-bold text-slate-900">Validasi PDF — {pdfReview.length} baris perlu dicocokkan</p>
+            <p className="text-[11px] text-slate-500 mt-0.5">Nomor di PDF diabaikan. Urutan mengikuti PDF dan nomor di aplikasi dibuat ulang mulai 1.</p>
+          </div>
+          {pdfReview.map((r, idx) => (
+            <PdfReviewRow key={(r.sourceIndex || idx) + '-' + idx} row={r} entity={entity} onPick={(item) => resolvePdfReview(idx, item)} />
+          ))}
+        </div>
+      )}
+
       {cart.length > 0 && (
         <div ref={cartRef} className={`${dense ? 'space-y-2' : 'space-y-3'} pb-20`}>
           <div className="flex items-center justify-between">
@@ -560,3 +607,33 @@ export default function InputPage() {
   );
   }
 
+
+
+function PdfReviewRow({ row, entity, onPick }) {
+  const [q, setQ] = useState(row.namaPdf || '');
+  const hits = q.trim().length >= 1 ? searchMaster(entity, q.trim()).slice(0, 5) : [];
+  return (
+    <div className="rounded-xl border border-amber-100 bg-amber-50/50 p-2.5">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-[10px] font-bold text-amber-700">NO {row.reviewNo}</p>
+          <p className="text-sm font-semibold text-slate-800">{row.namaPdf}</p>
+          <p className="text-[11px] text-slate-500">TOTAL {row.qty} · PDF NO {row.pdfNo || '—'}</p>
+        </div>
+      </div>
+      <input value={q} onChange={(e) => setQ(e.target.value)}
+        placeholder="Cari nama barang master..."
+        className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-900" />
+      {hits.length > 0 && (
+        <div className="mt-1 space-y-1">
+          {hits.map((h) => (
+            <button key={h.kode} type="button" onClick={() => onPick(h)}
+              className="w-full text-left rounded-lg bg-white border border-slate-200 px-2 py-1.5 text-xs text-slate-700">
+              {h.kode} · {h.nama}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
