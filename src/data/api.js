@@ -135,14 +135,34 @@ export function getWriteCircuitState() {
   return { open: false, failures: 0 };
 }
 
-export async function fetchStock(entity) {
+export async function fetchStock(entity, options = {}) {
   const ent = String(entity || 'CV').toUpperCase();
   try {
-    const data = await getJson('getStock', { entity: ent, entitas: ent });
-    const items = data?.items || data?.stock || data?.data || [];
-    return { success: true, items: Array.isArray(items) ? items : [], raw: data };
+    const data = await getJson('getAllStock', { entitas: ent, entity: ent });
+    if (data?.success === false) throw new Error(data?.error || 'Gagal mengambil stok');
+    const raw = data?.items || data?.stock || data?.data || [];
+    if (Array.isArray(raw)) {
+      return raw.map((it) => ({
+        ...it,
+        entity: String(it.entity || it.entitas || ent).toUpperCase(),
+        entitas: String(it.entitas || it.entity || ent).toUpperCase(),
+        stok: Number(it.stok ?? it.stockAkhir ?? it.sisa ?? 0) || 0,
+        stockAkhir: Number(it.stockAkhir ?? it.stok ?? it.sisa ?? 0) || 0,
+        stockAman: Number(it.stockAman ?? it.stokAman ?? it.aman ?? 0) || 0,
+      }));
+    }
+    const grouped = ent === 'CV' ? (data?.cv || data?.CV || []) : (data?.pt || data?.PT || []);
+    return Array.isArray(grouped) ? grouped.map((it) => ({
+      ...it,
+      entity: ent,
+      entitas: ent,
+      stok: Number(it.stok ?? it.stockAkhir ?? it.sisa ?? 0) || 0,
+      stockAkhir: Number(it.stockAkhir ?? it.stok ?? it.sisa ?? 0) || 0,
+      stockAman: Number(it.stockAman ?? it.stockAman ?? it.aman ?? 0) || 0,
+    })) : [];
   } catch (err) {
-    return { success: false, items: [], error: err?.message || String(err) };
+    if (options.allowDemo) return [];
+    throw err;
   }
 }
 
@@ -280,24 +300,47 @@ async function submitBulk(type, entity, tanggal, items) {
   let failed = 0;
   for (let i = 0; i < normalized.length; i += BULK_CHUNK_SIZE) {
     const chunk = normalized.slice(i, i + BULK_CHUNK_SIZE);
+    const ent = String(entity || '').toUpperCase();
+    const wire = chunk.map((it) => ({
+      kodeBarang: String(it.kode || it.kodeBarang || '').trim(),
+      qty: Number(it.qty) || 0,
+      keterangan: String(it.keterangan || '').trim().slice(0, 200),
+      requestId: 'REQ-' + String(it.clientItemId),
+      transactionId: 'TX-' + String(it.clientItemId),
+      nonce: 'NC-' + String(it.clientItemId),
+    }));
     const payload = {
       action: 'bulkTransaction',
       sheet: sheetName,
-      entitas: String(entity || '').toUpperCase(),
+      entitas: ent,
+      entity: ent,
       tanggal: tgl,
-      items: chunk,
+      transactions: wire,
+      items: wire,
+      queueApproved: true,
+      batchId: newIds().requestId,
       requestId: newIds().requestId,
     };
     try {
       const data = await postJson(payload, { timeoutMs: 60000 });
-      const chunkResults = data?.results || [];
+      const rawResults = data?.results || data?.data?.results || [];
+      const cidByTx = new Map(wire.map((it) => [String(it.transactionId), chunk.find(x => String(x.clientItemId) === String(it.transactionId).replace(/^TX-/, ''))?.clientItemId]));
+      const chunkResults = Array.isArray(rawResults) ? rawResults.map((r) => ({
+        ...r,
+        clientItemId: r?.clientItemId || cidByTx.get(String(r?.transactionId || '')),
+      })) : [];
       if (chunkResults.length) {
         for (const r of chunkResults) {
           results.push(r);
-          if (r?.success || r?.skipped) successCount++;
+          if (r?.success === true || r?.skipped === true || r?.status === 'APPLIED' || r?.status === 'OK' || r?.status === 'SUCCESS' || r?.status === 'DUPLICATE') successCount++;
           else failed++;
         }
-      } else if (data?.success !== false) {
+      } else if (data?.success === true && (data?.successCount == null || Number(data.successCount) >= chunk.length)) {
+        for (const it of chunk) {
+          results.push({ clientItemId: it.clientItemId, success: true });
+          successCount++;
+        }
+      } else if (data?.success !== false && data?.written === true) {
         for (const it of chunk) {
           results.push({ clientItemId: it.clientItemId, success: true });
           successCount++;
