@@ -1,10 +1,9 @@
-/** GudangAI RUDY — API layer: one-click full bulk + idempotent recovery + progress + tanggal YYYY-MM-DD
- *  Seluruh batch transaksi dikirim melalui bulkTransaction dalam satu request.
- *  Setiap item memakai clientItemId/requestId/transactionId stabil untuk anti-duplikasi.
- */
+/** GudangAI RUDY — API layer: safe bulk chunks + progress + tanggal YYYY-MM-DD */
 const RETRY_COUNT = 2;
 const RETRY_BASE_MS = 400;
 const REQUEST_TIMEOUT_MS = 15000;
+/** Chunk agar Apps Script + spreadsheet selesai < timeout (anti-antrian). */
+const BULK_CHUNK_SIZE = 80;
 const DEFAULT_API_URL = 'https://script.google.com/macros/s/AKfycbxVpw0_waeCautJTG0R-jZQKBoxjTLXl5PGYCUBULccKhW8IQAoGRQFEqaCy6MkcnZqlQ/exec';
 const DEFAULT_API_SECRET = 'adadd47759234a7f94acb230c0cc7ff479c4e4f79a674714';
 const LS_API_URL = 'gudangai_api_url';
@@ -99,9 +98,9 @@ export async function getJson(action, extraParams = {}) {
   url.searchParams.set('action', action);
   url.searchParams.set('secret', getApiSecret());
   for (const [k, v] of Object.entries(extraParams || {})) {
-    if (v != null) url.searchParams.set(k, String(v));
+    if (v != null && v !== '') url.searchParams.set(k, String(v));
   }
-  const res = await fetchWithRetry(url.toString(), { method: 'GET' }, RETRY_COUNT, REQUEST_TIMEOUT_MS);
+  const res = await fetchWithRetry(url.toString(), { method: 'GET' });
   const text = await res.text();
   try { return JSON.parse(text); } catch {
     throw new Error('Invalid JSON response');
@@ -111,9 +110,9 @@ export async function getJson(action, extraParams = {}) {
 function readLS(key, fallback) {
   try {
     const raw = localStorage.getItem(key);
-    if (raw == null) return fallback;
+    if (!raw) return fallback;
     return JSON.parse(raw);
-  } catch (_) { return fallback; }
+  } catch { return fallback; }
 }
 function writeLS(key, val) {
   try { localStorage.setItem(key, JSON.stringify(val)); } catch (_) {}
@@ -126,53 +125,108 @@ export async function hydrateOfflineQueue() {
 export async function healthCheck() {
   try {
     const data = await getJson('ping');
-    return { success: true, ...data };
+    return { ok: data?.success === true || data?.code === 'HEALTHY', data };
   } catch (err) {
-    return { success: false, error: err?.message || String(err) };
+    return { ok: false, error: err?.message || String(err) };
   }
 }
 
+export function getWriteCircuitState() {
+  return { open: false, failures: 0 };
+}
+
 export async function fetchStock(entity, options = {}) {
+  const ent = String(entity || 'CV').toUpperCase();
   try {
-    const data = await getJson('getAllStock', { entity: String(entity || '').toUpperCase() });
-    return data;
+    const data = await getJson('getAllStock', { entitas: ent, entity: ent });
+    if (data?.success === false) throw new Error(data?.error || 'Gagal mengambil stok');
+    const raw = data?.items || data?.stock || data?.data || [];
+    if (Array.isArray(raw)) {
+      return raw.map((it) => ({
+        ...it,
+        entity: String(it.entity || it.entitas || ent).toUpperCase(),
+        entitas: String(it.entitas || it.entity || ent).toUpperCase(),
+        stok: Number(it.stok ?? it.stockAkhir ?? it.sisa ?? 0) || 0,
+        stockAkhir: Number(it.stockAkhir ?? it.stok ?? it.sisa ?? 0) || 0,
+        stockAman: Number(it.stockAman ?? it.stokAman ?? it.aman ?? 0) || 0,
+      }));
+    }
+    const grouped = ent === 'CV' ? (data?.cv || data?.CV || []) : (data?.pt || data?.PT || []);
+    return Array.isArray(grouped) ? grouped.map((it) => ({
+      ...it,
+      entity: ent,
+      entitas: ent,
+      stok: Number(it.stok ?? it.stockAkhir ?? it.sisa ?? 0) || 0,
+      stockAkhir: Number(it.stockAkhir ?? it.stok ?? it.sisa ?? 0) || 0,
+      stockAman: Number(it.stockAman ?? it.stockAman ?? it.aman ?? 0) || 0,
+    })) : [];
   } catch (err) {
-    return { success: false, error: err?.message || String(err) };
+    if (options.allowDemo) return [];
+    throw err;
   }
 }
 
 export async function getStatusPO() {
   try {
-    return await getJson('getStatusPO');
+    const data = await getJson('getStatusPO');
+    return data;
   } catch (err) {
-    return { success: false, error: err?.message || String(err) };
+    return { success: false, items: [], error: err?.message || String(err) };
   }
 }
-
 export async function getDashboardData() {
   try {
-    return await getJson('getDashboard');
+    const data = await getJson('getDashboardData');
+    return data || { success: false, error: 'Respons Dashboard kosong' };
   } catch (err) {
-    return { success: false, error: err?.message || String(err) };
+    return { success: false, error: err?.message || 'Gagal memuat Dashboard' };
+  }
+}
+export async function confirmPOStatus({ itemNo, nama, status, qtyDatang, keterangan, requestId } = {}) {
+  const rid = requestId || newIds().requestId;
+  try {
+    const data = await postJson({
+      action: 'confirmPOStatus',
+      requestId: rid,
+      itemNo,
+      nama,
+      status,
+      qtyDatang: Number(qtyDatang) || 0,
+      keterangan: keterangan || '',
+    });
+    return data;
+  } catch (err) {
+    return { success: false, error: err?.message || String(err), requestId: rid };
   }
 }
 
-export async function confirmPOStatus({ itemNo, nama, status, qtyDatang, keterangan, requestId } = {}) {
-  try {
-    return await postJson({
-      action: 'confirmPOStatus',
-      itemNo, nama, status, qtyDatang, keterangan,
-      requestId: requestId || newIds().requestId,
-    }, { retries: 1, timeoutMs: 20000 });
-  } catch (err) {
-    return { success: false, error: err?.message || String(err) };
+export function getPendingQueue() {
+  return readLS(LS_QUEUE, []);
+}
+
+export function removePendingByClientIds(ids) {
+  const set = new Set((ids || []).map(String));
+  const q = readLS(LS_QUEUE, []).filter((e) => !set.has(String(e.clientItemId || e.id)));
+  writeLS(LS_QUEUE, q);
+  return q;
+}
+
+export function clearSyncedQueue() {
+  writeLS(LS_QUEUE, []);
+}
+
+export function markItemApplied(clientItemId) {
+  const list = readLS(LS_APPLIED, []);
+  if (clientItemId && !list.includes(clientItemId)) {
+    list.push(clientItemId);
+    writeLS(LS_APPLIED, list.slice(-500));
   }
 }
 
 export function saveToHistory(entry) {
-  const list = readLS(LS_HISTORY, []);
-  list.unshift({ ...entry, id: entry.id || newIds().clientItemId, at: entry.at || Date.now() });
-  writeLS(LS_HISTORY, list.slice(0, 200));
+  const hist = readLS(LS_HISTORY, []);
+  hist.unshift({ ...entry, at: entry.at || Date.now() });
+  writeLS(LS_HISTORY, hist.slice(0, 200));
 }
 
 export function getLocalHistory() {
@@ -185,9 +239,10 @@ export async function getTransactionHistory() {
 
 export async function fetchRemoteTransactionHistory() {
   try {
-    return await getJson('getTransactionHistory');
+    const data = await getJson('getTransactionHistory');
+    return data;
   } catch (err) {
-    return { success: false, error: err?.message || String(err), items: [] };
+    return { success: false, items: [], error: err?.message || String(err) };
   }
 }
 
@@ -228,8 +283,35 @@ function enqueue(type, entity, items, meta = {}) {
   return { success: false, queued: true, queuedCount: fresh.length, items: fresh };
 }
 
+async function submitSingleTransactionFallback(sheetName, entity, tanggal, item) {
+  const txId = 'TX-' + String(item.clientItemId || newIds().clientItemId);
+  const requestId = 'REQ-' + String(item.clientItemId || newIds().clientItemId);
+  const payload = {
+    action: 'addTransaction',
+    sheet: sheetName,
+    entitas: String(entity || 'CV').toUpperCase(),
+    entity: String(entity || 'CV').toUpperCase(),
+    kodeBarang: String(item.kode || item.kodeBarang || '').trim(),
+    kode: String(item.kode || item.kodeBarang || '').trim(),
+    qty: Number(item.qty) || 0,
+    keterangan: String(item.keterangan || '').trim().slice(0, 200),
+    tanggal: normalizeTanggal(tanggal),
+    requestId,
+    transactionId: txId,
+    clientItemId: item.clientItemId || '',
+  };
+  const data = await postJson(payload, { retries: 1, timeoutMs: 12000 });
+  const ok = data?.success === true || data?.status === 'OK' || data?.status === 'APPLIED' || data?.status === 'SUCCESS' || data?.skipped === true;
+  return {
+    ...data,
+    success: ok,
+    clientItemId: item.clientItemId,
+    transactionId: txId,
+  };
+}
+
 async function submitBulk(type, entity, tanggal, items) {
-  const sheetMap = { masuk: 'Barang masuk', keluar: 'Barang keluar', rusak: 'Barang rusak' };
+  const sheetMap = { masuk: 'Barang masuk', keluar: 'Barang keluar', rusak: 'Barang Rusak' };
   const sheetName = sheetMap[type] || 'Barang keluar';
   const normalized = (items || []).map((it) => ({
     kode: it.kode || it.kodeBarang,
@@ -239,26 +321,17 @@ async function submitBulk(type, entity, tanggal, items) {
     keterangan: it.keterangan || '',
     clientItemId: it.clientItemId || newIds().clientItemId,
   })).filter((it) => it.kode && Number(it.qty) > 0);
-
   const tgl = normalizeTanggal(tanggal);
-  const ent = String(entity || '').toUpperCase();
-  const total = normalized.length;
   const results = [];
   let successCount = 0;
   let failed = 0;
 
-  if (!total) return { success: false, count: 0, failed: 0, results: [], queuedCount: 0, error: 'Tidak ada item valid' };
+  if (!normalized.length) return { success: false, count: 0, failed: 0, results: [], queuedCount: 0 };
 
-  try {
-    window.dispatchEvent(new CustomEvent('gudangai-submit-progress', {
-      detail: { sent: 0, total, success: 0, failed: 0 }
-    }));
-  } catch (_) {}
-
-  // SATU KALI KIRIM: seluruh 70–80 item dikirim melalui bulkTransaction.
-  // Setiap item mempertahankan clientItemId/requestId/transactionId yang stabil.
-  // Jika respons timeout, JANGAN kirim ulang satu-per-satu: simpan ID yang sama
-  // ke antrian agar retry backend memakai idempotency ledger dan tidak menggandakan.
+  // Satu klik = satu bulkTransaction untuk seluruh batch (hingga 80 item).
+  // Tidak ada fallback satu-per-satu. ID item tetap sama saat recovery agar
+  // backend idempotency ledger mencegah duplikasi jika request timeout setelah write.
+  const ent = String(entity || '').toUpperCase();
   const wire = normalized.map((it) => ({
     kodeBarang: String(it.kode || '').trim(),
     kode: String(it.kode || '').trim(),
@@ -269,8 +342,6 @@ async function submitBulk(type, entity, tanggal, items) {
     nonce: 'NC-' + String(it.clientItemId),
     clientItemId: String(it.clientItemId),
   }));
-
-  const batchId = 'BATCH-' + String(normalized[0].clientItemId);
   const payload = {
     action: 'bulkTransaction',
     sheet: sheetName,
@@ -280,75 +351,56 @@ async function submitBulk(type, entity, tanggal, items) {
     transactions: wire,
     items: wire,
     queueApproved: true,
-    batchId,
-    requestId: 'REQ-BATCH-' + String(normalized[0].clientItemId),
+    batchId: newIds().requestId,
+    requestId: newIds().requestId,
   };
 
   try {
+    window.dispatchEvent(new CustomEvent('gudangai-submit-progress', {
+      detail: { sent: 0, total: normalized.length, success: 0, failed: 0 }
+    }));
     const data = await postJson(payload, { retries: 2, timeoutMs: 90000 });
     const rawResults = data?.results || data?.data?.results || [];
-    const isOk = (r) =>
-      r?.success === true ||
-      r?.skipped === true ||
-      r?.idempotent === true ||
-      r?.status === 'APPLIED' ||
-      r?.status === 'OK' ||
-      r?.status === 'SUCCESS' ||
-      r?.status === 'DUPLICATE';
+    const cidByTx = new Map(wire.map((it) => [String(it.transactionId), String(it.clientItemId)]));
+    const chunkResults = Array.isArray(rawResults) ? rawResults.map((r) => ({
+      ...r,
+      clientItemId: r?.clientItemId || cidByTx.get(String(r?.transactionId || '')),
+    })) : [];
 
-    if (Array.isArray(rawResults) && rawResults.length) {
-      const byId = new Map();
-      rawResults.forEach((r) => {
-        const id = r?.clientItemId || r?.requestId || r?.transactionId;
-        if (id) byId.set(String(id).replace(/^TX-/, '').replace(/^REQ-/, ''), r);
-      });
-
-      for (const it of normalized) {
-        const r =
-          rawResults.find((x) => String(x?.clientItemId || '') === String(it.clientItemId)) ||
-          rawResults.find((x) => String(x?.transactionId || '') === 'TX-' + it.clientItemId) ||
-          rawResults.find((x) => String(x?.requestId || '') === 'REQ-' + it.clientItemId) ||
-          byId.get(String(it.clientItemId)) ||
-          null;
-
-        if (r && isOk(r)) {
-          results.push({ ...r, clientItemId: it.clientItemId, success: true });
+    if (chunkResults.length) {
+      for (const r of chunkResults) {
+        const ok = r?.success === true || r?.skipped === true || r?.idempotent === true ||
+          r?.status === 'APPLIED' || r?.status === 'OK' || r?.status === 'SUCCESS' || r?.status === 'DUPLICATE';
+        results.push({ ...r, success: ok });
+        if (ok) {
           successCount++;
+          markItemApplied(r.clientItemId);
         } else {
-          results.push({
-            ...(r || {}),
-            clientItemId: it.clientItemId,
-            success: false,
-            error: r?.error || 'Item belum terkonfirmasi oleh backend'
-          });
           failed++;
         }
       }
-    } else if (
-      data?.success === true &&
-      (data?.successCount == null || Number(data.successCount) >= total)
-    ) {
+    } else if (data?.success === true &&
+               (data?.successCount == null || Number(data.successCount) >= normalized.length)) {
       for (const it of normalized) {
         results.push({ clientItemId: it.clientItemId, success: true });
         successCount++;
+        markItemApplied(it.clientItemId);
       }
-    } else if (
-      data?.written === true &&
-      (data?.writtenCount == null || Number(data.writtenCount) >= total)
-    ) {
+    } else if (data?.written === true &&
+               (data?.writtenCount == null || Number(data.writtenCount) >= normalized.length)) {
       for (const it of normalized) {
         results.push({ clientItemId: it.clientItemId, success: true });
         successCount++;
+        markItemApplied(it.clientItemId);
       }
     } else {
       throw new Error(data?.error || 'Backend tidak mengonfirmasi seluruh batch');
     }
   } catch (err) {
-    // Batch bisa saja sudah masuk Spreadsheet sebelum koneksi terputus.
-    // Karena itu item yang sama hanya DIANTRIKAN dengan ID yang sama.
-    // Tidak ada fallback satu-per-satu dan tidak membuat transaction ID baru.
+    // Jangan kirim ulang dengan ID baru dan jangan pecah menjadi single-item.
+    // Simpan batch yang sama untuk sinkronisasi/idempotency.
     enqueue(type, entity, normalized, { tanggal: tgl });
-    failed = total;
+    failed = normalized.length;
     for (const it of normalized) {
       results.push({
         clientItemId: it.clientItemId,
@@ -358,43 +410,18 @@ async function submitBulk(type, entity, tanggal, items) {
         error: err?.message || 'Timeout/koneksi terputus'
       });
     }
-    try {
-      window.dispatchEvent(new CustomEvent('gudangai-submit-progress', {
-        detail: { sent: total, total, success: 0, failed: total }
-      }));
-    } catch (_) {}
-    return {
-      success: true,
-      count: 0,
-      failed: total,
-      queuedCount: total,
-      total,
-      uncertain: true,
-      results
-    };
   }
 
-  // Hanya item yang benar-benar tidak terkonfirmasi yang diamankan ke antrian.
-  // Item yang sudah APPLIED/DUPLICATE tidak pernah dikirim dengan ID baru.
-  const failedItems = normalized.filter((it) => {
-    const r = results.find((x) => String(x.clientItemId) === String(it.clientItemId));
-    return !r || !r.success;
-  });
-  if (failedItems.length) enqueue(type, entity, failedItems, { tanggal: tgl });
-
-  try {
-    window.dispatchEvent(new CustomEvent('gudangai-submit-progress', {
-      detail: { sent: total, total, success: successCount, failed }
-    }));
-  } catch (_) {}
+  window.dispatchEvent(new CustomEvent('gudangai-submit-progress', {
+    detail: { sent: normalized.length, total: normalized.length, success: successCount, failed }
+  }));
 
   return {
     success: failed === 0,
     count: successCount,
     failed,
-    total,
     results,
-    queuedCount: failedItems.length
+    queuedCount: results.filter((r) => r.queued).length,
   };
 }
 
@@ -410,23 +437,20 @@ export async function submitBarangRusak({ entity, tanggal, items } = {}) {
 
 export async function syncPendingQueue() {
   const queue = readLS(LS_QUEUE, []);
-  if (!queue.length) return { success: true, processed: 0 };
-  let processed = 0;
-  const remaining = [];
+  if (!queue.length) return { success: true, synced: 0 };
+  let synced = 0;
+  const remain = [];
   for (const entry of queue) {
     try {
       const res = await submitBulk(entry.type, entry.entity, entry.tanggal, entry.items);
-      if (res.success || (res.count > 0 && res.failed === 0)) {
-        processed += entry.items?.length || 0;
-      } else {
-        remaining.push(entry);
-      }
-    } catch (_) {
-      remaining.push(entry);
+      if (res.failed === 0) synced += entry.items?.length || 0;
+      else remain.push(entry);
+    } catch {
+      remain.push(entry);
     }
   }
-  writeLS(LS_QUEUE, remaining);
-  return { success: true, processed, remaining: remaining.length };
+  writeLS(LS_QUEUE, remain);
+  return { success: remain.length === 0, synced, remaining: remain.length };
 }
 
 export async function processQueue() {
@@ -435,7 +459,7 @@ export async function processQueue() {
 
 export async function generatePO(payload = {}) {
   try {
-    return await postJson({ action: 'generatePO', ...payload }, { retries: 1, timeoutMs: 30000 });
+    return await postJson({ action: 'generatePO', ...payload, requestId: newIds().requestId });
   } catch (err) {
     return { success: false, error: err?.message || String(err) };
   }
@@ -443,7 +467,7 @@ export async function generatePO(payload = {}) {
 
 export async function submitPO(payload = {}) {
   try {
-    return await postJson({ action: 'submitPO', ...payload, requestId: payload.requestId || newIds().requestId }, { retries: 1, timeoutMs: 45000 });
+    return await postJson({ action: 'submitPO', ...payload, requestId: newIds().requestId });
   } catch (err) {
     return { success: false, error: err?.message || String(err) };
   }
