@@ -49,13 +49,13 @@ function StockCard({ item }) {
 }
 
 export default function StokPage() {
+  const [entity, setEntity] = useState('CV');
   const { items, loading, error, refresh } = useStock(entity);
   const bootstrapRevision = useBootstrapRevision();
 
   useEffect(() => {
     refresh?.({ force: true });
   }, [bootstrapRevision, refresh]);
-  const [entity, setEntity] = useState('CV');
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
   const [divisi, setDivisi] = useState('Semua');
