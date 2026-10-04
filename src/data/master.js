@@ -172,12 +172,31 @@ function getBootstrapMaster() {
   }
 }
 
+function normalizeAliasText(value) {
+  return String(value || '')
+    .normalize('NFKC')
+    .toLowerCase()
+    .replace(/[‘’]/g, "'")
+    .replace(/[“”]/g, '"')
+    .replace(/\\bchicken\\b/g, 'chiken')
+    .replace(/\\bsambel\\b/g, 'sambal')
+    .replace(/\\bspesial\\b/g, 'special')
+    .replace(/[-–—]+/g, ' ')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\\s+/g, ' ')
+    .trim();
+}
+
 function getAliasLookup(entity) {
   const aliases = (aliasConfig && aliasConfig.aliases && aliasConfig.aliases[entity]) || {};
   const lookup = {};
   for (const [kode, list] of Object.entries(aliases)) {
     for (const a of list || []) {
-      if (a) lookup[String(a).toLowerCase().trim()] = kode;
+      if (a) {
+        const raw = String(a).toLowerCase().trim();
+        lookup[raw] = kode;
+        lookup[normalizeAliasText(a)] = kode;
+      }
     }
   }
   return lookup;
@@ -224,22 +243,22 @@ export function searchMaster(entity, query) {
 
 export function matchByAlias(entity, name) {
   if (!name) return null;
-  const normalized = name.toLowerCase().trim()
-    .replace(/\s*\([^)]*\)\s*/g, ' ')
-    .replace(/\s*\/\s*cv\.\s*pd3\s*chicken/gi, '')
-    .replace(/\s*\/\s*good\s*eat/gi, '')
-    .replace(/[-–—]+/g, ' ')
-    .replace(/\s+/g, ' ').trim();
+  const normalized = normalizeAliasText(name)
+    .replace(/\\b(kg|gram|grams|gr|pack|pcs|pc|pail|ekor|box|unit|porsi|liter|lusin|botol|kaleng|karung)\\b/g, ' ')
+    .replace(/\\s+/g, ' ').trim();
   const lookup = getAliasLookup(entity);
+  const compact = normalized.replace(/\\s+/g, '');
   const list = getMasterByEntity(entity);
-  if (lookup[normalized]) {
-    const item = list.find(i => i.kode === lookup[normalized]);
+  if (lookup[normalized] || lookup[compact]) {
+    const item = list.find(i => i.kode === (lookup[normalized] || lookup[compact]));
     if (item) return { item, matchType: 'alias-exact' };
   }
   const namaMatch = list.find(i => i.nama.toLowerCase() === normalized);
   if (namaMatch) return { item: namaMatch, matchType: 'nama-exact' };
   for (const [alias, kode] of Object.entries(lookup)) {
-    if (alias.includes(normalized) || normalized.includes(alias)) {
+    const a = normalizeAliasText(alias);
+    if (!a) continue;
+    if (a === normalized || a.replace(/\\s+/g, '') === compact || a.includes(normalized) || normalized.includes(a)) {
       const item = list.find(i => i.kode === kode);
       if (item) return { item, matchType: 'alias-partial' };
     }
