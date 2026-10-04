@@ -241,131 +241,162 @@ async function submitBulk(type, entity, tanggal, items) {
     keterangan: it.keterangan || '',
     clientItemId: it.clientItemId || newIds().clientItemId,
   })).filter((it) => it.kode && Number(it.qty) > 0);
+
   const tgl = normalizeTanggal(tanggal);
+  const ent = String(entity || '').toUpperCase();
+  const total = normalized.length;
   const results = [];
   let successCount = 0;
   let failed = 0;
-  const ent = String(entity || '').toUpperCase();
-  const total = normalized.length;
 
-  // Progress awal
+  if (!total) return { success: false, count: 0, failed: 0, results: [], queuedCount: 0, error: 'Tidak ada item valid' };
+
   try {
-    window.dispatchEvent(new CustomEvent('gudangai-submit-progress', { detail: { sent: 0, total, success: 0, failed: 0 } }));
+    window.dispatchEvent(new CustomEvent('gudangai-submit-progress', {
+      detail: { sent: 0, total, success: 0, failed: 0 }
+    }));
   } catch (_) {}
 
-  for (let i = 0; i < total; i += BULK_CHUNK_SIZE) {
-    const chunk = normalized.slice(i, i + BULK_CHUNK_SIZE);
-    const wire = chunk.map((it) => ({
-      kodeBarang: String(it.kode || '').trim(),
-      qty: Number(it.qty) || 0,
-      keterangan: String(it.keterangan || '').trim().slice(0, 200),
-      requestId: 'REQ-' + String(it.clientItemId),
-      transactionId: 'TX-' + String(it.clientItemId),
-      nonce: 'NC-' + String(it.clientItemId),
-    }));
-    const payload = {
-      action: 'bulkTransaction',
-      sheet: sheetName,
-      entitas: ent,
-      entity: ent,
-      tanggal: tgl,
-      transactions: wire,
-      items: wire,
-      queueApproved: true,
-      batchId: 'BATCH-' + String(chunk[0]?.clientItemId || newIds().requestId),
-      requestId: 'REQ-' + String(chunk[0]?.clientItemId || newIds().requestId),
-    };
-    try {
-      const data = await postJson(payload, { retries: 1, timeoutMs: 12000 });
-      const rawResults = data?.results || data?.data?.results || [];
-      const isOkStatus = (r) =>
-        r?.success === true || r?.skipped === true ||
-        r?.status === 'APPLIED' || r?.status === 'OK' || r?.status === 'SUCCESS' || r?.status === 'DUPLICATE';
+  // SATU KALI KIRIM: seluruh 70–80 item dikirim melalui bulkTransaction.
+  // Setiap item mempertahankan clientItemId/requestId/transactionId yang stabil.
+  // Jika respons timeout, JANGAN kirim ulang satu-per-satu: simpan ID yang sama
+  // ke antrian agar retry backend memakai idempotency ledger dan tidak menggandakan.
+  const wire = normalized.map((it) => ({
+    kodeBarang: String(it.kode || '').trim(),
+    kode: String(it.kode || '').trim(),
+    qty: Number(it.qty) || 0,
+    keterangan: String(it.keterangan || '').trim().slice(0, 200),
+    requestId: 'REQ-' + String(it.clientItemId),
+    transactionId: 'TX-' + String(it.clientItemId),
+    nonce: 'NC-' + String(it.clientItemId),
+    clientItemId: String(it.clientItemId),
+  }));
 
-      if (Array.isArray(rawResults) && rawResults.length) {
-        for (let j = 0; j < chunk.length; j++) {
-          const it = chunk[j];
-          const r = rawResults[j] || rawResults.find((x) =>
-            String(x?.transactionId || '') === 'TX-' + it.clientItemId ||
-            String(x?.clientItemId || '') === String(it.clientItemId)
-          ) || {};
-          if (isOkStatus(r) || (data?.success === true && rawResults.length === 1)) {
-            results.push({ clientItemId: it.clientItemId, success: true, ...r });
-            successCount++;
-          } else if (data?.success === true && (data?.successCount == null || Number(data.successCount) >= chunk.length)) {
-            results.push({ clientItemId: it.clientItemId, success: true });
-            successCount++;
-          } else {
-            results.push({ clientItemId: it.clientItemId, success: false, error: r?.error || data?.error || 'failed' });
-            failed++;
-            enqueue(type, entity, [it], { tanggal: tgl });
-          }
-        }
-      } else if (data?.success === true || data?.written === true || (data?.success !== false && data?.status === 'OK')) {
-        for (const it of chunk) {
-          results.push({ clientItemId: it.clientItemId, success: true });
+  const batchId = 'BATCH-' + String(normalized[0].clientItemId);
+  const payload = {
+    action: 'bulkTransaction',
+    sheet: sheetName,
+    entitas: ent,
+    entity: ent,
+    tanggal: tgl,
+    transactions: wire,
+    items: wire,
+    queueApproved: true,
+    batchId,
+    requestId: 'REQ-BATCH-' + String(normalized[0].clientItemId),
+  };
+
+  try {
+    const data = await postJson(payload, { retries: 2, timeoutMs: 90000 });
+    const rawResults = data?.results || data?.data?.results || [];
+    const isOk = (r) =>
+      r?.success === true ||
+      r?.skipped === true ||
+      r?.idempotent === true ||
+      r?.status === 'APPLIED' ||
+      r?.status === 'OK' ||
+      r?.status === 'SUCCESS' ||
+      r?.status === 'DUPLICATE';
+
+    if (Array.isArray(rawResults) && rawResults.length) {
+      const byId = new Map();
+      rawResults.forEach((r) => {
+        const id = r?.clientItemId || r?.requestId || r?.transactionId;
+        if (id) byId.set(String(id).replace(/^TX-/, '').replace(/^REQ-/, ''), r);
+      });
+
+      for (const it of normalized) {
+        const r =
+          rawResults.find((x) => String(x?.clientItemId || '') === String(it.clientItemId)) ||
+          rawResults.find((x) => String(x?.transactionId || '') === 'TX-' + it.clientItemId) ||
+          rawResults.find((x) => String(x?.requestId || '') === 'REQ-' + it.clientItemId) ||
+          byId.get(String(it.clientItemId)) ||
+          null;
+
+        if (r && isOk(r)) {
+          results.push({ ...r, clientItemId: it.clientItemId, success: true });
           successCount++;
-        }
-      } else {
-        for (const it of chunk) {
-          results.push({ clientItemId: it.clientItemId, success: false, error: data?.error || 'failed' });
-          failed++;
-        }
-        enqueue(type, entity, chunk, { tanggal: tgl });
-      }
-    } catch (batchErr) {
-      // Fallback: bila bulk batch gagal/timeout, coba satu-per-satu memakai action
-      // yang sama. Ini mencegah tombol terlihat "macet" hanya karena satu batch.
-      for (const it of chunk) {
-        const singleWire = {
-          kodeBarang: String(it.kode || '').trim(),
-          qty: Number(it.qty) || 0,
-          keterangan: String(it.keterangan || '').trim().slice(0, 200),
-          requestId: 'REQ-' + String(it.clientItemId),
-          transactionId: 'TX-' + String(it.clientItemId),
-          nonce: 'NC-' + String(it.clientItemId),
-        };
-        try {
-          const single = await postJson({
-            action: 'bulkTransaction',
-            sheet: sheetName,
-            entitas: ent,
-            entity: ent,
-            tanggal: tgl,
-            transactions: [singleWire],
-            items: [singleWire],
-            queueApproved: true,
-            batchId: 'SINGLE-' + String(it.clientItemId),
-            requestId: 'REQ-' + String(it.clientItemId),
-          }, { retries: 1, timeoutMs: 12000 });
-          if (single?.success === true || single?.written === true || single?.status === 'OK' ||
-              single?.status === 'APPLIED' || single?.status === 'SUCCESS' ||
-              single?.status === 'DUPLICATE' || single?.results?.[0]?.success === true ||
-              single?.results?.[0]?.status === 'APPLIED') {
-            results.push({ clientItemId: it.clientItemId, success: true, fallback: true });
-            successCount++;
-            continue;
-          }
-          throw new Error(single?.error || 'Gagal menyimpan item');
-        } catch (singleErr) {
-          enqueue(type, entity, [it], { tanggal: tgl });
-          results.push({ clientItemId: it.clientItemId, success: false, queued: true, error: singleErr?.message || batchErr?.message || 'timeout/network' });
+        } else {
+          results.push({
+            ...(r || {}),
+            clientItemId: it.clientItemId,
+            success: false,
+            error: r?.error || 'Item belum terkonfirmasi oleh backend'
+          });
           failed++;
         }
       }
+    } else if (
+      data?.success === true &&
+      (data?.successCount == null || Number(data.successCount) >= total)
+    ) {
+      for (const it of normalized) {
+        results.push({ clientItemId: it.clientItemId, success: true });
+        successCount++;
+      }
+    } else if (
+      data?.written === true &&
+      (data?.writtenCount == null || Number(data.writtenCount) >= total)
+    ) {
+      for (const it of normalized) {
+        results.push({ clientItemId: it.clientItemId, success: true });
+        successCount++;
+      }
+    } else {
+      throw new Error(data?.error || 'Backend tidak mengonfirmasi seluruh batch');
+    }
+  } catch (err) {
+    // Batch bisa saja sudah masuk Spreadsheet sebelum koneksi terputus.
+    // Karena itu item yang sama hanya DIANTRIKAN dengan ID yang sama.
+    // Tidak ada fallback satu-per-satu dan tidak membuat transaction ID baru.
+    enqueue(type, entity, normalized, { tanggal: tgl });
+    failed = total;
+    for (const it of normalized) {
+      results.push({
+        clientItemId: it.clientItemId,
+        success: false,
+        queued: true,
+        uncertain: true,
+        error: err?.message || 'Timeout/koneksi terputus'
+      });
     }
     try {
       window.dispatchEvent(new CustomEvent('gudangai-submit-progress', {
-        detail: { sent: Math.min(i + chunk.length, total), total, success: successCount, failed }
+        detail: { sent: total, total, success: 0, failed: total }
       }));
     } catch (_) {}
+    return {
+      success: true,
+      count: 0,
+      failed: total,
+      queuedCount: total,
+      total,
+      uncertain: true,
+      results
+    };
   }
+
+  // Hanya item yang benar-benar tidak terkonfirmasi yang diamankan ke antrian.
+  // Item yang sudah APPLIED/DUPLICATE tidak pernah dikirim dengan ID baru.
+  const failedItems = normalized.filter((it) => {
+    const r = results.find((x) => String(x.clientItemId) === String(it.clientItemId));
+    return !r || !r.success;
+  });
+  if (failedItems.length) enqueue(type, entity, failedItems, { tanggal: tgl });
+
+  try {
+    window.dispatchEvent(new CustomEvent('gudangai-submit-progress', {
+      detail: { sent: total, total, success: successCount, failed }
+    }));
+  } catch (_) {}
+
   return {
     success: failed === 0,
     count: successCount,
     failed,
+    total,
     results,
-    queuedCount: results.filter((r) => r.queued).length,
+    queuedCount: failedItems.length
   };
 }
 
