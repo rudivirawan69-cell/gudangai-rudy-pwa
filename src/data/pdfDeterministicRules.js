@@ -59,7 +59,7 @@ export function resolvePdfNameDeterministic(entity, rawName, masterList) {
     if (hit) return hit;
   }
   // Bumbu urap / urap-urap — PT uses Rekanan/WK code.
-  if (/bumbu\\s+urap/.test(norm) || /urap[-\\s]*urap/.test(norm)) {
+  if (/bumbu\s+urap/.test(norm) || /urap[-\s]*urap/.test(norm)) {
     const hit = pick(ent === 'PT' ? 'WK-0009' : 'CV-0077', 'det-bumbu-urap');
     if (hit) return hit;
   }
