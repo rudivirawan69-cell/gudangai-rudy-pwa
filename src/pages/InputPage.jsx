@@ -43,6 +43,8 @@ export default function InputPage() {
   const [accuracy, setAccuracy] = useState(null);
   const [cart, setCart] = useState([]);
   const [pdfReview, setPdfReview] = useState([]);
+  const [showPhotoSource, setShowPhotoSource] = useState(false);
+  const [photoCameraOpen, setPhotoCameraOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitProgress, setSubmitProgress] = useState(null);
   const [showPaste, setShowPaste] = useState(false);
@@ -53,6 +55,9 @@ export default function InputPage() {
   const filePdfRef = useRef(null);
   const fileImgRef = useRef(null);
   const videoRef = useRef(null);
+  const photoVideoRef = useRef(null);
+  const photoStreamRef = useRef(null);
+  const photoCanvasRef = useRef(null);
   const [scanning, setScanning] = useState(false);
   const [dense, setDense] = useState(() => (localStorage.getItem('gudangai_density') || 'comfortable') === 'compact');
   const submittingRef = useRef(false);
@@ -132,7 +137,7 @@ export default function InputPage() {
       const qty = Number(m.qty) > 0 ? Number(m.qty) : 1;
       const existing = rows.find((c) => c.kode === kode);
       if (existing) existing.qty = +(existing.qty + qty).toFixed(2);
-      else rows.push({ kode, nama, satuan, qty, keterangan: '', clientItemId: `${kode}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}` });
+      else rows.push({ kode, nama, satuan, qty, pdfSourceIndex: Number(m.sourceIndex) || 0, keterangan: '', clientItemId: `${kode}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}` });
     }
     setCart((prev) => {
       const next = [...prev];
@@ -210,6 +215,90 @@ export default function InputPage() {
       if (!text.trim()) { setStatusBanner('Foto tidak berisi teks terbaca. Coba foto lebih jelas.'); setBusy(false); return; }
       await runValidationPipeline(text, lines, 'Foto');
     } catch (err) { setStatusBanner(err.message || 'Gagal OCR foto'); setBusy(false); }
+  };
+
+  const openPhotoCamera = async () => {
+    setShowPhotoSource(false);
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setStatusBanner('Kamera tidak didukung di perangkat ini. Gunakan Galeri.');
+      return;
+    }
+    try {
+      setBusy(true);
+      setStatusBanner('Menyalakan kamera…');
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } },
+        audio: false,
+      });
+      photoStreamRef.current = stream;
+      const video = photoVideoRef.current;
+      if (!video) throw new Error('Tampilan kamera belum siap');
+      video.srcObject = stream;
+      video.setAttribute('playsinline', 'true');
+      video.muted = true;
+      await video.play();
+      setPhotoCameraOpen(true);
+      setBusy(false);
+      setStatusBanner('Kamera siap — arahkan ke daftar barang lalu tekan Ambil Foto.');
+    } catch (err) {
+      try { photoStreamRef.current?.getTracks?.().forEach((t) => t.stop()); } catch (_) {}
+      photoStreamRef.current = null;
+      setPhotoCameraOpen(false);
+      setBusy(false);
+      setStatusBanner(err?.name === 'NotAllowedError'
+        ? 'Izin kamera ditolak. Aktifkan izin kamera di pengaturan browser/HP.'
+        : (err?.message || 'Gagal membuka kamera.'));
+    }
+  };
+
+  const closePhotoCamera = () => {
+    try { photoStreamRef.current?.getTracks?.().forEach((t) => t.stop()); } catch (_) {}
+    photoStreamRef.current = null;
+    if (photoVideoRef.current) photoVideoRef.current.srcObject = null;
+    setPhotoCameraOpen(false);
+  };
+
+  const capturePhotoAndValidate = async () => {
+    const video = photoVideoRef.current;
+    if (!video || video.readyState < 2) {
+      setStatusBanner('Kamera belum siap. Tunggu beberapa saat.');
+      return;
+    }
+    try {
+      setBusy(true);
+      setStatusBanner('Mengambil foto…');
+      const canvas = photoCanvasRef.current || document.createElement('canvas');
+      photoCanvasRef.current = canvas;
+      const maxWidth = 2200;
+      const scale = Math.min(1, maxWidth / (video.videoWidth || maxWidth));
+      canvas.width = Math.max(1, Math.round((video.videoWidth || maxWidth) * scale));
+      canvas.height = Math.max(1, Math.round((video.videoHeight || 1200) * scale));
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const blob = await new Promise((resolve, reject) => {
+        canvas.toBlob((b) => b ? resolve(b) : reject(new Error('Gagal membuat foto')), 'image/jpeg', 0.92);
+      });
+      closePhotoCamera();
+      const file = new File([blob], 'gudangai-camera-' + Date.now() + '.jpg', { type: 'image/jpeg' });
+      const res = await extractTextFromImage(file, (msg) => setStatusBanner(String(msg || 'OCR foto…')));
+      if (res && res.ok === false) { setStatusBanner(res.error || 'Gagal OCR foto'); return; }
+      const text = res?.text || '';
+      const lines = res?.lines || [];
+      if (!text.trim()) {
+        setStatusBanner('Foto tidak berisi teks terbaca. Ambil foto ulang dengan pencahayaan dan fokus lebih baik.');
+        return;
+      }
+      await runValidationPipeline(text, lines, 'Foto');
+    } catch (err) {
+      closePhotoCamera();
+      setBusy(false);
+      setStatusBanner(err?.message || 'Gagal mengambil / membaca foto');
+    }
+  };
+
+  const openPhotoGallery = () => {
+    setShowPhotoSource(false);
+    fileImgRef.current?.click();
   };
 
   const onPasteValidate = async () => { setShowPaste(false); await runValidationPipeline(pasteText, [], 'Tempel'); setPasteText(''); };
@@ -310,16 +399,26 @@ export default function InputPage() {
         satuan: item.satuan || 'Pack',
         qty: add,
         keterangan: '',
+        pdfSourceIndex: Number(review.sourceIndex) || 0,
         clientItemId: item.kode + '-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7),
       }];
     });
   }, [pdfReview]);
 
   const handleSubmit = async () => {
+    if (pdfReview.length > 0) {
+      setStatusBanner('Masih ada ' + pdfReview.length + ' baris PDF/Foto yang perlu divalidasi sebelum dikirim. Tidak ada item yang boleh terlewat.');
+      return;
+    }
     if (submittingRef.current || !cart.length) return;
     submittingRef.current = true; setSubmitting(true); setSubmitProgress({ sent: 0, total: cart.length, success: 0, failed: 0 });
     try {
-      const items = cart.map((c) => ({ kode: c.kode, nama: c.nama, qty: c.qty, satuan: c.satuan, keterangan: c.keterangan || '', clientItemId: c.clientItemId }));
+      const orderedCart = [...cart].sort((a, b) => {
+          const ao = Number(a.pdfSourceIndex) || 999999;
+          const bo = Number(b.pdfSourceIndex) || 999999;
+          return ao - bo;
+        });
+        const items = orderedCart.map((c) => ({ kode: c.kode, nama: c.nama, qty: c.qty, satuan: c.satuan, keterangan: c.keterangan || '', clientItemId: c.clientItemId }));
       const fn = txType === 'masuk' ? submitBarangMasuk : txType === 'rusak' ? submitBarangRusak : submitBarangKeluar;
       const res = await fn({ entity, tanggal, items });
       if (res?.success !== false) {
@@ -446,7 +545,7 @@ export default function InputPage() {
           </span>
           <span className="text-[11px] font-semibold text-slate-700">PDF</span>
         </button>
-        <button type="button" onClick={() => fileImgRef.current?.click()} disabled={busy}
+        <button type="button" onClick={() => setShowPhotoSource(true)} disabled={busy}
           className="rounded-2xl bg-white border border-slate-200 shadow-sm py-3 flex flex-col items-center gap-1.5 disabled:opacity-50">
           <span className="w-9 h-9 rounded-xl bg-amber-50 border border-amber-100 flex items-center justify-center">
             <Image className="w-5 h-5 text-amber-600" />
@@ -469,6 +568,42 @@ export default function InputPage() {
         </button>
       </div>
       <input ref={filePdfRef} type="file" accept="application/pdf" className="hidden" onChange={onPdfPick} />
+      <input ref={fileImgRef} type="file" accept="image/*" className="hidden" onChange={onImgPick} />
+
+      {showPhotoSource && (
+        <div className="fixed inset-0 z-40 bg-black/45 flex items-end justify-center p-0">
+          <div className="w-full max-w-lg rounded-t-3xl bg-white p-4 pb-6 shadow-2xl space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-base font-extrabold text-slate-900">Input Foto</p>
+                <p className="text-xs text-slate-500">Pilih sumber foto untuk membaca daftar barang.</p>
+              </div>
+              <button type="button" onClick={() => setShowPhotoSource(false)} className="p-2 rounded-xl bg-slate-100 text-slate-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-2.5">
+              <button type="button" onClick={openPhotoCamera}
+                className="rounded-2xl border border-cyan-200 bg-cyan-50 py-4 flex flex-col items-center gap-2 text-cyan-800 font-bold">
+                <span className="w-11 h-11 rounded-xl bg-white flex items-center justify-center shadow-sm">
+                  <Image className="w-5 h-5 text-cyan-600" />
+                </span>
+                <span className="text-sm">Kamera</span>
+                <span className="text-[10px] font-medium text-cyan-700">Foto langsung</span>
+              </button>
+              <button type="button" onClick={openPhotoGallery}
+                className="rounded-2xl border border-amber-200 bg-amber-50 py-4 flex flex-col items-center gap-2 text-amber-800 font-bold">
+                <span className="w-11 h-11 rounded-xl bg-white flex items-center justify-center shadow-sm">
+                  <Upload className="w-5 h-5 text-amber-600" />
+                </span>
+                <span className="text-sm">Galeri</span>
+                <span className="text-[10px] font-medium text-amber-700">Pilih foto</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <input ref={fileImgRef} type="file" accept="image/*" className="hidden" onChange={onImgPick} />
 
       <div className="relative">
@@ -557,6 +692,29 @@ export default function InputPage() {
               className="w-full py-3 rounded-2xl bg-cyan-600 text-white font-bold shadow-lg flex items-center justify-center gap-2 disabled:opacity-50">
               {submitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
               {submitting ? 'Mengirim…' : `Kirim ${cart.length} item`}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {photoCameraOpen && (
+        <div className="fixed inset-0 z-50 bg-black flex flex-col">
+          <div className="flex items-center justify-between px-4 py-3 bg-black/80 text-white">
+            <div>
+              <p className="text-sm font-bold">Kamera Foto</p>
+              <p className="text-[10px] text-slate-300">Pastikan seluruh tabel barang masuk frame.</p>
+            </div>
+            <button type="button" onClick={closePhotoCamera} className="p-2 rounded-xl bg-white/10">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+          <div className="flex-1 flex items-center justify-center bg-black overflow-hidden">
+            <video ref={photoVideoRef} className="w-full max-h-full object-contain" playsInline muted />
+          </div>
+          <div className="p-5 pb-8 bg-black/90">
+            <button type="button" onClick={capturePhotoAndValidate} disabled={busy}
+              className="w-full py-3.5 rounded-2xl bg-white text-slate-900 font-extrabold shadow-lg disabled:opacity-50">
+              {busy ? 'Memproses…' : 'Ambil Foto & Validasi'}
             </button>
           </div>
         </div>
