@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useBootstrapRevision } from '../hooks/useBootstrapRevision';
-import { Search, RefreshCw, LayoutGrid } from 'lucide-react';
+import { Search, RefreshCw, LayoutGrid, Boxes, ShieldAlert, TriangleAlert, ShieldCheck } from 'lucide-react';
 import { useStock } from '../hooks/useStock';
 
 function levelOf(stok) {
@@ -107,10 +107,10 @@ export default function StokPage() {
   }, [entityItems, divisi, search, filterStatus]);
 
   const topStats = [
-    { key: 'total', label: 'TOTAL', value: stats.total, color: 'text-slate-900', sub: 'item', filter: 'all', ring: 'ring-slate-300' },
-    { key: 'kritis', label: 'KRITIS', value: stats.kritis, color: 'text-red-600', sub: 'item', filter: 'kritis', ring: 'ring-red-300' },
-    { key: 'menipis', label: 'MENIPIS', value: stats.waspada, color: 'text-amber-600', sub: 'item', filter: 'menipis', ring: 'ring-amber-300' },
-    { key: 'aman', label: 'AMAN', value: stats.aman, color: 'text-emerald-600', sub: 'item', filter: 'aman', ring: 'ring-emerald-300' },
+    { key: 'total', label: 'TOTAL ITEM', value: stats.total, color: 'text-slate-900', sub: 'item', filter: 'all', ring: 'ring-slate-300', icon: Boxes, iconClass: 'stock-metric-icon-cyan' },
+    { key: 'kritis', label: 'KRITIS', value: stats.kritis, color: 'text-red-600', sub: 'item', filter: 'kritis', ring: 'ring-red-300', icon: ShieldAlert, iconClass: 'stock-metric-icon-red' },
+    { key: 'menipis', label: 'WASPADA', value: stats.waspada, color: 'text-amber-600', sub: 'item', filter: 'menipis', ring: 'ring-amber-300', icon: TriangleAlert, iconClass: 'stock-metric-icon-amber' },
+    { key: 'aman', label: 'AMAN', value: stats.aman, color: 'text-emerald-600', sub: 'item', filter: 'aman', ring: 'ring-emerald-300', icon: ShieldCheck, iconClass: 'stock-metric-icon-green' },
   ];
 
   return (
@@ -152,7 +152,8 @@ export default function StokPage() {
               filterStatus === s.filter ? `ring-2 ${s.ring}` : ''
             }`}
           >
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">{s.label}</p>
+            <div className="flex items-center justify-between"><span className={`stock-metric-icon ${s.iconClass}`}><s.icon className="w-5 h-5" /></span><span className="text-[9px] font-extrabold text-slate-400">STATUS</span></div>
+            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wide mt-3">{s.label}</p>
             <p className={`text-2xl font-extrabold tabular-nums leading-none mt-1 ${s.color}`}>{s.value}</p>
             <p className="text-[11px] text-slate-400 mt-1 font-medium">{s.sub}</p>
           </button>
