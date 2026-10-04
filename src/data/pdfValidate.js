@@ -65,12 +65,18 @@ export async function extractTextFromPdf(file, onProgress) {
       allLines.push(...lines);
       fullText += lines.join('\n') + '\n';
     }
-    // PDF hasil scan sering mempunyai content stream kosong. Jalankan OCR
-    // per halaman sebagai fallback, tanpa menggandakan teks PDF digital.
-    if (allLines.length < 3 || !/\d/.test(fullText)) {
+    // PDF scan/hasil export tertentu dapat mengandung text layer parsial:
+    // beberapa baris terbaca tetapi sebagian besar tabel hilang. Jangan
+    // menganggap >=3 baris sebagai tanda bahwa ekstraksi sudah lengkap.
+    const textCandidateCount = parsePdfLinesToItems(fullText).length;
+    const suspicious = allLines.length < 3 || !/\d/.test(fullText) || textCandidateCount < 15;
+    if (suspicious) {
       const ocr = await extractPdfPagesWithOcr(pdf, onProgress);
       if (ocr.text.trim()) {
-        return { ok: true, text: ocr.text, lines: ocr.lines, pageCount: pdf.numPages, method: 'ocr' };
+        const ocrCandidateCount = parsePdfLinesToItems(ocr.text).length;
+        if (ocrCandidateCount > textCandidateCount) {
+          return { ok: true, text: ocr.text, lines: ocr.lines, pageCount: pdf.numPages, method: 'ocr' };
+        }
       }
     }
     return { ok: true, text: fullText, lines: allLines, pageCount: pdf.numPages, method: 'text' };
@@ -179,43 +185,117 @@ export function parsePdfLinesToItems(text) {
   const lines = String(text || '').split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
   const items = [];
   for (const line of lines) {
-    if (/^(no\.?|total|grand|sub\s*total|jumlah|halaman|page)/i.test(line)) continue;
-    // Skip header-like lines
-    if (/^(nama\s*barang|kode|satuan|qty|quantity|unit)/i.test(line)) continue;
+    if (/^(no\.?|total|grand|sub\s*total|jumlah|halaman|page|tanggal|alamat|telepon|telp|invoice|nota)/i.test(line)) continue;
+    if (/^(nama\s*barang|kode|satuan|qty|quantity|unit|harga|jumlah\s*harga)/i.test(line)) continue;
+
     const nums = [...line.matchAll(/(\d+(?:[.,]\d+)?)/g)];
     if (!nums.length) continue;
-    // Take the last number as qty (could have commas for decimals)
-    let qtyStr = nums[nums.length - 1][1].replace(',', '.');
-    const qty = parseFloat(qtyStr);
+
+    const last = nums[nums.length - 1];
+    const qty = parseFloat(last[1].replace(',', '.'));
     if (!(qty > 0) || qty > 99999) continue;
-    let rawName = line.slice(0, nums[nums.length - 1].index).trim();
+
+    let rawName = line.slice(0, last.index).trim();
     rawName = stripLeadingNo(rawName)
       .replace(/\b(pack|pcs|pail|ekor|kg|box|unit|porsi|gram|liter)\b/gi, '')
       .replace(/\s+/g, ' ')
       .trim();
-    if (rawName.length < 2) continue;
+
+    if (rawName.length < 2 || /^\d[\d\s./-]*$/.test(rawName)) continue;
     items.push({ rawName, qty });
   }
   return items;
+}
+
+function normalizeMatchText(value) {
+  return String(value || '')
+    .normalize('NFKC')
+    .toLowerCase()
+    .replace(/[“”„‟]/g, '"')
+    .replace(/[‘’‚‛]/g, "'")
+    .replace(/\bfaem\b|\bfaarn\b|\bfarn\b|\bfaam\b/g, 'farm')
+    .replace(/\bgolden\s+fae?m\b/g, 'golden farm')
+    .replace(/\bchicken\b/g, 'chiken')
+    .replace(/\bsambel\b/g, 'sambal')
+    .replace(/\bspesial\b/g, 'special')
+    .replace(/\bkerongkongan\b/g, 'krongkongan')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function levenshtein(a, b) {
+  const aa = String(a || ''), bb = String(b || '');
+  if (!aa) return bb.length;
+  if (!bb) return aa.length;
+  let prev = Array.from({ length: bb.length + 1 }, (_, i) => i);
+  for (let i = 0; i < aa.length; i++) {
+    const cur = [i + 1];
+    for (let j = 0; j < bb.length; j++) {
+      const cost = aa[i] === bb[j] ? 0 : 1;
+      cur[j + 1] = Math.min(cur[j] + 1, prev[j + 1] + 1, prev[j] + cost);
+    }
+    prev = cur;
+  }
+  return prev[bb.length];
+}
+
+function fuzzyScore(a, b) {
+  const x = normalizeMatchText(a);
+  const y = normalizeMatchText(b);
+  if (!x || !y) return 0;
+  if (x === y) return 1;
+  if (x.includes(y) || y.includes(x)) {
+    const ratio = Math.min(x.length, y.length) / Math.max(x.length, y.length);
+    return 0.82 + (0.18 * ratio);
+  }
+  const dist = levenshtein(x, y);
+  const charScore = 1 - (dist / Math.max(x.length, y.length));
+  const xt = new Set(x.split(' ').filter(Boolean));
+  const yt = new Set(y.split(' ').filter(Boolean));
+  const overlap = [...xt].filter(t => yt.has(t)).length / Math.max(xt.size, yt.size, 1);
+  return (charScore * 0.55) + (overlap * 0.45);
+}
+
+function findFuzzyMasterMatch(entity, rawName, master) {
+  const list = Array.isArray(master) ? master : [];
+  const n = normalizeMatchText(rawName);
+  if (!n || !list.length) return null;
+
+  const scored = list
+    .map(item => ({ item, score: fuzzyScore(n, item?.nama || '') }))
+    .sort((a, b) => b.score - a.score);
+
+  const best = scored[0];
+  const second = scored[1];
+  const threshold = n.length <= 8 ? 0.93 : n.length <= 13 ? 0.86 : 0.72;
+  const margin = n.length <= 13 ? 0.08 : 0.045;
+  if (!best || best.score < threshold) return null;
+  if (second && (best.score - second.score) < margin) return null;
+  return { item: best.item, matchType: 'fuzzy-ocr', score: best.score };
 }
 
 export function validatePdfItems(entity, textOrItems, masterOverride) {
   const master = masterOverride || getMasterByEntity(entity) || [];
   const items = Array.isArray(textOrItems) ? textOrItems : parsePdfLinesToItems(textOrItems);
   const results = [];
-  const seenKodes = new Set(); // prevent duplicate matches
+  const seenKodes = new Set();
+
   for (const it of items) {
     const rawNameOriginal = it.rawName || it.nama || it.name || '';
     const qty = Number(it.qty) || 0;
     if (!rawNameOriginal || qty <= 0) continue;
+
     const deterministic = resolvePdfNameDeterministic(entity, rawNameOriginal, master);
     let match = null;
     let status = 'matched';
     let note = '';
+
     if (deterministic) {
       match = deterministic.item || deterministic;
       note = deterministic.matchType || 'deterministic';
     }
+
     if (!match) {
       const aliasResult = matchByAlias(entity, stripLeadingNo(rawNameOriginal));
       if (aliasResult) {
@@ -223,14 +303,23 @@ export function validatePdfItems(entity, textOrItems, masterOverride) {
         note = aliasResult.matchType || 'alias';
       }
     }
+
+    if (!match) {
+      const fuzzy = findFuzzyMasterMatch(entity, rawNameOriginal, master);
+      if (fuzzy) {
+        match = fuzzy;
+        note = fuzzy.matchType;
+      }
+    }
+
     if (!match) {
       status = 'unmatched';
       note = 'tidak cocok master';
     }
+
     const masterItem = match?.kode ? match : (match?.item || null);
     const kode = masterItem?.kode || match?.kode || null;
 
-    // Deduplicate: if same kode already matched, merge qty
     if (kode && seenKodes.has(kode)) {
       const existing = results.find((r) => r.kode === kode && r.status === 'matched');
       if (existing) {
