@@ -39,43 +39,54 @@ function RingChart({ pct, color = '#ef4444', size = 52, stroke = 6 }) {
 }
 
 function DonutPO({ complete, progress, pending, size = 140 }) {
-  const total = Math.max(1, complete + progress + pending);
+  const rawTotal = complete + progress + pending;
+  const total = Math.max(1, rawTotal);
   const cPct = (complete / total) * 100;
   const pPct = (progress / total) * 100;
   const nPct = (pending / total) * 100;
-  const center = Math.round((complete + progress * 0.5) / total * 100);
+  const center = rawTotal > 0 ? Math.round((complete + progress * 0.5) / total * 100) : 0;
   const r = 52;
   const circ = 2 * Math.PI * r;
   const seg = (pct) => (pct / 100) * circ;
   let offset = 0;
   const parts = [
-    { pct: cPct, color: '#10b981' },
-    { pct: pPct, color: '#f59e0b' },
+    { pct: cPct, color: '#0f9f9a' },
+    { pct: pPct, color: '#f0a23a' },
     { pct: nPct, color: '#94a3b8' },
   ];
   return (
-    <div className="relative mx-auto" style={{ width: size, height: size }}>
-      <svg width={size} height={size} className="-rotate-90" viewBox="0 0 140 140">
-        <circle cx="70" cy="70" r={r} fill="none" stroke="#f1f5f9" strokeWidth="18" />
-        {parts.map((p, i) => {
-          const len = seg(p.pct);
-          const el = (
-            <circle
-              key={i}
-              cx="70" cy="70" r={r} fill="none"
-              stroke={p.color} strokeWidth="18" strokeLinecap="butt"
-              strokeDasharray={`${len} ${circ - len}`}
-              strokeDashoffset={-offset}
-            />
-          );
-          offset += len;
-          return el;
-        })}
-      </svg>
-      <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <p className="text-3xl font-extrabold text-slate-900 tabular-nums leading-none">{center}%</p>
-        <p className="text-[11px] text-slate-400 font-medium mt-0.5">Progress</p>
+    <div>
+      <div className="flex items-center justify-center gap-4 mb-3 text-[10px] font-bold">
+        <span className="text-teal-700"><i className="inline-block w-2 h-2 rounded-full bg-teal-600 mr-1" />Datang</span>
+        <span className="text-amber-700"><i className="inline-block w-2 h-2 rounded-full bg-amber-500 mr-1" />Sebagian</span>
+        <span className="text-slate-500"><i className="inline-block w-2 h-2 rounded-full bg-slate-400 mr-1" />Belum</span>
       </div>
+      <div className="relative mx-auto" style={{ width: size, height: size }}>
+        <svg width={size} height={size} className="-rotate-90" viewBox="0 0 140 140">
+          <circle cx="70" cy="70" r={r} fill="none" stroke="#e8eff0" strokeWidth="18" />
+          {rawTotal > 0 && parts.map((p, i) => {
+            const len = seg(p.pct);
+            const el = (
+              <circle
+                key={i}
+                cx="70" cy="70" r={r} fill="none"
+                stroke={p.color} strokeWidth="18" strokeLinecap="butt"
+                strokeDasharray={`${len} ${circ - len}`}
+                strokeDashoffset={-offset}
+              />
+            );
+            offset += len;
+            return el;
+          })}
+        </svg>
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
+          <p className="text-3xl font-extrabold text-slate-900 tabular-nums leading-none">{rawTotal > 0 ? center : '—'}</p>
+          <p className="text-[11px] text-slate-500 font-semibold mt-1">{rawTotal > 0 ? 'Progress' : 'Belum ada PO'}</p>
+        </div>
+      </div>
+      {rawTotal === 0 && (
+        <p className="text-center text-[10px] text-slate-400 mt-2">Belum ada data PO aktif pada sumber Status PO.</p>
+      )}
     </div>
   );
 }
