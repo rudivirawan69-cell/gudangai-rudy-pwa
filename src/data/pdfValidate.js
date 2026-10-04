@@ -181,12 +181,23 @@ function stripLeadingNo(name) {
     .trim();
 }
 
+function isPdfNonItemLine(line) {
+  const s = String(line || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  if (!s) return true;
+  if (/\bperiode\b|\bperiod\b|\btanggal\b|\btgl\b|\bdate\b/.test(s)) return true;
+  if (/^\d{1,2}[\\/.-]\d{1,2}[\\/.-]\d{2,4}$/.test(s)) return true;
+  if (/\d{1,2}[\\/.-]\d{1,2}[\\/.-]\d{2,4}.*(?:s\\s*[/.-]?\\s*d|sd|sampai|to|-).*\d{1,2}[\\/.-]\d{1,2}[\\/.-]\d{2,4}/.test(s)) return true;
+  if (/^(?:jan(?:uari)?|feb(?:ruari)?|mar(?:et)?|apr(?:il)?|mei|may|jun(?:i)?|jul(?:i)?|agu(?:stus)?|sep(?:tember)?|okt(?:ober)?|nov(?:ember)?|des(?:ember)?)\\s*[-/]?\\s*\\d{4}$/.test(s)) return true;
+  return false;
+}
+
 export function parsePdfLinesToItems(text) {
   const lines = String(text || '').split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
   const items = [];
   let sourceIndex = 0;
 
   for (const line of lines) {
+    if (isPdfNonItemLine(line)) continue;
     if (/^(no\.?|total|grand|sub\s*total|jumlah|halaman|page|tanggal|alamat|telepon|telp|invoice|nota)\b/i.test(line)) continue;
     if (/^(nama\s*barang|barang|kode|satuan|unit|qty|quantity|harga|jumlah\s*harga)\b/i.test(line)) continue;
     if (/^(frozen\s*&\s*kering|rekap\s*order|keterangan|pt\.|cv\.)/i.test(line)) continue;
