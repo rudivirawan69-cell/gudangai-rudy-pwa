@@ -249,8 +249,15 @@ export async function getDashboardData() {
   }
 }
 export async function confirmPOStatus(payload) {
-  try { return await postJson({ action: 'confirmPOStatus', ...(payload || {}), requestId: newIds().requestId }); }
-  catch (err) { return { success: false, error: err?.message || 'Gagal konfirmasi PO' }; }
+  try {
+    return await postJson({
+      action: 'recordPOArrival',
+      ...(payload || {}),
+      requestId: payload?.requestId || newIds().requestId,
+    }, { retries: 1, timeoutMs: 90000 });
+  } catch (err) {
+    return { success: false, error: err?.message || 'Gagal konfirmasi kedatangan PO' };
+  }
 }
 function getAppliedMap() {
   try {
