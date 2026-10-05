@@ -1,0 +1,12 @@
+ent(new CustomEvent('gudangai-notification', { detail: item })); } catch (_) {}
+}
+export function getNotifications() { try { return JSON.parse(localStorage.getItem(NOTIF_KEY) || '[]'); } catch { return []; } }
+export function markNotificationsRead() {
+  const list = getNotifications().map((n) => ({ ...n, read: true }));
+  try { localStorage.setItem(NOTIF_KEY, JSON.stringify(list)); } catch (_) {}
+}
+export function unreadNotificationCount() { return getNotifications().filter((n) => !n.read).length; }
+export async function submitPO(payload) {
+  try { return await postJson({ action: 'submitPO', ...(payload || {}), requestId: newIds().requestId }); }
+  catch (err) { return { success: false, error: err.message }; }
+}
