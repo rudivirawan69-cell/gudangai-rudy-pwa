@@ -93,25 +93,38 @@ function DonutPO({ complete, progress, pending, size = 140 }) {
 
 function DivisionStatus3D({ items, sourceRows }) {
   const rows = useMemo(() => {
-    if (Array.isArray(sourceRows) && sourceRows.length > 0) {
-      return sourceRows.map((r) => ({
-        divisi: r.divisi || r.division || 'LAINNYA',
+    // Spreadsheet aggregate is preferred, but never let a stale/empty aggregate
+    // blank the PWA chart. Merge it with the live CV+PT stock source.
+    const localMap = {};
+    DIVISIONS.forEach((d) => { localMap[d] = { divisi: d, total: 0, aman: 0, waspada: 0, kritis: 0 }; });
+    (items || []).forEach((it) => {
+      const d = String(it.divisi || 'LAINNYA').trim() || 'LAINNYA';
+      if (!localMap[d]) localMap[d] = { divisi: d, total: 0, aman: 0, waspada: 0, kritis: 0 };
+      localMap[d].total += 1;
+      const cls = classifyItem(it);
+      localMap[d][cls] += 1;
+    });
+
+    const remoteMap = {};
+    (Array.isArray(sourceRows) ? sourceRows : []).forEach((r) => {
+      const d = String(r.divisi || r.division || 'LAINNYA').trim() || 'LAINNYA';
+      remoteMap[d] = {
+        divisi: d,
         total: Number(r.total || r.totalItem || 0) || 0,
         aman: Number(r.aman || 0) || 0,
         waspada: Number(r.waspada || 0) || 0,
         kritis: Number(r.kritis || 0) || 0,
-      })).filter((r) => r.total > 0);
-    }
-    const map = {};
-    DIVISIONS.forEach((d) => { map[d] = { divisi: d, total: 0, aman: 0, waspada: 0, kritis: 0 }; });
-    (items || []).forEach((it) => {
-      const d = String(it.divisi || 'CS').trim() || 'CS';
-      if (!map[d]) map[d] = { divisi: d, total: 0, aman: 0, waspada: 0, kritis: 0 };
-      map[d].total += 1;
-      const cls = classifyItem(it);
-      map[d][cls] += 1;
+      };
     });
-    return Object.values(map)
+
+    const names = new Set([...Object.keys(localMap), ...Object.keys(remoteMap)]);
+    return [...names]
+      .map((d) => {
+        const remote = remoteMap[d];
+        const local = localMap[d];
+        if (remote && remote.total > 0) return remote;
+        return local || { divisi: d, total: 0, aman: 0, waspada: 0, kritis: 0 };
+      })
       .filter((r) => r.total > 0)
       .sort((a, b) => (b.kritis / b.total) - (a.kritis / a.total) || b.total - a.total);
   }, [items, sourceRows]);
