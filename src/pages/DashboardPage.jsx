@@ -253,7 +253,7 @@ function normalizeStatusPO(raw) {
   const previousRaw = raw.previousWeek || raw.previous || raw.lastWeek || raw.data?.previousWeek || null;
   const legacyLastWeekItems = raw.lastWeekItems || raw.data?.lastWeekItems || [];
   const legacyLastWeekKey = raw.lastWeekWeekKey || raw.data?.lastWeekWeekKey || '';
-  const previousWeek = previousRaw || (Array.isArray(legacyLastWeekItems) && legacyLastWeekItems.length
+  let previousWeek = previousRaw || (Array.isArray(legacyLastWeekItems) && legacyLastWeekItems.length
     ? {
         weekKey: legacyLastWeekKey,
         items: legacyLastWeekItems.map((it, idx) => ({
@@ -265,6 +265,42 @@ function normalizeStatusPO(raw) {
         })),
       }
     : null);
+
+  // Backward-compatible client reconciliation: if the deployed Apps Script
+  // still returns one mixed PO list, split it by Monday-to-Sunday boundaries.
+  if (!previousWeek) {
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    const day = start.getDay();
+    start.setDate(start.getDate() - (day === 0 ? 6 : day - 1));
+    const prevStart = new Date(start); prevStart.setDate(prevStart.getDate() - 7);
+    const nextStart = new Date(start); nextStart.setDate(nextStart.getDate() + 7);
+    const toDate = (v) => {
+      if (v instanceof Date && !Number.isNaN(v.getTime())) return v;
+      const s = String(v || '').trim();
+      const m = s.match(/^(\\d{4})-(\\d{1,2})-(\\d{1,2})$/);
+      return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : null;
+    };
+    const currentItems = [];
+    const oldItems = [];
+    for (const it of items) {
+      const d = toDate(it.tglRencana);
+      if (d && d >= prevStart && d < start) oldItems.push(it);
+      else if (d && d >= start && d < nextStart) currentItems.push(it);
+    }
+    const makeSummary = (list) => list.reduce((s, it) => {
+      if (it.status === 'Selesai') s.itemSelesai++;
+      else if (it.status === 'Sebagian') s.itemSebagian++;
+      else s.itemMenunggu++;
+      return s;
+    }, { totalItem: list.length, itemMenunggu: 0, itemSebagian: 0, itemSelesai: 0 });
+    if (currentItems.length || oldItems.length) {
+      items.splice(0, items.length, ...currentItems);
+      const cs = makeSummary(items);
+      menunggu = cs.itemMenunggu; sebagian = cs.itemSebagian; selesai = cs.itemSelesai;
+      previousWeek = { weekKey: 'Minggu Lalu', items: oldItems, summary: makeSummary(oldItems) };
+    }
+  }
   return {
     success: true,
     noPO: raw.noPO || summaryRaw.noPO || '',
