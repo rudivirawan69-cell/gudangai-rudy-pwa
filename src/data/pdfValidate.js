@@ -383,7 +383,7 @@ export function parseLinesFromText(text, _lines = []) {
     name: it.rawName,
     rawName: it.rawName,
     qty: it.qty,
-    nameFromPdf: rawNameOriginal,
+    nameFromPdf: it.rawName,
     sourceLine: it.sourceLine || '',
   }));
 }
@@ -408,7 +408,15 @@ export function detectEntityFromText(text) {
   const t = String(text || '').toLowerCase();
   if (/\bpt\.?\s*rasyuka|\brasyuka\b/.test(t)) return 'PT';
   if (/\bcv\.?\s*selera|\bselera\b/.test(t)) return 'CV';
-  // Count mentions
+
+  // Entity contract:
+  // CV group = CV / BBCV
+  // PT group = PT / WK / MM / BBPT
+  const ptCodeCount = (t.match(/\b(?:pt|wk|mm|bbpt)\s*[-:]?\s*\d+/g) || []).length;
+  const cvCodeCount = (t.match(/\b(?:cv|bbcv)\s*[-:]?\s*\d+/g) || []).length;
+  if (ptCodeCount > cvCodeCount && ptCodeCount > 0) return 'PT';
+  if (cvCodeCount > ptCodeCount && cvCodeCount > 0) return 'CV';
+
   const ptCount = (t.match(/\bpt[-.\s]/g) || []).length;
   const cvCount = (t.match(/\bcv[-.\s]/g) || []).length;
   if (ptCount > cvCount && ptCount >= 2) return 'PT';
