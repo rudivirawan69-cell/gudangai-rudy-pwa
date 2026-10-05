@@ -187,7 +187,7 @@ function confirmPOStatus(body) {
     }
 
     var lastRow = Math.max(poSheet.getLastRow(), 6);
-    var data = poSheet.getRange(6, 2, lastRow, 3).getValues();
+    var data = poSheet.getRange(6, 2, lastRow - 5, 3).getValues();
 
     var foundRow = -1;
     var foundNama = '';
