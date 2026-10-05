@@ -1,0 +1,8 @@
+{
+  "name": "gudangai-rudy-pwa",
+  "compatibility_date": "2026-10-04",
+  "assets": {
+    "directory": "./dist"
+  },
+  "previews": {}
+}
