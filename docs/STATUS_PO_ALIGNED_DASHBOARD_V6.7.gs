@@ -281,71 +281,139 @@ function refreshDashboardPODataOnly_() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var dash = ss.getSheetByName('Dashboard');
   if (!dash) return { success: false, error: 'Sheet Dashboard tidak ditemukan' };
-
   var status = getStatusPO();
   if (!status.success) return status;
 
   var items = status.items || [];
+  var previous = status.previousWeek || { items: [], summary: {} };
   var summary = status.summary || {};
+  var prevItems = previous.items || [];
+  var prevSummary = previous.summary || {};
 
+  dash.getRange('A28:F44').clearContent();
+  dash.getRange('H28:M43').clearContent();
   dash.getRange('A28').setValue('STATUS PO — MINGGU INI');
-  dash.getRange('A29').setValue('Total Item');
-  dash.getRange('B29').setValue(summary.totalItem || 0);
-  dash.getRange('C29').setValue('Datang');
-  dash.getRange('D29').setValue(summary.itemSelesai || 0);
-  dash.getRange('E29').setValue('Sebagian');
-  dash.getRange('F29').setValue(summary.itemSebagian || 0);
+  dash.getRange('A29:F30').setValues([
+    ['Total Item', summary.totalItem || 0, 'Datang', summary.itemSelesai || 0, 'Sebagian', summary.itemSebagian || 0],
+    ['Menunggu', summary.itemMenunggu || 0, 'Sisa Qty', items.reduce(function(s,x){ return s + Math.max(0,(x.qtyPO||0)-(x.qtyDatang||0)); },0), 'Periode', status.weekKey || '']
+  ]);
+  dash.getRange('A31:F31').setValues([['No','Nama','Status','Qty PO','Datang','Sisa']]);
+  var rows = items.slice(0, 13).map(function(it) {
+    return [it.itemNo, it.nama, it.status, it.qtyPO, it.qtyDatang, Math.max(0,(it.qtyPO||0)-(it.qtyDatang||0))];
+  });
+  if (rows.length) dash.getRange(32,1,rows.length,6).setValues(rows);
 
-  dash.getRange('A30').setValue('Menunggu');
-  dash.getRange('B30').setValue(summary.itemMenunggu || 0);
+  dash.getRange('H28:M28').merge().setValue('STATUS PO — MINGGU LALU');
+  dash.getRange('H29:M30').setValues([
+    ['Total Item', prevSummary.totalItem || 0, 'Datang', prevSummary.itemSelesai || 0, 'Sebagian', prevSummary.itemSebagian || 0],
+    ['Menunggu', prevSummary.itemMenunggu || 0, 'Sisa Qty', prevItems.reduce(function(s,x){ return s + Math.max(0,(x.qtyPO||0)-(x.qtyDatang||0)); },0), 'Periode', previous.weekKey || '']
+  ]);
+  dash.getRange('H31:M31').setValues([['No','Nama','Status','Qty PO','Datang','Sisa']]);
+  var prevRows = prevItems.slice(0, 12).map(function(it) {
+    return [it.itemNo, it.nama, it.status, it.qtyPO, it.qtyDatang, Math.max(0,(it.qtyPO||0)-(it.qtyDatang||0))];
+  });
+  if (prevRows.length) dash.getRange(32,8,prevRows.length,6).setValues(prevRows);
 
-  var headers = ['No', 'Nama', 'Status', 'Qty PO', 'Datang', 'Sisa'];
-  dash.getRange('A31:F31').setValues([headers]);
-  dash.getRange('A32:F44').clearContent();
-
-  var rows = [];
-  for (var i = 0; i < Math.min(items.length, 13); i++) {
-    var it = items[i];
-    var sisa = Math.max(0, (it.qtyPO || 0) - (it.qtyDatang || 0));
-    rows.push([it.itemNo, it.nama, it.status, it.qtyPO, it.qtyDatang, sisa]);
-  }
-  if (rows.length) {
-    dash.getRange(32, 1, 32 + rows.length - 1, 6).setValues(rows);
-  }
-
-  dash.getRange('H28').setValue('STATUS PO — SISA DIBAWA / MINGGU LALU');
-  dash.getRange('H29').setValue('Total Item');
-  dash.getRange('I29').setValue(items.filter(function(x){ return (x.qtyPO||0) > (x.qtyDatang||0); }).length);
-  dash.getRange('J29').setValue('Sisa Qty');
-  var totalSisa = items.reduce(function(s, x){ return s + Math.max(0, (x.qtyPO||0)-(x.qtyDatang||0)); }, 0);
-  dash.getRange('K29').setValue(totalSisa);
-
-  dash.getRange('H31:M31').setValues([['No', 'Nama', 'Status', 'Qty PO', 'Datang', 'Sisa']]);
-  dash.getRange('H32:M43').clearContent();
-
-  var sisaRows = [];
-  for (var k = 0; k < items.length && sisaRows.length < 12; k++) {
-    var it2 = items[k];
-    var sisa2 = Math.max(0, (it2.qtyPO || 0) - (it2.qtyDatang || 0));
-    if (sisa2 <= 0) continue;
-    sisaRows.push([it2.itemNo, it2.nama, it2.status, it2.qtyPO, it2.qtyDatang, sisa2]);
-  }
-  if (sisaRows.length) {
-    dash.getRange(32, 8, 32 + sisaRows.length - 1, 13).setValues(sisaRows);
-  }
-
-  try {
-    dash.getRange('A200').setValue('HELPER_DONUT_STATUS');
-    dash.getRange('A201').setValue('Datang');
-    dash.getRange('B201').setValue(summary.itemSelesai || 0);
-    dash.getRange('A202').setValue('Sebagian');
-    dash.getRange('B202').setValue(summary.itemSebagian || 0);
-    dash.getRange('A203').setValue('Menunggu');
-    dash.getRange('B203').setValue(summary.itemMenunggu || 0);
-  } catch (eH) {}
-
+  dash.getRange('A200:B203').setValues([
+    ['STATUS PO DONUT','Jumlah'],
+    ['Datang', summary.itemSelesai || 0],
+    ['Sebagian', summary.itemSebagian || 0],
+    ['Menunggu', summary.itemMenunggu || 0]
+  ]);
   SpreadsheetApp.flush();
-  return { success: true, version: STATUS_PO_ALIGNED_VERSION, items: items.length };
+  try { rebuildDashboardChartsV68_(); } catch (eChart) {}
+  return { success: true, version: '6.8.0+WEEK-SYNC', current: items.length, previous: prevItems.length };
+}
+
+function rebuildDashboardChartsV68_() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var dash = ss.getSheetByName('Dashboard');
+  if (!dash) return { success: false, error: 'Dashboard tidak ditemukan' };
+
+  var divRows = _dashboardDivisionRowsV68_(ss);
+  var start = 1;
+  var divValues = [['Divisi','Aman','Waspada','Kritis']].concat(divRows);
+  dash.getRange(1,27,Math.max(1,divValues.length),4).clearContent();
+  dash.getRange(1,27,divValues.length,4).setValues(divValues);
+  dash.getRange(30,27,4,2).setValues([
+    ['Status','Jumlah'],
+    ['Datang', Number(dash.getRange('B201').getValue()) || 0],
+    ['Sebagian', Number(dash.getRange('B202').getValue()) || 0],
+    ['Menunggu', Number(dash.getRange('B203').getValue()) || 0]
+  ]);
+
+  var charts = dash.getCharts();
+  charts.forEach(function(ch) {
+    var title = '';
+    try { title = String(ch.getOptions().get('title') || '').toLowerCase(); } catch (_) {}
+    if (title.indexOf('status stok per divisi') >= 0 || title.indexOf('status po') >= 0 || title.indexOf('status po minggu') >= 0) {
+      dash.removeChart(ch);
+    }
+  });
+
+  if (divRows.length) {
+    var divChart = dash.newChart()
+      .setChartType(Charts.ChartType.BAR)
+      .addRange(dash.getRange(1,27,divValues.length,4))
+      .setPosition(2,1,0,0)
+      .setOption('title','Status Stok per Divisi')
+      .setOption('isStacked',true)
+      .setOption('legend',{position:'top'})
+      .setOption('width',650)
+      .setOption('height',320)
+      .build();
+    dash.insertChart(divChart);
+  }
+
+  var donut = dash.newChart()
+    .setChartType(Charts.ChartType.PIE)
+    .addRange(dash.getRange('AA30:AB33'))
+    .setPosition(2,9,0,0)
+    .setOption('title','Status PO Minggu Ini')
+    .setOption('pieHole',0.55)
+    .setOption('legend',{position:'right'})
+    .setOption('width',420)
+    .setOption('height',320)
+    .build();
+  dash.insertChart(donut);
+  dash.hideColumns(27,4);
+  SpreadsheetApp.flush();
+  return { success: true, divisions: divRows.length };
+}
+
+function _dashboardDivisionRowsV68_(ss) {
+  var map = {};
+  ['Stock CV','Stock PT'].forEach(function(name) {
+    var sh = ss.getSheetByName(name);
+    if (!sh || sh.getLastRow() < 4) return;
+    var lastCol = sh.getLastColumn();
+    var rows = sh.getRange(3,1,sh.getLastRow()-2,lastCol).getValues();
+    var headers = rows.length ? rows[0].map(function(v){ return String(v || '').toLowerCase().trim(); }) : [];
+    var divCol = headers.findIndex(function(h){ return h === 'divisi' || h === 'division' });
+    var stockCol = headers.findIndex(function(h){ return h.indexOf('sisa stock') >= 0 || h.indexOf('sisa stok') >= 0 || h === 'stock akhir' || h === 'stok akhir' });
+    var minCol = headers.findIndex(function(h){ return h.indexOf('stock aman') >= 0 || h.indexOf('stok aman') >= 0 || h === 'min' });
+    if (divCol < 0) return;
+    rows.slice(1).forEach(function(row) {
+      var div = String(row[divCol] || 'LAINNYA').trim() || 'LAINNYA';
+      if (!map[div]) map[div] = { divisi: div, total: 0, aman: 0, waspada: 0, kritis: 0 };
+      var stock = stockCol >= 0 ? Number(row[stockCol]) || 0 : 0;
+      var min = minCol >= 0 ? Number(row[minCol]) || 0 : 0;
+      map[div].total++;
+      if (min > 0) {
+        if (stock <= 0 || stock <= Math.max(5, Math.floor(min * 0.25))) map[div].kritis++;
+        else if (stock < min) map[div].waspada++;
+        else map[div].aman++;
+      } else {
+        if (stock <= 5) map[div].kritis++;
+        else if (stock <= 20) map[div].waspada++;
+        else map[div].aman++;
+      }
+    });
+  });
+  return Object.keys(map).map(function(k) {
+    var r = map[k];
+    return [r.divisi, r.aman, r.waspada, r.kritis];
+  }).sort(function(a,b){ return String(a[0]).localeCompare(String(b[0])); });
 }
 
 function setupDashboardPOLayoutOnce() {
