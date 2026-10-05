@@ -3,6 +3,6 @@
   "installCommand": "npm ci",
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
-  "ignoreCommand": "git diff --quiet HEAD^ HEAD -- src/ public/ index.html package.json package-lock.json vite.config.js vercel.json",
+  "ignoreCommand": "git diff --quiet HEAD^ HEAD -- src/ public/ scripts/ index.html package.json package-lock.json vite.config.js vercel.json tailwind.config.js tailwind.config.ts postcss.config.js postcss.config.cjs",
   "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
 }
