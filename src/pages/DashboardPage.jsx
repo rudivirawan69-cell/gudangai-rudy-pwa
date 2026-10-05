@@ -809,14 +809,20 @@ export default function DashboardPage() {
   useEffect(() => {
     void loadPO();
     void loadDashboardData();
-    const refreshPO = () => { if (document.visibilityState === 'visible' && navigator.onLine) void loadPO({ silent: true }); };
-    window.addEventListener('online', refreshPO);
-    window.addEventListener('gudangai-po-changed', refreshPO);
-    document.addEventListener('visibilitychange', refreshPO);
+    const refreshSources = () => {
+      if (document.visibilityState !== 'visible' || !navigator.onLine) return;
+      void loadPO({ silent: true });
+      void loadDashboardData();
+    };
+    const timer = setInterval(refreshSources, 60000);
+    window.addEventListener('online', refreshSources);
+    window.addEventListener('gudangai-po-changed', refreshSources);
+    document.addEventListener('visibilitychange', refreshSources);
     return () => {
-      window.removeEventListener('online', refreshPO);
-      window.removeEventListener('gudangai-po-changed', refreshPO);
-      document.removeEventListener('visibilitychange', refreshPO);
+      clearInterval(timer);
+      window.removeEventListener('online', refreshSources);
+      window.removeEventListener('gudangai-po-changed', refreshSources);
+      document.removeEventListener('visibilitychange', refreshSources);
     };
   }, [loadPO, loadDashboardData]);
 
