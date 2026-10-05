@@ -10,15 +10,11 @@ import {
 } from 'lucide-react';
 
 function classifyItem(it) {
+  // Status Dashboard memakai Sisa Stock aktual dari Stock CV/PT.
+  // Perhitungan PO tetap terpisah dan memakai Stock Aman dinamis.
   const stok = Number(it.stok ?? it.stockAkhir ?? 0) || 0;
-  const aman = Number(it.stockAman ?? it.aman ?? it.min ?? 0) || 0;
-  if (aman > 0) {
-    if (stok <= 0 || stok <= Math.max(5, Math.floor(aman * 0.25))) return 'kritis';
-    if (stok < aman) return 'waspada';
-    return 'aman';
-  }
-  if (stok <= 5) return 'kritis';
-  if (stok <= 20) return 'waspada';
+  if (stok < 10) return 'kritis';
+  if (stok < 20) return 'waspada';
   return 'aman';
 }
 
@@ -91,7 +87,7 @@ function DonutPO({ complete, progress, pending, size = 140 }) {
   );
 }
 
-function DivisionStatus3D({ items, sourceRows }) {
+function DivisionStatus3D({ items }) {
   const rows = useMemo(() => {
     // Spreadsheet aggregate is preferred, but never let a stale/empty aggregate
     // blank the PWA chart. Merge it with the live CV+PT stock source.
@@ -105,29 +101,14 @@ function DivisionStatus3D({ items, sourceRows }) {
       localMap[d][cls] += 1;
     });
 
-    const remoteMap = {};
-    (Array.isArray(sourceRows) ? sourceRows : []).forEach((r) => {
-      const d = String(r.divisi || r.division || 'LAINNYA').trim() || 'LAINNYA';
-      remoteMap[d] = {
-        divisi: d,
-        total: Number(r.total || r.totalItem || 0) || 0,
-        aman: Number(r.aman || 0) || 0,
-        waspada: Number(r.waspada || 0) || 0,
-        kritis: Number(r.kritis || 0) || 0,
-      };
-    });
-
-    const names = new Set([...Object.keys(localMap), ...Object.keys(remoteMap)]);
+    const names = new Set(Object.keys(localMap));
     return [...names]
       .map((d) => {
-        const remote = remoteMap[d];
-        const local = localMap[d];
-        if (remote && remote.total > 0) return remote;
-        return local || { divisi: d, total: 0, aman: 0, waspada: 0, kritis: 0 };
+        return localMap[d] || { divisi: d, total: 0, aman: 0, waspada: 0, kritis: 0 };
       })
       .filter((r) => r.total > 0)
       .sort((a, b) => (b.kritis / b.total) - (a.kritis / a.total) || b.total - a.total);
-  }, [items, sourceRows]);
+  }, [items]);
 
   if (rows.length === 0) {
     return <p className="text-[12px] text-slate-400 text-center py-4">Belum ada data divisi</p>;
@@ -797,7 +778,7 @@ export default function DashboardPage() {
       const unit = Number(it.stok ?? it.stockAkhir ?? 0) || 0;
       totalUnit += unit;
       const ent = String(it.entitas || it.entity || '').toUpperCase();
-      const bucket = ent === 'PT' ? pt : cv;
+      const bucket = ['PT', 'WK', 'MM', 'BBPT'].includes(ent) ? pt : cv;
       bucket.total += 1;
       bucket.unit += unit;
       bucket[cls] += 1;
@@ -971,7 +952,7 @@ export default function DashboardPage() {
           <span className="text-slate-400">Ring = % kritis</span>
         </div>
       </div>
-        <DivisionStatus3D items={allItems} sourceRows={dashboardData?.statusPerDivisi} />
+        <DivisionStatus3D items={allItems} />
       </div>
 
       <StatusPOCard
