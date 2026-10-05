@@ -122,12 +122,12 @@ export default function InputPage() {
       return [...prev, {
         kode: item.kode, nama: item.nama || item.name, satuan: item.satuan || 'Pack',
         qty: +qty || 1, keterangan: '',
-        clientItemId: `${item.kode}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        clientItemId: 'CI-' + (crypto.randomUUID ? crypto.randomUUID() : Date.now() + '-' + Math.random().toString(36).slice(2, 9)),
       }];
     });
   }, []);
 
-  const mergePdfIntoCart = useCallback((matched) => {
+  const mergePdfIntoCart = useCallback((matched, review = []) => {
     const rows = [];
     for (const m of matched || []) {
       const kode = m.kode || m.match?.kode || m.match?.item?.kode || m.item?.kode || null;
@@ -137,15 +137,27 @@ export default function InputPage() {
       const qty = Number(m.qty) > 0 ? Number(m.qty) : 1;
       const existing = rows.find((c) => c.kode === kode);
       if (existing) existing.qty = +(existing.qty + qty).toFixed(2);
-      else rows.push({ kode, nama, satuan, qty, pdfSourceIndex: Number(m.sourceIndex) || 0, keterangan: '', clientItemId: `${kode}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}` });
+      else rows.push({ kode, nama, satuan, qty, pdfSourceIndex: Number(m.sourceIndex) || 0, keterangan: '', clientItemId: 'CI-' + (crypto.randomUUID ? crypto.randomUUID() : Date.now() + '-' + Math.random().toString(36).slice(2, 9)) });
     }
+    const unresolvedRows = (review || []).map((r, idx) => ({
+      kode: '',
+      nama: r.namaPdf || r.nameFromPdf || r.rawName || 'Item PDF tidak terbaca',
+      satuan: '—',
+      qty: Number(r.qty) || 0,
+      keterangan: '',
+      unmatched: true,
+      pdfReviewIndex: idx,
+      pdfSourceIndex: Number(r.sourceIndex) || 0,
+      clientItemId: 'CI-' + (crypto.randomUUID ? crypto.randomUUID() : Date.now() + '-' + Math.random().toString(36).slice(2, 9)),
+    }));
     setCart((prev) => {
       const next = [...prev];
       for (const r of rows) {
-        const idx = next.findIndex((c) => c.kode === r.kode);
-        if (idx >= 0) next[idx] = { ...next[idx], qty: +(next[idx].qty + r.qty).toFixed(2) };
+        const idx = next.findIndex((c) => c.kode === r.kode && c.kode);
+        if (idx >= 0) next[idx] = { ...next[idx], qty: +(Number(next[idx].qty) + r.qty).toFixed(2) };
         else next.push(r);
       }
+      for (const r of unresolvedRows) next.push(r);
       return next;
     });
     setTimeout(() => { try { cartRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' }); } catch (_) {} }, 150);
@@ -179,7 +191,7 @@ export default function InputPage() {
       setAccuracy({ pct: acc, matched: matched.length, skipped: 0, needPick: review.length, total });
       // Only confirmed master matches enter the transaction cart.
       // Unmatched/ambiguous rows are retained for manual mapping; nothing is silently dropped.
-      mergePdfIntoCart(matched);
+      mergePdfIntoCart(matched, review);
       setPdfReview(review);
       const parts = [];
       if (matched.length) parts.push(matched.length + ' cocok');
@@ -397,31 +409,44 @@ export default function InputPage() {
 
   const resolvePdfReview = useCallback((reviewIndex, item) => {
     if (!item?.kode) return;
+    const review = pdfReview[reviewIndex];
     setPdfReview((prev) => prev.filter((_, i) => i !== reviewIndex));
     setCart((prev) => {
-      const qty = Number(prev.find((x) => x.kode === item.kode)?.qty || 0);
-      const review = pdfReview[reviewIndex];
-      if (!review) return prev;
-      const add = Number(review.qty) || 0;
-      const idx = prev.findIndex((x) => x.kode === item.kode);
+      const cleaned = prev.filter((x) => !(x.unmatched && Number(x.pdfSourceIndex) === Number(review?.sourceIndex) && String(x.nama || '') === String(review?.namaPdf || review?.rawName || '')));
+      const add = Number(review?.qty) || 0;
+      const idx = cleaned.findIndex((x) => x.kode === item.kode);
       if (idx >= 0) {
-        const next = [...prev];
-        next[idx] = { ...next[idx], qty: +(qty + add).toFixed(2) };
+        const next = [...cleaned];
+        next[idx] = { ...next[idx], qty: +(Number(next[idx].qty) + add).toFixed(2) };
         return next;
       }
-      return [...prev, {
+      return [...cleaned, {
         kode: item.kode,
-        nama: item.nama || review.namaPdf,
+        nama: item.nama || review?.namaPdf,
         satuan: item.satuan || 'Pack',
         qty: add,
         keterangan: '',
-        pdfSourceIndex: Number(review.sourceIndex) || 0,
-        clientItemId: item.kode + '-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7),
+        pdfSourceIndex: Number(review?.sourceIndex) || 0,
+        clientItemId: 'CI-' + (crypto.randomUUID ? crypto.randomUUID() : Date.now() + '-' + Math.random().toString(36).slice(2, 9)),
       }];
     });
   }, [pdfReview]);
 
+  const ignorePdfReview = useCallback((reviewIndex) => {
+    const review = pdfReview[reviewIndex];
+    setPdfReview((prev) => prev.filter((_, i) => i !== reviewIndex));
+    if (review) {
+      setCart((prev) => prev.filter((c) => !(c.unmatched && Number(c.pdfSourceIndex) === Number(review.sourceIndex) && String(c.nama || '') === String(review.namaPdf || review.rawName || ''))));
+    }
+  }, [pdfReview]);
+
+
   const handleSubmit = async () => {
+    const unresolved = cart.filter((c) => c.unmatched || !c.kode);
+    if (unresolved.length > 0) {
+      setStatusBanner('Masih ada ' + unresolved.length + ' item PDF yang belum dipetakan. Pilih master atau abaikan sebelum Kirim.');
+      return;
+    }
     if (pdfReview.length > 0) {
       setStatusBanner('Masih ada ' + pdfReview.length + ' baris PDF/Foto yang perlu divalidasi sebelum dikirim. Tidak ada item yang boleh terlewat.');
       return;
@@ -435,7 +460,7 @@ export default function InputPage() {
           return ao - bo;
         });
         const items = orderedCart.map((c) => ({ ...c, qty: Number(c.qty) || 0 })).filter((c) => c.qty > 0)
-          .map((c) => ({ kode: c.kode, nama: c.nama, qty: c.qty, satuan: c.satuan, keterangan: c.keterangan || '', clientItemId: c.clientItemId }));
+          .map((c) => ({ kode: c.kode, qty: c.qty, keterangan: c.keterangan || '', clientItemId: c.clientItemId }));
         if (!items.length) { setStatusBanner('Isi minimal 1 jumlah barang sebelum dikirim.'); return; }
       const fn = txType === 'masuk' ? submitBarangMasuk : txType === 'rusak' ? submitBarangRusak : submitBarangKeluar;
       const res = await fn({ entity, tanggal, items });
@@ -628,6 +653,7 @@ export default function InputPage() {
           className="w-full rounded-xl bg-white border border-slate-200 text-slate-900 pl-9 pr-3 py-2.5 text-sm shadow-sm" />
       </div>
 
+      <button type="button" onClick={onIgnore} className="mt-2 w-full rounded-lg border border-rose-200 bg-white px-2 py-1.5 text-xs font-semibold text-rose-600">Abaikan item ini (tidak akan dikirim)</button>
       {hits.length > 0 && (
         <div className="rounded-xl border border-slate-200 bg-white shadow-sm max-h-64 overflow-y-auto divide-y divide-slate-100">
           {hits.map((h) => (
@@ -659,7 +685,7 @@ export default function InputPage() {
             <p className="text-[11px] text-slate-500 mt-0.5">Nomor di PDF diabaikan. Urutan mengikuti PDF dan nomor di aplikasi dibuat ulang mulai 1.</p>
           </div>
           {pdfReview.map((r, idx) => (
-            <PdfReviewRow key={(r.sourceIndex || idx) + '-' + idx} row={r} entity={entity} onPick={(item) => resolvePdfReview(idx, item)} />
+            <PdfReviewRow key={(r.sourceIndex || idx) + '-' + idx} row={r} entity={entity} onPick={(item) => resolvePdfReview(idx, item)} onIgnore={() => ignorePdfReview(idx)} />
           ))}
         </div>
       )}
@@ -671,11 +697,11 @@ export default function InputPage() {
             <button type="button" onClick={() => setCart([])} className="text-xs text-rose-300 font-semibold">Kosongkan</button>
           </div>
           {cart.map((c, idx) => (
-            <div key={c.clientItemId || idx} className="rounded-xl bg-white border border-slate-200 shadow-sm p-3 space-y-2">
+            <div key={c.clientItemId || idx} className={`rounded-xl bg-white border shadow-sm p-3 space-y-2 ${c.unmatched ? 'border-orange-300 bg-orange-50/60' : 'border-slate-200'}`}>
               <div className="flex items-start justify-between gap-2">
                 <div>
                   <p className="text-sm font-semibold text-slate-800">{c.nama}</p>
-                  <p className="text-[11px] text-slate-500">{c.kode} · {c.satuan}</p>
+                  {c.unmatched ? <p className="text-[11px] font-bold text-orange-700">Tidak cocok master — pilih master atau abaikan</p> : <p className="text-[11px] text-slate-500">{c.kode} · {c.satuan}</p>}
                 </div>
                 <button type="button" onClick={() => removeCart(idx)} className="text-rose-500"><Trash2 className="w-4 h-4" /></button>
               </div>
@@ -783,14 +809,14 @@ export default function InputPage() {
 
 
 
-function PdfReviewRow({ row, entity, onPick }) {
+function PdfReviewRow({ row, entity, onPick, onIgnore }) {
   const [q, setQ] = useState(row.namaPdf || '');
   const hits = q.trim().length >= 1 ? searchMaster(entity, q.trim()).slice(0, 5) : [];
   return (
     <div className="rounded-xl border border-amber-100 bg-amber-50/50 p-2.5">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <p className="text-[10px] font-bold text-amber-700">NO {row.reviewNo}</p>
+          <p className="text-[10px] font-bold text-orange-700">TIDAK COCOK MASTER — REVIEW MANUAL · NO {row.reviewNo}</p>
           <p className="text-sm font-semibold text-slate-800">{row.namaPdf}</p>
           <p className="text-[11px] text-slate-500">TOTAL {row.qty} · PDF NO {row.pdfNo || '—'}</p>
         </div>
