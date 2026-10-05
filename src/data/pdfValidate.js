@@ -335,6 +335,26 @@ export function validatePdfItems(entity, textOrItems, masterOverride) {
 
     if (!match) {
       const aliasResult = matchByAlias(entity, sanitizePdfProductName(rawNameOriginal));
+      if (aliasResult?.ambiguous) {
+        status = 'ambiguous';
+        note = 'pencocokan master ambigu — perlu pilih manual';
+        results.push({
+          no: i + 1,
+          sourceIndex: Number(it.sourceIndex) || (i + 1),
+          pdfNo: it.pdfNo || null,
+          sourceLine: it.sourceLine || '',
+          rawName: rawNameOriginal,
+          qty,
+          status,
+          note,
+          kode: null,
+          nama: null,
+          satuan: null,
+          candidates: aliasResult.candidates || [],
+          match: null,
+        });
+        continue;
+      }
       if (aliasResult) {
         match = aliasResult;
         note = aliasResult.matchType || 'alias';
