@@ -173,12 +173,25 @@ function cleanOcrText(text) {
 
 function stripLeadingNo(name) {
   return String(name || '')
-    .replace(/^\d{1,3}[.)\s-]+/, '')
-    .replace(/\s*[/\\]\s*cv\.?\s*pd3\s*chicken/gi, '')
-    .replace(/\s*[/\\]\s*good\s*eat/gi, '')
+    .replace(/^\s*(?:no\.?\s*)?\d{1,4}[.)\s-]+/i, '')
+    .replace(/\s*[/\\|]\s*(?:cv|pt)\.?\s*(?:pd3\s*chicken|rasyuka|selera|supplier|vendor)?[^\d]*$/gi, '')
+    .replace(/\s*\b(?:cv|pt)\.?\s*(?:pd3\s*chicken|rasyuka|selera|supplier|vendor)\b/gi, '')
+    .replace(/\b(?:supplier|vendor)\s*[:=-]?\s*[^,;|]+$/gi, '')
+    .replace(/\b(?:cv|pt)\.?\s*pd3\s*chicken\b/gi, '')
+    .replace(/\b(?:good\s*eat)\b/gi, '')
     .replace(/[-–—]+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+/** Remove supplier/metadata noise while preserving product identity. */
+function sanitizePdfProductName(name) {
+  return stripLeadingNo(String(name || '')
+    .replace(/\s*\([^)]*\b(?:supplier|vendor|cv\.?|pt\.?)\b[^)]*\)/gi, ' ')
+    .replace(/\s*[/|]\s*(?:cv|pt)\.?\s*[^|/]+$/gi, ' ')
+    .replace(/\s+supplier\b.*$/gi, ' ')
+    .replace(/\s+vendor\b.*$/gi, ' ')
+    .replace(/\s+/g, ' '));
 }
 
 function isPdfNonItemLine(line) {
@@ -213,7 +226,7 @@ export function parsePdfLinesToItems(text) {
     if (!(qty > 0) || qty > 99999) continue;
 
     let rawName = line.slice(0, last.index).trim();
-    rawName = stripLeadingNo(rawName)
+    rawName = sanitizePdfProductName(rawName)
       .replace(/\b(pack|pcs|pail|ekor|kg|box|unit|porsi|gram|liter|lusin|botol|kaleng|karung)\b/gi, ' ')
       .replace(/\s+/g, ' ')
       .trim();
@@ -306,7 +319,7 @@ export function validatePdfItems(entity, textOrItems, masterOverride) {
 
   for (let i = 0; i < items.length; i++) {
     const it = items[i] || {};
-    const rawNameOriginal = it.rawName || it.nama || it.name || '';
+    const rawNameOriginal = sanitizePdfProductName(it.rawName || it.nama || it.name || '');
     const qty = Number(it.qty) || 0;
     if (!rawNameOriginal || qty <= 0) continue;
 
@@ -321,7 +334,7 @@ export function validatePdfItems(entity, textOrItems, masterOverride) {
     }
 
     if (!match) {
-      const aliasResult = matchByAlias(entity, stripLeadingNo(rawNameOriginal));
+      const aliasResult = matchByAlias(entity, sanitizePdfProductName(rawNameOriginal));
       if (aliasResult) {
         match = aliasResult;
         note = aliasResult.matchType || 'alias';
@@ -370,7 +383,7 @@ export function parseLinesFromText(text, _lines = []) {
     name: it.rawName,
     rawName: it.rawName,
     qty: it.qty,
-    nameFromPdf: it.rawName,
+    nameFromPdf: rawNameOriginal,
     sourceLine: it.sourceLine || '',
   }));
 }
