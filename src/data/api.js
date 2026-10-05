@@ -1,4 +1,5 @@
 /** GudangAI RUDY — API layer V6.7.2 stable-chunk (BATCH=20) + queue serial fallback + tanggal YYYY-MM-DD */
+/** PRODUCTION-WRITE-RECOVERY-2026-10-05: canonical main build marker; preserve CV/PT write path and 20-item batching. */
 const RETRY_COUNT = 2;
 const RETRY_BASE_MS = 400;
 const REQUEST_TIMEOUT_MS = 15000;
