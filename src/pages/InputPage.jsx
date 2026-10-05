@@ -464,7 +464,8 @@ export default function InputPage() {
         if (!items.length) { setStatusBanner('Isi minimal 1 jumlah barang sebelum dikirim.'); return; }
       const fn = txType === 'masuk' ? submitBarangMasuk : txType === 'rusak' ? submitBarangRusak : submitBarangKeluar;
       const res = await fn({ entity, tanggal, items });
-      if (res?.success !== false) {
+      const hasConfirmedOrQueued = !!res && (res.success === true || Number(res.queuedCount || 0) > 0 || (res.results || []).some((r) => r?.success === true || r?.queued === true));
+      if (hasConfirmedOrQueued) {
         const okCount = Number(res.count || 0);
         const queuedCount = Number(res.queuedCount || 0);
         const failCount = Number(res.failed || 0);
