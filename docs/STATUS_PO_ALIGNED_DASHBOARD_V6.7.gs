@@ -25,7 +25,7 @@
  * ============================================================
  */
 
-var STATUS_PO_ALIGNED_VERSION = '6.7.0+PO-ALIGNED-DASH-DATAONLY';
+var STATUS_PO_ALIGNED_VERSION = '6.8.0+WEEK-SYNC';
 
 /**
  * Helper: normalisasi nama untuk matching
@@ -52,141 +52,124 @@ function _poGetSheet_(ss, names) {
  * Hitung qty datang dari sheet Barang masuk (setelah tgl PO aktif)
  * Matching by nama (normalized) atau kode jika tersedia.
  */
-function _poComputeArrivalsFromMasuk_(ss, poItems, periodStart) {
-  var masukSheet = _poGetSheet_(ss, ['Barang masuk', 'Barang Masuk', 'barang masuk']);
-  if (!masukSheet) return {};
-
-  var lastRow = Math.max(masukSheet.getLastRow(), 2);
+function _poDate_(v) {
+  if (v instanceof Date && !isNaN(v.getTime())) return new Date(v.getTime());
+  var s = String(v || '').trim();
+  if (!s) return null;
+  var m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (m) return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  return null;
+}
+function _poStartOfWeek_(d) {
+  var x = new Date(d || new Date());
+  x.setHours(0, 0, 0, 0);
+  var day = x.getDay();
+  x.setDate(x.getDate() - (day === 0 ? 6 : day - 1));
+  return x;
+}
+function _poAddDays_(d, n) {
+  var x = new Date(d.getTime());
+  x.setDate(x.getDate() + n);
+  return x;
+}
+function _poComputeArrivalsFromMasuk_(ss, periodStart, periodEnd) {
+  var sh = _poGetSheet_(ss, ['Barang masuk', 'Barang Masuk', 'barang masuk']);
+  if (!sh) return {};
+  var lastRow = sh.getLastRow();
   if (lastRow < 2) return {};
-
-  var data = masukSheet.getRange(2, 1, lastRow, 8).getValues();
-  var arrivals = {};
-
-  for (var i = 0; i < data.length; i++) {
-    var row = data[i];
-    var tgl = row[0];
-    if (periodStart && tgl instanceof Date && tgl < periodStart) continue;
-
+  var rows = sh.getRange(2, 1, lastRow - 1, 8).getValues();
+  var out = {};
+  rows.forEach(function(row) {
+    var tgl = _poDate_(row[0]);
+    if (!tgl || tgl < periodStart || tgl >= periodEnd) return;
     var kode = String(row[1] || row[2] || '').trim();
     var nama = String(row[2] || row[3] || row[1] || '').trim();
     var qty = 0;
     for (var c = 3; c <= 7; c++) {
-      var v = Number(row[c]);
-      if (!isNaN(v) && v > 0) { qty = v; break; }
+      var q = Number(row[c]);
+      if (!isNaN(q) && q > 0) { qty = q; break; }
     }
-    if (qty <= 0) continue;
-
-    var keyN = _poNormName_(nama);
-    var keyK = _poNormName_(kode);
-    if (keyN) arrivals[keyN] = (arrivals[keyN] || 0) + qty;
-    if (keyK && keyK !== keyN) arrivals[keyK] = (arrivals[keyK] || 0) + qty;
-  }
-  return arrivals;
+    if (qty <= 0) return;
+    var nk = _poNormName_(nama), kk = _poNormName_(kode);
+    if (nk) out[nk] = (out[nk] || 0) + qty;
+    if (kk && kk !== nk) out[kk] = (out[kk] || 0) + qty;
+  });
+  return out;
 }
-
-/**
- * getStatusPO — versi aligned
- */
+function _poReadWeekItems_(ss, poSheet, start, end) {
+  var lastRow = poSheet.getLastRow();
+  if (lastRow < 6) return [];
+  var data = poSheet.getRange(6, 2, lastRow - 5, 10).getValues();
+  var arrivals = _poComputeArrivalsFromMasuk_(ss, start, end);
+  var items = [];
+  data.forEach(function(row, idx) {
+    var no = row[0], nama = String(row[1] || '').trim();
+    if (!nama) return;
+    var tgl = _poDate_(row[7]);
+    if (!tgl || tgl < start || tgl >= end) return;
+    var qtyPO = Number(row[6]) || 0;
+    var statusCell = String(row[8] || '').toUpperCase();
+    var qtyK = Number(row[9]) || 0;
+    var fromMasuk = arrivals[_poNormName_(nama)] || 0;
+    var qtyDatang = Math.max(qtyK, fromMasuk);
+    var status = 'MENUNGGU';
+    if (qtyDatang >= qtyPO && qtyPO > 0) status = 'SELESAI';
+    else if (qtyDatang > 0) status = 'SEBAGIAN';
+    else if (statusCell.indexOf('SELESAI') >= 0 || statusCell.indexOf('DATANG') >= 0) status = 'SELESAI';
+    else if (statusCell.indexOf('SEBAGIAN') >= 0) status = 'SEBAGIAN';
+    items.push({
+      itemNo: no || (idx + 1),
+      nama: nama,
+      size: String(row[2] || ''),
+      satuan: String(row[3] || 'Pack'),
+      qtyPO: qtyPO,
+      qtyDatang: qtyDatang,
+      tglKedatangan: tgl,
+      status: status
+    });
+  });
+  return items;
+}
+function _poSummary_(items) {
+  var s = { totalItem: items.length, itemMenunggu: 0, itemSebagian: 0, itemSelesai: 0 };
+  items.forEach(function(it) {
+    if (it.status === 'SELESAI') s.itemSelesai++;
+    else if (it.status === 'SEBAGIAN') s.itemSebagian++;
+    else s.itemMenunggu++;
+  });
+  return s;
+}
 function getStatusPO() {
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var poSheet = _poGetSheet_(ss, ['purchase order', 'Purchase Order', 'Purchase order']);
-    if (!poSheet) {
-      return { success: false, error: 'Sheet purchase order tidak ditemukan', version: STATUS_PO_ALIGNED_VERSION };
-    }
-
-    var lastRow = Math.max(poSheet.getLastRow(), 6);
-    if (lastRow < 6) {
-      return {
-        success: true,
-        items: [],
-        summary: { totalItem: 0, itemMenunggu: 0, itemSebagian: 0, itemSelesai: 0 },
-        version: STATUS_PO_ALIGNED_VERSION
-      };
-    }
-
-    var data = poSheet.getRange(6, 2, lastRow, 11).getValues();
-    var items = [];
-    var periodStart = null;
-
-    for (var i = 0; i < data.length; i++) {
-      var row = data[i];
-      var no = row[0];
-      var nama = String(row[1] || '').trim();
-      if (!nama) continue;
-
-      var totalQty = Number(row[6]) || 0;
-      var tgl = row[7];
-      if (tgl instanceof Date && (!periodStart || tgl < periodStart)) periodStart = tgl;
-
-      var statusCell = String(row[8] || '').toUpperCase();
-      var qtyK = Number(row[9]) || 0;
-
-      items.push({
-        itemNo: no || (i + 1),
-        nama: nama,
-        size: String(row[2] || ''),
-        satuan: String(row[3] || 'Pack'),
-        qtyPO: totalQty,
-        qtyDatang: qtyK,
-        tglKedatangan: tgl,
-        statusCell: statusCell,
-        _row: i + 6
-      });
-    }
-
-    var arrivals = _poComputeArrivalsFromMasuk_(ss, items, periodStart);
-
-    var menunggu = 0, sebagian = 0, selesai = 0;
-    var outItems = [];
-
-    for (var j = 0; j < items.length; j++) {
-      var it = items[j];
-      var key = _poNormName_(it.nama);
-      var fromMasuk = arrivals[key] || 0;
-      var qtyDatang = Math.max(it.qtyDatang, fromMasuk);
-
-      var status = 'MENUNGGU';
-      if (qtyDatang >= it.qtyPO && it.qtyPO > 0) status = 'SELESAI';
-      else if (qtyDatang > 0) status = 'SEBAGIAN';
-      else if (it.statusCell.indexOf('SELESAI') >= 0 || it.statusCell.indexOf('DATANG') >= 0) status = 'SELESAI';
-      else if (it.statusCell.indexOf('SEBAGIAN') >= 0) status = 'SEBAGIAN';
-
-      if (status === 'SELESAI') selesai++;
-      else if (status === 'SEBAGIAN') sebagian++;
-      else menunggu++;
-
-      outItems.push({
-        itemNo: it.itemNo,
-        nama: it.nama,
-        size: it.size,
-        satuan: it.satuan,
-        qtyPO: it.qtyPO,
-        qtyDatang: qtyDatang,
-        tglKedatangan: it.tglKedatangan,
-        status: status
-      });
-    }
-
+    if (!poSheet) return { success: false, error: 'Sheet purchase order tidak ditemukan', version: '6.8.0+WEEK-SYNC' };
+    var now = new Date();
+    var thisStart = _poStartOfWeek_(now);
+    var nextStart = _poAddDays_(thisStart, 7);
+    var prevStart = _poAddDays_(thisStart, -7);
+    var currentItems = _poReadWeekItems_(ss, poSheet, thisStart, nextStart);
+    var previousItems = _poReadWeekItems_(ss, poSheet, prevStart, thisStart);
     return {
       success: true,
-      items: outItems,
-      summary: {
-        totalItem: outItems.length,
-        itemMenunggu: menunggu,
-        itemSebagian: sebagian,
-        itemSelesai: selesai
-      },
-      version: STATUS_PO_ALIGNED_VERSION
+      version: '6.8.0+WEEK-SYNC',
+      weekKey: Utilities.formatDate(thisStart, Session.getScriptTimeZone() || 'Asia/Jakarta', 'dd-MM-yyyy') + ' s/d ' + Utilities.formatDate(_poAddDays_(thisStart, 6), Session.getScriptTimeZone() || 'Asia/Jakarta', 'dd-MM-yyyy'),
+      poStartDate: Utilities.formatDate(thisStart, Session.getScriptTimeZone() || 'Asia/Jakarta', 'yyyy-MM-dd'),
+      poEndDate: Utilities.formatDate(_poAddDays_(thisStart, 6), Session.getScriptTimeZone() || 'Asia/Jakarta', 'yyyy-MM-dd'),
+      summary: _poSummary_(currentItems),
+      items: currentItems,
+      previousWeek: {
+        weekKey: Utilities.formatDate(prevStart, Session.getScriptTimeZone() || 'Asia/Jakarta', 'dd-MM-yyyy') + ' s/d ' + Utilities.formatDate(_poAddDays_(prevStart, 6), Session.getScriptTimeZone() || 'Asia/Jakarta', 'dd-MM-yyyy'),
+        poStartDate: Utilities.formatDate(prevStart, Session.getScriptTimeZone() || 'Asia/Jakarta', 'yyyy-MM-dd'),
+        poEndDate: Utilities.formatDate(_poAddDays_(prevStart, 6), Session.getScriptTimeZone() || 'Asia/Jakarta', 'yyyy-MM-dd'),
+        summary: _poSummary_(previousItems),
+        items: previousItems
+      }
     };
   } catch (err) {
-    return { success: false, error: String(err.message || err), version: STATUS_PO_ALIGNED_VERSION };
+    return { success: false, error: String(err.message || err), version: '6.8.0+WEEK-SYNC' };
   }
 }
-
-/**
- * confirmPOStatus — update J/K + tulis Barang masuk bila SELESAI/DATANG
- */
 function confirmPOStatus(body) {
   try {
     body = body || {};
