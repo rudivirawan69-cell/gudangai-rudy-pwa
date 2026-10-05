@@ -5,11 +5,12 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "node scripts/write-icons.mjs && node scripts/write-sw-version.mjs && vite build",
+    "build": "node scripts/assemble-api.mjs && node scripts/write-icons.mjs && node scripts/write-sw-version.mjs && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
     "write-icons": "node scripts/write-icons.mjs",
-    "predev": "node scripts/write-icons.mjs"
+    "predev": "node scripts/assemble-api.mjs && node scripts/write-icons.mjs",
+    "assemble-api": "node scripts/assemble-api.mjs"
   },
   "dependencies": {
     "@vercel/speed-insights": "^2.0.0",
