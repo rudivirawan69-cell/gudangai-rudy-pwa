@@ -1,5 +1,6 @@
 import { readFile, writeFile } from 'node:fs/promises';
 
+// Force Vercel rebuild when only deploy markers change (path watched by ignoreCommand).
 const path = new URL('../public/sw.js', import.meta.url);
 const source = await readFile(path, 'utf8');
 const version = process.env.CF_VERSION_METADATA || process.env.VERCEL_GIT_COMMIT_SHA || process.env.GITHUB_SHA || new Date().toISOString();
