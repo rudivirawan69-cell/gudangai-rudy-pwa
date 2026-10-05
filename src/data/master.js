@@ -160,7 +160,12 @@ function getBootstrapMaster() {
       const nama = String(it?.nama || it?.namaBarang || it?.name || '').trim();
       const satuan = String(it?.satuan || it?.unit || it?.satuanBarang || '').trim();
       const divisi = String(it?.divisi || it?.division || it?.departemen || '').trim();
-      const entity = String(it?.entitas || it?.entity || (kode.startsWith('PT-') ? 'PT' : 'CV')).toUpperCase();
+      const prefix = kode.toUpperCase().split('-')[0];
+      const entity = String(
+        it?.entitas || it?.entity ||
+        (['PT','WK','MM','BBPT'].includes(prefix) ? 'PT' :
+         ['CV','BBCV'].includes(prefix) ? 'CV' : '')
+      ).toUpperCase();
       return { kode, nama, satuan, divisi, entity };
     }).filter((it) => it.kode && it.nama && (it.entity === 'CV' || it.entity === 'PT'));
     const cv = normalized.filter((it) => it.entity === 'CV').map(({ entity, ...it }) => it);
