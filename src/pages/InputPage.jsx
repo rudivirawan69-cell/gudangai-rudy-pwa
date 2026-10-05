@@ -825,7 +825,7 @@ function PdfReviewRow({ row, entity, onPick, onIgnore }) {
         <div className="min-w-0">
           <p className="text-[10px] font-bold text-orange-700">TIDAK COCOK MASTER — REVIEW MANUAL · NO {row.reviewNo}</p>
           <p className="text-sm font-semibold text-slate-800">{row.namaPdf}</p>
-          <p className="text-[11px] text-slate-500">TOTAL {row.qty} · PDF NO {row.pdfNo || '—'}</p>
+          <p className="text-[11px] text-slate-500">TOTAL QTY {row.qty} · Urutan aplikasi #{row.reviewNo}</p>
         </div>
       </div>
       <input value={q} onChange={(e) => setQ(e.target.value)}
