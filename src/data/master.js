@@ -254,23 +254,45 @@ export function matchByAlias(entity, name) {
   const lookup = getAliasLookup(entity);
   const compact = normalized.replace(/\s+/g, '');
   const list = getMasterByEntity(entity);
-  if (lookup[normalized] || lookup[compact]) {
-    const item = list.find(i => i.kode === (lookup[normalized] || lookup[compact]));
-    if (item) return { item, matchType: 'alias-exact' };
+
+  const exactCandidates = new Map();
+  const addCandidate = (kode, matchType) => {
+    const item = list.find(i => i.kode === kode);
+    if (item && !exactCandidates.has(item.kode)) exactCandidates.set(item.kode, { item, matchType });
+  };
+
+  if (lookup[normalized]) addCandidate(lookup[normalized], 'alias-exact');
+  if (lookup[compact]) addCandidate(lookup[compact], 'alias-exact');
+
+  for (const item of list) {
+    if (normalizeAliasText(item.nama) === normalized) addCandidate(item.kode, 'nama-exact');
   }
-  const namaMatch = list.find(i => i.nama.toLowerCase() === normalized);
-  if (namaMatch) return { item: namaMatch, matchType: 'nama-exact' };
+
+  if (exactCandidates.size === 1) return [...exactCandidates.values()][0];
+  if (exactCandidates.size > 1) {
+    return { item: null, matchType: 'ambiguous', ambiguous: true, candidates: [...exactCandidates.values()].map(x => x.item) };
+  }
+
+  const partialCandidates = new Map();
   for (const [alias, kode] of Object.entries(lookup)) {
     const a = normalizeAliasText(alias);
     if (!a) continue;
-    if (a === normalized || a.replace(/\s+/g, '') === compact || a.includes(normalized) || normalized.includes(a)) {
-      const item = list.find(i => i.kode === kode);
-      if (item) return { item, matchType: 'alias-partial' };
-    }
+    if (a.includes(normalized) || normalized.includes(a)) addCandidatePartial(partialCandidates, list, kode, 'alias-partial');
   }
-  const partial = list.find(i => i.nama.toLowerCase().includes(normalized) || normalized.includes(i.nama.toLowerCase()));
-  if (partial) return { item: partial, matchType: 'nama-partial' };
+  for (const item of list) {
+    const n = normalizeAliasText(item.nama);
+    if (n.includes(normalized) || normalized.includes(n)) addCandidatePartial(partialCandidates, list, item.kode, 'nama-partial');
+  }
+  if (partialCandidates.size === 1) return [...partialCandidates.values()][0];
+  if (partialCandidates.size > 1) {
+    return { item: null, matchType: 'ambiguous', ambiguous: true, candidates: [...partialCandidates.values()].map(x => x.item) };
+  }
   return null;
+}
+
+function addCandidatePartial(map, list, kode, matchType) {
+  const item = list.find(i => i.kode === kode);
+  if (item && !map.has(item.kode)) map.set(item.kode, { item, matchType });
 }
 
 export const DIVISIONS = ["CS", "MIE", "DAPUR 1", "DAPUR 2", "PACKING", "BAHAN BAKU", "REKANAN"];
