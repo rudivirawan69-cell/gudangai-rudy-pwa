@@ -381,7 +381,7 @@ async function submitItems(action, entity, items, tanggal, options = {}) {
     if (!options.fromQueue) enqueue(action, entity, list, { tanggal });
     const msg = list.length + ' item masuk Antrian Sinkronisasi (offline)';
     pushNotification({ type: 'warning', title: 'Koneksi terputus', body: msg + '. Tidak ada item yang dibuang.' });
-    return { success: true, queued: true, count: 0, queuedCount: list.length, failed: list.length, results: list.map(it => ({ success: false, queued: true, clientItemId: it.clientItemId })) };
+    return { success: false, queued: true, count: 0, queuedCount: list.length, failed: list.length, results: list.map(it => ({ success: false, queued: true, clientItemId: it.clientItemId })) };
   }
   // Never silently queue a write while the API is reachable.
   // Verify the exact write-capable backend before attempting any transaction.
@@ -392,7 +392,7 @@ async function submitItems(action, entity, items, tanggal, options = {}) {
     const msg = err?.message || 'Backend write belum terverifikasi';
     pushNotification({ type: 'error', title: 'Write ditahan', body: msg });
     return {
-      success: true, count: 0, failed: list.length, queuedCount: list.length, total: list.length,
+      success: false, count: 0, failed: list.length, queuedCount: list.length, total: list.length,
       results: list.map(it => ({ success: false, queued: true, clientItemId: it.clientItemId, error: msg }))
     };
   }
@@ -437,31 +437,6 @@ async function submitItems(action, entity, items, tanggal, options = {}) {
         title: 'Write belum terkonfirmasi',
         body: remainingItems.length + ' item diamankan di Antrian Sinkronisasi. Jangan kirim ulang manual; verifikasi backend/read-back terlebih dahulu.',
       });
-      break;
-    }
-      const remainingItems = list.slice(i);
-      if (options.fromQueue) {
-        // From queue on timeout/unknown: attempt serial for remaining to clear antrian.
-        for (const it of remainingItems) {
-          try {
-            const one = await submitOneItem(action, entity, it, tanggal);
-            allResults.push(one);
-            if (one.success || one.skipped) totalSuccess += 1;
-            else totalFail += 1;
-          } catch (oneErr) {
-            totalFail += 1;
-            allResults.push({ success: false, clientItemId: it.clientItemId, error: oneErr?.message || 'Gagal serial' });
-          }
-        }
-        emitProgress(list.length, list.length, { successCount: totalSuccess, failCount: totalFail });
-        break;
-      }
-      if (!options.fromQueue) enqueue(action, entity, remainingItems, { tanggal });
-      totalQueued += remainingItems.length;
-      totalFail += remainingItems.length;
-      allResults.push(...remainingItems.map(it => ({ success: false, queued: true, uncertain: true, clientItemId: it.clientItemId, error: err?.message || 'Timeout/koneksi terputus' })));
-      emitProgress(list.length, list.length, { successCount: totalSuccess, failCount: totalFail });
-      pushNotification({ type: 'warning', title: 'Koneksi terputus — masuk antrian', body: remainingItems.length + ' item diamankan di Antrian Sinkronisasi. Retry memakai ID unik agar tidak duplikasi.' });
       break;
     }
   }
