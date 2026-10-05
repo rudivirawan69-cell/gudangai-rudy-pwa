@@ -416,6 +416,26 @@ function _dashboardDivisionRowsV68_(ss) {
   }).sort(function(a,b){ return String(a[0]).localeCompare(String(b[0])); });
 }
 
+function installDashboardSyncTriggerV68_() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  ScriptApp.getProjectTriggers().forEach(function(t) {
+    var fn = t.getHandlerFunction();
+    if (fn === 'refreshDashboardPODataOnly_' || fn === 'refreshDashboardOperationalV68_') {
+      ScriptApp.deleteTrigger(t);
+    }
+  });
+  ScriptApp.newTrigger('refreshDashboardOperationalV68_').timeBased().everyMinutes(10).create();
+  refreshDashboardOperationalV68_();
+  return { success: true, message: 'Dashboard sync trigger 10 menit aktif' };
+}
+function refreshDashboardOperationalV68_() {
+  try {
+    return refreshDashboardPODataOnly_();
+  } catch (err) {
+    return { success: false, error: String(err.message || err) };
+  }
+}
+
 function setupDashboardPOLayoutOnce() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var dash = ss.getSheetByName('Dashboard');
