@@ -12,13 +12,10 @@ import {
 function classifyItem(it) {
   const stok = Number(it.stok ?? it.stockAkhir ?? 0) || 0;
   const aman = Number(it.stockAman ?? it.aman ?? it.min ?? 0) || 0;
-  if (aman > 0) {
-    if (stok <= 0 || stok <= Math.max(5, Math.floor(aman * 0.25))) return 'kritis';
-    if (stok < aman) return 'waspada';
-    return 'aman';
-  }
-  if (stok <= 5) return 'kritis';
-  if (stok <= 20) return 'waspada';
+  // Dashboard follows the same fixed stock status thresholds used by the PWA:
+  // Aman >= 20, Perhatian 10–19, Kritis < 10.
+  if (stok < 10) return 'kritis';
+  if (stok < 20) return 'waspada';
   return 'aman';
 }
 
@@ -517,18 +514,25 @@ function StatusPOCard({ data, loading, error, onRefresh, onConfirm, confirmingId
     if (!arrivalItem) return;
     const qty = Number(arrivalQty);
     const qtyPO = Number(arrivalItem.qtyPO) || 0;
+    const alreadyArrived = Math.max(0, Number(arrivalItem.qtyDatang) || 0);
+    const remaining = Math.max(0, qtyPO - alreadyArrived);
     if (!arrivalQty.trim() || !Number.isFinite(qty) || qty <= 0) {
-      setArrivalError('Isi total kedatangan lebih dari 0.');
+      setArrivalError('Isi Qty kedatangan kali ini lebih dari 0.');
       return;
     }
-    if (qtyPO > 0 && qty > qtyPO) {
-      setArrivalError(`Total kedatangan tidak boleh melebihi Qty PO (${qtyPO}).`);
+    if (qtyPO <= 0) {
+      setArrivalError('Qty PO tidak valid.');
+      return;
+    }
+    if (qty > remaining) {
+      setArrivalError(`Qty kedatangan kali ini maksimal ${remaining} (sisa PO).`);
       return;
     }
     setArrivalSaving(true);
     setArrivalError('');
     try {
-      const status = qty >= qtyPO && qtyPO > 0 ? 'Selesai' : 'Sebagian';
+      const projectedTotal = alreadyArrived + qty;
+      const status = projectedTotal >= qtyPO ? 'Selesai' : 'Sebagian';
       const ok = await onConfirm?.(arrivalItem, status, qty);
       if (ok) closeArrivalCart();
       else setArrivalError('Gagal menyimpan kedatangan. Periksa koneksi/API.');
@@ -666,7 +670,11 @@ function StatusPOCard({ data, loading, error, onRefresh, onConfirm, confirmingId
                   <button
                     type="button"
                     disabled={isBusy}
-                    onClick={() => onConfirm?.(it, 'Sebagian', Math.max(1, Math.floor((it.qtyPO || 1) / 2)))}
+                    onClick={() => {
+                      const remaining = Math.max(0, (Number(it.qtyPO) || 0) - (Number(it.qtyDatang) || 0));
+                      const delta = Math.min(remaining, Math.max(1, Math.floor(remaining / 2)));
+                      if (delta > 0) onConfirm?.(it, 'Sebagian', delta);
+                    }}
                     className="flex-1 text-[10px] font-bold py-1.5 rounded-lg bg-amber-500 text-white active:scale-95 disabled:opacity-50"
                   >
                     Sebagian
@@ -880,7 +888,15 @@ export default function DashboardPage() {
     if (!item) return;
     setConfirmingId(item.id);
     setConfirmMsg('');
-    const finalQty = qtyDatang != null ? qtyDatang : (status === 'Selesai' ? (item.qtyPO || item.qtyDatang) : status === 'Menunggu' ? 0 : item.qtyDatang);
+    const qtyPO = Number(item.qtyPO) || 0;
+    const alreadyArrived = Math.max(0, Number(item.qtyDatang) || 0);
+    const remaining = Math.max(0, qtyPO - alreadyArrived);
+    // qtyDatang sent to backend is always the NEW arrival delta, never cumulative.
+    const finalQty = qtyDatang != null
+      ? Number(qtyDatang) || 0
+      : status === 'Selesai'
+        ? remaining
+        : 0;
     try {
       const res = await confirmPOStatus({
         itemNo: item.itemNo,
