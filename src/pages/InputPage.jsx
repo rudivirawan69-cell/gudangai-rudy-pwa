@@ -580,7 +580,7 @@ export default function InputPage() {
         })}
       </div>
 
-      <div className="grid grid-cols-4 gap-2.5">
+      <div className="grid grid-cols-5 gap-2.5">
         <button type="button" onClick={() => filePdfRef.current?.click()} disabled={busy}
           className="rounded-2xl bg-white border border-slate-200 shadow-sm py-3 flex flex-col items-center gap-1.5 disabled:opacity-50">
           <span className="w-9 h-9 rounded-xl bg-violet-50 border border-violet-100 flex items-center justify-center">
@@ -608,6 +608,13 @@ export default function InputPage() {
             <Mic className="w-5 h-5 text-rose-600" />
           </span>
           <span className="text-[11px] font-semibold text-slate-700">Suara</span>
+        </button>
+        <button type="button" onClick={() => setShowPaste(true)} disabled={busy}
+          className="rounded-2xl bg-white border border-slate-200 shadow-sm py-3 flex flex-col items-center gap-1.5 disabled:opacity-50">
+          <span className="w-9 h-9 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center">
+            <Clipboard className="w-5 h-5 text-indigo-600" />
+          </span>
+          <span className="text-[11px] font-semibold text-slate-700">Tempel Teks</span>
         </button>
       </div>
       <input ref={filePdfRef} type="file" accept="application/pdf" className="hidden" onChange={onPdfPick} />
