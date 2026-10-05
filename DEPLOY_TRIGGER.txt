@@ -1,0 +1,5 @@
+redeploy-production
+sha=8cc149a66b8601ab10f7a931833168a63ac32249
+at=2026-10-05T22:05:00+07:00
+batch=20
+purpose=force-vercel-git-integration-production-build
