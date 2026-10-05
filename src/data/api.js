@@ -249,8 +249,15 @@ export async function getDashboardData() {
   }
 }
 export async function confirmPOStatus(payload) {
-  try { return await postJson({ action: 'confirmPOStatus', ...(payload || {}), requestId: newIds().requestId }); }
-  catch (err) { return { success: false, error: err?.message || 'Gagal konfirmasi PO' }; }
+  try {
+    return await postJson({
+      action: 'recordPOArrival',
+      ...(payload || {}),
+      requestId: payload?.requestId || newIds().requestId,
+    }, { retries: 1, timeoutMs: 90000 });
+  } catch (err) {
+    return { success: false, error: err?.message || 'Gagal konfirmasi kedatangan PO' };
+  }
 }
 function getAppliedMap() {
   try {
@@ -374,7 +381,7 @@ async function submitItems(action, entity, items, tanggal, options = {}) {
     if (!options.fromQueue) enqueue(action, entity, list, { tanggal });
     const msg = list.length + ' item masuk Antrian Sinkronisasi (offline)';
     pushNotification({ type: 'warning', title: 'Koneksi terputus', body: msg + '. Tidak ada item yang dibuang.' });
-    return { success: true, queued: true, count: 0, queuedCount: list.length, failed: list.length, results: list.map(it => ({ success: false, queued: true, clientItemId: it.clientItemId })) };
+    return { success: false, queued: true, count: 0, queuedCount: list.length, failed: list.length, results: list.map(it => ({ success: false, queued: true, clientItemId: it.clientItemId })) };
   }
   // Never silently queue a write while the API is reachable.
   // Verify the exact write-capable backend before attempting any transaction.
@@ -385,7 +392,7 @@ async function submitItems(action, entity, items, tanggal, options = {}) {
     const msg = err?.message || 'Backend write belum terverifikasi';
     pushNotification({ type: 'error', title: 'Write ditahan', body: msg });
     return {
-      success: true, count: 0, failed: list.length, queuedCount: list.length, total: list.length,
+      success: false, count: 0, failed: list.length, queuedCount: list.length, total: list.length,
       results: list.map(it => ({ success: false, queued: true, clientItemId: it.clientItemId, error: msg }))
     };
   }
@@ -409,60 +416,27 @@ async function submitItems(action, entity, items, tanggal, options = {}) {
       }
       continue;
     } catch (err) {
-      const msg = String(err?.message || '');
-      if (msg === 'BATCH_NOT_SUPPORTED' || /BATCH_NOT_SUPPORTED/i.test(msg) || /Respons bukan JSON/i.test(msg)) {
-        // From queue: allow serial fallback so pending items can still clear.
-        // Non-queue: never auto-serial (anti-duplikat rule).
-        if (options.fromQueue) {
-          for (const it of chunk) {
-            try {
-              const one = await submitOneItem(action, entity, it, tanggal);
-              allResults.push(one);
-              if (one.success || one.skipped) totalSuccess += 1;
-              else totalFail += 1;
-            } catch (oneErr) {
-              totalFail += 1;
-              allResults.push({ success: false, clientItemId: it.clientItemId, error: oneErr?.message || 'Gagal serial' });
-            }
-          }
-          emitProgress(Math.min(i + chunk.length, list.length), list.length, { successCount: totalSuccess, failCount: totalFail });
-          continue;
-        }
-        if (!options.fromQueue) enqueue(action, entity, chunk, { tanggal });
-        totalQueued += chunk.length;
-        totalFail += chunk.length;
-        allResults.push(...chunk.map(it => ({
-          success: false,
-          queued: true,
-          clientItemId: it.clientItemId,
-          error: 'Backend bulkTransaction belum tersedia'
-        })));
-        emitProgress(Math.min(i + chunk.length, list.length), list.length, { successCount: totalSuccess, failCount: totalFail });
-        break;
-      }
+      const msg = String(err?.message || 'Gagal menulis batch');
       const remainingItems = list.slice(i);
-      if (options.fromQueue) {
-        // From queue on timeout/unknown: attempt serial for remaining to clear antrian.
-        for (const it of remainingItems) {
-          try {
-            const one = await submitOneItem(action, entity, it, tanggal);
-            allResults.push(one);
-            if (one.success || one.skipped) totalSuccess += 1;
-            else totalFail += 1;
-          } catch (oneErr) {
-            totalFail += 1;
-            allResults.push({ success: false, clientItemId: it.clientItemId, error: oneErr?.message || 'Gagal serial' });
-          }
-        }
-        emitProgress(list.length, list.length, { successCount: totalSuccess, failCount: totalFail });
-        break;
-      }
+      // HARD RULE: timeout/unknown tidak boleh diubah menjadi serial retry.
+      // Retry hanya boleh memakai identity/batch yang sama setelah read-back/status
+      // backend terverifikasi; jangan mengubah timeout menjadi write serial.
       if (!options.fromQueue) enqueue(action, entity, remainingItems, { tanggal });
       totalQueued += remainingItems.length;
       totalFail += remainingItems.length;
-      allResults.push(...remainingItems.map(it => ({ success: false, queued: true, uncertain: true, clientItemId: it.clientItemId, error: err?.message || 'Timeout/koneksi terputus' })));
+      allResults.push(...remainingItems.map(it => ({
+        success: false,
+        queued: true,
+        uncertain: true,
+        clientItemId: it.clientItemId,
+        error: msg,
+      })));
       emitProgress(list.length, list.length, { successCount: totalSuccess, failCount: totalFail });
-      pushNotification({ type: 'warning', title: 'Koneksi terputus — masuk antrian', body: remainingItems.length + ' item diamankan di Antrian Sinkronisasi. Retry memakai ID unik agar tidak duplikasi.' });
+      pushNotification({
+        type: 'warning',
+        title: 'Write belum terkonfirmasi',
+        body: remainingItems.length + ' item diamankan di Antrian Sinkronisasi. Jangan kirim ulang manual; verifikasi backend/read-back terlebih dahulu.',
+      });
       break;
     }
   }
@@ -471,7 +445,15 @@ async function submitItems(action, entity, items, tanggal, options = {}) {
   } else {
     pushNotification({ type: 'success', title: 'Transaksi selesai', body: totalSuccess + ' item berhasil ditulis tanpa antrian.' });
   }
-  return { success: totalSuccess > 0 || totalQueued > 0, count: totalSuccess, failed: totalFail, queuedCount: totalQueued, total: list.length, results: allResults };
+  return {
+    success: totalSuccess === list.length,
+    partial: totalSuccess > 0 && totalSuccess < list.length,
+    count: totalSuccess,
+    failed: totalFail,
+    queuedCount: totalQueued,
+    total: list.length,
+    results: allResults,
+  };
 }
 export async function submitBarangMasuk({ entity, tanggal, items }) { return submitItems('barangMasuk', entity, items, tanggal); }
 export async function submitBarangKeluar({ entity, tanggal, items }) { return submitItems('barangKeluar', entity, items, tanggal); }

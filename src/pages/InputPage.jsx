@@ -580,7 +580,7 @@ export default function InputPage() {
         })}
       </div>
 
-      <div className="grid grid-cols-4 gap-2.5">
+      <div className="grid grid-cols-5 gap-2.5">
         <button type="button" onClick={() => filePdfRef.current?.click()} disabled={busy}
           className="rounded-2xl bg-white border border-slate-200 shadow-sm py-3 flex flex-col items-center gap-1.5 disabled:opacity-50">
           <span className="w-9 h-9 rounded-xl bg-violet-50 border border-violet-100 flex items-center justify-center">
@@ -610,6 +610,13 @@ export default function InputPage() {
           <span className="text-[11px] font-semibold text-slate-700">Suara</span>
         </button>
       </div>
+        <button type="button" onClick={() => setShowPaste(true)} disabled={busy}
+          className="rounded-2xl bg-white border border-slate-200 shadow-sm py-3 flex flex-col items-center gap-1.5 disabled:opacity-50">
+          <span className="w-9 h-9 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center">
+            <Clipboard className="w-5 h-5 text-indigo-600" />
+          </span>
+          <span className="text-[11px] font-semibold text-slate-700">Tempel Teks</span>
+        </button>
       <input ref={filePdfRef} type="file" accept="application/pdf" className="hidden" onChange={onPdfPick} />
       <input ref={fileImgRef} type="file" accept="image/*" className="hidden" onChange={onImgPick} />
 
@@ -653,7 +660,6 @@ export default function InputPage() {
           className="w-full rounded-xl bg-white border border-slate-200 text-slate-900 pl-9 pr-3 py-2.5 text-sm shadow-sm" />
       </div>
 
-      <button type="button" onClick={onIgnore} className="mt-2 w-full rounded-lg border border-rose-200 bg-white px-2 py-1.5 text-xs font-semibold text-rose-600">Abaikan item ini (tidak akan dikirim)</button>
       {hits.length > 0 && (
         <div className="rounded-xl border border-slate-200 bg-white shadow-sm max-h-64 overflow-y-auto divide-y divide-slate-100">
           {hits.map((h) => (
@@ -791,14 +797,20 @@ export default function InputPage() {
         <div className="fixed inset-0 z-30 bg-black/40 flex items-end justify-center">
           <div className="bg-white rounded-t-2xl w-full max-w-lg p-4 space-y-3">
             <div className="flex items-center justify-between">
-              <span className="font-semibold">Tempel teks order</span>
+              <div>
+                <p className="text-base font-extrabold text-slate-900">Tempel Teks</p>
+                <p className="text-[11px] text-slate-500 mt-0.5">Tempel teks mentah order. Sistem akan memakai validasi yang sama dengan PDF/Foto.</p>
+              </div>
               <button type="button" onClick={() => setShowPaste(false)}><X className="w-5 h-5" /></button>
             </div>
-            <textarea value={pasteText} onChange={(e) => setPasteText(e.target.value)} rows={6}
-              className="w-full border border-slate-200 rounded-xl p-2 text-sm" placeholder="Tempel di sini…" />
+            <textarea value={pasteText} onChange={(e) => setPasteText(e.target.value)} rows={10}
+              autoFocus
+              className="w-full border border-slate-300 rounded-2xl p-3 text-sm text-slate-900 bg-white shadow-inner resize-y"
+              placeholder={"Tempel teks order di sini…\nContoh:\n1. Ayam Fillet Paha 18\n2. Daging Slice Lowfat 6"} />
             <div className="flex gap-2">
               <button type="button" onClick={() => setShowPaste(false)} className="flex-1 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold">Batal</button>
-              <button type="button" onClick={onPasteValidate} className="flex-1 py-2.5 rounded-xl bg-cyan-600 text-white text-sm font-semibold">Validasi</button>
+              <button type="button" onClick={onPasteValidate} disabled={busy || !pasteText.trim()}
+                className="flex-1 py-2.5 rounded-xl bg-cyan-600 text-white text-sm font-semibold disabled:opacity-50">Analisis & Validasi</button>
             </div>
           </div>
         </div>
