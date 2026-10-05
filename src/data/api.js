@@ -442,9 +442,17 @@ async function submitItems(action, entity, items, tanggal, options = {}) {
       continue;
     } catch (err) {
       const msg = String(err?.message || 'Gagal menulis batch');
+      const remainingItems = list.slice(i);
+      if (!options.fromQueue) enqueue(action, entity, remainingItems, { tanggal });
+      totalQueued += remainingItems.length;
+      totalFail += remainingItems.length;
+      allResults.push(...remainingItems.map(it => ({ success: false, queued: true, uncertain: true, clientItemId: it.clientItemId, error: msg })));
+      emitProgress(list.length, list.length, { successCount: totalSuccess, failCount: totalFail });
+      pushNotification({ type: 'warning', title: 'Write belum terkonfirmasi', body: remainingItems.length + ' item diamankan di Antrian Sinkronisasi.' });
+      break;
     }
   }
-  if (totalQueued > 0)) {
+  if (totalQueued > 0) {
     pushNotification({ type: 'warning', title: 'Sinkronisasi perlu dilanjutkan', body: totalSuccess + ' sukses · ' + totalQueued + ' masuk antrian · ' + totalFail + ' belum terkonfirmasi. Antrian menyimpan ID unik untuk mencegah duplikasi.' });
   } else {
     pushNotification({ type: 'success', title: 'Transaksi selesai', body: totalSuccess + ' item berhasil ditulis tanpa antrian.' });
