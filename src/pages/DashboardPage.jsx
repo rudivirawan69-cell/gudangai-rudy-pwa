@@ -301,6 +301,7 @@ function normalizeStatusPO(raw) {
       previousWeek = { weekKey: 'Minggu Lalu', items: oldItems, summary: makeSummary(oldItems) };
     }
   }
+  const finalTotalItem = items.length || totalItem;
   return {
     success: true,
     noPO: raw.noPO || summaryRaw.noPO || '',
@@ -310,7 +311,7 @@ function normalizeStatusPO(raw) {
     previousWeek,
     items,
     summary: {
-      totalItem,
+      totalItem: finalTotalItem,
       itemMenunggu: menunggu,
       itemSebagian: sebagian,
       itemSelesai: selesai,
