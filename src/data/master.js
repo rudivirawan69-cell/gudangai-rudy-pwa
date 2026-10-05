@@ -13,6 +13,7 @@ const MASTER_CV = [
   {kode:"CV-0091",nama:"Sosis PRONAS (500 GRAM)",satuan:"Pack",divisi:"CS"},{kode:"CV-0095",nama:"Cireng (24 pcs)",satuan:"Pack",divisi:"CS"},
   {kode:"CV-0096",nama:"Kulit Lumpia (40 pcs)",satuan:"Pack",divisi:"CS"},{kode:"CV-0097",nama:"Ayam Parting 10 Fresh",satuan:"Ekor",divisi:"CS"},
   {kode:"CV-0098",nama:"Singkong Keju",satuan:"Pack",divisi:"CS"},{kode:"CV-0099",nama:"Degan Frozen (1 kg)",satuan:"Pack",divisi:"CS"},
+  {kode:"CV-0100",nama:"Dada Custom (1kg)",satuan:"1kg",divisi:"CS"},
   {kode:"CV-0011",nama:"Chiken Wing",satuan:"Pack",divisi:"DAPUR 1"},{kode:"CV-0014",nama:"Daging Pangsit",satuan:"Pack",divisi:"DAPUR 1"},
   {kode:"CV-0038",nama:"Tulang Kepala Ceker",satuan:"Kg",divisi:"DAPUR 1"},{kode:"CV-0070",nama:"Ayam Penyet 2 Dada + 2 Paha",satuan:"Pack",divisi:"DAPUR 1"},
   {kode:"CV-0071",nama:"Ayam Negeri 2 Dada + 2 Paha",satuan:"Pack",divisi:"DAPUR 1"},{kode:"CV-0085",nama:"Chiken Katsu (promo 50)",satuan:"Pack",divisi:"DAPUR 1"},
