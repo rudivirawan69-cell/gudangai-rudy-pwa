@@ -290,7 +290,7 @@ async function submitBatchChunk(action, entity, chunkItems, tanggal) {
     kode: String(it.kode || '').trim(),
     qty: Number(it.qty) || 0,
     keterangan: String(it.keterangan || '').trim().slice(0, 200),
-    requestId: 'REQ-' + String(it.clientItemId),
+    requestId: String(it.clientItemId),
     transactionId: 'TX-' + String(it.clientItemId),
     nonce: 'NC-' + String(it.clientItemId),
     clientItemId: String(it.clientItemId),
