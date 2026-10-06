@@ -214,6 +214,28 @@ export default function InputPage() {
   const removeCart = (idx) => setCart((prev) => prev.filter((_, i) => i !== idx));
   const setKet = (idx, val) => setCart((prev) => prev.map((c, i) => (i === idx ? { ...c, keterangan: val } : c)));
 
+  const changeEntity = (nextEntity) => {
+    if (nextEntity === entity) return;
+    if (cart.length > 0) {
+      setStatusBanner('Selesaikan atau kosongkan keranjang sebelum mengganti CV / PT.');
+      return;
+    }
+    setEntity(nextEntity);
+    setPdfReview([]);
+    setAccuracy(null);
+    setStatusBanner('');
+  };
+
+  const changeTxType = (nextType) => {
+    if (nextType === txType) return;
+    if (cart.length > 0) {
+      setStatusBanner('Selesaikan atau kosongkan keranjang sebelum mengganti jenis transaksi.');
+      return;
+    }
+    setTxType(nextType);
+    setStatusBanner('');
+  };
+
   const onPdfPick = async (e) => {
     const f = e.target.files?.[0]; e.target.value = ''; if (!f) return;
     setBusy(true); setStatusBanner('Membaca PDF…');
@@ -237,6 +259,18 @@ export default function InputPage() {
       await runValidationPipeline(text, lines, 'Foto');
     } catch (err) { setStatusBanner(err.message || 'Gagal OCR foto'); setBusy(false); }
   };
+
+  useEffect(() => {
+    return () => {
+      try { photoStreamRef.current?.getTracks?.().forEach((t) => t.stop()); } catch (_) {}
+      try { if (photoVideoRef.current) photoVideoRef.current.srcObject = null; } catch (_) {}
+      try {
+        const stream = videoRef.current?.srcObject;
+        if (stream?.getTracks) stream.getTracks().forEach((t) => t.stop());
+        if (videoRef.current) videoRef.current.srcObject = null;
+      } catch (_) {}
+    };
+  }, []);
 
   const openPhotoCamera = async () => {
     setShowPhotoSource(false);
@@ -562,7 +596,7 @@ export default function InputPage() {
           className="rounded-xl bg-white border border-slate-200 text-slate-900 px-3 py-2 text-sm w-32 shadow-sm font-semibold" />
         <div className="flex rounded-xl overflow-hidden border border-slate-200 shadow-sm">
           {['CV', 'PT'].map((e) => (
-            <button key={e} type="button" onClick={() => setEntity(e)}
+            <button key={e} type="button" onClick={() => changeEntity(e)}
               className={`px-4 py-2 text-sm font-semibold ${entity === e ? 'bg-cyan-600 text-white' : 'bg-white text-slate-600'}`}>{e}</button>
           ))}
         </div>
@@ -576,7 +610,7 @@ export default function InputPage() {
             : t.id === 'rusak' ? { active: 'bg-rose-600 border-rose-600', icon: 'text-rose-600', soft: 'bg-rose-50 border-rose-100' }
             : { active: 'bg-cyan-600 border-cyan-600', icon: 'text-cyan-600', soft: 'bg-cyan-50 border-cyan-100' };
           return (
-            <button key={t.id} type="button" onClick={() => setTxType(t.id)}
+            <button key={t.id} type="button" onClick={() => changeTxType(t.id)}
               className={`rounded-2xl py-3.5 flex flex-col items-center gap-1.5 border shadow-sm transition ${on ? accent.active + ' text-white' : 'bg-white border-slate-100 text-slate-700'}`}>
               <span className={`w-9 h-9 rounded-xl flex items-center justify-center ${on ? 'bg-white/20' : accent.soft}`}>
                 <Icon className={`w-5 h-5 ${on ? 'text-white' : accent.icon}`} />
