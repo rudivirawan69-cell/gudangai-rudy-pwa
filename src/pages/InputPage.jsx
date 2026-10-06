@@ -1,1 +1,19 @@
-RESTORE_FROM_FILE
+import { useState, useRef, useCallback, useEffect } from 'react';
+import {
+  Search, Trash2, Send, Loader2,
+  Plus, Minus,
+  PackagePlus, PackageMinus, AlertOctagon, Mic, Upload,
+  QrCode, Bell, X, CheckCircle2, Clipboard, Image,
+} from 'lucide-react';
+
+export default function InputPage() {
+  return (
+    <div className="p-4 pb-24 space-y-4 max-w-lg mx-auto">
+      <div className="rounded-2xl bg-amber-50 border border-amber-200 p-4">
+        <p className="text-sm font-semibold text-amber-900">Halaman Input sedang dipulihkan</p>
+        <p className="text-xs text-amber-700 mt-1">File InputPage.jsx sempat rusak. Versi lengkap dengan perbaikan (paste) akan segera di-push. Silakan muat ulang dalam 1–2 menit.</p>
+      </div>
+      <p className="text-xs text-slate-500">Sementara ini Anda masih bisa mengakses tab lain (Beranda, Stok, PO, Riwayat, Atur).</p>
+    </div>
+  );
+}
