@@ -985,6 +985,12 @@ function addTransaction(body) {
     clearMasterCache();
     try { syncDivisionStockLightweight_(); } catch (divErr) { console.error("syncDivisionStockLightweight_ gagal: " + divErr.message); }
     const readBack = readBackTransactionByIdentity_({ transactionId: transactionId, nonce: nonce }, sheetName);
+    if (!readBack || !readBack.matched) {
+      const readBackError = "Write selesai tetapi read-back Transaction ID/Nonce tidak ditemukan.";
+      updateIdempotencyRecord_(ledgerRecord, { status: "UNKNOWN", dataRow: targetRow, writeOccurred: "unknown", errorCode: "READBACK_NOT_CONFIRMED", details: readBackError });
+      writeAuditLogSecure("WRITE_TRANSACTION", "UNKNOWN", { requestId: request.requestId, transactionId: transactionId, nonce: nonce, sheet: sheetName, row: targetRow, entitas: entitas, kode: kode, qty: finalQty }, readBackError, transactionId);
+      return { success: false, status: "UNKNOWN", code: "READBACK_NOT_CONFIRMED", requestId: request.requestId, transactionId: transactionId, nonce: nonce, sheet: sheetName, row: targetRow, writeOccurred: "unknown", readBack: readBack || null, error: readBackError };
+    }
     const syncVersions = getCurrentSyncVersions_();
     const appliedResponse = { success: true, status: "APPLIED", code: "TRANSACTION_APPLIED", requestId: request.requestId, transactionId: transactionId, nonce: nonce, sheet: sheetName, row: targetRow, masterVersion: syncVersions.masterVersion, stockVersion: syncVersions.stockVersion, entitas: entitas, kode: kode, qty: finalQty, originalQty: numericQty, shortage: shortageMode, stockPolicy: shortageMode ? "STOCK_KURANG_HOLD_QTY_0" : "NORMAL", normalization: normalizationStatus, holdTransactionId: holdReference || null, flags: flags, retries: attempts - 1, execMs: execMs, writeOccurred: true, readBack: readBack, message: shortageMode ? "HOLD: Qty ditulis 0; realisasi harus dibuat sebagai transaksi Barang keluar baru setelah stok tersedia." : "Transaksi berhasil di " + sheetName + " baris " + targetRow + "." };
     recordSyncMetric_(appliedResponse);
@@ -1343,7 +1349,7 @@ function validateTransactionRequest_(tx, options) {
   const entitas = entityGroup.valid ? entityGroup.entitas : "";
   if (!kode) return { valid: false, status: "REJECTED", code: "CODE_REQUIRED", error: "kodeBarang wajib diisi" };
   const qty = Number(tx.qty);
-  if (isNaN(qty) || qty < 0 || qty > MAX_QTY) return { valid: false, status: "REJECTED", code: "INVALID_QTY", error: "qty tidak valid" };
+  if (isNaN(qty) || qty <= 0 || qty > MAX_QTY) return { valid: false, status: "REJECTED", code: "INVALID_QTY", error: "qty harus lebih dari 0 dan <= " + MAX_QTY };
   if (opts.requireDate && !tx.tanggal) return { valid: false, status: "REJECTED", code: "DATE_REQUIRED", error: "tanggal wajib diisi untuk sinkronisasi outbox." };
   if (tx.tanggal) {
     const dateCheck = validateTransactionDate(tx.tanggal);
@@ -3580,6 +3586,24 @@ function recordPOArrival(body) {
   }
   const entityPOQty = entitas === "CV" ? found.poCV : found.poPT;
   if (entityPOQty <= 0) return { success: false, status: "REJECTED", code: "PO_ENTITY_NOT_ELIGIBLE", error: "Item PO tidak memiliki kebutuhan " + entitas + "." };
+
+  // Kedatangan selalu delta; jangan izinkan total kedatangan melampaui PO.
+  const poLabel = getPOInfoFromHeader_(po).noPO;
+  let alreadyArrived = 0;
+  const masuk = ss.getSheetByName("Barang masuk");
+  if (masuk) {
+    const rowsMasuk = masuk.getLastRow() >= 4 ? masuk.getRange(4, 2, masuk.getLastRow() - 3, 6).getDisplayValues() : [];
+    rowsMasuk.forEach(function(r) {
+      const rowQty = Math.max(0, toNumber_(r[4]));
+      const rowKet = String(r[5] || "");
+      const rowNama = normalizePONameKey_(r[2] || "");
+      const matchesPO = poLabel && rowKet.toLowerCase().indexOf(String(poLabel).toLowerCase()) >= 0;
+      const matchesItem = rowNama === normalizePONameKey_(found.nama) || String(r[1] || "").trim() === String(body.kode || body.kodeBarang || "").trim();
+      if (rowQty > 0 && matchesPO && matchesItem) alreadyArrived += rowQty;
+    });
+  }
+  const remainingPO = Math.max(0, entityPOQty - alreadyArrived);
+  if (qty > remainingPO) return { success: false, status: "REJECTED", code: "PO_ARRIVAL_EXCEEDS_REMAINING", error: "Qty datang " + qty + " melebihi sisa PO " + remainingPO + ".", alreadyArrived: alreadyArrived, remainingPO: remainingPO };
 
   let kode = String(body.kode || body.kodeBarang || "").trim();
   if (!kode) {
