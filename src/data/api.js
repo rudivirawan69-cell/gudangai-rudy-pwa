@@ -144,9 +144,9 @@ export async function healthCheck() {
       else if (data.data?.batchSupported != null) _batchSupported = !!data.data.batchSupported;
       return { ok: true, data };
     }
-    return { ok: false, offline: true, error: (data && data.error) || 'Tidak terjangkau' };
+    return { ok: false, offline: true, code: data?.code || '', status: data?.status || '', error: (data && (data.error || data.message)) || 'Tidak terjangkau', data };
   } catch (err) {
-    return { ok: false, offline: true, error: err.message || 'Offline' };
+    return { ok: false, offline: true, code: err?.code || '', status: err?.status || '', error: err.message || 'Offline' };
   }
 }
 export function getConnectionStatus() { return { online: navigator.onLine, apiUrl: getApiUrl() }; }
@@ -159,7 +159,10 @@ async function assertSafeWriteBackend() {
   if (_safeBackendCache.ok && (now - _safeBackendCache.at) < 60000) return _safeBackendCache.health;
   const health = await healthCheck();
   const version = String(health?.data?.version ?? health?.data?.data?.version ?? health?.data?.title ?? '').trim();
-  if (!health?.ok) throw new Error('WRITE DITAHAN: backend tidak terverifikasi. Tidak ada transaksi yang dikirim.');
+  if (!health?.ok) {
+    const detail = [health?.code, health?.status, health?.error].filter(Boolean).join(' · ');
+    throw new Error('WRITE DITAHAN: backend tidak terverifikasi' + (detail ? ' — ' + detail : '') + '. Tidak ada transaksi yang dikirim.');
+  }
   if (!SAFE_WRITE_BACKEND_RE.test(version)) throw new Error('WRITE DITAHAN: backend belum LOCK Stock CV/PT. Versi: ' + (version || 'tidak diketahui'));
   if (/6\.6\.5|BULK[-_]?STABLE|DEPLOY[-_]?READY/i.test(version)) _batchSupported = true;
   _safeBackendCache = { ok: true, at: now, health };
@@ -361,7 +364,8 @@ async function submitBatchChunk(action, entity, chunkItems, tanggal) {
     for (const it of normalized) results.push({ clientItemId: it.clientItemId, success: true });
   }
   if (!results.length) {
-    throw new Error(data?.error || data?.message || 'Backend tidak mengonfirmasi seluruh batch');
+    const detail = [data?.code, data?.status, data?.error, data?.message].filter(Boolean).join(' · ');
+    throw new Error(detail || 'Backend tidak mengonfirmasi seluruh batch');
   }
 
   for (const r of results) {
@@ -435,7 +439,7 @@ async function submitItems(action, entity, items, tanggal, options = {}) {
       pushNotification({
         type: 'warning',
         title: 'Write belum terkonfirmasi',
-        body: remainingItems.length + ' item diamankan di Antrian Sinkronisasi. Jangan kirim ulang manual; verifikasi backend/read-back terlebih dahulu.',
+        body: remainingItems.length + ' item diamankan di Antrian Sinkronisasi. Detail backend: ' + msg + '. Jangan kirim ulang manual; verifikasi backend/read-back terlebih dahulu.',
       });
       break;
     }
