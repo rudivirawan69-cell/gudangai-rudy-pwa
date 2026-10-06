@@ -1053,8 +1053,12 @@ function bulkTransaction(body) {
     var tx = Object.assign({}, original);
     if (!tx.sheet) tx.sheet = sheetName;
     if (!tx.entitas) tx.entitas = entitas;
+    // The PWA batch envelope carries shared metadata outside each item.
+    // Materialize it before validation so bulk and single writes share one path.
+    if (!tx.tanggal && body.tanggal) tx.tanggal = body.tanggal;
     if (tx.queueApproved !== true && body.queueApproved === true) tx.queueApproved = true;
     if (!tx.client && body.client) tx.client = body.client;
+    if (!tx.requestId && body.requestId) tx.requestId = body.requestId;
     tx.transactionId = String(tx.transactionId || (batchId + "-" + String(i + 1).padStart(3, "0")));
     if (!tx.nonce) tx.nonce = tx.transactionId;
     var check = validateTransactionRequest_(tx, { requireDate: !!tx._syncMode || !!body._syncMode, requireEntity: true });
