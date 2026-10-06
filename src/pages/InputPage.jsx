@@ -3,7 +3,7 @@ import {
   Search, Trash2, Send, Loader2,
   Plus, Minus,
   PackagePlus, PackageMinus, AlertOctagon, Mic, Upload,
-  QrCode, Bell, X, CheckCircle2, Clipboard, Image,
+  QrCode, Bell, X, CheckCircle2, Clipboard, Image, Camera,
 } from 'lucide-react';
 import {
   extractTextFromPdf, extractTextFromImage, parseLinesFromText, validateItems, applyStockAwareFallback,
@@ -147,6 +147,7 @@ export default function InputPage() {
       keterangan: '',
       unmatched: true,
       pdfReviewIndex: idx,
+      pdfReviewId: r.reviewId || '',
       pdfSourceIndex: Number(r.sourceIndex) || 0,
       clientItemId: 'CI-' + (crypto.randomUUID ? crypto.randomUUID() : Date.now() + '-' + Math.random().toString(36).slice(2, 9)),
     }));
@@ -180,8 +181,10 @@ export default function InputPage() {
         .filter((m) => !/\b(?:periode|period|minggu)\b.*\d{4}/i.test(String(m?.nameFromPdf || m?.rawName || '')));
       const amb = validation.ambiguous || [];
       const un = validation.unmatched || [];
+      const reviewRunId = Date.now().toString(36);
       const review = [...amb, ...un].map((r, idx) => ({
         ...r,
+        reviewId: 'PR-' + reviewRunId + '-' + idx,
         reviewNo: idx + 1,
         namaPdf: r.nameFromPdf || r.rawName || r.name || '',
         qty: Number(r.qty) || 0,
@@ -412,7 +415,7 @@ export default function InputPage() {
     const review = pdfReview[reviewIndex];
     setPdfReview((prev) => prev.filter((_, i) => i !== reviewIndex));
     setCart((prev) => {
-      const cleaned = prev.filter((x) => !(x.unmatched && Number(x.pdfSourceIndex) === Number(review?.sourceIndex) && String(x.nama || '') === String(review?.namaPdf || review?.rawName || '')));
+      const cleaned = prev.filter((x) => !(x.unmatched && String(x.pdfReviewId || '') === String(review?.reviewId || '')));
       const add = Number(review?.qty) || 0;
       const idx = cleaned.findIndex((x) => x.kode === item.kode);
       if (idx >= 0) {
@@ -426,6 +429,7 @@ export default function InputPage() {
         satuan: item.satuan || 'Pack',
         qty: add,
         keterangan: '',
+        pdfReviewId: review?.reviewId || '',
         pdfSourceIndex: Number(review?.sourceIndex) || 0,
         clientItemId: 'CI-' + (crypto.randomUUID ? crypto.randomUUID() : Date.now() + '-' + Math.random().toString(36).slice(2, 9)),
       }];
@@ -436,7 +440,10 @@ export default function InputPage() {
     const review = pdfReview[reviewIndex];
     setPdfReview((prev) => prev.filter((_, i) => i !== reviewIndex));
     if (review) {
-      setCart((prev) => prev.filter((c) => !(c.unmatched && Number(c.pdfSourceIndex) === Number(review.sourceIndex) && String(c.nama || '') === String(review.namaPdf || review.rawName || ''))));
+      setCart((prev) => prev.filter((c) => !(c.unmatched && String(c.pdfReviewId || '') === String(review.reviewId || ''))));
+      setAccuracy((prev) => prev
+        ? { ...prev, skipped: Number(prev.skipped || 0) + 1, needPick: Math.max(0, Number(prev.needPick || 0) - 1) }
+        : prev);
     }
   }, [pdfReview]);
 
@@ -616,6 +623,7 @@ export default function InputPage() {
           </span>
           <span className="text-[11px] font-semibold text-slate-700">(paste)</span>
         </button>
+      </div>
       <input ref={filePdfRef} type="file" accept="application/pdf" className="hidden" onChange={onPdfPick} />
       <input ref={fileImgRef} type="file" accept="image/*" className="hidden" onChange={onImgPick} />
 
@@ -635,7 +643,7 @@ export default function InputPage() {
               <button type="button" onClick={openPhotoCamera}
                 className="rounded-2xl border border-cyan-200 bg-cyan-50 py-4 flex flex-col items-center gap-2 text-cyan-800 font-bold">
                 <span className="w-11 h-11 rounded-xl bg-white flex items-center justify-center shadow-sm">
-                  <Image className="w-5 h-5 text-cyan-600" />
+                  <Camera className="w-5 h-5 text-cyan-600" />
                 </span>
                 <span className="text-sm">Kamera</span>
                 <span className="text-[10px] font-medium text-cyan-700">Foto langsung</span>
@@ -822,7 +830,19 @@ export default function InputPage() {
 
 function PdfReviewRow({ row, entity, onPick, onIgnore }) {
   const [q, setQ] = useState(row.namaPdf || '');
-  const hits = q.trim().length >= 1 ? searchMaster(entity, q.trim()).slice(0, 5) : [];
+  const hits = (() => {
+    const term = q.trim();
+    if (!term) return [];
+    const live = searchLiveStock([], term);
+    const stat = searchMaster(entity, term);
+    const seen = new Set();
+    return [...live, ...stat].filter((h) => {
+      const k = String(h?.kode || h?.kodeBarang || '').trim();
+      if (!k || seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    }).slice(0, 5);
+  })();
   return (
     <div className="rounded-xl border border-amber-100 bg-amber-50/50 p-2.5">
       <div className="flex items-start justify-between gap-2">
