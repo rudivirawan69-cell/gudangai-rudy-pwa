@@ -36,7 +36,7 @@
  * CATATAN PENTING:
  * - Kolom D & E DILINDUNGI — script TIDAK menulis ke kolom ini
  * - Nama & Satuan diisi otomatis oleh VLOOKUP di sheet
- * - Total master data: 191 item — source of truth Stock CV + Stock PT
+ * - Total master data dihitung dinamis dari Stock CV + Stock PT
  *
  * TRIGGER (via setupEnvironment):
  * - sendDailyStockReport     → setiap hari jam 07:00
@@ -655,7 +655,8 @@ function identityPayloadMatches_(record, body) {
 
 function validateImportedItems_(body) {
   const entity = String(body && (body.entitas || body.entity) || "").trim().toUpperCase();
-  if (["CV", "PT"].indexOf(entity) < 0) return { success: false, status: "REJECTED", code: "ENTITY_REQUIRED", error: "entitas wajib CV atau PT." };
+  const entityInfo = normalizeEntityGroup_(entity, "");
+  if (!entityInfo.valid) return { success: false, status: "REJECTED", code: "ENTITY_REQUIRED", error: entityInfo.error };
   const raw = (body && (body.items || body.rows || body.data)) || [];
   if (!Array.isArray(raw) || !raw.length) return { success: false, status: "REJECTED", code: "ITEMS_REQUIRED", error: "items wajib berisi minimal satu item." };
   if (raw.length > 200) return { success: false, status: "REJECTED", code: "ITEMS_LIMIT", error: "Maksimal 200 item per validasi." };
@@ -1033,9 +1034,11 @@ function bulkTransaction(body) {
   if (!(sheetName in SHEET_CONFIG)) {
     return { success: false, status: "REJECTED", code: "SHEET_NOT_ALLOWED", batchId: batchId, error: "Sheet tidak diizinkan: " + sheetName };
   }
-  if (["CV", "PT"].indexOf(entitas) < 0) {
-    return { success: false, status: "REJECTED", code: "ENTITY_REQUIRED", batchId: batchId, error: "entitas wajib CV atau PT." };
+  var batchEntityInfo = normalizeEntityGroup_(entitas, "");
+  if (!batchEntityInfo.valid) {
+    return { success: false, status: "REJECTED", code: "ENTITY_REQUIRED", batchId: batchId, error: batchEntityInfo.error };
   }
+  entitas = batchEntityInfo.entitas;
 
   var config = SHEET_CONFIG[sheetName];
   var ss = getSS();
@@ -1750,7 +1753,11 @@ function getStockByCode(kode, requestedEntitas) {
 
 function getAllStock(entitas) {
   const ss = getSS();
-  const sheets = entitas === "CV" ? ["Stock CV"] : entitas === "PT" ? ["Stock PT"] : ["Stock CV", "Stock PT"];
+  const requested = String(entitas || "ALL").trim().toUpperCase();
+  const normalized = requested === "ALL" ? "ALL" : normalizeEntityGroup_(requested, "");
+  if (normalized !== "ALL" && !normalized.valid) return { success: false, status: "REJECTED", code: "ENTITY_REQUIRED", error: normalized.error };
+  const group = normalized === "ALL" ? "ALL" : normalized.entitas;
+  const sheets = group === "CV" ? ["Stock CV"] : group === "PT" ? ["Stock PT"] : ["Stock CV", "Stock PT"];
   const items = [];
 
   sheets.forEach(function(name) {
