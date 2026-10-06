@@ -698,7 +698,7 @@ export default function InputPage() {
             <p className="text-[11px] text-slate-500 mt-0.5">Nomor di PDF diabaikan. Urutan mengikuti PDF dan nomor di aplikasi dibuat ulang mulai 1.</p>
           </div>
           {pdfReview.map((r, idx) => (
-            <PdfReviewRow key={(r.sourceIndex || idx) + '-' + idx} row={r} entity={entity} onPick={(item) => resolvePdfReview(idx, item)} onIgnore={() => ignorePdfReview(idx)} />
+            <PdfReviewRow key={r.reviewId || (r.sourceIndex || idx) + '-' + idx} row={r} entity={entity} stockCatalog={stockCatalog} onPick={(item) => resolvePdfReview(idx, item)} onIgnore={() => ignorePdfReview(idx)} />
           ))}
         </div>
       )}
@@ -828,12 +828,12 @@ export default function InputPage() {
 
 
 
-function PdfReviewRow({ row, entity, onPick, onIgnore }) {
+function PdfReviewRow({ row, entity, stockCatalog = [], onPick, onIgnore }) {
   const [q, setQ] = useState(row.namaPdf || '');
   const hits = (() => {
     const term = q.trim();
     if (!term) return [];
-    const live = searchLiveStock([], term);
+    const live = searchLiveStock(stockCatalog, term);
     const stat = searchMaster(entity, term);
     const seen = new Set();
     return [...live, ...stat].filter((h) => {
