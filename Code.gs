@@ -2463,6 +2463,7 @@ function stampVisibleUpdateTimestamp_(formatted) {
     { name: "purchase order", range: null },
     { name: "Stock CV", range: null },
     { name: "Stock PT", range: null },
+    { name: "Stock Bahan Baku", range: null },
     { name: "Barang masuk", range: null },
     { name: "Barang keluar", range: null },
     { name: "Barang Rusak", range: null }
@@ -2719,9 +2720,12 @@ function diagnoseDashboard() {
 function refreshAllData(options) {
   options = options || {};
   const maintenance = maintenanceCleanup(false);
-  // Trigger 15-menit dipertahankan, tetapi tidak lagi rebuild dashboard/divisi.
-  // PWA membaca data stok langsung melalui API sehingga refresh sheet penuh tidak diperlukan.
-  return { success: true, maintenance: maintenance, skippedHeavyRebuild: true, dirty: isDataDirty_() };
+  // Refresh ringan: menjaga Dashboard Spreadsheet tetap sinkron tanpa
+  // membongkar/membangun ulang chart setiap interval.
+  let dashboard = null;
+  try { dashboard = refreshDashboardLive_(); }
+  catch (e) { dashboard = { success: false, error: String(e && e.message || e) }; }
+  return { success: true, maintenance: maintenance, dashboard: dashboard, dirty: isDataDirty_() };
 }
 
 function clearDashboardCharts_(sheet) {
@@ -2764,6 +2768,80 @@ function renderDivisionBarChart_(sheet, dataStartRow, data) {
     .build();
   sheet.insertChart(chart);
   return { rows: rows.length, chartTitle: "Status Stok per Divisi" };
+}
+
+function refreshDashboardLive_() {
+  const lock = LockService.getDocumentLock();
+  if (!lock.tryLock(10000)) return { success: false, error: "Dashboard sedang diproses." };
+  try {
+    const ss = getSS();
+    const sh = ss.getSheetByName("Dashboard");
+    if (!sh) return { success: false, code: "DASHBOARD_NOT_FOUND", error: "Sheet Dashboard tidak ditemukan" };
+
+    const data = getDashboardData();
+    if (!data || !data.success) return data || { success: false, error: "Data Dashboard kosong" };
+
+    if (sh.getMaxRows() < 100) sh.insertRowsAfter(sh.getMaxRows(), 100 - sh.getMaxRows());
+    if (sh.getMaxColumns() < 19) sh.insertColumnsAfter(sh.getMaxColumns(), 19 - sh.getMaxColumns());
+
+    // Header + kartu ringkasan — tidak mengubah merge/layout.
+    sh.getRange("A2").setValue("Pantauan Stok & Aktivitas — Real Time | Update: " + (data.lastUpdate || data.generatedAt));
+    const cards = [
+      ["TOTAL ITEM AKTIF", data.totalItemAktif, "item"],
+      ["KRITIS", data.kritis, percent_(data.kritis, data.totalItemAktif) + "%"],
+      ["WASPADA", data.waspada, percent_(data.waspada, data.totalItemAktif) + "%"],
+      ["AMAN", data.aman, percent_(data.aman, data.totalItemAktif) + "%"]
+    ];
+    [["A6:C9"],["D6:F9"],["G6:I9"],["J6:L9"]].forEach(function(x, i) {
+      sh.getRange(x[0]).setValue(cards[i][0] + "\n\n" + cards[i][1] + " " + cards[i][2]);
+    });
+
+    // Tabel sumber chart divisi tetap di A13:F; chart tersembunyi membaca P13:S.
+    const divRows = (data.statusPerDivisi || []).map(function(d) {
+      return [d.divisi, d.total, d.aman, d.waspada, d.kritis, percent_(d.kritis, d.total) / 100];
+    });
+    sh.getRange(13, 1, 80, 6).clearContent();
+    sh.getRange(12, 1, 1, 6).setValues([["DIVISI", "TOTAL ITEM", "AMAN", "WASPADA", "KRITIS", "% KRITIS"]]);
+    if (divRows.length) {
+      sh.getRange(13, 1, divRows.length, 6).setValues(divRows);
+      sh.getRange(13, 2, divRows.length, 4).setNumberFormat("#,##0").setHorizontalAlignment("center");
+      sh.getRange(13, 6, divRows.length, 1).setNumberFormat("0.0%").setHorizontalAlignment("center");
+    }
+
+    const hiddenDiv = [["DIVISI", "AMAN", "WASPADA", "KRITIS"]].concat((data.statusPerDivisi || []).map(function(d) {
+      return [d.divisi, Number(d.aman) || 0, Number(d.waspada) || 0, Number(d.kritis) || 0];
+    }));
+    sh.getRange(13, 16, 80, 4).clearContent();
+    sh.getRange(13, 16, hiddenDiv.length, 4).setValues(hiddenDiv);
+
+    // Donut PO membaca range P12:Q15; cukup update datanya, chart tidak perlu dibuat ulang.
+    const poNow = getStatusPO();
+    if (poNow && poNow.success) {
+      sh.getRange(12, 16, 4, 2).setValues([
+        ["STATUS PO", "QTY"],
+        ["SELESAI", Number(poNow.summary.itemSelesai || 0)],
+        ["SEBAGIAN", Number(poNow.summary.itemSebagian || 0)],
+        ["MENUNGGU", Number(poNow.summary.itemMenunggu || 0)]
+      ]);
+    }
+
+    // Tabel PO saat ini + minggu lalu. Fungsi ini sudah dipisahkan agar tidak overlap.
+    const poSection = refreshDashboardPOSection_({ renderCharts: false, lightweight: true });
+    updateLastUpdateTimestamp();
+    clearDataDirty_();
+
+    return {
+      success: true,
+      sheet: "Dashboard",
+      totalItem: data.totalItemAktif,
+      statusPerDivisi: data.statusPerDivisi || [],
+      poSection: poSection,
+      updatedAt: getLastUpdateTimestamp(),
+      mode: "LIVE_LIGHTWEIGHT"
+    };
+  } finally {
+    if (lock.hasLock()) lock.releaseLock();
+  }
 }
 
 function refreshDashboard(force) {
@@ -3416,17 +3494,23 @@ function onEdit(e) {
   try {
     if (!e || !e.range) return;
     const sheetName = e.range.getSheet().getName();
-    const affected = ["Stock CV", "Stock PT", "Stock awal", "purchase order"].indexOf(sheetName) >= 0 || Object.keys(SHEET_CONFIG).indexOf(sheetName) >= 0;
+    const affected = ["Stock CV", "Stock PT", "Stock Bahan Baku", "Stock awal", "purchase order"].indexOf(sheetName) >= 0 || Object.keys(SHEET_CONFIG).indexOf(sheetName) >= 0;
     if (!affected) return;
     // onEdit: invalidasi cache + dirty + stempel waktu. Sinkronisasi divisi real-time bila stok berubah.
     clearMasterCache();
     markDataDirty_(sheetName);
     updateLastUpdateTimestamp();
-    if (sheetName === "Stock CV" || sheetName === "Stock PT" || sheetName === "Stock awal") {
+    if (sheetName === "Stock CV" || sheetName === "Stock PT" || sheetName === "Stock Bahan Baku" || sheetName === "Stock awal") {
       try { syncDivisionStockLightweight_(); } catch (divErr) { console.error("onEdit sync divisi: " + divErr.message); }
     }
     if (sheetName === "Barang masuk" || sheetName === "purchase order") {
       try { refreshDashboardPOSection_({ renderCharts: false, lightweight: true }); } catch (poErr) { console.error("Dashboard PO ringan gagal: " + poErr.message); }
+    }
+    // Setiap perubahan sumber Dashboard juga memperbarui ringkasan/chart-data tanpa
+    // membuat ulang chart. Penulisan transaksi API tetap aman; interval 5 menit
+    // menjadi jalur sinkronisasi kedua untuk perubahan yang dibuat oleh PWA/API. 
+    if (["Stock CV", "Stock PT", "Stock Bahan Baku", "Stock awal", "Barang masuk", "purchase order", "Barang keluar", "Barang Rusak"].indexOf(sheetName) >= 0) {
+      try { refreshDashboardLive_(); } catch (dashErr) { console.error("Dashboard live gagal: " + dashErr.message); }
     }
   } catch (err) { console.error("onEdit ringan gagal: " + err.message); }
 }
@@ -3512,7 +3596,8 @@ function setupEnvironment() {
   ScriptApp.newTrigger("weeklyPOAutomation").timeBased().onWeekDay(ScriptApp.WeekDay.MONDAY).atHour(8).create();
   ScriptApp.newTrigger("logDailySnapshot").timeBased().everyDays(1).atHour(23).create();
   // processEmailQueue sengaja tidak dijadwalkan; seluruh queue write fail-closed.
-  ScriptApp.newTrigger("refreshAllData").timeBased().everyMinutes(15).create();
+  // Dashboard live ringan setiap 5 menit; interval resmi Apps Script mendukung 1/5/10/15/30 menit.
+  ScriptApp.newTrigger("refreshAllData").timeBased().everyMinutes(5).create();
   // Installable onEdit trigger agar perubahan manual pada semua sumber stok
   // dapat menjalankan sinkronisasi yang membutuhkan otorisasi SpreadsheetApp.
   ScriptApp.newTrigger("onEdit").forSpreadsheet(ss).onEdit().create();
@@ -3930,7 +4015,10 @@ function refreshDashboardPOSection_(options) {
   const currentTop = PO_SECTION_CURRENT_ROW;
   const currentCount = Math.min(PO_DASHBOARD_MAX_VISIBLE_ROWS, Math.max(1, (data.items || []).length));
   const currentEnd = currentTop + 4 + currentCount - 1;
-  const previousTop = currentTop;
+  // Minggu Lalu WAJIB dimulai setelah blok Minggu Ini.
+  // Sebelumnya previousTop = currentTop (31), sehingga tabel Minggu Lalu
+  // menimpa tabel Minggu Ini.
+  const previousTop = currentEnd + 3;
   const previousItems = previous.items || [];
   const previousCount = Math.min(PO_DASHBOARD_MAX_VISIBLE_ROWS, Math.max(1, previousItems.length));
   const previousEnd = previousTop + 4 + previousCount - 1;
