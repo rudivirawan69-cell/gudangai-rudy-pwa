@@ -6,8 +6,7 @@ import {
   QrCode, Bell, X, CheckCircle2, Clipboard, Image, Camera,
 } from 'lucide-react';
 import {
-  extractTextFromPdf, extractTextFromImage, parseLinesFromText, validateItems, applyStockAwareFallback,
-  detectEntityFromText, scanBarcodeFromVideo,
+  extractTextFromPdf, extractTextFromImage, parseLinesFromText, validateItems, applyStockAwareFallback, scanBarcodeFromVideo,
 } from '../data/pdfValidate';
 import {
   submitBarangMasuk, submitBarangKeluar, submitBarangRusak, fetchStock,
