@@ -1,0 +1,77 @@
+--- a/Code.gs
++++ b/Code.gs
+@@ -602,19 +602,17 @@
+ }
+ 
+ function identityMarker_(transactionId, nonce) {
+-  const parts = [];
+-  if (transactionId) parts.push("GUDANGAI_TX=" + transactionId);
+-  if (nonce && nonce !== transactionId) parts.push("GUDANGAI_NONCE=" + nonce);
+-  return parts.join(";");
++  // Identity markers MUST NOT be written into kolom Keterangan sheet transaksi.
++  // ID unik (transactionId / nonce / requestId) disimpan di sheet Idempotency Ledger saja.
++  // Fungsi ini dipertahankan agar call-site lama tidak error, tetapi selalu mengembalikan string kosong.
++  return "";
+ }
+ 
+ function appendIdentityMarker_(keterangan, transactionId, nonce) {
+-  const marker = identityMarker_(transactionId, nonce);
++  // Hanya kembalikan keterangan user (maksimal panjang). Jangan sisipkan GUDANGAI_TX / NONCE.
++  // Read-back dan anti-duplikat mengandalkan Idempotency Ledger, bukan kolom Keterangan.
+   const base = String(keterangan || "").trim();
+-  if (!marker) return base.substring(0, MAX_KETERANGAN_LENGTH);
+-  const separator = base ? " | " : "";
+-  const maxBase = Math.max(0, MAX_KETERANGAN_LENGTH - separator.length - marker.length);
+-  return base.substring(0, maxBase) + separator + marker;
++  return base.substring(0, MAX_KETERANGAN_LENGTH);
+ }
+ 
+ function readBackTransactionByIdentity_(identity, preferredSheet) {
+@@ -1120,7 +1118,7 @@
+           var priorReadBack = readBackTransactionByIdentity_({ transactionId: item.transactionId, nonce: item.nonce }, sheetName);
+           if (priorReadBack && priorReadBack.matched) {
+             updateIdempotencyRecord_(prior, { status: "APPLIED", dataRow: priorReadBack.row, writeOccurred: true, errorCode: "" });
+-            results.push({ success: true, status: "APPLIED", code: "READBACK_CONFIRMED", batchId: batchId, batchIndex: p + 1, transactionId: item.transactionId, nonce: item.nonce, sheet: sheetName, row: priorReadBack.row, kode: priorReadBack.kodeBarang, qty: priorReadBack.qty, replayed: true, writeOccurred: true });
++            results.push({ success: true, status: "APPLIED", code: "READBACK_CONFIRMED", batchId: batchId, batchIndex: p + 1, transactionId: item.transactionId, nonce: item.nonce, requestId: item.requestId || "", clientItemId: item.clientItemId || item.requestId || "", sheet: sheetName, row: priorReadBack.row, kode: priorReadBack.kodeBarang, qty: priorReadBack.qty, replayed: true, writeOccurred: true });
+             successCount++;
+             continue;
+           }
+@@ -1133,6 +1131,8 @@
+           success: true, status: "APPLIED", code: "IDEMPOTENT_REPLAY",
+           batchId: batchId, batchIndex: p + 1,
+           transactionId: item.transactionId, nonce: item.nonce,
++          requestId: item.requestId || "",
++          clientItemId: item.clientItemId || item.requestId || "",
+           sheet: sheetName, kode: item.kodeBarang,
+           qty: prior.qty != null ? prior.qty : item.qty, replayed: true
+         });
+@@ -1188,6 +1188,8 @@
+         index: p, date: formattedDate, kode: item.kodeBarang,
+         qty: finalQty, originalQty: numericQty, ket: keterangan,
+         txId: item.transactionId, nonce: item.nonce,
++        requestId: item.requestId || item.clientItemId || "",
++        clientItemId: item.clientItemId || item.requestId || "",
+         shortage: shortageMode, availableQty: availableQty
+       });
+     }
+@@ -1243,6 +1245,8 @@
+             success: true, status: "APPLIED", code: "TRANSACTION_APPLIED",
+             batchId: batchId, batchIndex: rw.index + 1,
+             transactionId: rw.txId, nonce: rw.nonce,
++            requestId: rw.requestId || "",
++            clientItemId: rw.clientItemId || rw.requestId || "",
+             sheet: sheetName, row: rowNum, kode: rw.kode,
+             qty: rw.qty, originalQty: rw.originalQty,
+             shortage: rw.shortage, writeOccurred: true
+@@ -1264,7 +1268,10 @@
+           results.push({
+             success: false, status: "UNKNOWN", code: "VERIFY_FAILED",
+             batchId: batchId, batchIndex: rw.index + 1,
+-            transactionId: rw.txId, kode: rw.kode,
++            transactionId: rw.txId, nonce: rw.nonce,
++            requestId: rw.requestId || "",
++            clientItemId: rw.clientItemId || rw.requestId || "",
++            kode: rw.kode,
+             writeOccurred: "unknown", error: "Verifikasi integritas gagal di baris " + rowNum
+           });
+           break;
