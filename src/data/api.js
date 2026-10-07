@@ -328,7 +328,6 @@ async function submitBatchChunk(action, entity, chunkItems, tanggal) {
     requestId: String(it.clientItemId),
     transactionId: 'TX-' + String(it.clientItemId),
     nonce: 'NC-' + String(it.clientItemId),
-    clientItemId: String(it.clientItemId),
   }));
   const batchId = newIds().requestId;
   const payload = {
