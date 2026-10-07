@@ -3608,8 +3608,11 @@ function setupEnvironment() {
   ScriptApp.newTrigger("weeklyPOAutomation").timeBased().onWeekDay(ScriptApp.WeekDay.MONDAY).atHour(8).create();
   ScriptApp.newTrigger("logDailySnapshot").timeBased().everyDays(1).atHour(23).create();
   // processEmailQueue sengaja tidak dijadwalkan; seluruh queue write fail-closed.
-  // Dashboard live ringan setiap 5 menit; interval resmi Apps Script mendukung 1/5/10/15/30 menit.
-  ScriptApp.newTrigger("refreshAllData").timeBased().everyMinutes(5).create();
+  // Dashboard Sync Patch V1 memiliki trigger tunggal sendiri.
+  // Jangan membuat refreshAllData kedua saat patch aktif.
+  if (!isDashboardSyncPatchEnabled_()) {
+    ScriptApp.newTrigger("refreshAllData").timeBased().everyMinutes(5).create();
+  }
   // Installable onEdit trigger agar perubahan manual pada semua sumber stok
   // dapat menjalankan sinkronisasi yang membutuhkan otorisasi SpreadsheetApp.
   ScriptApp.newTrigger("onEdit").forSpreadsheet(ss).onEdit().create();
