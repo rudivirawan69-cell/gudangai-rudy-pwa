@@ -725,17 +725,21 @@ function StatusPOCard({ data, loading, error, onRefresh, onConfirm, confirmingId
 export default function DashboardPage() {
   const { user } = useAuth();
 
-  // HARD SAFETY: backend menerima getAllStock untuk CV/PT secara terpisah.
-  // Dashboard tidak pernah meminta entitas "ALL" dan tidak pernah menulis ke
-  // Stock CV / Stock PT. Kedua sheet hanya menjadi sumber data baca.
+  // DASHBOARD MASTER SOURCE:
+  // CV + PT tetap menjadi sumber utama masing-masing entitas.
+  // ALL membaca agregat backend yang juga memasukkan 28 item Stock Bahan Baku,
+  // sehingga total dashboard kembali mengikuti 191 item.
+  // Tidak ada penulisan ke sheet stok dari halaman Dashboard.
+  const stockAll = useStock('ALL');
   const stockCV = useStock('CV');
   const stockPT = useStock('PT');
-  const allItems = useMemo(() => [...(stockCV.items || []), ...(stockPT.items || [])], [stockCV.items, stockPT.items]);
-  const loading = stockCV.loading || stockPT.loading;
+  const allItems = stockAll.items || [];
+  const loading = stockAll.loading || stockCV.loading || stockPT.loading;
   const refresh = useCallback(() => {
+    void stockAll.refresh({ force: true });
     void stockCV.refresh({ force: true });
     void stockPT.refresh({ force: true });
-  }, [stockCV.refresh, stockPT.refresh]);
+  }, [stockAll.refresh, stockCV.refresh, stockPT.refresh]);
 
   const [poData, setPoData] = useState(null);
   const [poLoading, setPoLoading] = useState(true);
@@ -909,7 +913,12 @@ export default function DashboardPage() {
         const label = status === 'Selesai' ? 'Datang' : status === 'Sebagian' ? 'Sebagian' : 'Belum';
         setConfirmMsg(`✓ ${item.nama} → ${label}`);
         try { window.dispatchEvent(new CustomEvent('gudangai-po-changed', { detail: { item, status, qtyDatang: finalQty } })); } catch (_) {}
-        await Promise.all([loadPO(), stockCV.refresh({ force: true }), stockPT.refresh({ force: true })]);
+        await Promise.all([
+          loadPO(),
+          stockAll.refresh({ force: true }),
+          stockCV.refresh({ force: true }),
+          stockPT.refresh({ force: true }),
+        ]);
         return true;
       } else {
         setConfirmMsg(res?.error || 'Gagal update status');
@@ -921,7 +930,11 @@ export default function DashboardPage() {
       setConfirmingId(null);
       setTimeout(() => setConfirmMsg(''), 3200);
     }
-  }, [loadPO, poData?.noPO, stockCV.refresh, stockPT.refresh]);
+  }, [loadPO, poData?.noPO, stockAll.refresh, stockCV.refresh, stockPT.refresh]);
+
+  // 191-item contract: show the backend master count, while keeping a safe
+  // local fallback if an older cached deployment temporarily returns less.
+  const dashboardTotalItem = Number(dashboardData?.totalItemAktif ?? dashboardData?.totalItem ?? allItems.length) || allItems.length;
 
   const pending = useMemo(() => {
     try {
@@ -973,7 +986,7 @@ export default function DashboardPage() {
         <div className="dashboard-panel rounded-2xl bg-white border border-slate-100 shadow-sm p-4">
           <StockComparison cv={stats.cv} pt={stats.pt} />
         </div>
-        <DashboardTotals totalItem={stats.total} />
+        <DashboardTotals totalItem={dashboardTotalItem} />
       </section>
 
       <div className="rounded-2xl bg-white border border-slate-100 shadow-sm p-4">
