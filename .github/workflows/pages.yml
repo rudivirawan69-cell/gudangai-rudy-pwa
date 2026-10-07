@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
 
@@ -22,6 +22,53 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Surgical API wire compatibility patch
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path("src/data/api.js")
+          s = p.read_text(encoding="utf-8")
+          old = """  const wire = normalized.map((it) => ({
+    kodeBarang: String(it.kode || '').trim(),
+    kode: String(it.kode || '').trim(),
+    qty: Number(it.qty) || 0,
+    keterangan: String(it.keterangan || '').trim().slice(0, 200),
+    requestId: String(it.clientItemId),
+    transactionId: 'TX-' + String(it.clientItemId),
+    nonce: 'NC-' + String(it.clientItemId),
+  }));"""
+          new = """  const wire = normalized.map((it) => ({
+    kodeBarang: String(it.kode || '').trim(),
+    qty: Number(it.qty) || 0,
+    keterangan: String(it.keterangan || '').trim().slice(0, 200),
+    tanggal: normalizeTanggal(tanggal),
+    requestId: String(it.clientItemId),
+    transactionId: 'TX-' + String(it.clientItemId),
+    nonce: 'NC-' + String(it.clientItemId),
+  }));"""
+          if old not in s:
+              raise SystemExit("Expected bulk wire block not found")
+          s = s.replace(old, new, 1)
+          start = s.index("  const wire = normalized.map")
+          end = s.index("  }));", start) + len("  }));")
+          wire = s[start:end]
+          if "    kode:" in wire or "clientItemId:" in wire:
+              raise SystemExit("Unsupported field remains in bulk wire payload")
+          p.write_text(s, encoding="utf-8")
+          print("Verified: bulk wire payload matches Code.gs whitelist.")
+          PY
+          git diff --check
+          if git diff --quiet -- src/data/api.js; then
+            echo "No API wire patch needed."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/data/api.js
+          git commit -m "fix(api): remove unsupported bulk wire fields"
+          git push
 
       - name: Setup Node
         uses: actions/setup-node@v4
