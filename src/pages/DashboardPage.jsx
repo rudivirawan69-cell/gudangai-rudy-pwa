@@ -876,7 +876,7 @@ export default function DashboardPage() {
       void loadPO({ silent: true });
       void loadDashboardData();
     };
-    const timer = setInterval(refreshSources, 60000);
+    const timer = setInterval(refreshSources, 15000); // Dashboard backend polling
     window.addEventListener('online', refreshSources);
     window.addEventListener('gudangai-po-changed', refreshSources);
     document.addEventListener('visibilitychange', refreshSources);
