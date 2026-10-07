@@ -322,9 +322,9 @@ async function submitBatchChunk(action, entity, chunkItems, tanggal) {
   const ent = String(entity || '').toUpperCase();
   const wire = normalized.map((it) => ({
     kodeBarang: String(it.kode || '').trim(),
-    kode: String(it.kode || '').trim(),
     qty: Number(it.qty) || 0,
     keterangan: String(it.keterangan || '').trim().slice(0, 200),
+    tanggal: normalizeTanggal(tanggal),
     requestId: String(it.clientItemId),
     transactionId: 'TX-' + String(it.clientItemId),
     nonce: 'NC-' + String(it.clientItemId),
