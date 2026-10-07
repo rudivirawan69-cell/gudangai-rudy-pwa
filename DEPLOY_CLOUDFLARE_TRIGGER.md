@@ -1,2 +1,3 @@
-Cloudflare deployment trigger. No application code or runtime behavior changed.
-Source commit at trigger time: ca7d0021fd0e785bd3099dcc19908988fa9f7e13
+Cloudflare production trigger — 2026-10-07
+Point production to Cloudflare (avoid Vercel Hobby deploy limit).
+Source: main with write-fix recovery + SPA assets config.

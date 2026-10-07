@@ -2,7 +2,9 @@
   "name": "gudangai-rudy-pwa",
   "compatibility_date": "2026-10-04",
   "assets": {
-    "directory": "./dist"
+    "directory": "./dist",
+    "not_found_handling": "single-page-application",
+    "html_handling": "auto-trailing-slash"
   },
   "previews": {}
 }
