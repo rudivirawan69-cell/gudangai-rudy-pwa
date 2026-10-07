@@ -7,7 +7,7 @@ const BATCH_CHUNK_SIZE = 80;
 const BATCH_TIMEOUT_MS = 90000;
 const SINGLE_TIMEOUT_MS = 60000;
 const SCHEMA_VERSION = '1.0';
-const SAFE_WRITE_BACKEND_RE = /STOCK-READONLY|STOCK-SOURCE-LOCKED|6\.6\.5\+?BULK[-_]?STABLE|6\.6\.[5-9]|V?6\.6\.[5-9]|BULK[-_]?STABLE/i;
+const SAFE_WRITE_BACKEND_RE = /STOCK-READONLY|STOCK-SOURCE-LOCKED|6\.6\.5\+?BULK[-_]?STABLE|6\.6\.[5-9]|V?6\.6\.[5-9]|V?6\.7(?:\.[0-9]+)?|BULK[-_]?STABLE/i;
 
 const APPLIED_KEY = 'gudangai_applied';
 const QUEUE_KEY = 'gudangai_queue';
@@ -297,7 +297,8 @@ async function submitBatchChunk(action, entity, chunkItems, tanggal) {
   }));
   const batchId = newIds().requestId;
   const payload = {
-    action: 'bulkTransaction',
+    // Backend utama memakai addBatchTransaction; alias bulkTransaction hanya ada di deploy lama.
+    action: 'addBatchTransaction',
     sheet: sheetName,
     entitas: ent,
     entity: ent,

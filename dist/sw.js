@@ -1,5 +1,6 @@
 /* GudangAI RUDY — Service Worker */
-const CACHE_NAME = 'gudangai-v7.1.0-rocket-r-install';
+const BUILD_VERSION = '2026-10-07T03:46:25.704Z';
+const CACHE_NAME = `gudangai-${BUILD_VERSION}`;
 const PRECACHE = [
   '/',
   '/index.html',
@@ -20,7 +21,7 @@ self.addEventListener('install', (event) => {
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)))
+      Promise.all(keys.filter((k) => k.startsWith('gudangai-') && k !== CACHE_NAME).map((k) => caches.delete(k)))
     ).then(() => self.clients.claim())
   );
 });
