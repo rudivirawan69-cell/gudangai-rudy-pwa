@@ -1,0 +1,50 @@
+name: Recover write fix files
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'patches/**'
+      - '.github/workflows/recover-write-fix.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Restore base files from known-good commit
+        run: |
+          git checkout 6ac7c5c -- src/data/api.js src/pages/InputPage.jsx Code.gs
+
+      - name: Apply recovery patches
+        run: |
+          git apply --verbose patches/api.js.patch
+          git apply --verbose patches/inputpage.patch
+          git apply --verbose patches/code.gs.patch
+
+      - name: Verify markers
+        run: |
+          grep -q cidByIdentity src/data/api.js
+          grep -q "nama: c.nama" src/pages/InputPage.jsx
+          grep -q "MUST NOT be written" Code.gs
+          echo "All recovery markers present"
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/data/api.js src/pages/InputPage.jsx Code.gs
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+          git commit -m "fix(write): recover full api.js InputPage Code.gs — cidByIdentity, nama in queue, ledger-only identity"
+          git push origin HEAD:main

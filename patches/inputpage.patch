@@ -1,0 +1,18 @@
+--- a/src/pages/InputPage.jsx
++++ b/src/pages/InputPage.jsx
+@@ -501,7 +501,14 @@
+           return ao - bo;
+         });
+         const items = orderedCart.map((c) => ({ ...c, qty: Number(c.qty) || 0 })).filter((c) => c.qty > 0)
+-          .map((c) => ({ kode: c.kode, qty: c.qty, keterangan: c.keterangan || '', clientItemId: c.clientItemId }));
++          .map((c) => ({
++            kode: c.kode,
++            nama: c.nama || '',
++            satuan: c.satuan || '',
++            qty: c.qty,
++            keterangan: c.keterangan || '',
++            clientItemId: c.clientItemId,
++          }));
+         if (!items.length) { setStatusBanner('Isi minimal 1 jumlah barang sebelum dikirim.'); return; }
+       const fn = txType === 'masuk' ? submitBarangMasuk : txType === 'rusak' ? submitBarangRusak : submitBarangKeluar;
+       const res = await fn({ entity, tanggal, items });

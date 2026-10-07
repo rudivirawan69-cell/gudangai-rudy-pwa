@@ -1,0 +1,25 @@
+--- a/src/data/api.js
++++ b/src/data/api.js
+@@ -345,9 +345,20 @@
+ 
+   const data = await postJson(payload, { retries: 2, timeoutMs: 90000 });
+   const rawResults = data?.results || data?.data?.results || [];
+-  const cidByTx = new Map(wire.map((it) => [String(it.transactionId), String(it.clientItemId)]));
++  // Map identity → clientItemId from normalized (wire intentionally omits clientItemId).
++  // Keys: transactionId (TX-CI-...), requestId (CI-...), and bare clientItemId.
++  const cidByIdentity = new Map();
++  for (const it of normalized) {
++    const cid = String(it.clientItemId);
++    cidByIdentity.set(cid, cid);
++    cidByIdentity.set('TX-' + cid, cid);
++    cidByIdentity.set('NC-' + cid, cid);
++  }
+   const results = Array.isArray(rawResults) ? rawResults.map((r) => {
+-    const clientItemId = r?.clientItemId || cidByTx.get(String(r?.transactionId || ''));
++    const clientItemId = r?.clientItemId
++      || cidByIdentity.get(String(r?.transactionId || ''))
++      || cidByIdentity.get(String(r?.requestId || ''))
++      || cidByIdentity.get(String(r?.nonce || ''));
+     const ok = r?.success === true || r?.skipped === true || r?.idempotent === true ||
+       r?.status === 'APPLIED' || r?.status === 'OK' || r?.status === 'SUCCESS' || r?.status === 'DUPLICATE';
+     return { ...r, clientItemId, success: ok };
