@@ -387,9 +387,11 @@ async function submitItems(action, entity, items, tanggal, options = {}) {
     } catch (err) {
       const msg = String(err?.message || '');
       if (msg === 'BATCH_NOT_SUPPORTED' || /BATCH_NOT_SUPPORTED/i.test(msg) || /Respons bukan JSON/i.test(msg)) {
-        // From queue: allow serial fallback so pending items can still clear.
-        // Non-queue: never auto-serial (anti-duplikat rule).
-        if (options.fromQueue) {
+        // Apps Script deployments can be out of sync: the batch route may be
+        // missing while the single-item route is already available. Each item
+        // carries its own idempotency ID, so serial fallback is safe for both
+        // live submissions and queued retries.
+        if (/UNKNOWN_ACTION|ACTION_NOT_FOUND|not found|tidak dikenal|belum tersedia|unsupported/i.test(msg) || options.fromQueue) {
           for (const it of chunk) {
             try {
               const one = await submitOneItem(action, entity, it, tanggal);

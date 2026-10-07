@@ -1,0 +1,1 @@
+import{R as e}from"./index-C8M3CWWs.js";var t=e();function n(){let[e,n]=(0,t.useState)(0);return(0,t.useEffect)(()=>{let e=()=>n(e=>e+1);return window.addEventListener(`gudangai-bootstrap-updated`,e),()=>window.removeEventListener(`gudangai-bootstrap-updated`,e)},[]),e}export{n as t};
