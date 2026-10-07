@@ -2782,7 +2782,7 @@ function refreshDashboardLive_() {
     if (!data || !data.success) return data || { success: false, error: "Data Dashboard kosong" };
 
     if (sh.getMaxRows() < 100) sh.insertRowsAfter(sh.getMaxRows(), 100 - sh.getMaxRows());
-    if (sh.getMaxColumns() < 19) sh.insertColumnsAfter(sh.getMaxColumns(), 19 - sh.getMaxColumns());
+    if (sh.getMaxColumns() < 22) sh.insertColumnsAfter(sh.getMaxColumns(), 22 - sh.getMaxColumns());
 
     // Header + kartu ringkasan — tidak mengubah merge/layout.
     sh.getRange("A2").setValue("Pantauan Stok & Aktivitas — Real Time | Update: " + (data.lastUpdate || data.generatedAt));
@@ -2817,12 +2817,15 @@ function refreshDashboardLive_() {
     // Donut PO membaca range P12:Q15; cukup update datanya, chart tidak perlu dibuat ulang.
     const poNow = getStatusPO();
     if (poNow && poNow.success) {
-      sh.getRange(12, 16, 4, 2).setValues([
+      // Donut memakai U12:V15. Jangan gunakan P:Q karena P:S adalah
+      // sumber data grafik status stok per divisi.
+      sh.getRange(12, 21, 4, 2).setValues([
         ["STATUS PO", "QTY"],
         ["SELESAI", Number(poNow.summary.itemSelesai || 0)],
         ["SEBAGIAN", Number(poNow.summary.itemSebagian || 0)],
         ["MENUNGGU", Number(poNow.summary.itemMenunggu || 0)]
       ]);
+      try { sh.hideColumns(21, 2); } catch (hideDonutErr) {}
     }
 
     // Tabel PO saat ini + minggu lalu. Fungsi ini sudah dipisahkan agar tidak overlap.
@@ -3992,7 +3995,8 @@ function renderPOStatusBlock_(sheet, topRow, title, subtitle, data, items, start
 }
 
 function renderPODonutChart_(sheet, chartStartRow, title, summary, chartTitle) {
-  const col = 16;
+  // Donut memakai U:V agar tidak menimpa sumber grafik divisi di P:S.
+  const col = 21;
   if (sheet.getMaxColumns() < col + 2) sheet.insertColumnsAfter(sheet.getMaxColumns(), col + 2 - sheet.getMaxColumns());
   const rows = [['STATUS PO', 'QTY'], ['SELESAI', Number(summary.itemSelesai || 0)], ['SEBAGIAN', Number(summary.itemSebagian || 0)], ['MENUNGGU', Number(summary.itemMenunggu || 0)]];
   sheet.getRange(chartStartRow, col, rows.length, 2).setValues(rows);
