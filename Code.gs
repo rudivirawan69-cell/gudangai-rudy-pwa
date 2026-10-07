@@ -1785,6 +1785,43 @@ function getAllStock(entitas) {
     });
   });
 
+  // Dashboard/API master count includes the dedicated Bahan Baku source.
+  // CV/PT remain untouched; Stock Bahan Baku contributes its own unique items
+  // so the combined dashboard master returns to 191 items.
+  if (entitas === "ALL") {
+    const bb = typeof getBahanBakuStockMap_ === "function" ? getBahanBakuStockMap_() : null;
+    const shBB = ss.getSheetByName("Stock Bahan Baku");
+    if (bb && bb.success && shBB) {
+      const existing = {};
+      items.forEach(function(item) { existing[String(item.kode || "").trim()] = true; });
+      const lastRow = shBB.getLastRow();
+      const lastCol = shBB.getLastColumn();
+      const headerRow = Number(bb.headerRow || 0);
+      if (lastRow > headerRow && lastCol > 0) {
+        const hdr = shBB.getRange(headerRow, 1, 1, lastCol).getValues()[0];
+        const idxKode = hdr.findIndex(function(h) { return String(h || "").toLowerCase().includes("kode"); });
+        const idxNama = hdr.findIndex(function(h) { return String(h || "").toLowerCase().includes("nama"); });
+        const idxSatuan = hdr.findIndex(function(h) { return String(h || "").toLowerCase().includes("satuan"); });
+        const rowsBB = shBB.getRange(headerRow + 1, 1, lastRow - headerRow, lastCol).getValues();
+        rowsBB.forEach(function(row) {
+          const kode = String(idxKode >= 0 ? row[idxKode] : "").trim();
+          if (!kode || /^total\\b/i.test(kode) || existing[kode]) return;
+          items.push({
+            kode: kode,
+            entitas: "BAHAN BAKU",
+            nama: idxNama >= 0 ? row[idxNama] : "",
+            satuan: idxSatuan >= 0 ? row[idxSatuan] : "",
+            stockAkhir: bb.map[kode] !== undefined ? bb.map[kode] : 0,
+            stockAman: 0,
+            stockValue: 0,
+            divisi: "BAHAN BAKU"
+          });
+          existing[kode] = true;
+        });
+      }
+    }
+  }
+
   return { success: true, count: items.length, items: items };
 }
 
