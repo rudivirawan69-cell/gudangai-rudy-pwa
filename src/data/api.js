@@ -3,7 +3,7 @@ const RETRY_COUNT = 2;
 const RETRY_BASE_MS = 400;
 const REQUEST_TIMEOUT_MS = 15000;
 /** Chunk aman agar Apps Script + spreadsheet selesai < timeout (anti-antrian). 20 item per POST. */
-const BATCH_CHUNK_SIZE = 80;
+const BATCH_CHUNK_SIZE = 20;
 const BATCH_TIMEOUT_MS = 90000;
 const SINGLE_TIMEOUT_MS = 60000;
 const SCHEMA_VERSION = '1.0';
@@ -419,28 +419,27 @@ async function submitItems(action, entity, items, tanggal, options = {}) {
         break;
       }
       const remainingItems = list.slice(i);
-      if (options.fromQueue) {
-        // From queue on timeout/unknown: attempt serial for remaining to clear antrian.
-        for (const it of remainingItems) {
-          try {
-            const one = await submitOneItem(action, entity, it, tanggal);
-            allResults.push(one);
-            if (one.success || one.skipped) totalSuccess += 1;
-            else totalFail += 1;
-          } catch (oneErr) {
-            totalFail += 1;
-            allResults.push({ success: false, clientItemId: it.clientItemId, error: oneErr?.message || 'Gagal serial' });
-          }
+      // Apps Script can finish the write but delay the batch response (especially
+      // after a redeploy). Retry the same idempotent items one-by-one instead of
+      // reporting a false failure or waiting for the user to retry manually.
+      for (const it of remainingItems) {
+        try {
+          const one = await submitOneItem(action, entity, it, tanggal);
+          allResults.push(one);
+          if (one.success || one.skipped) totalSuccess += 1;
+          else totalFail += 1;
+        } catch (oneErr) {
+          totalFail += 1;
+          allResults.push({ success: false, clientItemId: it.clientItemId, error: oneErr?.message || 'Gagal serial' });
         }
-        emitProgress(list.length, list.length, { successCount: totalSuccess, failCount: totalFail });
-        break;
       }
-      if (!options.fromQueue) enqueue(action, entity, remainingItems, { tanggal });
-      totalQueued += remainingItems.length;
-      totalFail += remainingItems.length;
-      allResults.push(...remainingItems.map(it => ({ success: false, queued: true, uncertain: true, clientItemId: it.clientItemId, error: err?.message || 'Timeout/koneksi terputus' })));
+      const failedItems = remainingItems.filter((it) => {
+        const result = allResults.find((r) => r.clientItemId === it.clientItemId);
+        return !result?.success && !result?.skipped;
+      });
+      if (failedItems.length && !options.fromQueue) enqueue(action, entity, failedItems, { tanggal });
+      totalQueued += options.fromQueue ? 0 : failedItems.length;
       emitProgress(list.length, list.length, { successCount: totalSuccess, failCount: totalFail });
-      pushNotification({ type: 'warning', title: 'Koneksi terputus — masuk antrian', body: remainingItems.length + ' item diamankan di Antrian Sinkronisasi. Retry memakai ID unik agar tidak duplikasi.' });
       break;
     }
   }
