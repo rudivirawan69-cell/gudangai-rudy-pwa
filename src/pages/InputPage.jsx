@@ -74,7 +74,13 @@ export default function InputPage() {
   useEffect(() => {
     const handler = (e) => {
       const d = e.detail || {};
-      setSubmitProgress({ sent: d.sent || 0, total: d.total || 0, success: d.success || 0, failed: d.failed || 0 });
+      setSubmitProgress({
+        sent: Number(d.sent) || 0,
+        total: Number(d.total) || 0,
+        success: Number(d.success) || 0,
+        queued: Number(d.queued) || 0,
+        failed: Number(d.failed) || 0,
+      });
     };
     window.addEventListener('gudangai-submit-progress', handler);
     return () => window.removeEventListener('gudangai-submit-progress', handler);
@@ -547,15 +553,15 @@ export default function InputPage() {
         if (queuedCount > 0) {
           pushNotification({
             type: 'warning',
-            title: confirmedItems.length > 0 ? 'Sebagian transaksi masuk Antrian Sinkronisasi' : 'Transaksi masuk Antrian Sinkronisasi',
-            body: confirmedItems.length + ' terkonfirmasi · ' + queuedCount + ' masuk antrian · ' +
-              Math.max(0, cart.length - confirmedItems.length - queuedCount) + ' belum teridentifikasi. Tidak ada item dibuang.'
+            title: confirmedItems.length > 0 ? 'Transaksi sebagian selesai' : 'Transaksi masuk Antrian Sinkronisasi',
+            body: confirmedItems.length + ' sukses · ' + queuedCount + ' antrian' +
+              (Math.max(0, cart.length - confirmedItems.length - queuedCount) ? ' · ' + Math.max(0, cart.length - confirmedItems.length - queuedCount) + ' belum teridentifikasi' : '') +
+              '. Tidak ada item dibuang.'
           });
           setStatusBanner(
-            (confirmedItems.length > 0 ? 'TERKONFIRMASI ' + confirmedItems.length + ' · ' : '') +
-            'ANTRIAN ' + queuedCount +
-            (failCount ? ' · BELUM TERKONFIRMASI ' + failCount : '') +
-            ' — belum ditulis dianggap pending.'
+            confirmedItems.length + ' sukses · ' + queuedCount + ' antrian' +
+            (failCount ? ' · ' + failCount + ' gagal konfirmasi' : '') +
+            ' — lanjutkan dari Antrian bila perlu.'
           );
         } else if (confirmedItems.length === cart.length) {
           pushNotification({ type: 'success', title: 'Transaksi selesai', body: confirmedItems.length + ' item ' + txType + ' ' + entity + ' terkonfirmasi ditulis backend.' });
@@ -781,13 +787,22 @@ export default function InputPage() {
           <div className="fixed bottom-16 left-0 right-0 px-4 z-20">
             {submitProgress && (
               <p className="text-center text-xs text-cyan-700 mb-1 font-semibold">
-                Mengirim {submitProgress.sent}/{submitProgress.total} · ok {submitProgress.success} · antri {submitProgress.failed}
+                {submitProgress.sent < submitProgress.total
+                  ? `Mengirim ${submitProgress.sent}/${submitProgress.total} · sukses ${submitProgress.success}` +
+                    (submitProgress.queued ? ` · antrian ${submitProgress.queued}` : '')
+                  : `Selesai kirim ${submitProgress.total} · sukses ${submitProgress.success}` +
+                    (submitProgress.queued ? ` · antrian ${submitProgress.queued}` : '') +
+                    (submitProgress.failed ? ` · gagal ${submitProgress.failed}` : '')}
               </p>
             )}
             <button type="button" onClick={handleSubmit} disabled={submitting || !cart.length}
               className="w-full py-3 rounded-2xl bg-cyan-600 text-white font-bold shadow-lg flex items-center justify-center gap-2 disabled:opacity-50">
               {submitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
-              {submitting ? 'Mengirim…' : `Kirim ${cart.length} item`}
+              {submitting
+                ? (submitProgress
+                    ? `Mengirim ${submitProgress.sent}/${submitProgress.total}…`
+                    : 'Mengirim…')
+                : `Kirim ${cart.length} item`}
             </button>
           </div>
         </div>

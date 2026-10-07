@@ -9,7 +9,7 @@ const outFile = path.join(root, 'src/data/api.js');
 
 function isCompleteApi(src) {
   return typeof src === 'string'
-    && src.includes('BATCH_CHUNK_SIZE = 20')
+    && /BATCH_CHUNK_SIZE\s*=\s*\d+/.test(src)
     && src.includes('export async function submitBarangMasuk')
     && src.includes('bulkTransaction');
 }
@@ -61,7 +61,7 @@ if (!isCompleteApi(content)) {
     console.log('assemble-api: skip write (assembled chunks incomplete; keeping existing api.js)');
     process.exit(0);
   }
-  console.error('assemble-api: assembled content incomplete (need BATCH=20 + submitBarangMasuk + bulkTransaction)');
+  console.error('assemble-api: assembled content incomplete (need BATCH_CHUNK_SIZE + submitBarangMasuk + bulkTransaction)');
   process.exit(1);
 }
 
