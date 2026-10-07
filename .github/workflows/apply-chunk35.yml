@@ -1,0 +1,45 @@
+name: Apply BATCH=35 write + progress UI
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'scripts/apply-chunk35.mjs'
+      - '.github/workflows/apply-chunk35.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+
+      - name: Apply chunk 35 + progress UI
+        run: node scripts/apply-chunk35.mjs
+
+      - name: Verify
+        run: |
+          grep -q 'BATCH_CHUNK_SIZE = 35' src/data/api.js
+          grep -q 'BATCH_TIMEOUT_MS = 100000' src/data/api.js
+          grep -q 'sukses' src/pages/InputPage.jsx
+          echo OK
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/data/api.js src/pages/InputPage.jsx scripts/assemble-api.mjs
+          if git diff --cached --quiet; then
+            echo "No changes"
+            exit 0
+          fi
+          git commit -m "fix(write): BATCH_CHUNK_SIZE=35 + progress UI sukses/antrian akurat"
+          git push origin HEAD:main
