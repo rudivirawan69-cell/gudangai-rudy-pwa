@@ -243,9 +243,14 @@ export async function getDashboardData() {
     throw new Error(data?.error || 'Dashboard aggregate kosong');
   } catch (err) {
     try {
-      const [cv, pt] = await Promise.all([fetchStock('CV'), fetchStock('PT')]);
-      const items = [...(cv || []), ...(pt || [])];
-      return { success: true, version: 'PWA-LIVE-STOCK-FALLBACK', statusPerDivisi: buildDashboardFallbackFromStock(items), source: 'live-stock-cv-pt' };
+      const items = await fetchStock('ALL');
+      return {
+        success: true,
+        totalItem: items.length,
+        totalItemAktif: items.length,
+        statusPerDivisi: buildDashboardFallbackFromStock(items),
+        source: 'live-stock-all-cv-pt-bahan-baku'
+      };
     } catch (fallbackErr) {
       return { success: false, error: fallbackErr?.message || err?.message || 'Gagal mengambil dashboard' };
     }
