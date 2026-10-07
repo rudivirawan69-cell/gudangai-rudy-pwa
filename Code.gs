@@ -2720,11 +2720,14 @@ function diagnoseDashboard() {
 function refreshAllData(options) {
   options = options || {};
   const maintenance = maintenanceCleanup(false);
-  // Refresh ringan: menjaga Dashboard Spreadsheet tetap sinkron tanpa
-  // membongkar/membangun ulang chart setiap interval.
   let dashboard = null;
-  try { dashboard = refreshDashboardLive_(); }
-  catch (e) { dashboard = { success: false, error: String(e && e.message || e) }; }
+  try {
+    dashboard = isDashboardSyncPatchEnabled_()
+      ? dashboardSyncPatchRefresh_({ reason: "refreshAllData" })
+      : refreshDashboardLive_();
+  } catch (e) {
+    dashboard = { success: false, error: String(e && e.message || e) };
+  }
   return { success: true, maintenance: maintenance, dashboard: dashboard, dirty: isDataDirty_() };
 }
 
@@ -2771,6 +2774,7 @@ function renderDivisionBarChart_(sheet, dataStartRow, data) {
 }
 
 function refreshDashboardLive_() {
+  if (isDashboardSyncPatchEnabled_()) return dashboardSyncPatchRefresh_({ reason: "legacy-refreshDashboardLive" });
   const lock = LockService.getDocumentLock();
   if (!lock.tryLock(10000)) return { success: false, error: "Dashboard sedang diproses." };
   try {
@@ -2848,6 +2852,10 @@ function refreshDashboardLive_() {
 }
 
 function refreshDashboard(force) {
+  if (isDashboardSyncPatchEnabled_()) {
+    if (force !== true) return { success: true, skippedHeavyRebuild: true, patch: true, lastUpdate: getLastUpdateTimestamp() };
+    return dashboardSyncPatchRefresh_({ reason: "manual-refreshDashboard", force: true });
+  }
   // Dashboard sheet adalah tampilan sekunder. Jangan rebuild setiap transaksi/onEdit.
   // force=true hanya untuk admin/manual refresh.
   if (force !== true) {
@@ -3512,7 +3520,8 @@ function onEdit(e) {
     // Setiap perubahan sumber Dashboard juga memperbarui ringkasan/chart-data tanpa
     // membuat ulang chart. Penulisan transaksi API tetap aman; interval 5 menit
     // menjadi jalur sinkronisasi kedua untuk perubahan yang dibuat oleh PWA/API. 
-    if (["Stock CV", "Stock PT", "Stock Bahan Baku", "Stock awal", "Barang masuk", "purchase order", "Barang keluar", "Barang Rusak"].indexOf(sheetName) >= 0) {
+    if (!isDashboardSyncPatchEnabled_() &&
+        ["Stock CV", "Stock PT", "Stock Bahan Baku", "Stock awal", "Barang masuk", "purchase order", "Barang keluar", "Barang Rusak"].indexOf(sheetName) >= 0) {
       try { refreshDashboardLive_(); } catch (dashErr) { console.error("Dashboard live gagal: " + dashErr.message); }
     }
   } catch (err) { console.error("onEdit ringan gagal: " + err.message); }
@@ -4013,6 +4022,9 @@ function refreshDashboardPOSection_(options) {
   const ss = getSS();
   const sh = ss.getSheetByName('Dashboard');
   if (!sh) return { success: false, code: 'DASHBOARD_NOT_FOUND', error: 'Sheet Dashboard tidak ditemukan' };
+  if (isDashboardSyncPatchEnabled_() && options._dashboardPatchDelegated !== true) {
+    return dashboardSyncPatchRefresh_({ reason: "legacy-refreshDashboardPOSection" });
+  }
   const data = getStatusPO();
   if (!data.success) return data;
   const previous = getPreviousPOStatus_();
@@ -4083,4 +4095,141 @@ function noteConnectionFailure_() {
 
 function noteConnectionSuccess_() {
   try { PropertiesService.getScriptProperties().deleteProperty("GUDANGAI_CIRCUIT_STATE"); } catch(e) {}
+}
+
+// ============================================================
+// DASHBOARD_SYNC_PATCH_V1 — ISOLATED DASHBOARD ORCHESTRATOR
+// ============================================================
+const DASHBOARD_SYNC_PATCH_VERSION = "DASHBOARD_SYNC_PATCH_V1";
+const DASHBOARD_SYNC_PATCH_FLAG = "GUDANGAI_DASHBOARD_SYNC_PATCH_ENABLED";
+const DASHBOARD_SYNC_PATCH_LAST = "GUDANGAI_DASHBOARD_SYNC_PATCH_LAST";
+
+function isDashboardSyncPatchEnabled_() {
+  try { return PropertiesService.getScriptProperties().getProperty(DASHBOARD_SYNC_PATCH_FLAG) === "1"; }
+  catch (e) { return false; }
+}
+
+function dashboardSyncPatchDisableConflictingTriggers_() {
+  const conflicting = ["refreshAllData", "refreshDashboard"];
+  let removed = 0;
+  ScriptApp.getProjectTriggers().forEach(function(t) {
+    if (conflicting.indexOf(t.getHandlerFunction()) >= 0) { ScriptApp.deleteTrigger(t); removed++; }
+  });
+  return removed;
+}
+
+function dashboardSyncPatchInstall() {
+  const props = PropertiesService.getScriptProperties();
+  props.setProperty(DASHBOARD_SYNC_PATCH_FLAG, "1");
+  const removed = dashboardSyncPatchDisableConflictingTriggers_();
+  let created = false;
+  const exists = ScriptApp.getProjectTriggers().some(function(t) {
+    return t.getHandlerFunction() === "dashboardSyncPatchTick_";
+  });
+  if (!exists) {
+    ScriptApp.newTrigger("dashboardSyncPatchTick_").timeBased().everyMinutes(5).create();
+    created = true;
+  }
+  const first = dashboardSyncPatchRefresh_({ reason: "install" });
+  props.setProperty(DASHBOARD_SYNC_PATCH_LAST, new Date().toISOString());
+  SpreadsheetApp.flush();
+  return { success: !!(first && first.success), patch: DASHBOARD_SYNC_PATCH_VERSION, enabled: true,
+    removedConflictingTriggers: removed, createdTrigger: created, trigger: "dashboardSyncPatchTick_(5 menit)", dashboard: first };
+}
+
+function dashboardSyncPatchDisable() {
+  PropertiesService.getScriptProperties().deleteProperty(DASHBOARD_SYNC_PATCH_FLAG);
+  let removed = 0;
+  ScriptApp.getProjectTriggers().forEach(function(t) {
+    if (t.getHandlerFunction() === "dashboardSyncPatchTick_") { ScriptApp.deleteTrigger(t); removed++; }
+  });
+  return { success: true, enabled: false, removedPatchTriggers: removed };
+}
+
+function dashboardSyncPatchTick_() {
+  if (!isDashboardSyncPatchEnabled_()) return { success: true, skipped: true, reason: "patch disabled" };
+  return dashboardSyncPatchRefresh_({ reason: "scheduled" });
+}
+
+function dashboardSyncPatchRefresh_(options) {
+  options = options || {};
+  const lock = LockService.getDocumentLock();
+  if (!lock.tryLock(20000)) return { success: false, status: "BUSY", code: "DASHBOARD_PATCH_LOCKED", error: "Dashboard sedang diproses proses lain." };
+  try {
+    const ss = getSS();
+    const sh = ss.getSheetByName("Dashboard");
+    if (!sh) return { success: false, code: "DASHBOARD_NOT_FOUND", error: "Sheet Dashboard tidak ditemukan" };
+    const data = getDashboardData();
+    if (!data || !data.success) return data || { success: false, error: "Data Dashboard kosong" };
+    if (sh.getMaxRows() < 140) sh.insertRowsAfter(sh.getMaxRows(), 140 - sh.getMaxRows());
+    if (sh.getMaxColumns() < 22) sh.insertColumnsAfter(sh.getMaxColumns(), 22 - sh.getMaxColumns());
+
+    sh.getRange("A2").setValue("Pantauan Stok & Aktivitas — Real Time | Update: " + (data.lastUpdate || data.generatedAt || new Date().toISOString()));
+    const total = Number(data.totalItemAktif || data.totalItem || 0);
+    const cards = [
+      ["TOTAL ITEM AKTIF", total, "item"],
+      ["KRITIS", Number(data.kritis || 0), percent_(data.kritis || 0, total) + "%"],
+      ["WASPADA", Number(data.waspada || 0), percent_(data.waspada || 0, total) + "%"],
+      ["AMAN", Number(data.aman || 0), percent_(data.aman || 0, total) + "%"]
+    ];
+    [["A6:C9"],["D6:F9"],["G6:I9"],["J6:L9"]].forEach(function(x, i) {
+      sh.getRange(x[0]).setValue(cards[i][0] + "\n\n" + cards[i][1] + " " + cards[i][2]);
+    });
+
+    const divRows = (data.statusPerDivisi || []).map(function(d) {
+      return [d.divisi, Number(d.total)||0, Number(d.aman)||0, Number(d.waspada)||0, Number(d.kritis)||0, percent_(d.kritis||0,d.total||0)/100];
+    });
+    sh.getRange(12,1,80,6).clearContent();
+    sh.getRange(12,1,1,6).setValues([["DIVISI","TOTAL ITEM","AMAN","WASPADA","KRITIS","% KRITIS"]]).setFontWeight("bold");
+    if (divRows.length) sh.getRange(13,1,divRows.length,6).setValues(divRows);
+    sh.getRange(13,2,80,4).setNumberFormat("#,##0").setHorizontalAlignment("center");
+    sh.getRange(13,6,80,1).setNumberFormat("0.0%").setHorizontalAlignment("center");
+
+    const hiddenDiv = [["DIVISI","AMAN","WASPADA","KRITIS"]].concat((data.statusPerDivisi || []).map(function(d) {
+      return [d.divisi,Number(d.aman)||0,Number(d.waspada)||0,Number(d.kritis)||0];
+    }));
+    sh.getRange(13,16,80,4).clearContent();
+    sh.getRange(13,16,hiddenDiv.length,4).setValues(hiddenDiv);
+    try { sh.hideColumns(16,4); } catch(e) {}
+    try { removeChartByTitle_(sh,"Status Stok per Divisi"); } catch(e) {}
+    try { renderDivisionBarChart_(sh,13,data); } catch(e) { console.error("PATCH chart divisi: "+e.message); }
+
+    const poNow = getStatusPO();
+    if (poNow && poNow.success) {
+      sh.getRange(12,21,4,2).setValues([
+        ["STATUS PO","QTY"],
+        ["SELESAI",Number(poNow.summary && poNow.summary.itemSelesai || 0)],
+        ["SEBAGIAN",Number(poNow.summary && poNow.summary.itemSebagian || 0)],
+        ["MENUNGGU",Number(poNow.summary && poNow.summary.itemMenunggu || 0)]
+      ]);
+      try { sh.hideColumns(21,2); } catch(e) {}
+      try { renderPODonutChart_(sh,12,"Status PO — Minggu Ini",poNow.summary||{},"Status PO — Minggu Ini"); } catch(e) { console.error("PATCH donut PO: "+e.message); }
+    }
+
+    let poSection;
+    try { poSection = refreshDashboardPOSection_({renderCharts:false,lightweight:true,_dashboardPatchDelegated:true}); }
+    catch(e) { poSection={success:false,error:String(e && e.message || e)}; }
+
+    updateLastUpdateTimestamp();
+    clearDataDirty_();
+    SpreadsheetApp.flush();
+    const stamp = new Date().toISOString();
+    PropertiesService.getScriptProperties().setProperty(DASHBOARD_SYNC_PATCH_LAST,stamp);
+    return {
+      success:true, patch:DASHBOARD_SYNC_PATCH_VERSION, mode:"SINGLE_DASHBOARD_SOURCE",
+      totalItem:total, expectedMaster:191, statusPerDivisi:data.statusPerDivisi||[],
+      poSection:poSection, updatedAt:stamp,
+      pwaApi:{getDashboard:true,getStatusPO:!!(poNow&&poNow.success),getAllStock:true,realtimeReadMode:"PWA polling reads current backend source"}
+    };
+  } finally { if(lock.hasLock()) lock.releaseLock(); }
+}
+
+function dashboardSyncPatchVerify() {
+  const ss=getSS(), sh=ss.getSheetByName("Dashboard"), all=getAllStock("ALL"), po=getStatusPO();
+  const triggers=ScriptApp.getProjectTriggers().map(function(t){return t.getHandlerFunction();});
+  return {success:true,patch:DASHBOARD_SYNC_PATCH_VERSION,enabled:isDashboardSyncPatchEnabled_(),dashboardExists:!!sh,
+    totalMaster:all&&all.success?all.count:null,expectedMaster:191,poApi:!!(po&&po.success),
+    conflictingTriggersStillPresent:triggers.filter(function(x){return x==="refreshAllData"||x==="refreshDashboard";}),
+    patchTriggers:triggers.filter(function(x){return x==="dashboardSyncPatchTick_";}),
+    lastSync:PropertiesService.getScriptProperties().getProperty(DASHBOARD_SYNC_PATCH_LAST),checkedAt:new Date().toISOString()};
 }
