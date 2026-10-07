@@ -173,15 +173,16 @@ export default function InputPage() {
     if (!text || !String(text).trim()) { setStatusBanner('Tidak ada teks untuk divalidasi.'); return; }
     setBusy(true); setStatusBanner(''); setAccuracy(null);
     try {
-      const detected = detectEntityFromText(text);
-      const Entity = detected || entity;
-      if (detected && detected !== entity) setEntity(detected);
+      // Entitas yang dipilih pengguna adalah sumber kebenaran.
+      // Teks paste/PDF/foto tidak boleh mengubah CV menjadi PT hanya karena
+      // nama supplier/header di dalam dokumen mengandung "PT".
+      const validationEntity = entity;
       const rows = parseLinesFromText(text, lines);
       if (!rows.length) { setStatusBanner('Tidak ada baris barang terdeteksi dari ' + sourceLabel + '.'); return; }
-      const validation = validateItems(rows, useEntity);
+      const validation = validateItems(rows, validationEntity);
       let stock = null;
-      try { stock = await fetchStock(useEntity, { allowDemo: false }); } catch (_) { stock = null; }
-      const matched = applyStockAwareFallback(validation.matched || [], useEntity, stock)
+      try { stock = await fetchStock(validationEntity, { allowDemo: false }); } catch (_) { stock = null; }
+      const matched = applyStockAwareFallback(validation.matched || [], validationEntity, stock)
         .filter((m) => !/\b\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4}\b/.test(String(m?.nameFromPdf || m?.rawName || '')))
         .filter((m) => !/\b(?:periode|period|minggu)\b.*\d{4}/i.test(String(m?.nameFromPdf || m?.rawName || '')));
       const amb = validation.ambiguous || [];
