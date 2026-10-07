@@ -174,7 +174,7 @@ export default function InputPage() {
     setBusy(true); setStatusBanner(''); setAccuracy(null);
     try {
       const detected = detectEntityFromText(text);
-      const useEntity = detected || entity;
+      const Entity = detected || entity;
       if (detected && detected !== entity) setEntity(detected);
       const rows = parseLinesFromText(text, lines);
       if (!rows.length) { setStatusBanner('Tidak ada baris barang terdeteksi dari ' + sourceLabel + '.'); return; }
