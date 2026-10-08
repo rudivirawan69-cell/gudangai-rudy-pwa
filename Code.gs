@@ -4107,6 +4107,25 @@ function dashboardSyncPatchDisableConflictingTriggers_() {
   return removed;
 }
 
+function dashboardLockChartLayout_() {
+  const sh = getSS().getSheetByName("Dashboard");
+  if (!sh) return { success: false, error: "Sheet Dashboard tidak ditemukan" };
+  let moved = 0;
+  sh.getCharts().forEach(function(chart) {
+    const title = String(chart.getOptions().get("title") || "");
+    let row = null, col = null;
+    if (title === "Status Stok per Divisi") { row = 10; col = 1; }
+    else if (title === "Status PO — Minggu Ini") { row = 10; col = 8; }
+    if (row == null) return;
+    try {
+      const updated = chart.modify().setPosition(row, col, 0, 0).build();
+      sh.updateChart(updated);
+      moved++;
+    } catch (err) { console.error("Chart anchor gagal diperbarui (" + title + "): " + err.message); }
+  });
+  return { success: true, chartsPositioned: moved, layout: "division=A10; poDonut=H10" };
+}
+
 function dashboardSyncPatchInstall() {
   const props = PropertiesService.getScriptProperties();
   props.setProperty(DASHBOARD_SYNC_PATCH_FLAG, "1");
@@ -4119,11 +4138,12 @@ function dashboardSyncPatchInstall() {
     ScriptApp.newTrigger("dashboardSyncPatchTick_").timeBased().everyMinutes(5).create();
     created = true;
   }
+  const layout = dashboardLockChartLayout_();
   const first = dashboardSyncPatchRefresh_({ reason: "install" });
   props.setProperty(DASHBOARD_SYNC_PATCH_LAST, new Date().toISOString());
   SpreadsheetApp.flush();
   return { success: !!(first && first.success), patch: DASHBOARD_SYNC_PATCH_VERSION, enabled: true,
-    removedConflictingTriggers: removed, createdTrigger: created, trigger: "dashboardSyncPatchTick_(5 menit)", dashboard: first };
+    removedConflictingTriggers: removed, createdTrigger: created, trigger: "dashboardSyncPatchTick_(5 menit)", layout: layout, dashboard: first };
 }
 
 function dashboardSyncPatchDisable() {
