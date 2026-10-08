@@ -865,7 +865,8 @@ export default function DashboardPage() {
         fetchRemoteTransactionHistory(31).catch(() => []),
       ]);
       const norm = normalizeStatusPO(res);
-      const synced = norm?.success ? mergeIncomingWithPO(norm, remoteHistory) : norm;
+      // Status PO hanya berasal dari endpoint backend getStatusPO agar tabel dan donat mengikuti Spreadsheet utama.
+      const synced = norm;
       if (synced?.success) {
         const signature = getPODataSignature(synced);
         if (signature !== poSignatureRef.current) {
