@@ -3,8 +3,9 @@ import { useBootstrapRevision } from '../hooks/useBootstrapRevision';
 import { useStock } from '../hooks/useStock';
 import {
   FileText, Trash2, Plus, Minus, Download, ShoppingCart,
-  CheckCircle, Snowflake, ChefHat,
+  CheckCircle, Snowflake, ChefHat, Loader2, CloudUpload,
 } from 'lucide-react';
+import { submitPO } from '../data/api';
 
 /** Fallback batas aman (dipakai jika live stockAman = 0). */
 const STOCK_AMAN = {
@@ -221,6 +222,8 @@ export default function POPage() {
   const [csGenerated, setCsGenerated] = useState(false);
   const [prodGenerated, setProdGenerated] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [savingPO, setSavingPO] = useState(false);
+  const [poSaveMessage, setPoSaveMessage] = useState('');
 
   const criticalCS = useMemo(() => {
     const cv = buildCritical(stockCV.items, 'CV', isCS);
@@ -285,13 +288,53 @@ export default function POPage() {
     }
   };
 
+  // Simpan PO langsung ke Spreadsheet utama melalui Apps Script.
+  // Tidak menggunakan clipboard sebagai tanda sukses; sukses hanya jika backend
+  // mengonfirmasi write dan read-back Purchase order.
   const copySheetOnly = async () => {
+    if (savingPO) return;
     const tsv = buildSheetTSV(editList);
+    if (!tsv.trim()) {
+      setPoSaveMessage('Tidak ada item dengan qty lebih dari 0.');
+      return;
+    }
+    const rows = tsv.split('\\n').map((line) => line.split('\\t'));
+    const items = rows.map((r) => ({
+      no: Number(r[0]) || 0,
+      nama: String(r[1] || '').trim(),
+      size: String(r[2] || '').trim(),
+      satuan: String(r[3] || 'Pack').trim(),
+      poCV: Number(r[4]) || 0,
+      poPT: Number(r[5]) || 0,
+      total: Number(r[6]) || 0,
+      tanggalKedatangan: String(r[7] || '').trim(),
+    })).filter((r) => r.nama && r.total > 0);
+    if (!items.length) {
+      setPoSaveMessage('PO tidak dikirim: qty seluruh item kosong atau nol.');
+      return;
+    }
+    setSavingPO(true);
+    setPoSaveMessage('Mengirim PO ke Spreadsheet utama…');
     try {
-      await navigator.clipboard?.writeText(tsv);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2500);
-    } catch (_) {}
+      const res = await submitPO({
+        items,
+        tanggal: new Date().toISOString().slice(0, 10),
+        noPO: 'PO-' + new Date().toISOString().slice(0, 10) + '-' + (tab === 'cs' ? 'CS' : 'PROD'),
+        deviceId: 'gudangai-rudy-pwa',
+      });
+      if (res?.success === true && (res.writeOccurred === true || res.status === 'APPLIED' || res.code === 'IDEMPOTENT_REPLAY')) {
+        setPoSaveMessage('Tersimpan dan dikonfirmasi backend: ' + (res.count ?? items.length) + ' item ke sheet ' + (res.sheet || 'purchase order') + '.');
+        setCopied(true);
+      } else {
+        setPoSaveMessage('BELUM TERKONFIRMASI — ' + (res?.error || res?.code || 'backend belum memastikan penulisan').toString());
+        setCopied(false);
+      }
+    } catch (err) {
+      setPoSaveMessage('Gagal mengirim PO: ' + (err?.message || 'kesalahan tidak diketahui'));
+      setCopied(false);
+    } finally {
+      setSavingPO(false);
+    }
   };
 
   const totalKurang = activeList.reduce((s, i) => s + i.kurang, 0);
@@ -414,6 +457,7 @@ export default function POPage() {
           <p className="text-[10px] text-slate-500 text-center mb-2">
             Dibuat oleh: <b>Rudi Virawan</b> · Mengetahui: <b>Heri Suprijanto</b>
           </p>
+          {poSaveMessage && <p role="status" className={`text-[11px] text-center mb-2 font-semibold ${poSaveMessage.startsWith('Tersimpan') ? 'text-emerald-700' : poSaveMessage.startsWith('BELUM') || poSaveMessage.startsWith('Gagal') ? 'text-red-700' : 'text-cyan-700'}`}>{poSaveMessage}</p>}
         </>
       )}
 
@@ -446,10 +490,11 @@ export default function POPage() {
                 <button
                   type="button"
                   onClick={copySheetOnly}
-                  className="flex-1 py-3 rounded-xl bg-cyan-600 text-white text-xs font-semibold flex items-center justify-center gap-1 shadow"
+                  disabled={savingPO || editList.length === 0}
+                  className="flex-1 py-3 rounded-xl bg-cyan-600 text-white text-xs font-semibold flex items-center justify-center gap-1 shadow disabled:opacity-60"
                 >
-                  <Download className="w-3.5 h-3.5" />
-                  {copied ? 'Tersalin!' : 'Salin ke Sheet'}
+                  {savingPO ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CloudUpload className="w-3.5 h-3.5" />}
+                  {savingPO ? 'Mengirim…' : copied ? 'Tersimpan' : 'Simpan ke Spreadsheet'}
                 </button>
               )}
               <button
