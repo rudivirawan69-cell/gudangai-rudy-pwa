@@ -2753,7 +2753,7 @@ function renderDivisionBarChart_(sheet, dataStartRow, data) {
     .setOption("height", 280)
     .setOption("hAxis", { title: "Jumlah Item", minValue: 0 })
     .setOption("vAxis", { title: "Divisi" })
-    .setPosition(10, 0, 0, 0)
+    .setPosition(10, 1, 0, 0)
     .build();
   sheet.insertChart(chart);
   return { rows: rows.length, chartTitle: "Status Stok per Divisi" };
@@ -4002,7 +4002,7 @@ function renderPODonutChart_(sheet, chartStartRow, title, summary, chartTitle) {
   removeChartByTitle_(sheet, chartTitle);
   const chart = sheet.newChart().setChartType(Charts.ChartType.PIE).addRange(sheet.getRange(chartStartRow, col, 4, 2))
     .setOption('title', title).setOption('pieHole', 0.55).setOption('legend', {position:'right'})
-    .setOption('width', 420).setOption('height', 240).setPosition(10, 7, 0, 0).build();
+    .setOption('width', 420).setOption('height', 240).setPosition(10, 8, 0, 0).build();
   sheet.insertChart(chart);
 }
 
