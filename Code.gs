@@ -2634,55 +2634,41 @@ function getSevenDayTrend_() {
 }
 
 function getPOStatus_() {
-  const result = {
+  // Satu sumber kebenaran untuk dashboard Spreadsheet dan PWA:
+  // getStatusPO membaca nama + total qty dari Purchase order, lalu merekonsiliasi
+  // Barang masuk berdasarkan nama barang dan PO aktif. Sheet Purchase order
+  // hanya dibaca oleh fungsi ini; tidak ada penulisan/format ulang ke sheet PO.
+  const empty = {
     aktif: { cv: 0, pt: 0, purchaseOrder: 0, total: 0, itemCount: 0 },
     konfirmasi: { cv: 0, pt: 0, purchaseOrder: 0, total: 0, itemCount: 0 }
   };
-  const sh = getSS().getSheetByName("purchase order");
-  if (!sh || sh.getLastRow() < PO_HEADER_ROW) return result;
+  let poData;
+  try { poData = getStatusPO(); }
+  catch (err) { console.error("getPOStatus_ → getStatusPO gagal: " + err.message); return empty; }
+  if (!poData || poData.success !== true || !Array.isArray(poData.items)) return empty;
 
-  // Format GudangAI standar: header tabel row 6, data mulai row 7,
-  // B=No, C=Nama, D=Size, E=Satuan, F=PO CV, G=PO PT, H=Total, I=Tanggal Kedatangan.
-  // Header-based agar tidak salah menjumlahkan nomor item/tanggal/angka lain.
-  const headerRow = PO_HEADER_ROW;
-  const lastCol = sh.getLastColumn();
-  const headers = sh.getRange(headerRow, 1, 1, lastCol).getDisplayValues()[0].map(function(v) {
-    return String(v || "").trim().toUpperCase();
-  });
-  const cCV = headers.findIndex(function(h) { return /PO\\s*CV|CV\\s*PO/.test(h); });
-  const cPT = headers.findIndex(function(h) { return /PO\\s*PT|PT\\s*PO/.test(h); });
-  const cTotal = headers.findIndex(function(h) { return /^TOTAL$|TOTAL\\s*PO/.test(h); });
-  const cStatus = headers.findIndex(function(h) { return /STATUS|KONFIRM/.test(h); });
-
-  if (cCV < 0 && cPT < 0 && cTotal < 0) {
-    return result;
-  }
-
-  const startRow = PO_DATA_START_ROW;
-  const numRows = sh.getLastRow() - startRow + 1;
-  if (numRows <= 0) return result;
-  const vals = sh.getRange(startRow, 1, numRows, lastCol).getDisplayValues();
-
-  vals.forEach(function(row) {
-    const hasItem = row.some(function(v) { return String(v || "").trim() !== ""; });
-    if (!hasItem) return;
-
-    const statusText = cStatus >= 0 ? String(row[cStatus] || "").toUpperCase() : "";
-    const confirmed = /KONFIRM|CONFIRM|SELESAI|APPROVED/.test(statusText);
-    const bucket = confirmed ? result.konfirmasi : result.aktif;
-
-    const cv = cCV >= 0 ? toNumber_(row[cCV]) : 0;
-    const pt = cPT >= 0 ? toNumber_(row[cPT]) : 0;
-    const total = cTotal >= 0 ? toNumber_(row[cTotal]) : (cv + pt);
+  const result = {
+    aktif: { cv: 0, pt: 0, purchaseOrder: 0, total: 0, itemCount: 0 },
+    konfirmasi: { cv: 0, pt: 0, purchaseOrder: 0, total: 0, itemCount: 0 },
+    noPO: poData.noPO || "",
+    weekKey: poData.weekKey || "",
+    summary: poData.summary || {}
+  };
+  poData.items.forEach(function(item) {
+    const total = Math.max(0, toNumber_(item.totalPO != null ? item.totalPO : item.qtyPO));
+    const cv = Math.max(0, toNumber_(item.poCV));
+    const pt = Math.max(0, toNumber_(item.poPT));
+    if (!String(item.nama || "").trim() || total <= 0) return;
+    const completed = String(item.status || "").toUpperCase() === "SELESAI";
+    const bucket = completed ? result.konfirmasi : result.aktif;
     bucket.cv += cv;
     bucket.pt += pt;
     bucket.total += total;
-    if (cv || pt || total) bucket.itemCount++;
+    bucket.purchaseOrder += total;
+    bucket.itemCount += 1;
   });
-
   return result;
 }
-
 
 // ============================================================
 // 14. DASHBOARD GOOGLE SHEETS — REAL-TIME RENDERER
