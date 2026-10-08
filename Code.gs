@@ -2753,7 +2753,7 @@ function renderDivisionBarChart_(sheet, dataStartRow, data) {
     .setOption("height", 280)
     .setOption("hAxis", { title: "Jumlah Item", minValue: 0 })
     .setOption("vAxis", { title: "Divisi" })
-    .setPosition(11, 8, 0, 0)
+    .setPosition(10, 0, 0, 0)
     .build();
   sheet.insertChart(chart);
   return { rows: rows.length, chartTitle: "Status Stok per Divisi" };
@@ -4002,7 +4002,7 @@ function renderPODonutChart_(sheet, chartStartRow, title, summary, chartTitle) {
   removeChartByTitle_(sheet, chartTitle);
   const chart = sheet.newChart().setChartType(Charts.ChartType.PIE).addRange(sheet.getRange(chartStartRow, col, 4, 2))
     .setOption('title', title).setOption('pieHole', 0.55).setOption('legend', {position:'right'})
-    .setOption('width', 420).setOption('height', 240).setPosition(chartStartRow, 8, 0, 0).build();
+    .setOption('width', 420).setOption('height', 240).setPosition(10, 7, 0, 0).build();
   sheet.insertChart(chart);
 }
 
@@ -4180,8 +4180,13 @@ function dashboardSyncPatchRefresh_(options) {
     sh.getRange(13,16,80,4).clearContent();
     sh.getRange(13,16,hiddenDiv.length,4).setValues(hiddenDiv);
     try { sh.hideColumns(16,4); } catch(e) {}
-    try { removeChartByTitle_(sh,"Status Stok per Divisi"); } catch(e) {}
-    try { renderDivisionBarChart_(sh,13,data); } catch(e) { console.error("PATCH chart divisi: "+e.message); }
+    // Tata letak terkunci: buat chart hanya jika belum ada. Refresh berkala
+    // cukup memperbarui range helper P:S; chart yang ada tidak dihapus/dibangun ulang.
+    let hasDivisionChart = false;
+    try { hasDivisionChart = sh.getCharts().some(function(c) { return String(c.getOptions().get("title") || "") === "Status Stok per Divisi"; }); } catch(e) {}
+    if (!hasDivisionChart) {
+      try { renderDivisionBarChart_(sh,13,data); } catch(e) { console.error("PATCH chart divisi: "+e.message); }
+    }
 
     const poNow = getStatusPO();
     if (poNow && poNow.success) {
@@ -4192,7 +4197,13 @@ function dashboardSyncPatchRefresh_(options) {
         ["MENUNGGU",Number(poNow.summary && poNow.summary.itemMenunggu || 0)]
       ]);
       try { sh.hideColumns(21,2); } catch(e) {}
-      try { renderPODonutChart_(sh,12,"Status PO — Minggu Ini",poNow.summary||{},"Status PO — Minggu Ini"); } catch(e) { console.error("PATCH donut PO: "+e.message); }
+      // Donut dibuat satu kali. Data helper U:V diperbarui setiap refresh,
+      // sehingga chart yang sudah ada tetap stabil dan tidak bergeser/bertumpuk.
+      let hasPODonut = false;
+      try { hasPODonut = sh.getCharts().some(function(c) { return String(c.getOptions().get("title") || "") === "Status PO — Minggu Ini"; }); } catch(e) {}
+      if (!hasPODonut) {
+        try { renderPODonutChart_(sh,12,"Status PO — Minggu Ini",poNow.summary||{},"Status PO — Minggu Ini"); } catch(e) { console.error("PATCH donut PO: "+e.message); }
+      }
     }
 
     let poSection;
