@@ -1,0 +1,32 @@
+name: Apply Status PO totalPO map (Dashboard only)
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'scripts/apply-po-status-map.mjs'
+      - '.github/workflows/apply-po-status-map.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+      - name: Apply surgical map
+        run: node scripts/apply-po-status-map.mjs
+      - name: Verify
+        run: grep -q 'totalPO' src/pages/DashboardPage.jsx && echo OK
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/pages/DashboardPage.jsx
+          if git diff --cached --quiet; then echo No changes; exit 0; fi
+          git commit -m "fix(dashboard): map totalPO from getStatusPO so Status PO aktif tampil"
+          git push origin HEAD:main
