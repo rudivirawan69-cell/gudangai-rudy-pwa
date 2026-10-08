@@ -298,7 +298,7 @@ export default function POPage() {
       setPoSaveMessage('Tidak ada item dengan qty lebih dari 0.');
       return;
     }
-    const rows = tsv.split('\\n').map((line) => line.split('\\t'));
+    const rows = tsv.split('\n').map((line) => line.split('\t'));
     const items = rows.map((r) => ({
       no: Number(r[0]) || 0,
       nama: String(r[1] || '').trim(),
