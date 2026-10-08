@@ -216,8 +216,14 @@ function normalizeStatusPO(raw) {
   const itemsRaw = raw.items || raw.data?.items || raw.list || [];
   const items = (Array.isArray(itemsRaw) ? itemsRaw : []).map((it, idx) => {
     const statusRaw = String(it.status || it.Status || it.statusPO || it.statusPo || '').trim();
-    const qtyPO = Number(it.qtyPO ?? it.qty ?? it.quantity ?? 0) || 0;
-    const qtyDatang = Number(it.qtyDatang ?? it.datang ?? it.received ?? it.qtyReceived ?? 0) || 0;
+    // Backend getStatusPO memakai totalPO / poCV+poPT (bukan qtyPO).
+    const qtyPO = Number(
+      it.qtyPO ?? it.totalPO ?? it.total ?? it.qty ?? it.quantity ??
+      ((Number(it.poCV) || 0) + (Number(it.poPT) || 0))
+    ) || 0;
+    const qtyDatang = Number(
+      it.qtyDatang ?? it.datang ?? it.received ?? it.qtyReceived ?? it.totalKonfirmasiQty ?? 0
+    ) || 0;
     let status = statusRaw || (qtyPO > 0 && qtyDatang >= qtyPO ? 'Selesai' : qtyDatang > 0 ? 'Sebagian' : 'Menunggu');
     const low = status.toLowerCase();
     if (low.includes('sebagian') || low.includes('progress') || low.includes('partial')) status = 'Sebagian';
@@ -229,12 +235,12 @@ function normalizeStatusPO(raw) {
       size: it.size || '',
       satuan: it.satuan || 'Pack',
       tglRencana: it.tglRencana || it.tglKedatangan || '',
-      qtyPO: Number(it.qtyPO ?? it.qty ?? 0) || 0,
-      qtyDatang: Number(it.qtyDatang ?? it.datang ?? 0) || 0,
+      qtyPO,
+      qtyDatang,
       status,
       id: it.id || it.itemId || it.clientItemId || `po-${idx}`,
     };
-  });
+  }).filter((it) => it.nama && it.nama !== '—' && it.qtyPO > 0);
   const summaryRaw = raw.summary || raw.data?.summary || {};
   let menunggu = Number(summaryRaw.itemMenunggu ?? summaryRaw.menunggu ?? 0) || 0;
   let sebagian = Number(summaryRaw.itemSebagian ?? summaryRaw.sebagian ?? 0) || 0;
