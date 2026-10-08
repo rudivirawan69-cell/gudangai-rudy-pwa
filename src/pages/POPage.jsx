@@ -486,17 +486,15 @@ export default function POPage() {
               >
                 Kembali
               </button>
-              {tab === 'cs' && (
-                <button
-                  type="button"
-                  onClick={copySheetOnly}
-                  disabled={savingPO || editList.length === 0}
-                  className="flex-1 py-3 rounded-xl bg-cyan-600 text-white text-xs font-semibold flex items-center justify-center gap-1 shadow disabled:opacity-60"
-                >
-                  {savingPO ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CloudUpload className="w-3.5 h-3.5" />}
-                  {savingPO ? 'Mengirim…' : copied ? 'Tersimpan' : 'Simpan ke Spreadsheet'}
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={copySheetOnly}
+                disabled={savingPO || editList.length === 0}
+                className="flex-1 py-3 rounded-xl bg-cyan-600 text-white text-xs font-semibold flex items-center justify-center gap-1 shadow disabled:opacity-60"
+              >
+                {savingPO ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CloudUpload className="w-3.5 h-3.5" />}
+                {savingPO ? 'Mengirim…' : copied ? 'Tersimpan' : 'Simpan ke Spreadsheet'}
+              </button>
               <button
                 type="button"
                 onClick={copyPO}
