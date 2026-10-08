@@ -1,0 +1,35 @@
+name: Apply Status PO visible (Dashboard only)
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'scripts/apply-po-status-visible.mjs'
+      - '.github/workflows/apply-po-status-visible.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+      - name: Apply
+        run: node scripts/apply-po-status-visible.mjs
+      - name: Verify
+        run: |
+          grep -q 'toQty' src/pages/DashboardPage.jsx
+          grep -q 'currentItems.length > 0' src/pages/DashboardPage.jsx
+          echo OK
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/pages/DashboardPage.jsx
+          if git diff --cached --quiet; then echo No changes; exit 0; fi
+          git commit -m "fix(dashboard): Status PO tampil — totalPO + week-split tidak mengosongkan list"
+          git push origin HEAD:main
