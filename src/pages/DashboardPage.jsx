@@ -211,40 +211,55 @@ function mergeIncomingWithPO(poData, history) {
 
 function normalizeStatusPO(raw) {
   if (!raw || typeof raw !== 'object') return null;
-  const ok = raw.success === true || raw.status === 'OK' || raw.status === 'ok' || raw.status === 'APPLIED';
-  if (!ok) return { success: false, error: raw.error || 'Gagal memuat Status PO' };
   const itemsRaw = raw.items || raw.data?.items || raw.list || [];
-  const items = (Array.isArray(itemsRaw) ? itemsRaw : []).map((it, idx) => {
+  const hasItems = Array.isArray(itemsRaw) && itemsRaw.length > 0;
+  const ok = raw.success === true || raw.status === 'OK' || raw.status === 'ok' || raw.status === 'APPLIED' || hasItems;
+  if (!ok) return { success: false, error: raw.error || raw.message || 'Gagal memuat Status PO' };
+
+  const toQty = (v) => {
+    if (typeof v === 'number' && Number.isFinite(v)) return v;
+    const s0 = String(v ?? '').trim();
+    if (!s0) return 0;
+    const normalized = s0.includes(',') && !s0.includes('.')
+      ? s0.replace(',', '.')
+      : s0.replace(/\./g, '').replace(',', '.');
+    const n = Number(normalized.replace(/[^0-9.-]/g, ''));
+    return Number.isFinite(n) ? n : 0;
+  };
+
+  const mapItem = (it, idx) => {
     const statusRaw = String(it.status || it.Status || it.statusPO || it.statusPo || '').trim();
-    // Backend getStatusPO memakai totalPO / poCV+poPT (bukan qtyPO).
-    const qtyPO = Number(
+    const qtyPO = toQty(
       it.qtyPO ?? it.totalPO ?? it.total ?? it.qty ?? it.quantity ??
-      ((Number(it.poCV) || 0) + (Number(it.poPT) || 0))
-    ) || 0;
-    const qtyDatang = Number(
-      it.qtyDatang ?? it.datang ?? it.received ?? it.qtyReceived ?? it.totalKonfirmasiQty ?? 0
-    ) || 0;
+      ((toQty(it.poCV) || 0) + (toQty(it.poPT) || 0))
+    );
+    const qtyDatang = toQty(it.qtyDatang ?? it.datang ?? it.received ?? it.qtyReceived ?? 0);
     let status = statusRaw || (qtyPO > 0 && qtyDatang >= qtyPO ? 'Selesai' : qtyDatang > 0 ? 'Sebagian' : 'Menunggu');
     const low = status.toLowerCase();
     if (low.includes('sebagian') || low.includes('progress') || low.includes('partial')) status = 'Sebagian';
     else if (low.includes('selesai') || low === 'datang' || low.includes('complete') || low.includes('received')) status = 'Selesai';
     else if (low.includes('belum') || low.includes('menunggu') || low.includes('pending') || low.includes('waiting')) status = 'Menunggu';
+    const nama = String(it.nama || it.Nama || it.name || '').trim();
     return {
       itemNo: it.itemNo || it.no || idx + 1,
-      nama: it.nama || it.Nama || it.name || '—',
+      nama: nama || '—',
       size: it.size || '',
       satuan: it.satuan || 'Pack',
-      tglRencana: it.tglRencana || it.tglKedatangan || '',
+      tglRencana: it.tglRencana || it.tglKedatangan || it.tanggalPO || '',
       qtyPO,
       qtyDatang,
       status,
-      id: it.id || it.itemId || it.clientItemId || `po-${idx}`,
+      id: it.id || it.itemId || it.clientItemId || ('po-' + idx),
     };
-  }).filter((it) => it.nama && it.nama !== '—' && it.qtyPO > 0);
+  };
+
+  let items = (Array.isArray(itemsRaw) ? itemsRaw : []).map(mapItem)
+    .filter((it) => it.nama && it.nama !== '—');
+
   const summaryRaw = raw.summary || raw.data?.summary || {};
-  let menunggu = Number(summaryRaw.itemMenunggu ?? summaryRaw.menunggu ?? 0) || 0;
-  let sebagian = Number(summaryRaw.itemSebagian ?? summaryRaw.sebagian ?? 0) || 0;
-  let selesai = Number(summaryRaw.itemSelesai ?? summaryRaw.selesai ?? 0) || 0;
+  let menunggu = toQty(summaryRaw.itemMenunggu ?? summaryRaw.menunggu ?? 0);
+  let sebagian = toQty(summaryRaw.itemSebagian ?? summaryRaw.sebagian ?? 0);
+  let selesai = toQty(summaryRaw.itemSelesai ?? summaryRaw.selesai ?? 0);
   if (items.length && menunggu + sebagian + selesai === 0) {
     for (const it of items) {
       if (it.status === 'Selesai') selesai += 1;
@@ -252,26 +267,17 @@ function normalizeStatusPO(raw) {
       else menunggu += 1;
     }
   }
-  const totalItem = Number(summaryRaw.totalItem ?? 0) || items.length || (menunggu + sebagian + selesai);
-  const previousRaw = raw.previousWeek || raw.previous || raw.lastWeek || raw.data?.previousWeek || null;
-  const legacyLastWeekItems = raw.lastWeekItems || raw.data?.lastWeekItems || [];
-  const legacyLastWeekKey = raw.lastWeekWeekKey || raw.data?.lastWeekWeekKey || '';
-  let previousWeek = previousRaw || (Array.isArray(legacyLastWeekItems) && legacyLastWeekItems.length
-    ? {
-        weekKey: legacyLastWeekKey,
-        items: legacyLastWeekItems.map((it, idx) => ({
-          itemNo: it.itemNo || it.no || idx + 1,
-          nama: it.nama || it.Nama || it.name || '—',
-          qtyPO: Number(it.qtyPO ?? it.qty ?? 0) || 0,
-          qtyDatang: Number(it.qtyDatang ?? it.datang ?? 0) || 0,
-          status: it.status || it.keterangan || 'Menunggu',
-        })),
-      }
-    : null);
 
-  // Backward-compatible client reconciliation: if the deployed Apps Script
-  // still returns one mixed PO list, split it by Monday-to-Sunday boundaries.
-  if (!previousWeek) {
+  const previousRaw = raw.previousWeek || raw.previous || raw.lastWeek || raw.data?.previousWeek || null;
+  let previousWeek = previousRaw && typeof previousRaw === 'object' ? {
+    weekKey: String(previousRaw.weekKey || previousRaw.week || ''),
+    noPO: previousRaw.noPO || '',
+    items: (Array.isArray(previousRaw.items) ? previousRaw.items : []).map(mapItem).filter((it) => it.nama && it.nama !== '—'),
+    summary: previousRaw.summary || null,
+  } : null;
+  if (previousWeek && !previousWeek.items.length) previousWeek = null;
+
+  if (!previousWeek && items.length) {
     const start = new Date();
     start.setHours(0, 0, 0, 0);
     const day = start.getDay();
@@ -280,37 +286,54 @@ function normalizeStatusPO(raw) {
     const nextStart = new Date(start); nextStart.setDate(nextStart.getDate() + 7);
     const toDate = (v) => {
       if (v instanceof Date && !Number.isNaN(v.getTime())) return v;
-      const s = String(v || '').trim();
-      const m = s.match(/^(\\d{4})-(\\d{1,2})-(\\d{1,2})$/);
-      return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : null;
+      const str = String(v || '').trim();
+      const m = str.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+      if (m) return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+      const t = Date.parse(str);
+      return Number.isFinite(t) ? new Date(t) : null;
     };
     const currentItems = [];
     const oldItems = [];
+    let dated = 0;
     for (const it of items) {
       const d = toDate(it.tglRencana);
-      if (d && d >= prevStart && d < start) oldItems.push(it);
-      else if (d && d >= start && d < nextStart) currentItems.push(it);
+      if (!d) continue;
+      dated += 1;
+      if (d >= prevStart && d < start) oldItems.push(it);
+      else if (d >= start && d < nextStart) currentItems.push(it);
     }
-    const makeSummary = (list) => list.reduce((s, it) => {
-      if (it.status === 'Selesai') s.itemSelesai++;
-      else if (it.status === 'Sebagian') s.itemSebagian++;
-      else s.itemMenunggu++;
-      return s;
-    }, { totalItem: list.length, itemMenunggu: 0, itemSebagian: 0, itemSelesai: 0 });
-    if (currentItems.length || oldItems.length) {
-      items.splice(0, items.length, ...currentItems);
-      const cs = makeSummary(items);
-      menunggu = cs.itemMenunggu; sebagian = cs.itemSebagian; selesai = cs.itemSelesai;
-      previousWeek = { weekKey: 'Minggu Lalu', items: oldItems, summary: makeSummary(oldItems) };
+    if (dated > 0 && currentItems.length > 0) {
+      items = currentItems;
+      menunggu = 0; sebagian = 0; selesai = 0;
+      for (const it of items) {
+        if (it.status === 'Selesai') selesai += 1;
+        else if (it.status === 'Sebagian') sebagian += 1;
+        else menunggu += 1;
+      }
+      if (oldItems.length) {
+        previousWeek = {
+          weekKey: 'Minggu Lalu',
+          items: oldItems,
+          summary: oldItems.reduce((acc, it) => {
+            if (it.status === 'Selesai') acc.itemSelesai += 1;
+            else if (it.status === 'Sebagian') acc.itemSebagian += 1;
+            else acc.itemMenunggu += 1;
+            acc.totalItem += 1;
+            return acc;
+          }, { totalItem: 0, itemMenunggu: 0, itemSebagian: 0, itemSelesai: 0 }),
+        };
+      }
     }
   }
-  const finalTotalItem = items.length || totalItem;
+
+  const finalTotalItem = items.length || toQty(summaryRaw.totalItem) || (menunggu + sebagian + selesai);
   return {
     success: true,
     noPO: raw.noPO || summaryRaw.noPO || '',
     weekKey: raw.weekKey || raw.week || raw.data?.weekKey || '',
     poStartDate: raw.poStartDate || raw.data?.poStartDate || '',
     poEndDate: raw.poEndDate || raw.data?.poEndDate || '',
+    tanggalPO: raw.tanggalPO || '',
     previousWeek,
     items,
     summary: {
@@ -320,6 +343,9 @@ function normalizeStatusPO(raw) {
       itemSelesai: selesai,
       totalAktif: menunggu + sebagian,
       totalKonfirmasi: selesai,
+      totalPOQty: toQty(summaryRaw.totalPOQty),
+      totalKonfirmasiQty: toQty(summaryRaw.totalKonfirmasiQty),
+      totalSisaQty: toQty(summaryRaw.totalSisaQty),
     },
   };
 }
@@ -855,7 +881,7 @@ export default function DashboardPage() {
     } catch (err) {
       if (!poDataRef.current) setPoError(err?.message || 'Gagal memuat Status PO');
     } finally {
-      if (!silent && !poDataRef.current) setPoLoading(false);
+      if (!silent) setPoLoading(false);
     }
   }, []);
 
