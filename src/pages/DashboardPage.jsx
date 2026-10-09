@@ -860,10 +860,7 @@ export default function DashboardPage() {
   const loadPO = useCallback(async ({ silent = false } = {}) => {
     if (!silent && !poDataRef.current) setPoLoading(true);
     try {
-      const [res, remoteHistory] = await Promise.all([
-        getStatusPO(),
-        fetchRemoteTransactionHistory(31).catch(() => []),
-      ]);
+      const res = await getStatusPO();
       const norm = normalizeStatusPO(res);
       // Status PO hanya berasal dari endpoint backend getStatusPO agar tabel dan donat mengikuti Spreadsheet utama.
       const synced = norm;
@@ -987,22 +984,19 @@ export default function DashboardPage() {
   const name = user?.name || user?.nama || 'Rudi';
 
   return (
-    <div className="px-3 pt-3 pb-24 space-y-3 max-w-lg mx-auto">
-      <div className="rounded-2xl bg-gradient-to-br from-cyan-50 via-white to-violet-50 border border-cyan-100 shadow-sm px-4 pt-5 pb-4">
+    <div className="dashboard-shell w-full max-w-6xl mx-auto px-3 sm:px-5 lg:px-7 pt-4 pb-24 space-y-4">
+      <div className="rounded-2xl bg-white border border-slate-200 shadow-sm px-4 sm:px-5 py-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
-            <p className="text-[12px] font-bold text-cyan-700 tracking-wide flex items-center gap-1.5">
-              <span className="text-base leading-none">{hour >= 4 && hour < 10 ? '🌅' : hour >= 10 && hour < 15 ? '☀️' : hour >= 15 && hour < 18 ? '🌤️' : '🌙'}</span>
-              {greeting}
-            </p>
-            <h1 className="text-2xl font-extrabold text-slate-900 truncate mt-1 leading-tight">{name} 👋</h1>
-            <p className="text-[13px] text-slate-700 mt-2 leading-snug font-medium">✨ {reminder}</p>
+            <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-cyan-700">{greeting} · GUDANG PUSAT</p>
+            <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 truncate mt-1 leading-tight">Dashboard Operasional</h1>
+            <p className="text-[13px] text-slate-600 mt-1 leading-snug">{reminder} <span className="text-slate-400">· {name}</span></p>
           </div>
           <button
             type="button"
             onClick={() => { refresh?.(); loadPO(); loadDashboardData(); }}
-            className="w-10 h-10 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-600 shrink-0 active:scale-95"
-            aria-label="Refresh"
+            className="w-10 h-10 rounded-xl bg-white border border-slate-200 hover:bg-slate-50 flex items-center justify-center text-slate-600 shrink-0 active:scale-95"
+            aria-label="Refresh data"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
@@ -1012,17 +1006,17 @@ export default function DashboardPage() {
         )}
       </div>
 
-      <section className="space-y-3" aria-label="Analisa beranda">
-        <div className="dashboard-panel rounded-2xl bg-white border border-slate-100 shadow-sm p-4">
+      <section className="grid grid-cols-1 xl:grid-cols-2 gap-4" aria-label="Ringkasan operasional">
+        <div className="dashboard-panel rounded-2xl bg-white border border-slate-200 shadow-sm p-4 min-w-0">
           <Movement7Days history={history} />
         </div>
-        <div className="dashboard-panel rounded-2xl bg-white border border-slate-100 shadow-sm p-4">
+        <div className="dashboard-panel rounded-2xl bg-white border border-slate-200 shadow-sm p-4 min-w-0">
           <StockComparison cv={stats.cv} pt={stats.pt} />
         </div>
-        <DashboardTotals totalItem={dashboardTotalItem} />
+        <div className="xl:col-span-2"><DashboardTotals totalItem={dashboardTotalItem} /></div>
       </section>
 
-      <div className="rounded-2xl bg-white border border-slate-100 shadow-sm p-4">
+      <div className="rounded-2xl bg-white border border-slate-200 shadow-sm p-4 sm:p-5">
         <div className="mb-3">
         <p className="text-sm font-extrabold text-slate-900">Status Stok per Divisi</p>
         <p className="text-[11px] text-slate-500 mt-0.5">Ringkas kondisi item di setiap divisi</p>
@@ -1036,6 +1030,7 @@ export default function DashboardPage() {
         <DivisionStatus3D items={allItems} sourceRows={dashboardData?.statusPerDivisi} />
       </div>
 
+      <section aria-label="Purchase Order" className="scroll-mt-4">
       <StatusPOCard
         data={poData}
         loading={poLoading}
@@ -1044,6 +1039,7 @@ export default function DashboardPage() {
         onConfirm={handleConfirm}
         confirmingId={confirmingId}
       />
+      </section>
 
       {pending > 0 && (
         <div className="rounded-xl bg-amber-50 border border-amber-100 px-3 py-2.5 text-[12px] text-amber-800 font-medium">
