@@ -3119,13 +3119,19 @@ function writePurchaseOrder_(body) {
     ensurePOHeader(sheet, PO_HEADER_ROW);
     updatePODateRow4(sheet);
     if (body.noPO || body.nomorPO || body.poNumber) writePONumberRow5_(sheet, body.noPO || body.nomorPO || body.poNumber);
-    clearPOTableData(sheet);
-
+    // Siapkan data baru sebelum membersihkan sisa tabel lama. Jika setValues gagal,
+    // PO yang sedang aktif tetap utuh dan tidak hilang akibat clearContent lebih dahulu.
     const rows = items.map(function(x) {
       return [x.no, x.nama, x.size, x.satuan, x.poCV, x.poPT, x.total, x.tanggalKedatangan || ""];
     });
     sheet.getRange(PO_DATA_START_ROW, PO_DATA_START_COL, rows.length, PO_DATA_NUM_COLS).setValues(rows);
     writeTouched = true;
+
+    // Hanya bersihkan baris sisa setelah data baru berhasil ditulis; footer di bawah tabel tidak disentuh.
+    const newEndRow = PO_DATA_START_ROW + rows.length - 1;
+    if (existingEnd > newEndRow) {
+      sheet.getRange(newEndRow + 1, PO_DATA_START_COL, existingEnd - newEndRow, PO_DATA_NUM_COLS).clearContent();
+    }
     const formatting = formatPOTable_(sheet, PO_DATA_START_ROW, rows.length, PO_HEADER_ROW);
     SpreadsheetApp.flush();
 
