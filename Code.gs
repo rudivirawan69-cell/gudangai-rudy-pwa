@@ -85,7 +85,7 @@ const PO_DATA_START_ROW = 6;
 const PO_DATA_START_COL = 2; // B
 const PO_DATA_NUM_COLS = 8; // B:I
 const PO_LOCK_TIMEOUT_MS = 20000;
-const PO_SECTION_CURRENT_ROW = 31;
+const PO_SECTION_CURRENT_ROW = 46;
 const PO_DASHBOARD_MAX_VISIBLE_ROWS = 50;
 const OPS_TITLE_ROWS = 2;
 const OPS_HEADER_ROW = 3;
@@ -4007,43 +4007,64 @@ function renderPODonutChart_(sheet, chartStartRow, title, summary, chartTitle) {
 }
 
 function refreshDashboardPOSection_(options) {
-  options = options || { renderCharts: true };
+  options = options || {};
   const ss = getSS();
   const sh = ss.getSheetByName('Dashboard');
   if (!sh) return { success: false, code: 'DASHBOARD_NOT_FOUND', error: 'Sheet Dashboard tidak ditemukan' };
-  if (isDashboardSyncPatchEnabled_() && options._dashboardPatchDelegated !== true) {
-    return dashboardSyncPatchRefresh_({ reason: "legacy-refreshDashboardPOSection" });
-  }
+
+  // Layout terkunci: dua tabel sejajar, keduanya mulai baris 46.
+  // Fungsi ini tidak mendelegasikan penulisan PO ke penulis dashboard lama.
   const data = getStatusPO();
-  if (!data.success) return data;
-  const previous = getPreviousPOStatus_();
-  const currentTop = PO_SECTION_CURRENT_ROW;
-  const currentCount = Math.min(PO_DASHBOARD_MAX_VISIBLE_ROWS, Math.max(1, (data.items || []).length));
-  const currentEnd = currentTop + 4 + currentCount - 1;
-  // Minggu Lalu WAJIB dimulai setelah blok Minggu Ini.
-  // Sebelumnya previousTop = currentTop (31), sehingga tabel Minggu Lalu
-  // menimpa tabel Minggu Ini.
-  const previousTop = currentEnd + 3;
+  if (!data || !data.success) return data || { success: false, code: 'PO_STATUS_EMPTY', error: 'Data Status PO tidak tersedia' };
+  const previous = getPreviousPOStatus_() || {};
+  const currentTop = 46;
+  const previousTop = 46;
+  const currentItems = data.items || [];
   const previousItems = previous.items || [];
-  const previousCount = Math.min(PO_DASHBOARD_MAX_VISIBLE_ROWS, Math.max(1, previousItems.length));
-  const previousEnd = previousTop + 4 + previousCount - 1;
-  const chartStart = previousEnd + 3;
-  const clearEnd = Math.max(chartStart + 20, Math.min(sh.getMaxRows(), chartStart + 80));
+  const currentCount = Math.min(PO_DASHBOARD_MAX_VISIBLE_ROWS, currentItems.length);
+  const previousCount = Math.min(PO_DASHBOARD_MAX_VISIBLE_ROWS, previousItems.length);
+  const maxVisible = Math.max(1, Math.min(PO_DASHBOARD_MAX_VISIBLE_ROWS, Math.max(currentItems.length, previousItems.length)));
+
+  if (sh.getMaxRows() < currentTop + 4 + maxVisible - 1) {
+    sh.insertRowsAfter(sh.getMaxRows(), currentTop + 4 + maxVisible - 1 - sh.getMaxRows());
+  }
+  if (sh.getMaxColumns() < 13) sh.insertColumnsAfter(sh.getMaxColumns(), 13 - sh.getMaxColumns());
+
+  // Area khusus PO hanya dibersihkan mulai baris 46; area lama baris 28–45
+  // dan sheet "purchase order" tidak disentuh oleh fungsi refresh ini.
+  const clearEnd = currentTop + 4 + PO_DASHBOARD_MAX_VISIBLE_ROWS - 1;
   dashboardClearPOArea_(sh, currentTop, clearEnd);
 
-  const currentSubtitle = 'Periode: ' + (data.tanggalPO || data.weekKey || '-') + ' • No PO: ' + (data.noPO || '-') + ' • Total Qty: ' + (data.summary.totalPOQty || 0) + ' • Datang: ' + (data.summary.totalKonfirmasiQty || 0) + ' • Belum Datang: ' + (data.summary.totalSisaQty || 0);
-  renderPOStatusBlock_(sh, currentTop, '4 STATUS PO MINGGU INI', currentSubtitle, data, data.items, 1);
+  const currentSubtitle = 'Periode: ' + (data.tanggalPO || data.weekKey || '-') +
+    ' • No PO: ' + (data.noPO || '-') +
+    ' • Total Qty: ' + (data.summary.totalPOQty || 0) +
+    ' • Datang: ' + (data.summary.totalKonfirmasiQty || 0) +
+    ' • Belum Datang: ' + (data.summary.totalSisaQty || 0);
+  renderPOStatusBlock_(sh, currentTop, 'STATUS PO MINGGU INI', currentSubtitle, data, currentItems, 1);
 
-  const previousSubtitle = previous.weekKey ? 'Periode: ' + previous.weekKey + ' • No PO: ' + (previous.noPO || '-') + ' • Data arsip minggu lalu' : 'Belum ada arsip PO minggu lalu.';
-  renderPOStatusBlock_(sh, previousTop, '5 STATUS PO MINGGU LALU', previousSubtitle, previous, previousItems, 8);
+  const previousSubtitle = previous.weekKey
+    ? 'Periode: ' + previous.weekKey + ' • No PO: ' + (previous.noPO || '-') + ' • Arsip minggu lalu'
+    : 'Belum ada arsip PO minggu lalu.';
+  renderPOStatusBlock_(sh, previousTop, 'STATUS PO MINGGU LALU', previousSubtitle, previous, previousItems, 8);
 
   [60, 300, 100, 100, 120, 120].forEach(function(w, i) { sh.setColumnWidth(i + 1, w); });
   [60, 300, 100, 100, 120, 120].forEach(function(w, i) { sh.setColumnWidth(i + 8, w); });
   sh.setColumnWidth(7, 24);
-  sh.getRange(currentTop, 1, Math.max(1, previousEnd - currentTop + 1), 13).setVerticalAlignment('middle');
-  return { success: true, status: 'OK', sectionCurrent: 4, sectionPrevious: 5, noPO: data.noPO,
-    currentCount: (data.items || []).length, previousCount: previousItems.length, chartStartRow: chartStart,
-    chartsRendered: options.renderCharts !== false, updatedAt: new Date().toISOString() };
+  sh.getRange(currentTop, 1, 4 + maxVisible, 13).setVerticalAlignment('middle');
+
+  return {
+    success: true,
+    status: 'OK',
+    sectionCurrent: 4,
+    sectionPrevious: 5,
+    currentTop: currentTop,
+    previousTop: previousTop,
+    currentCount: currentCount,
+    previousCount: previousCount,
+    sheet: 'Dashboard',
+    purchaseOrderWriteEnabled: true,
+    updatedAt: new Date().toISOString()
+  };
 }
 
 function getCurrentSyncVersions_() {
