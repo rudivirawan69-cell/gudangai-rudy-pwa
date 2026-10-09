@@ -222,6 +222,7 @@ export default function POPage() {
   const [csGenerated, setCsGenerated] = useState(false);
   const [prodGenerated, setProdGenerated] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [poSaved, setPoSaved] = useState(false);
   const [savingPO, setSavingPO] = useState(false);
   const [poSaveMessage, setPoSaveMessage] = useState('');
 
@@ -243,6 +244,9 @@ export default function POPage() {
   const editList = tab === 'cs' ? csItems : prodItems;
 
   const generate = () => {
+    setPoSaved(false);
+    setCopied(false);
+    setPoSaveMessage('');
     const src = tab === 'cs' ? criticalCS : criticalProd;
     const mapped = src.map((i) => ({
       kode: i.kode,
@@ -266,12 +270,14 @@ export default function POPage() {
   };
 
   const onUpdateItem = (item, patch) => {
+    setPoSaved(false);
     const setter = tab === 'cs' ? setCsItems : setProdItems;
     setter((p) => p.map((i) => (
       i.kode === item.kode && i.entity === item.entity ? { ...i, ...patch } : i
     )));
   };
   const onRemoveItem = (item) => {
+    setPoSaved(false);
     const setter = tab === 'cs' ? setCsItems : setProdItems;
     setter((p) => p.filter((i) => !(i.kode === item.kode && i.entity === item.entity)));
   };
@@ -280,7 +286,8 @@ export default function POPage() {
     const title = tab === 'cs' ? 'DIVISI CS (Cold Storage)' : 'TEAM PRODUKSI';
     const text = buildReadablePO(editList, title);
     try {
-      await navigator.clipboard?.writeText(text);
+      if (!navigator.clipboard?.writeText) throw new Error('Clipboard tidak tersedia di browser ini.');
+      await navigator.clipboard.writeText(text);
       setCopied(true);
       setTimeout(() => setCopied(false), 2500);
     } catch (_) {
@@ -324,13 +331,16 @@ export default function POPage() {
       });
       if (res?.success === true && (res.writeOccurred === true || res.status === 'APPLIED' || res.code === 'IDEMPOTENT_REPLAY')) {
         setPoSaveMessage('Tersimpan dan dikonfirmasi backend: ' + (res.count ?? items.length) + ' item ke sheet ' + (res.sheet || 'purchase order') + '.');
-        setCopied(true);
+        setPoSaved(true);
+        setCopied(false);
       } else {
         setPoSaveMessage('BELUM TERKONFIRMASI — ' + (res?.error || res?.code || 'backend belum memastikan penulisan').toString());
+        setPoSaved(false);
         setCopied(false);
       }
     } catch (err) {
       setPoSaveMessage('Gagal mengirim PO: ' + (err?.message || 'kesalahan tidak diketahui'));
+      setPoSaved(false);
       setCopied(false);
     } finally {
       setSavingPO(false);
@@ -493,7 +503,7 @@ export default function POPage() {
                 className="flex-1 py-3 rounded-xl bg-cyan-600 text-white text-xs font-semibold flex items-center justify-center gap-1 shadow disabled:opacity-60"
               >
                 {savingPO ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CloudUpload className="w-3.5 h-3.5" />}
-                {savingPO ? 'Mengirim…' : copied ? 'Tersimpan' : 'Simpan ke Spreadsheet'}
+                {savingPO ? 'Mengirim…' : poSaved ? 'Tersimpan ✓' : 'Simpan ke Spreadsheet'}
               </button>
               <button
                 type="button"
