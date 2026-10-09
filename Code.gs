@@ -4128,6 +4128,7 @@ function dashboardLockChartLayout_() {
 
 function dashboardSyncPatchInstall() {
   const props = PropertiesService.getScriptProperties();
+  if (props.getProperty(DASHBOARD_LAYOUT_LOCK_KEY) !== "1") dashboardApplyProfessionalLayoutOnce_();
   props.setProperty(DASHBOARD_SYNC_PATCH_FLAG, "1");
   const removed = dashboardSyncPatchDisableConflictingTriggers_();
   let created = false;
@@ -4158,6 +4159,96 @@ function dashboardSyncPatchDisable() {
 function dashboardSyncPatchTick_() {
   if (!isDashboardSyncPatchEnabled_()) return { success: true, skipped: true, reason: "patch disabled" };
   return dashboardSyncPatchRefresh_({ reason: "scheduled" });
+}
+
+
+/**
+ * Dashboard layout lock v1.
+ * Fungsi ini hanya menata sheet Dashboard satu kali; tidak menyentuh sheet stok,
+ * Purchase order, atau sheet transaksi. Refresh rutin hanya mengganti nilai sel.
+ */
+const DASHBOARD_LAYOUT_LOCK_KEY = "GUDANGAI_DASHBOARD_LAYOUT_LOCK_V1";
+
+function dashboardApplyProfessionalLayoutOnce_() {
+  const ss = getSS();
+  const sh = ss.getSheetByName("Dashboard");
+  if (!sh) return { success: false, code: "DASHBOARD_NOT_FOUND", error: "Sheet Dashboard tidak ditemukan" };
+  if (sh.getMaxRows() < 145) sh.insertRowsAfter(sh.getMaxRows(), 145 - sh.getMaxRows());
+  if (sh.getMaxColumns() < 22) sh.insertColumnsAfter(sh.getMaxColumns(), 22 - sh.getMaxColumns());
+
+  // Area PO dibereskan satu kali saja. Chart dan helper chart di baris atas tetap utuh.
+  const area = sh.getRange(31, 1, 110, 13);
+  area.breakApart();
+  area.clearContent();
+  area.setFontFamily("Arial").setFontSize(10).setFontColor("#17324D").setVerticalAlignment("middle");
+  sh.getRange("A31:F31").merge().setValue("STATUS PO MINGGU INI")
+    .setBackground("#1F4E79").setFontColor("#FFFFFF").setFontWeight("bold").setFontSize(12);
+  sh.getRange("A32:F32").merge().setBackground("#D9EAF7").setWrap(true).setFontSize(9);
+  sh.getRange("H87:M87").merge().setValue("STATUS PO MINGGU LALU")
+    .setBackground("#1F4E79").setFontColor("#FFFFFF").setFontWeight("bold").setFontSize(12);
+  sh.getRange("H88:M88").merge().setBackground("#D9EAF7").setWrap(true).setFontSize(9);
+
+  const header = [["NO", "NAMA BARANG", "TOTAL QTY", "DATANG", "BELUM DATANG", "STATUS PO"]];
+  sh.getRange(34, 1, 1, 6).setValues(header).setBackground("#1F4E79").setFontColor("#FFFFFF").setFontWeight("bold").setHorizontalAlignment("center").setWrap(true);
+  sh.getRange(90, 8, 1, 6).setValues(header).setBackground("#1F4E79").setFontColor("#FFFFFF").setFontWeight("bold").setHorizontalAlignment("center").setWrap(true);
+  sh.getRange(35, 1, 50, 6).setBorder(true, true, true, true, true, true, "#B7C9D6", SpreadsheetApp.BorderStyle.SOLID);
+  sh.getRange(91, 8, 50, 6).setBorder(true, true, true, true, true, true, "#B7C9D6", SpreadsheetApp.BorderStyle.SOLID);
+  sh.getRange(35, 3, 50, 3).setHorizontalAlignment("center").setNumberFormat("#,##0");
+  sh.getRange(91, 10, 50, 3).setHorizontalAlignment("center").setNumberFormat("#,##0");
+  for (let i = 0; i < 50; i++) {
+    const bg = i % 2 === 0 ? "#EAF2F8" : "#FFFFFF";
+    sh.getRange(35 + i, 1, 1, 6).setBackground(bg);
+    sh.getRange(91 + i, 8, 1, 6).setBackground(bg);
+  }
+  [55, 290, 100, 90, 120, 125].forEach(function(w, i) { sh.setColumnWidth(i + 1, w); });
+  [24, 55, 290, 100, 90, 120, 125].forEach(function(w, i) { sh.setColumnWidth(i + 7, w); });
+  sh.setRowHeight(31, 28); sh.setRowHeight(32, 28); sh.setRowHeight(34, 30);
+  sh.setRowHeight(87, 28); sh.setRowHeight(88, 28); sh.setRowHeight(90, 30);
+  sh.setFrozenRows(3);
+  sh.getRange("A1").setNote("Tata letak Dashboard GudangAI dikunci. Refresh rutin hanya memperbarui data; jangan hapus atau buat ulang chart.");
+  PropertiesService.getScriptProperties().setProperty(DASHBOARD_LAYOUT_LOCK_KEY, "1");
+  return { success: true, layout: "LOCKED_V1", currentPO: "A31:F84", previousPO: "H87:M140" };
+}
+
+function dashboardRefreshPOSectionLight_() {
+  const ss = getSS();
+  const sh = ss.getSheetByName("Dashboard");
+  if (!sh) return { success: false, code: "DASHBOARD_NOT_FOUND" };
+  const current = getStatusPO();
+  if (!current || current.success !== true) return current || { success: false, error: "Status PO tidak tersedia" };
+  const previous = getPreviousPOStatus_() || {};
+  const currentItems = (current.items || []).slice(0, 50);
+  const previousItems = (previous.items || []).slice(0, 50);
+  const summary = current.summary || {};
+  const currentSubtitle = "Periode: " + (current.tanggalPO || current.weekKey || "-") +
+    " | No PO: " + (current.noPO || "-") +
+    " | Total Qty: " + (summary.totalPOQty || 0) +
+    " | Datang: " + (summary.totalKonfirmasiQty || 0) +
+    " | Belum: " + (summary.totalSisaQty || 0);
+  const previousSubtitle = (previous.weekKey ? "Periode: " + previous.weekKey + " | No PO: " + (previous.noPO || "-") : "Belum ada arsip PO minggu lalu.") +
+    " | Sumber: arsip status PO sebelumnya";
+
+  sh.getRange("A31").setValue("STATUS PO MINGGU INI");
+  sh.getRange("A32").setValue(currentSubtitle);
+  sh.getRange("H87").setValue("STATUS PO MINGGU LALU");
+  sh.getRange("H88").setValue(previousSubtitle);
+  const toRow = function(items) {
+    const rows = items.map(function(x) {
+      const total = Number(x.totalPO || x.qtyPO || 0);
+      const datang = Number(x.qtyDatang || 0);
+      return [x.no || x.itemNo || "", x.nama || "", total, datang,
+        x.qtyBelumDatang != null ? Number(x.qtyBelumDatang) : Math.max(0, total - datang),
+        String(x.status || "MENUNGGU").toUpperCase()];
+    });
+    while (rows.length < 50) rows.push(["", "", "", "", "", ""]);
+    return rows;
+  };
+  // 50x6 fixed writes: data only; no merge, format, chart, row or column rebuild.
+  sh.getRange(35, 1, 50, 6).setValues(toRow(currentItems));
+  sh.getRange(91, 8, 50, 6).setValues(toRow(previousItems));
+  SpreadsheetApp.flush();
+  return { success: true, status: "OK", currentCount: (current.items || []).length,
+    previousCount: (previous.items || []).length, layout: "LOCKED_V1", mode: "DATA_ONLY_REFRESH" };
 }
 
 function dashboardSyncPatchRefresh_(options) {
@@ -4227,8 +4318,12 @@ function dashboardSyncPatchRefresh_(options) {
     }
 
     let poSection;
-    try { poSection = refreshDashboardPOSection_({renderCharts:false,lightweight:true,_dashboardPatchDelegated:true}); }
-    catch(e) { poSection={success:false,error:String(e && e.message || e)}; }
+    try {
+      if (PropertiesService.getScriptProperties().getProperty(DASHBOARD_LAYOUT_LOCK_KEY) !== "1") {
+        poSection = dashboardApplyProfessionalLayoutOnce_();
+      }
+      poSection = dashboardRefreshPOSectionLight_();
+    } catch(e) { poSection={success:false,error:String(e && e.message || e)}; }
 
     updateLastUpdateTimestamp();
     clearDataDirty_();
