@@ -4126,12 +4126,22 @@ function isDashboardSyncPatchEnabled_() {
 }
 
 function dashboardSyncPatchDisableConflictingTriggers_() {
+  // Nonaktifkan trigger lama yang berpotensi menjalankan rebuild Dashboard
+  // dan menulis ulang blok lama. Jangan menghapus weeklyPOAutomation karena
+  // fungsi itu membuat PO; penulisan Status PO-nya sudah dipusatkan ke baris 46.
   const conflicting = ["refreshAllData", "refreshDashboard"];
   let removed = 0;
+  const kept = [];
   ScriptApp.getProjectTriggers().forEach(function(t) {
-    if (conflicting.indexOf(t.getHandlerFunction()) >= 0) { ScriptApp.deleteTrigger(t); removed++; }
+    const handler = t.getHandlerFunction();
+    if (conflicting.indexOf(handler) >= 0) {
+      ScriptApp.deleteTrigger(t);
+      removed++;
+    } else {
+      kept.push(handler);
+    }
   });
-  return removed;
+  return { removed: removed, kept: kept };
 }
 
 function dashboardLockChartLayout_() {
@@ -4236,8 +4246,9 @@ function dashboardApplyProfessionalLayoutOnce_() {
   return { success: true, layout: "LOCKED_ROW46", currentPO: "A46:F99", previousPO: "H46:M99" };
 }
 function dashboardRefreshPOSectionLight_() {
-  // Semua refresh PO diarahkan ke satu penulis yang dikunci mulai baris 46.
-  // Tidak ada lagi penulisan data PO ke A31/F35 atau H87/M91.
+  // Satu-satunya penulis tabel Status PO Dashboard.
+  // Zona baris 28–45 adalah milik tabel kritis dan tidak boleh disentuh.
+  // Minggu Ini: A46:F99; Minggu Lalu: H46:M99.
   return refreshDashboardPOSection_({ renderCharts: false, lightweight: true });
 }
 function dashboardSyncPatchRefresh_(options) {
