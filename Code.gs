@@ -4131,17 +4131,15 @@ function dashboardSyncPatchDisableConflictingTriggers_() {
   // fungsi itu membuat PO; penulisan Status PO-nya sudah dipusatkan ke baris 46.
   const conflicting = ["refreshAllData", "refreshDashboard"];
   let removed = 0;
-  const kept = [];
   ScriptApp.getProjectTriggers().forEach(function(t) {
     const handler = t.getHandlerFunction();
     if (conflicting.indexOf(handler) >= 0) {
       ScriptApp.deleteTrigger(t);
       removed++;
-    } else {
-      kept.push(handler);
+    }
     }
   });
-  return { removed: removed, kept: kept };
+  return removed;
 }
 
 function dashboardLockChartLayout_() {
