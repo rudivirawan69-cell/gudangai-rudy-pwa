@@ -7,6 +7,7 @@ import {
 import { DIVISIONS } from '../data/master';
 import {
   AlertTriangle, RefreshCw, FileText, Package, Users, Boxes, ShieldAlert, CheckCircle2, AlertCircle, X,
+  CalendarDays, CalendarClock, ClipboardCheck, FilePlus2, Mail, Clock3, Layers3, ArrowUpRight,
 } from 'lucide-react';
 
 function classifyItem(it) {
@@ -17,6 +18,28 @@ function classifyItem(it) {
   if (stok < 10) return 'kritis';
   if (stok < 20) return 'waspada';
   return 'aman';
+}
+
+function formatSpreadsheetTimestamp(value) {
+  if (value === undefined || value === null || value === '') return 'Belum dikirim oleh API spreadsheet';
+  let milliseconds;
+  if (value instanceof Date) milliseconds = value.getTime();
+  else if (typeof value === 'number') {
+    if (value >= 1e12) milliseconds = value;
+    else if (value >= 1e9) milliseconds = value * 1000;
+    else return String(value);
+  } else {
+    milliseconds = Date.parse(String(value));
+  }
+  if (!Number.isFinite(milliseconds)) return String(value);
+  try {
+    return `${new Intl.DateTimeFormat('id-ID', {
+      day: '2-digit', month: 'short', year: 'numeric',
+      hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: 'Asia/Jakarta',
+    }).format(new Date(milliseconds))} WIB`;
+  } catch (_) {
+    return new Date(milliseconds).toLocaleString('id-ID');
+  }
 }
 
 function RingChart({ pct, color = '#ef4444', size = 52, stroke = 6 }) {
@@ -131,7 +154,7 @@ function DivisionStatus3D({ items, sourceRows }) {
   }
 
   return (
-    <div className="space-y-3">
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
       {rows.map((r) => {
         const kritisPct = r.total ? Math.round((r.kritis / r.total) * 100) : 0;
         const aPct = r.total ? (r.aman / r.total) * 100 : 0;
@@ -139,9 +162,9 @@ function DivisionStatus3D({ items, sourceRows }) {
         const kPct = r.total ? (r.kritis / r.total) * 100 : 0;
         const ringColor = kritisPct >= 50 ? '#ef4444' : kritisPct >= 25 ? '#f59e0b' : '#10b981';
         return (
-          <div key={r.divisi} className="flex items-center gap-3">
+          <div key={r.divisi} className="division-status-card rounded-xl border border-slate-100 bg-white/90 px-3 py-3 flex items-center gap-3 min-w-0">
             <div className="relative shrink-0">
-              <RingChart pct={kritisPct || 1} color={ringColor} size={52} stroke={6} />
+              <RingChart pct={kritisPct || 1} color={ringColor} size={44} stroke={5} />
               <span className="absolute inset-0 flex items-center justify-center text-[11px] font-extrabold text-slate-800 tabular-nums">
                 {kritisPct}%
               </span>
@@ -523,16 +546,59 @@ function DashboardTotals({ totalItem }) {
   );
 }
 
-function StatusPOCard({ data, loading, error, onRefresh, onConfirm, confirmingId }) {
+function POQuickActions({ onNavigate, onSelect, activeView, currentCount = 0, previousCount = 0, confirmCount = 0 }) {
+  const actions = [
+    { id: 'generate', title: 'PO', subtitle: 'Generate dan simpan PO', Icon: FilePlus2, count: null, action: () => onNavigate?.('po') },
+    { id: 'current', title: 'Status PO Minggu Ini', subtitle: 'Periode berjalan', Icon: CalendarDays, count: currentCount, action: () => onSelect?.('current') },
+    { id: 'previous', title: 'Status PO Minggu Lalu', subtitle: 'Periode sebelumnya', Icon: CalendarClock, count: previousCount, action: () => onSelect?.('previous') },
+    { id: 'confirm', title: 'Konfirmasi PO', subtitle: 'Kedatangan yang perlu dicatat', Icon: ClipboardCheck, count: confirmCount, action: () => onSelect?.('confirm') },
+  ];
+  return (
+    <div className="po-shortcuts-grid grid grid-cols-2 sm:grid-cols-4 gap-2" aria-label="Akses cepat PO">
+      {actions.map(({ id, title, subtitle, Icon, count, action }) => {
+        const selected = id !== 'generate' && activeView === id;
+        return (
+          <button
+            key={id}
+            type="button"
+            onClick={action}
+            aria-pressed={id === 'generate' ? undefined : selected}
+            className={`po-shortcut dashboard-3d-card ${selected ? 'is-selected' : ''}`}
+          >
+            <span className={`po-shortcut-icon po-shortcut-icon-${id}`}><Icon className="h-5 w-5" aria-hidden="true" /></span>
+            <span className="po-shortcut-copy">
+              <span className="po-shortcut-title">{title}</span>
+              <span className="po-shortcut-subtitle">{subtitle}</span>
+            </span>
+            <span className="po-shortcut-footer">
+              {count !== null ? <span className="po-shortcut-count tabular-nums">{count} item</span> : <span className="po-shortcut-count">Buka</span>}
+              <ArrowUpRight className="h-4 w-4 shrink-0" aria-hidden="true" />
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function StatusPOCard({ data, loading, error, onRefresh, onConfirm, confirmingId, onNavigate }) {
   const [arrivalItem, setArrivalItem] = useState(null);
   const [arrivalQty, setArrivalQty] = useState('');
   const [arrivalError, setArrivalError] = useState('');
   const [arrivalSaving, setArrivalSaving] = useState(false);
+  const [arrivalTargetNoPO, setArrivalTargetNoPO] = useState('');
+  const [activePOView, setActivePOView] = useState('current');
+  const sourceItems = Array.isArray(data?.items) ? data.items : [];
+  const previousSnapshot = data?.previousWeek || data?.previous || data?.lastWeek || null;
+  const previousItemsSnapshot = Array.isArray(previousSnapshot?.items) ? previousSnapshot.items : [];
 
-  const openArrivalCart = (item) => {
+  const openArrivalCart = (item, targetNoPO = data?.noPO) => {
     setArrivalItem(item);
     setArrivalQty('');
     setArrivalError('');
+    setArrivalTargetNoPO(String(targetNoPO || ''));
+    const cvQty = Number(item?.poCV) || 0;
+    const ptQty = Number(item?.poPT) || 0;
   };
 
   const closeArrivalCart = () => {
@@ -540,10 +606,17 @@ function StatusPOCard({ data, loading, error, onRefresh, onConfirm, confirmingId
     setArrivalItem(null);
     setArrivalQty('');
     setArrivalError('');
+    setArrivalTargetNoPO('');
   };
 
   const submitArrivalCart = async () => {
     if (!arrivalItem) return;
+    const hasCV = (Number(arrivalItem.poCV) || 0) > 0;
+    const hasPT = (Number(arrivalItem.poPT) || 0) > 0;
+    if (hasCV && hasPT) {
+      setArrivalError('Item ini memiliki PO CV dan PT sekaligus. Konfirmasi dipause sampai backend menyediakan sisa qty per entitas agar tidak salah mencatat stok.');
+      return;
+    }
     const qty = Number(arrivalQty);
     const qtyPO = Number(arrivalItem.qtyPO) || 0;
     const alreadyArrived = Math.max(0, Number(arrivalItem.qtyDatang) || 0);
@@ -565,9 +638,15 @@ function StatusPOCard({ data, loading, error, onRefresh, onConfirm, confirmingId
     try {
       const projectedTotal = alreadyArrived + qty;
       const status = projectedTotal >= qtyPO ? 'Selesai' : 'Sebagian';
-      const ok = await onConfirm?.(arrivalItem, status, qty);
-      if (ok) closeArrivalCart();
-      else setArrivalError('Gagal menyimpan kedatangan. Periksa koneksi/API.');
+      const selectedEntity = hasPT ? 'PT' : 'CV';
+      const selectedCode = selectedEntity === 'PT' ? arrivalItem.kodePT : arrivalItem.kodeCV;
+      const ok = await onConfirm?.(arrivalItem, status, qty, arrivalTargetNoPO, selectedEntity, selectedCode);
+      if (ok) {
+        setArrivalItem(null);
+        setArrivalQty('');
+        setArrivalError('');
+        setArrivalTargetNoPO('');
+      } else setArrivalError('Gagal menyimpan kedatangan. Periksa koneksi/API.');
     } catch (err) {
       setArrivalError(err?.message || 'Gagal menyimpan kedatangan.');
     } finally {
@@ -588,6 +667,7 @@ function StatusPOCard({ data, loading, error, onRefresh, onConfirm, confirmingId
           </div>
         </div>
         <div className="h-28 rounded-xl bg-slate-50 animate-pulse" />
+        <POQuickActions onNavigate={onNavigate} onSelect={setActivePOView} activeView={activePOView} />
       </div>
     );
   }
@@ -605,17 +685,26 @@ function StatusPOCard({ data, loading, error, onRefresh, onConfirm, confirmingId
           <button type="button" onClick={onRefresh} className="text-[11px] text-cyan-700 font-semibold">Muat ulang</button>
         </div>
         <p className="text-[12px] text-slate-500">{error || 'Belum ada data PO aktif. Pastikan API Secret di Atur.'}</p>
+        <POQuickActions onNavigate={onNavigate} onSelect={setActivePOView} activeView={activePOView} />
       </div>
     );
   }
 
   const summary = data.summary || {};
-  const items = data.items || [];
+  const items = sourceItems;
+  const previousItems = previousItemsSnapshot;
   const totalItem = summary.totalItem || 0;
   const menunggu = summary.itemMenunggu || 0;
   const sebagian = summary.itemSebagian || 0;
   const selesai = summary.itemSelesai || 0;
   const pct = (n) => (totalItem > 0 ? Math.round((n / totalItem) * 1000) / 10 : 0);
+  const visibleItems = activePOView === 'previous'
+    ? previousItems
+    : activePOView === 'confirm'
+      ? items.filter((it) => it.status !== 'Selesai')
+      : items;
+  const targetNoPO = activePOView === 'previous' ? previousSnapshot?.noPO : data.noPO;
+  const canConfirmTarget = activePOView !== 'previous' && Boolean(targetNoPO);
 
   return (
     <div className="dashboard-po-card rounded-2xl bg-white border border-slate-100 shadow-sm p-4 space-y-4">
@@ -661,100 +750,158 @@ function StatusPOCard({ data, loading, error, onRefresh, onConfirm, confirmingId
         </div>
       </div>
 
-      {items.length > 0 && (
-        <div className="space-y-0 divide-y divide-slate-100">
-          {items.map((it, idx) => {
-            const badge =
-              it.status === 'Selesai'
-                ? 'bg-emerald-50 text-emerald-700'
-                : it.status === 'Sebagian'
-                  ? 'bg-amber-50 text-amber-700'
-                  : 'bg-slate-50 text-slate-600';
-            const barPct = it.qtyPO > 0 ? Math.min(100, Math.round((it.qtyDatang / it.qtyPO) * 100)) : 0;
-            const isBusy = confirmingId === it.id;
-            return (
-              <div key={it.id || idx} className="py-3 first:pt-0">
-                <div className="flex items-start justify-between gap-2 mb-1.5">
-                  <div className="min-w-0">
-                    <p className="text-[13px] font-bold text-slate-800 truncate">
-                      <span className="text-slate-400 font-semibold mr-1">#{String(it.itemNo || idx + 1).padStart(2, '0')}</span>
-                      {it.nama}
-                    </p>
-                    <p className="text-[11px] text-slate-500">{it.satuan}{it.size ? ` · ${it.size}` : ''} · {it.qtyDatang}/{it.qtyPO}</p>
+      <POQuickActions
+        onNavigate={onNavigate}
+        onSelect={setActivePOView}
+        activeView={activePOView}
+        currentCount={items.length}
+        previousCount={previousItems.length}
+        confirmCount={items.filter((it) => it.status !== 'Selesai').length}
+      />
+
+      <div id="po-detail-list" className="space-y-3 scroll-mt-24">
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <h4 className="text-sm font-extrabold text-slate-900">
+              {activePOView === 'previous' ? 'Detail PO Minggu Lalu' : activePOView === 'confirm' ? 'PO yang Perlu Dikonfirmasi' : 'Detail PO Minggu Ini'}
+            </h4>
+            <p className="text-[11px] text-slate-500 mt-0.5">
+              {activePOView === 'previous'
+                ? (previousSnapshot?.weekKey || 'Periode sebelumnya')
+                : activePOView === 'confirm'
+                  ? 'Utamakan item belum datang atau datang sebagian'
+                  : (data.weekKey || 'Periode berjalan')}
+              {' · '}{visibleItems.length} item
+            </p>
+          </div>
+          <span className="status-pill status-pill-neutral">{activePOView === 'confirm' ? 'Perlu aksi' : 'Sumber Dashboard'}</span>
+        </div>
+
+        {activePOView === 'previous' && previousItems.length > 0 && !previousSnapshot?.noPO && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] leading-relaxed text-amber-800">
+            Konfirmasi minggu lalu sementara dikunci. Backend saat ini hanya membaca PO aktif dan belum menerima identitas PO historis saat mencatat kedatangan. Ini mencegah barang minggu lalu salah dicatat ke PO minggu ini.
+          </div>
+        )}
+
+        {visibleItems.length > 0 ? (
+          <div className="space-y-0 divide-y divide-slate-100">
+            {visibleItems.map((it, idx) => {
+              const badge =
+                it.status === 'Selesai'
+                  ? 'bg-emerald-50 text-emerald-700'
+                  : it.status === 'Sebagian'
+                    ? 'bg-amber-50 text-amber-700'
+                    : 'bg-slate-50 text-slate-600';
+              const barPct = it.qtyPO > 0 ? Math.min(100, Math.round((it.qtyDatang / it.qtyPO) * 100)) : 0;
+              const isBusy = confirmingId === it.id;
+              return (
+                <div key={`${activePOView}-${it.id || idx}`} className="py-3 first:pt-0">
+                  <div className="flex items-start justify-between gap-2 mb-1.5">
+                    <div className="min-w-0">
+                      <p className="text-[13px] font-bold text-slate-800">
+                        <span className="text-slate-400 font-semibold mr-1">#{String(it.itemNo || idx + 1).padStart(2, '0')}</span>
+                        {it.nama}
+                      </p>
+                      <p className="text-[11px] text-slate-500">{it.satuan}{it.size ? ` · ${it.size}` : ''} · {it.qtyDatang}/{it.qtyPO}</p>
+                    </div>
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${badge}`}>{it.status}</span>
                   </div>
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${badge}`}>{it.status}</span>
+                  <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden mb-2">
+                    <div
+                      className={`h-full rounded-full ${it.status === 'Selesai' ? 'bg-emerald-500' : it.status === 'Sebagian' ? 'bg-amber-400' : 'bg-slate-300'}`}
+                      style={{ width: `${barPct}%` }}
+                    />
+                  </div>
+                  {canConfirmTarget ? (
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <button
+                        type="button"
+                        disabled={isBusy || Number(it.qtyPO) <= Number(it.qtyDatang)}
+                        onClick={() => openArrivalCart(it, targetNoPO)}
+                        className="rounded-lg border border-emerald-200 bg-emerald-50 px-2 py-2 text-[10px] font-bold text-emerald-800 disabled:opacity-40"
+                      >
+                        Catat datang
+                      </button>
+                      <button
+                        type="button"
+                        disabled={isBusy || Number(it.qtyPO) <= Number(it.qtyDatang)}
+                        onClick={() => openArrivalCart(it, targetNoPO)}
+                        className="rounded-lg border border-amber-200 bg-amber-50 px-2 py-2 text-[10px] font-bold text-amber-800 disabled:opacity-40"
+                      >
+                        Sebagian
+                      </button>
+                    </div>
+                  ) : (
+                    <p className="text-[10px] text-slate-400">Konfirmasi belum tersedia karena nomor PO sumber tidak lengkap.</p>
+                  )}
                 </div>
-                <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden mb-2">
-                  <div
-                    className={`h-full rounded-full ${it.status === 'Selesai' ? 'bg-emerald-500' : it.status === 'Sebagian' ? 'bg-amber-400' : 'bg-slate-300'}`}
-                    style={{ width: `${barPct}%` }}
-                  />
-                </div>
-                <div className="flex gap-1.5">
-                  <button
-                    type="button"
-                    disabled={isBusy}
-                    onClick={() => openArrivalCart(it)}
-                    className="flex-1 text-[10px] font-bold py-1.5 rounded-lg bg-emerald-600 text-white active:scale-95 disabled:opacity-50"
-                  >
-                    {isBusy ? '…' : 'Datang'}
-                  </button>
-                  <button
-                    type="button"
-                    disabled={isBusy}
-                    onClick={() => {
-                      const remaining = Math.max(0, (Number(it.qtyPO) || 0) - (Number(it.qtyDatang) || 0));
-                      const delta = Math.min(remaining, Math.max(1, Math.floor(remaining / 2)));
-                      if (delta > 0) onConfirm?.(it, 'Sebagian', delta);
-                    }}
-                    className="flex-1 text-[10px] font-bold py-1.5 rounded-lg bg-amber-500 text-white active:scale-95 disabled:opacity-50"
-                  >
-                    Sebagian
-                  </button>
-                  <button
-                    type="button"
-                    disabled={isBusy}
-                    onClick={() => onConfirm?.(it, 'Menunggu', 0)}
-                    className="flex-1 text-[10px] font-bold py-1.5 rounded-lg bg-slate-200 text-slate-700 active:scale-95 disabled:opacity-50"
-                  >
-                    Belum
-                  </button>
-                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/70 p-4 text-center">
+            <ClipboardCheck className="mx-auto mb-2 h-6 w-6 text-slate-400" aria-hidden="true" />
+            <p className="text-[12px] font-semibold text-slate-700">
+              {activePOView === 'previous' ? 'Tidak ada data PO minggu lalu' : activePOView === 'confirm' ? 'Tidak ada item yang menunggu konfirmasi' : 'Belum ada detail item PO'}
+            </p>
+            <p className="text-[10px] text-slate-500 mt-1">Informasi mengikuti data yang tersedia dari Dashboard spreadsheet.</p>
+          </div>
+        )}
+      </div>
+
+      {arrivalItem && (
+        <div className="fixed inset-0 z-[90] flex items-end justify-center bg-slate-950/50 p-3 sm:items-center" role="presentation">
+          <div className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="po-arrival-title">
+            <div className="mb-3 flex items-start justify-between gap-3">
+              <div>
+                <h3 id="po-arrival-title" className="text-base font-extrabold text-slate-900">Konfirmasi kedatangan</h3>
+                <p className="mt-1 text-[11px] text-slate-500">{arrivalItem.nama} · PO {arrivalTargetNoPO || 'tidak tersedia'}</p>
               </div>
-            );
-          })}
+              <button type="button" onClick={closeArrivalCart} disabled={arrivalSaving} className="rounded-lg border border-slate-200 p-2 text-slate-500 disabled:opacity-50" aria-label="Tutup formulir">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <p className="mb-3 rounded-xl bg-slate-50 px-3 py-2 text-[11px] text-slate-600">
+              Sudah datang: {Number(arrivalItem.qtyDatang) || 0} · Total PO: {Number(arrivalItem.qtyPO) || 0} · Sisa: {Math.max(0, (Number(arrivalItem.qtyPO) || 0) - (Number(arrivalItem.qtyDatang) || 0))}
+            </p>
+            {(Number(arrivalItem.poCV) || 0) > 0 && (Number(arrivalItem.poPT) || 0) > 0 ? (
+              <p className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">PO terbagi ke CV dan PT. Konfirmasi dinonaktifkan sementara sampai backend dapat menghitung sisa per entitas dengan akurat.</p>
+            ) : (
+              <p className="mb-3 rounded-xl border border-cyan-100 bg-cyan-50 px-3 py-2 text-[11px] text-cyan-800">Entitas penerimaan: <strong>{(Number(arrivalItem.poPT) || 0) > 0 ? 'PT' : 'CV'}</strong></p>
+            )}
+            <form onSubmit={(event) => { event.preventDefault(); void submitArrivalCart(); }} className="space-y-3">
+              <label className="block text-[12px] font-bold text-slate-700" htmlFor="po-arrival-qty">Qty datang pada penerimaan ini</label>
+              <input
+                id="po-arrival-qty"
+                name="po-arrival-qty"
+                type="number"
+                inputMode="decimal"
+                min="0.001"
+                step="any"
+                max={Math.max(0, (Number(arrivalItem.qtyPO) || 0) - (Number(arrivalItem.qtyDatang) || 0))}
+                value={arrivalQty}
+                onChange={(event) => setArrivalQty(event.target.value)}
+                placeholder="Masukkan jumlah aktual"
+                required
+                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-semibold text-slate-900 outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100"
+              />
+              {arrivalError && <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-[11px] font-semibold text-red-700">{arrivalError}</p>}
+              <div className="grid grid-cols-2 gap-2 pt-1">
+                <button type="button" onClick={closeArrivalCart} disabled={arrivalSaving} className="rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-bold text-slate-600 disabled:opacity-50">Batal</button>
+                <button type="submit" disabled={arrivalSaving} className="rounded-xl bg-[#0f8c91] px-3 py-3 text-sm font-extrabold text-white shadow-md disabled:opacity-50">
+                  {arrivalSaving ? 'Menyimpan…' : 'Simpan konfirmasi'}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
-      {(() => {
-        const previous = data.previousWeek || data.previous || data.lastWeek;
-        const previousItems = Array.isArray(previous?.items) ? previous.items : [];
-        if (!previous || previousItems.length === 0) return null;
-        return (
-          <div className="mt-1 rounded-xl border border-slate-200 bg-slate-50/80 p-3">
-            <div className="flex items-center justify-between gap-2 mb-2">
-              <div>
-                <p className="text-[11px] font-extrabold uppercase tracking-wide text-slate-700">Status PO Minggu Lalu</p>
-                <p className="text-[10px] text-slate-500">{previous.weekKey || 'Snapshot sebelumnya'} · belum selesai</p>
-              </div>
-              <span className="status-pill status-pill-neutral">{previousItems.length} item</span>
-            </div>
-            <div className="space-y-1.5">
-              {previousItems.slice(0, 6).map((it, idx) => (
-                <div key={`${it.itemNo || idx}-${it.nama || ''}`} className="flex items-center justify-between gap-2 text-[11px]">
-                  <span className="min-w-0 truncate text-slate-700">#{it.itemNo || idx + 1} {it.nama || '—'}</span>
-                  <span className="shrink-0 font-bold tabular-nums text-slate-600">{Number(it.qtyDatang || 0)}/{Number(it.qtyPO || 0)}</span>
-                </div>
-              ))}
-            </div>
-            {previousItems.length > 6 && <p className="mt-2 text-[10px] text-slate-500">+{previousItems.length - 6} item lainnya</p>}
-          </div>
-        );
-      })()}
+
     </div>
   );
 }
 
-export default function DashboardPage() {
+export default function DashboardPage({ onNavigate }) {
   const { user } = useAuth();
 
   // DASHBOARD MASTER SOURCE:
@@ -918,7 +1065,7 @@ export default function DashboardPage() {
     };
   }, [loadPO, loadDashboardData]);
 
-  const handleConfirm = useCallback(async (item, status = 'Selesai', qtyDatang) => {
+  const handleConfirm = useCallback(async (item, status = 'Selesai', qtyDatang, noPOOverride, entitasOverride, kodeOverride) => {
     if (!item) return;
     setConfirmingId(item.id);
     setConfirmMsg('');
@@ -935,7 +1082,9 @@ export default function DashboardPage() {
       const res = await confirmPOStatus({
         itemNo: item.itemNo,
         nama: item.nama,
-        noPO: poData?.noPO,
+        noPO: noPOOverride || item.noPO || poData?.noPO,
+        entitas: entitasOverride || (Number(item.poPT) > 0 && Number(item.poCV) <= 0 ? 'PT' : Number(item.poCV) > 0 && Number(item.poPT) <= 0 ? 'CV' : undefined),
+        kode: kodeOverride || (Number(item.poPT) > 0 && Number(item.poCV) <= 0 ? item.kodePT : Number(item.poCV) > 0 && Number(item.poPT) <= 0 ? item.kodeCV : undefined),
         status,
         qtyDatang: finalQty,
       });
@@ -973,7 +1122,7 @@ export default function DashboardPage() {
     } catch { return 0; }
   }, [allItems, poData]);
 
-  const hour = new Date().getHours();
+  const hour = Number(new Intl.DateTimeFormat('id-ID', { hour: '2-digit', hourCycle: 'h23', timeZone: 'Asia/Jakarta' }).format(new Date()));
   let greeting = 'Halo';
   let reminder = 'Siap bekerja.';
   if (hour >= 4 && hour < 10) { greeting = 'Selamat pagi'; reminder = 'Cek kedatangan barang hari ini.'; }
@@ -982,15 +1131,29 @@ export default function DashboardPage() {
   else { greeting = 'Selamat malam'; reminder = 'Pastikan data hari ini sudah lengkap.'; }
 
   const name = user?.name || user?.nama || 'Rudi';
+  const spreadsheetTimestamp =
+    dashboardData?.lastUpdate ?? dashboardData?.lastUpdatedAt ?? dashboardData?.lastUpdated ??
+    dashboardData?.updatedAt ?? dashboardData?.updateTime ?? dashboardData?.waktuUpdate ??
+    dashboardData?.waktu_update ?? dashboardData?.terakhirUpdate ?? dashboardData?.timestamp ?? null;
 
   return (
     <div className="dashboard-shell w-full max-w-6xl mx-auto px-3 sm:px-5 lg:px-7 pt-4 pb-24 space-y-4">
-      <div className="rounded-2xl bg-white border border-slate-200 shadow-sm px-4 sm:px-5 py-4">
+      <div className="dashboard-header-card dashboard-3d-card rounded-2xl bg-white border border-slate-200 shadow-sm px-4 sm:px-5 py-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
             <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-cyan-700">{greeting} · GUDANG PUSAT</p>
             <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 truncate mt-1 leading-tight">Dashboard Operasional</h1>
             <p className="text-[13px] text-slate-600 mt-1 leading-snug">{reminder} <span className="text-slate-400">· {name}</span></p>
+            <div className="mt-2.5 grid gap-1.5 text-[10px] font-medium text-slate-600">
+              <div className="flex min-w-0 items-center gap-1.5">
+                <Clock3 className="h-3.5 w-3.5 shrink-0 text-cyan-700" aria-hidden="true" />
+                <span><span className="font-bold text-slate-700">Update spreadsheet:</span> {formatSpreadsheetTimestamp(spreadsheetTimestamp)}</span>
+              </div>
+              <div className="flex min-w-0 items-center gap-1.5">
+                <Mail className="h-3.5 w-3.5 shrink-0 text-cyan-700" aria-hidden="true" />
+                <a className="truncate hover:underline" href="mailto:rudivirawan69@gmail.com">rudivirawan69@gmail.com</a>
+              </div>
+            </div>
           </div>
           <button
             type="button"
@@ -1018,7 +1181,7 @@ export default function DashboardPage() {
 
       <div className="rounded-2xl bg-white border border-slate-200 shadow-sm p-4 sm:p-5">
         <div className="mb-3">
-        <p className="text-sm font-extrabold text-slate-900">Status Stok per Divisi</p>
+        <div className="flex items-center gap-2"><span className="dashboard-icon-badge dashboard-icon-cyan"><Layers3 className="h-4 w-4" aria-hidden="true" /></span><p className="text-sm font-extrabold text-slate-900">Status Stok per Divisi</p></div>
         <p className="text-[11px] text-slate-500 mt-0.5">Ringkas kondisi item di setiap divisi</p>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-[9px] font-semibold">
           <span className="text-emerald-600"><i className="inline-block w-2 h-2 rounded-full bg-emerald-500 mr-1" />Aman</span>
@@ -1038,6 +1201,7 @@ export default function DashboardPage() {
         onRefresh={loadPO}
         onConfirm={handleConfirm}
         confirmingId={confirmingId}
+        onNavigate={onNavigate}
       />
       </section>
 

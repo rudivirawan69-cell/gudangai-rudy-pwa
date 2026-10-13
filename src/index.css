@@ -709,9 +709,9 @@ button{min-height:40px}
 .app-content .card:not(button):hover,.app-content .surface:not(button):hover,.app-content .stat-tile:not(button):hover,.app-content .stock-card:not(button):hover,.app-content .section-card:not(button):hover,.app-content .dashboard-panel:hover,.app-content .dashboard-total-card:hover,.app-content .dashboard-po-card:hover,.app-content .menu-group:hover{transform:translateY(-1px);box-shadow:var(--g3d-shadow-active)}
 .app-content .card:not(button):active,.app-content .surface:not(button):active,.app-content .stat-tile:not(button):active,.app-content .stock-card:not(button):active{transform:translateY(0) scale(.995)}
 .nav-moving-ball{position:absolute;z-index:3;width:7px;height:7px;border-radius:50%;background:radial-gradient(circle at 32% 28%,#fff 0 14%,#ffbd55 25%,#f59e0b 62%,#d97706 100%);box-shadow:0 2px 8px rgba(245,158,11,.45),0 0 0 2px rgba(255,255,255,.88);pointer-events:none;transition:left .30s cubic-bezier(.22,.8,.24,1),top .30s cubic-bezier(.22,.8,.24,1),transform .30s cubic-bezier(.22,.8,.24,1)}
-.nav-moving-ball-mobile{display:block;top:2px;left:calc((100% / 6) * var(--nav-index) + (100% / 12) - 3.5px)}
+.nav-moving-ball-mobile{display:block;top:2px;left:calc((100% / 5) * var(--nav-index) + (100% / 10) - 3.5px)}
 .nav-moving-ball-desktop{display:none}.nav-btn{transition:color .22s ease,transform .22s cubic-bezier(.22,.8,.24,1),background-color .22s ease}.nav-btn.is-active .nav-icon-wrap{box-shadow:0 5px 12px rgba(15,159,154,.14),inset 0 1px 0 rgba(255,255,255,.9);transform:translateY(-1px)}.nav-btn:active{transform:scale(.96)}.nav-underline{transition:width .22s ease,opacity .22s ease}
-@media (min-width:768px){.nav-moving-ball-mobile{display:none}.nav-moving-ball-desktop{display:block;left:50%;top:calc((var(--nav-index) * var(--nav-height) / 6) + 4px);transform:translateX(-50%)}}
+@media (min-width:768px){.nav-moving-ball-mobile{display:none}.nav-moving-ball-desktop{display:block;left:50%;top:calc((var(--nav-index) * var(--nav-height) / 5) + 4px);transform:translateX(-50%)}}
 @media (prefers-reduced-motion:reduce){.nav-moving-ball{transition:none}.app-content .card:not(button),.app-content .surface:not(button),.app-content .stat-tile:not(button),.app-content .stock-card:not(button),.app-content .section-card:not(button),.app-content .dashboard-panel,.app-content .dashboard-total-card,.app-content .dashboard-po-card,.app-content .menu-group{transition:none}}
 /* v8.1 — refined depth for stock/dashboard surfaces */
 .app-content .stock-card,.app-content .stock-metric-surface{
@@ -733,3 +733,34 @@ button{min-height:40px}
 .stock-metric-icon-red{background:linear-gradient(145deg,#fff0f1,#ffd9dd);color:#c52f3b;border:1px solid #f4c1c7}
 .stock-metric-icon-green{background:linear-gradient(145deg,#eafbf3,#ccefe0);color:#08724f;border:1px solid #b8e3cf}
 .dashboard-chart-wrap{box-shadow:inset 0 1px 0 rgba(255,255,255,.9),0 6px 16px rgba(15,35,43,.045)}
+
+
+/* v8.2 — consistent tactile 3D cards, PO shortcuts, and compact division status. */
+.po-shortcuts-grid{position:relative;z-index:1}
+.po-shortcut{
+  display:flex;min-width:0;min-height:142px;flex-direction:column;align-items:flex-start;gap:.65rem;
+  position:relative;overflow:hidden;padding:.8rem;border:1px solid #dfe8eb;border-radius:1rem;
+  text-align:left;color:#123039;background:linear-gradient(145deg,#fff 0%,#fbfefe 60%,#edf7f8 100%);
+  box-shadow:0 8px 18px rgba(16,55,64,.085),0 2px 4px rgba(16,55,64,.045),inset 0 1px 0 rgba(255,255,255,.98);
+  transform:translateZ(0);transition:transform .18s cubic-bezier(.22,.8,.24,1),box-shadow .18s ease,border-color .18s ease;
+  -webkit-tap-highlight-color:transparent;
+}
+.po-shortcut::after{content:"";position:absolute;left:12px;right:12px;top:0;height:1px;background:linear-gradient(90deg,transparent,rgba(15,159,154,.32),transparent);pointer-events:none}
+.po-shortcut:hover{transform:translateY(-2px);border-color:#c4e0e3;box-shadow:0 13px 24px rgba(16,55,64,.12),0 4px 8px rgba(16,55,64,.05),inset 0 1px 0 #fff}
+.po-shortcut:active{transform:translateY(0) scale(.99);box-shadow:0 3px 8px rgba(16,55,64,.08),inset 0 1px 0 #fff}
+.po-shortcut:focus-visible{outline:3px solid rgba(8,145,178,.35);outline-offset:2px}
+.po-shortcut.is-selected{border-color:#a8d9dc;background:linear-gradient(145deg,#f4ffff 0%,#eaf9fa 100%);box-shadow:0 0 0 2px rgba(15,159,154,.10),0 8px 16px rgba(16,55,64,.08),inset 0 1px 0 #fff}
+.po-shortcut-icon{display:grid;width:2.45rem;height:2.45rem;flex-shrink:0;place-items:center;border:1px solid #d5e6e9;border-radius:.85rem;color:#0f777b;background:linear-gradient(145deg,#f3ffff,#dceff1);box-shadow:0 5px 12px rgba(15,67,75,.10),inset 0 1px 0 rgba(255,255,255,.96)}
+.po-shortcut-icon-current{color:#087a80;background:linear-gradient(145deg,#ebffff,#c9f1f2);border-color:#b8e4e7}
+.po-shortcut-icon-previous{color:#4f63a7;background:linear-gradient(145deg,#f1f3ff,#dde4ff);border-color:#d3dafb}
+.po-shortcut-icon-confirm{color:#9b610b;background:linear-gradient(145deg,#fff8e9,#ffe8bb);border-color:#f4d8a0}
+.po-shortcut-copy{display:grid;gap:.25rem;min-width:0}
+.po-shortcut-title{font-size:.76rem;font-weight:850;line-height:1.25;letter-spacing:-.01em;color:#102e36}
+.po-shortcut-subtitle{font-size:.64rem;font-weight:550;line-height:1.4;color:#647781}
+.po-shortcut-footer{display:flex;width:100%;align-items:center;justify-content:space-between;gap:.35rem;margin-top:auto;color:#0c797e}
+.po-shortcut-count{font-size:.64rem;font-weight:800;line-height:1.2;color:#536d75}
+.division-status-card{box-shadow:0 6px 15px rgba(16,55,64,.055),inset 0 1px 0 rgba(255,255,255,.96);transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease}
+.division-status-card:hover{transform:translateY(-1px);border-color:#cfe5e7;box-shadow:0 10px 19px rgba(16,55,64,.08),inset 0 1px 0 #fff}
+.dashboard-header-card{box-shadow:0 10px 22px rgba(16,55,64,.075),0 2px 5px rgba(16,55,64,.035),inset 0 1px 0 rgba(255,255,255,.98)}
+@media(max-width:360px){.po-shortcut{min-height:136px;padding:.68rem}.po-shortcut-title{font-size:.7rem}.po-shortcut-subtitle{font-size:.6rem}}
+@media(prefers-reduced-motion:reduce){.po-shortcut,.division-status-card{transition:none}.po-shortcut:hover,.division-status-card:hover{transform:none}}
