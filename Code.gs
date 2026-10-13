@@ -87,6 +87,7 @@ const PO_DATA_NUM_COLS = 8; // B:I
 const PO_LOCK_TIMEOUT_MS = 20000;
 const STATUS_PO_LAYOUT_VERSION = '6.9.0-LOCKED-ROW46';
 const PO_START_ROW = 46;
+const PO_DASHBOARD_HEADER_ROW = 49; // Header Dashboard; PO_HEADER_ROW=5 tetap khusus sheet purchase order.
 const PO_SECTION_CURRENT_ROW = PO_START_ROW;
 const PO_DASHBOARD_MAX_VISIBLE_ROWS = 50;
 const OPS_TITLE_ROWS = 2;
@@ -4286,8 +4287,8 @@ function dashboardApplyProfessionalLayoutOnce_() {
   sh.getRange("H47:M47").merge().setBackground("#D9EAF7").setWrap(true).setFontSize(9);
 
   const header = [["NO", "NAMA BARANG", "TOTAL QTY", "DATANG", "BELUM DATANG", "STATUS PO"]];
-  sh.getRange(49, 1, 1, 6).setValues(header).setBackground("#1F4E79").setFontColor("#FFFFFF").setFontWeight("bold").setHorizontalAlignment("center").setWrap(true);
-  sh.getRange(49, 8, 1, 6).setValues(header).setBackground("#1F4E79").setFontColor("#FFFFFF").setFontWeight("bold").setHorizontalAlignment("center").setWrap(true);
+  sh.getRange(PO_DASHBOARD_HEADER_ROW, 1, 1, 6).setValues(header).setBackground("#1F4E79").setFontColor("#FFFFFF").setFontWeight("bold").setHorizontalAlignment("center").setWrap(true);
+  sh.getRange(PO_DASHBOARD_HEADER_ROW, 8, 1, 6).setValues(header).setBackground("#1F4E79").setFontColor("#FFFFFF").setFontWeight("bold").setHorizontalAlignment("center").setWrap(true);
   sh.getRange(50, 1, 50, 6).setBorder(true, true, true, true, true, true, "#B7C9D6", SpreadsheetApp.BorderStyle.SOLID);
   sh.getRange(50, 8, 50, 6).setBorder(true, true, true, true, true, true, "#B7C9D6", SpreadsheetApp.BorderStyle.SOLID);
   sh.getRange(50, 3, 50, 3).setHorizontalAlignment("center").setNumberFormat("#,##0");
@@ -4299,7 +4300,7 @@ function dashboardApplyProfessionalLayoutOnce_() {
   }
   [55, 290, 100, 90, 120, 125].forEach(function(w, i) { sh.setColumnWidth(i + 1, w); });
   [24, 55, 290, 100, 90, 120, 125].forEach(function(w, i) { sh.setColumnWidth(i + 7, w); });
-  sh.setRowHeight(46, 28); sh.setRowHeight(47, 28); sh.setRowHeight(49, 30);
+  sh.setRowHeight(46, 28); sh.setRowHeight(47, 28); sh.setRowHeight(PO_DASHBOARD_HEADER_ROW, 30);
   sh.setFrozenRows(3);
   sh.getRange("A1").setNote("Tata letak Dashboard GudangAI dikunci. Tabel Status PO mulai baris 46; refresh rutin hanya memperbarui data.");
   PropertiesService.getScriptProperties().setProperty(DASHBOARD_LAYOUT_LOCK_KEY, "1");
