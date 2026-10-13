@@ -333,8 +333,9 @@ function filterPdfMasterForEntity(entity, masterList) {
       // CV PDF hanya memakai barang jadi/produksi; bahan baku BBCV/BBPT tidak boleh masuk keranjang CV.
       return /^CV-/.test(kode) && divisi !== 'BAHAN BAKU' && !/^(?:BBCV|BBPT)-/.test(kode);
     }
-    // PT boleh memakai kode PT, WK, MM, dan BBPT; kode CV/BBCV ditolak.
-    return /^(?:PT|WK|MM|BBPT)-/.test(kode);
+    // PDF PT juga hanya berisi barang yang dipesan sebagai barang jadi/operasional.
+    // BBPT dan divisi BAHAN BAKU harus diproses melalui master bahan baku, bukan keranjang PO PDF.
+    return /^(?:PT|WK|MM)-/.test(kode) && divisi !== 'BAHAN BAKU' && !/^(?:BBCV|BBPT)-/.test(kode);
   });
 }
 
