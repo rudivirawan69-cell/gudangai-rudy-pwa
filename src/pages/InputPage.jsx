@@ -180,12 +180,11 @@ export default function InputPage() {
       let rows = parseLinesFromText(text, lines);
       if (!rows.length) { setStatusBanner('Tidak ada baris barang terdeteksi dari ' + sourceLabel + '.'); return; }
 
-      // PDF CV untuk barang jadi/matang tidak boleh memasukkan bahan baku PT
-      // (BBPT) seperti Bebek, Iga Sapi, atau Ayam Negeri ke keranjang validasi CV.
-      // Baris yang dikenali sebagai master BBPT dipisahkan, tidak dipetakan silang
-      // ke kode CV, dan tidak masuk ke keranjang transaksi.
+      // PDF CV maupun PT tidak boleh memasukkan bahan baku BBCV/BBPT
+      // ke keranjang transaksi barang jadi. Filter nama exact mencegah bahan baku
+      // lolos sebagai alias/fuzzy ke kode lain; varian nama barang jadi tetap dipertahankan.
       let skippedRawMaterialCount = 0;
-      if (validationEntity === 'CV') {
+      if (validationEntity === 'CV' || validationEntity === 'PT') {
         const normalizeRawMaterialName = (value) => String(value || '')
           .normalize('NFKC').toLowerCase()
           .replace(/\([^)]*\)/g, ' ')
@@ -214,8 +213,8 @@ export default function InputPage() {
         skippedRawMaterialCount = before - rows.length;
       }
       if (!rows.length) {
-        setStatusBanner(validationEntity === 'CV' && skippedRawMaterialCount
-          ? 'PDF CV: ' + skippedRawMaterialCount + ' baris bahan baku PT/BBPT dilewati; keranjang CV hanya untuk barang jadi/matang.'
+        setStatusBanner(skippedRawMaterialCount
+          ? 'PDF ' + validationEntity + ': ' + skippedRawMaterialCount + ' baris bahan baku BBCV/BBPT dilewati; keranjang hanya menerima barang yang sesuai entitas.'
           : 'Tidak ada baris barang yang sesuai untuk divalidasi dari ' + sourceLabel + '.');
         return;
       }
@@ -245,7 +244,7 @@ export default function InputPage() {
       const parts = [];
       if (matched.length) parts.push(matched.length + ' cocok');
       if (review.length) parts.push(review.length + ' perlu validasi');
-      if (skippedRawMaterialCount) parts.push(skippedRawMaterialCount + ' bahan baku PT/BBPT dilewati (khusus barang jadi CV)');
+      if (skippedRawMaterialCount) parts.push(skippedRawMaterialCount + ' baris bahan baku BBCV/BBPT dilewati');
       setStatusBanner(sourceLabel + ' ' + total + ' baris · ' + parts.join(' · '));
     } catch (err) {
       setStatusBanner(err.message || 'Gagal memvalidasi ' + sourceLabel);
