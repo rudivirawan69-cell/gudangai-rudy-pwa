@@ -3943,9 +3943,23 @@ function getStatusPO() {
   const info = getPOInfoFromHeader_(po);
   const noPO = info.noPO;
   const last = po.getLastRow();
+  const headerValues = po.getRange(PO_HEADER_ROW, PO_DATA_START_COL, 1, PO_DATA_NUM_COLS).getDisplayValues()[0];
+  const headerKey = function(v) { return String(v || "").toUpperCase().replace(/[^A-Z0-9]+/g, " ").trim(); };
+  const findHeader = function(re, fallback) {
+    const idx = headerValues.findIndex(function(v) { return re.test(headerKey(v)); });
+    return idx >= 0 ? idx : fallback;
+  };
+  // Kolom mengikuti header aktual B:I; fallback mempertahankan format baku NO,NAMA,SIZE,SATUAN,PO CV,PO PT,TOTAL,TGL.
+  const poCols = {
+    no: findHeader(/^(?:NO|NOMOR)$/, 0),
+    nama: findHeader(/NAMA/, 1),
+    poCV: findHeader(/PO\s*CV/, 4),
+    poPT: findHeader(/PO\s*PT/, 5),
+    total: findHeader(/TOTAL/, 6)
+  };
   const rows = last >= PO_DATA_START_ROW
     ? po.getRange(PO_DATA_START_ROW, PO_DATA_START_COL, last - PO_DATA_START_ROW + 1, PO_DATA_NUM_COLS).getValues()
-    : []; // Kolom H (r[6]) dibaca sebagai nilai numerik hasil formula, bukan teks format tampilan.
+    : []; // Kolom TOTAL (default H) dibaca dari nilai formula, dengan fallback PO CV + PO PT.
   const allStockForPO_ = getAllStock("ALL").items || [];
 
   // Peta kedatangan:
@@ -3989,11 +4003,12 @@ function getStatusPO() {
   let totalKonfirmasiQty = 0, totalPOQty = 0;
   rows.forEach(function(r, idx) {
     if (!String(r.join('')).trim()) return;
-    const no = Number(r[0]) || idx + 1;
-    const nama = String(r[1] || '').trim();
-    const poCV = toNumber_(r[4]);
-    const poPT = toNumber_(r[5]);
-    const totalFromColumnH = toNumber_(r[6]); // purchase order kolom H; indeks 6 pada range B:I.
+    const rawNo = String(r[poCols.no] == null ? "" : r[poCols.no]).trim();
+    const no = Number(rawNo) || idx + 1;
+    const nama = String(r[poCols.nama] || '').trim();
+    const poCV = toNumber_(r[poCols.poCV]);
+    const poPT = toNumber_(r[poCols.poPT]);
+    const totalFromColumnH = toNumber_(r[poCols.total]); // Header TOTAL menentukan kolom aktual; format baku adalah H.
     const total = Math.max(0, totalFromColumnH > 0 ? totalFromColumnH : (poCV + poPT));
     if (!nama || total <= 0) return;
     const byIndex = arrivalsByIndex[no] || 0;
@@ -4028,7 +4043,8 @@ function getStatusPO() {
       totalPOQty: totalPOQty, totalKonfirmasiQty: totalKonfirmasiQty,
       totalSisaQty: Math.max(0, totalPOQty - totalKonfirmasiQty)
     },
-    items: items
+    items: items,
+    previousWeek: getPreviousPOStatus_()
   };
 }
 
