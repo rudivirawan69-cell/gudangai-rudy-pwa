@@ -587,6 +587,7 @@ function StatusPOCard({ data, loading, error, onRefresh, onConfirm, confirmingId
   const [arrivalError, setArrivalError] = useState('');
   const [arrivalSaving, setArrivalSaving] = useState(false);
   const [arrivalTargetNoPO, setArrivalTargetNoPO] = useState('');
+  const [arrivalEntity, setArrivalEntity] = useState('CV');
   const [activePOView, setActivePOView] = useState('current');
   const sourceItems = Array.isArray(data?.items) ? data.items : [];
   const previousSnapshot = data?.previousWeek || data?.previous || data?.lastWeek || null;
@@ -597,6 +598,9 @@ function StatusPOCard({ data, loading, error, onRefresh, onConfirm, confirmingId
     setArrivalQty('');
     setArrivalError('');
     setArrivalTargetNoPO(String(targetNoPO || ''));
+    const cvQty = Number(item?.poCV) || 0;
+    const ptQty = Number(item?.poPT) || 0;
+    setArrivalEntity(cvQty > 0 && ptQty <= 0 ? 'CV' : ptQty > 0 && cvQty <= 0 ? 'PT' : 'CV');
   };
 
   const closeArrivalCart = () => {
@@ -605,10 +609,17 @@ function StatusPOCard({ data, loading, error, onRefresh, onConfirm, confirmingId
     setArrivalQty('');
     setArrivalError('');
     setArrivalTargetNoPO('');
+    setArrivalEntity('CV');
   };
 
   const submitArrivalCart = async () => {
     if (!arrivalItem) return;
+    const hasCV = (Number(arrivalItem.poCV) || 0) > 0;
+    const hasPT = (Number(arrivalItem.poPT) || 0) > 0;
+    if (hasCV && hasPT) {
+      setArrivalError('Item ini memiliki PO CV dan PT sekaligus. Konfirmasi dipause sampai backend menyediakan sisa qty per entitas agar tidak salah mencatat stok.');
+      return;
+    }
     const qty = Number(arrivalQty);
     const qtyPO = Number(arrivalItem.qtyPO) || 0;
     const alreadyArrived = Math.max(0, Number(arrivalItem.qtyDatang) || 0);
@@ -630,12 +641,15 @@ function StatusPOCard({ data, loading, error, onRefresh, onConfirm, confirmingId
     try {
       const projectedTotal = alreadyArrived + qty;
       const status = projectedTotal >= qtyPO ? 'Selesai' : 'Sebagian';
-      const ok = await onConfirm?.(arrivalItem, status, qty, arrivalTargetNoPO);
+      const selectedEntity = hasPT ? 'PT' : 'CV';
+      const selectedCode = selectedEntity === 'PT' ? arrivalItem.kodePT : arrivalItem.kodeCV;
+      const ok = await onConfirm?.(arrivalItem, status, qty, arrivalTargetNoPO, selectedEntity, selectedCode);
       if (ok) {
         setArrivalItem(null);
         setArrivalQty('');
         setArrivalError('');
         setArrivalTargetNoPO('');
+        setArrivalEntity('CV');
       } else setArrivalError('Gagal menyimpan kedatangan. Periksa koneksi/API.');
     } catch (err) {
       setArrivalError(err?.message || 'Gagal menyimpan kedatangan.');
@@ -694,7 +708,7 @@ function StatusPOCard({ data, loading, error, onRefresh, onConfirm, confirmingId
       ? items.filter((it) => it.status !== 'Selesai')
       : items;
   const targetNoPO = activePOView === 'previous' ? previousSnapshot?.noPO : data.noPO;
-  const canConfirmTarget = Boolean(targetNoPO);
+  const canConfirmTarget = activePOView !== 'previous' && Boolean(targetNoPO);
 
   return (
     <div className="dashboard-po-card rounded-2xl bg-white border border-slate-100 shadow-sm p-4 space-y-4">
@@ -769,7 +783,7 @@ function StatusPOCard({ data, loading, error, onRefresh, onConfirm, confirmingId
 
         {activePOView === 'previous' && previousItems.length > 0 && !previousSnapshot?.noPO && (
           <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] leading-relaxed text-amber-800">
-            Konfirmasi periode lalu dikunci karena respons backend tidak menyertakan nomor PO periode tersebut. Ini mencegah konfirmasi salah menulis ke PO minggu ini.
+            Konfirmasi minggu lalu sementara dikunci. Backend saat ini hanya membaca PO aktif dan belum menerima identitas PO historis saat mencatat kedatangan. Ini mencegah barang minggu lalu salah dicatat ke PO minggu ini.
           </div>
         )}
 
@@ -803,7 +817,7 @@ function StatusPOCard({ data, loading, error, onRefresh, onConfirm, confirmingId
                     />
                   </div>
                   {canConfirmTarget ? (
-                    <div className="grid grid-cols-3 gap-1.5">
+                    <div className="grid grid-cols-2 gap-1.5">
                       <button
                         type="button"
                         disabled={isBusy || Number(it.qtyPO) <= Number(it.qtyDatang)}
@@ -819,14 +833,6 @@ function StatusPOCard({ data, loading, error, onRefresh, onConfirm, confirmingId
                         className="rounded-lg border border-amber-200 bg-amber-50 px-2 py-2 text-[10px] font-bold text-amber-800 disabled:opacity-40"
                       >
                         Sebagian
-                      </button>
-                      <button
-                        type="button"
-                        disabled={isBusy}
-                        onClick={() => onConfirm?.(it, 'Menunggu', 0, targetNoPO)}
-                        className="rounded-lg border border-slate-200 bg-white px-2 py-2 text-[10px] font-bold text-slate-600 disabled:opacity-40"
-                      >
-                        Belum datang
                       </button>
                     </div>
                   ) : (
@@ -862,6 +868,11 @@ function StatusPOCard({ data, loading, error, onRefresh, onConfirm, confirmingId
             <p className="mb-3 rounded-xl bg-slate-50 px-3 py-2 text-[11px] text-slate-600">
               Sudah datang: {Number(arrivalItem.qtyDatang) || 0} · Total PO: {Number(arrivalItem.qtyPO) || 0} · Sisa: {Math.max(0, (Number(arrivalItem.qtyPO) || 0) - (Number(arrivalItem.qtyDatang) || 0))}
             </p>
+            {(Number(arrivalItem.poCV) || 0) > 0 && (Number(arrivalItem.poPT) || 0) > 0 ? (
+              <p className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">PO terbagi ke CV dan PT. Konfirmasi dinonaktifkan sementara sampai backend dapat menghitung sisa per entitas dengan akurat.</p>
+            ) : (
+              <p className="mb-3 rounded-xl border border-cyan-100 bg-cyan-50 px-3 py-2 text-[11px] text-cyan-800">Entitas penerimaan: <strong>{(Number(arrivalItem.poPT) || 0) > 0 ? 'PT' : 'CV'}</strong></p>
+            )}
             <form onSubmit={(event) => { event.preventDefault(); void submitArrivalCart(); }} className="space-y-3">
               <label className="block text-[12px] font-bold text-slate-700" htmlFor="po-arrival-qty">Qty datang pada penerimaan ini</label>
               <input
@@ -1058,7 +1069,7 @@ export default function DashboardPage({ onNavigate }) {
     };
   }, [loadPO, loadDashboardData]);
 
-  const handleConfirm = useCallback(async (item, status = 'Selesai', qtyDatang, noPOOverride) => {
+  const handleConfirm = useCallback(async (item, status = 'Selesai', qtyDatang, noPOOverride, entitasOverride, kodeOverride) => {
     if (!item) return;
     setConfirmingId(item.id);
     setConfirmMsg('');
@@ -1076,6 +1087,8 @@ export default function DashboardPage({ onNavigate }) {
         itemNo: item.itemNo,
         nama: item.nama,
         noPO: noPOOverride || item.noPO || poData?.noPO,
+        entitas: entitasOverride || (Number(item.poPT) > 0 && Number(item.poCV) <= 0 ? 'PT' : Number(item.poCV) > 0 && Number(item.poPT) <= 0 ? 'CV' : undefined),
+        kode: kodeOverride || (Number(item.poPT) > 0 && Number(item.poCV) <= 0 ? item.kodePT : Number(item.poCV) > 0 && Number(item.poPT) <= 0 ? item.kodeCV : undefined),
         status,
         qtyDatang: finalQty,
       });
