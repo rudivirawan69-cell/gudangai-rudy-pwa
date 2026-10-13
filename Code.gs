@@ -3971,8 +3971,9 @@ function getStatusPO() {
           }
         }
       }
-      // Cadangan: No PO ada di keterangan (atau NoPO kosong) + nama barang cocok.
-      if (noPO && ket.toLowerCase().indexOf(String(noPO).toLowerCase()) < 0) return;
+      // Fallback nama hanya aman bila nomor PO aktif tersedia dan cocok.
+      // Tanpa No PO, jangan mengimpor penerimaan lama yang kebetulan memiliki nama barang sama.
+      if (!noPO || ket.toLowerCase().indexOf(String(noPO).toLowerCase()) < 0) return;
       if (namaMasuk) {
         const key = normalizePONameKey_(namaMasuk);
         if (key) arrivalsByName[key] = (arrivalsByName[key] || 0) + qty;
