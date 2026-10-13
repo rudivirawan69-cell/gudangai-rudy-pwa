@@ -233,9 +233,12 @@ export function parsePdfLinesToItems(text) {
 
     let rawName = withoutTrailingDate.slice(0, last.index).trim();
     rawName = sanitizePdfProductName(rawName)
-      // Size/kemasan di ujung nama review tidak ikut nama murni.
-      .replace(/\s*\([^)]*\b(?:\d+(?:[.,]\d+)?\s*(?:kg|gram|gr|pcs|pack|pail|liter|ml)|\d+\s*(?:pcs|pack|pail))[^)]*\)\s*$/i, '')
-      .replace(/\s+\d+(?:[.,]\d+)?\s*(?:kg|gram|gr|pcs|pack|pail|liter|ml)\s*$/i, '')
+      // Kolom kuantitas sebelumnya (PO CV/PT) bukan bagian nama barang.
+      .replace(/\s+(?:\d+(?:[.,]\d+)?\s+){1,3}\d+(?:[.,]\d+)?\s*$/, '')
+      // Size/kemasan yang tercampur di nama review harus dibuang.
+      .replace(/\s*\([^)]*\b(?:\d+(?:[.,]\d+)?\s*(?:kg|gram|gr|pcs|pack|pail|liter|ml)|\d+\s*(?:pcs|pack|pail))[^)]*\)/gi, '')
+      .replace(/\s+\d+(?:[.,]\d+)?\s*(?:kg|gram|gr|pcs|pack|pail|liter|ml)\b/gi, '')
+      .replace(/\b(?:pack|pcs|pail|ekor|kg|box|unit|porsi|gram|liter|ml)\b/gi, ' ')
       .replace(/\s+/g, ' ')
       .trim();
 
