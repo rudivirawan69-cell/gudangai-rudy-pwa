@@ -87,7 +87,6 @@ const PO_DATA_NUM_COLS = 8; // B:I
 const PO_LOCK_TIMEOUT_MS = 20000;
 const STATUS_PO_LAYOUT_VERSION = '6.9.0-LOCKED-ROW46';
 const PO_START_ROW = 46;
-const PO_HEADER_ROW = 49; // Header Dashboard Status PO; berbeda dari header sheet purchase order.
 const PO_SECTION_CURRENT_ROW = PO_START_ROW;
 const PO_DASHBOARD_MAX_VISIBLE_ROWS = 50;
 const OPS_TITLE_ROWS = 2;
@@ -3551,9 +3550,8 @@ function onEdit(e) {
     if (sheetName === "Stock CV" || sheetName === "Stock PT" || sheetName === "Stock Bahan Baku" || sheetName === "Stock awal") {
       try { syncDivisionStockLightweight_(); } catch (divErr) { console.error("onEdit sync divisi: " + divErr.message); }
     }
-    if (sheetName === "Barang masuk" || sheetName === "purchase order") {
-      try { refreshDashboardPOSection_({ renderCharts: false, lightweight: true }); } catch (poErr) { console.error("Dashboard PO ringan gagal: " + poErr.message); }
-    }
+    // Satu jalur refresh per edit: saat patch nonaktif, refreshDashboardLive_ di bawah
+    // memperbarui tabel PO. Saat patch aktif, dashboardSyncPatchTick_ menyinkronkan berkala.
     // Setiap perubahan sumber Dashboard juga memperbarui ringkasan/chart-data tanpa
     // membuat ulang chart. Penulisan transaksi API tetap aman; interval 5 menit
     // menjadi jalur sinkronisasi kedua untuk perubahan yang dibuat oleh PWA/API. 
@@ -4114,7 +4112,7 @@ function refreshDashboardPOSection_(options) {
     currentCount: currentCount,
     previousCount: previousCount,
     sheet: 'Dashboard',
-    purchaseOrderWriteEnabled: true,
+    purchaseOrderWriteEnabled: false,
     updatedAt: new Date().toISOString()
   };
 }
