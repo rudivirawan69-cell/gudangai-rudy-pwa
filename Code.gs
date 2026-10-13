@@ -930,7 +930,7 @@ function addTransaction(body) {
         if (kekurangan > 0) {
           shortageMode = true;
           finalQty = 0;
-          const structured = "Input pending " + numericQty + " > sisa stock " + sisa + " > kurang " + kekurangan;
+          const structured = formatStockShortageHold_(numericQty, sisa, kekurangan, stockInfo.satuan || stockInfo.unit || "");
           keterangan = keterangan ? (keterangan + " | " + structured) : structured;
           flags.push("STOCK_KURANG", "STOCK_KURANG_HOLD", "QTY_HOLD_0");
           try {
@@ -1087,6 +1087,7 @@ function bulkTransaction(body) {
         stockMap[String(it.kode || "").trim()] = {
           stockAkhir: clampStockToZero_(it.stockAkhir),
           nama: it.nama || "",
+          satuan: it.satuan || it.unit || "",
           entitas: it.entitas || entitas
         };
       });
@@ -1162,7 +1163,7 @@ function bulkTransaction(body) {
         if (kekurangan > 0) {
           shortageMode = true;
           finalQty = 0;
-          var structured = "HOLD; orderQty: " + numericQty + "; availableQty: " + sisa + "; shortageQty: " + kekurangan + "; followUp: verifikasi pembelian manual";
+          var structured = formatStockShortageHold_(numericQty, sisa, kekurangan, (st && (st.satuan || st.unit)) || "");
           keterangan = keterangan ? (keterangan + " | " + structured) : structured;
         }
         if (st) st.stockAkhir = Math.max(0, sisa - (shortageMode ? 0 : finalQty));
@@ -2567,6 +2568,17 @@ function getDashboardData() {
 function getDashboard() { return getDashboardData(); }
 
 function toNumber_(v) { const n = Number(String(v).replace(/[^0-9,.-]/g, "").replace(/,/g, ".")); return isNaN(n) ? 0 : n; }
+function formatStockShortageHold_(orderQty, availableQty, shortageQty, unit) {
+  function fmt(value) {
+    const n = Number(value);
+    return Number.isFinite(n) ? String(n) : "0";
+  }
+  const normalizedUnit = String(unit || "").trim().toLowerCase();
+  return "pending ❌ PO " + fmt(orderQty) +
+    " sisa stock " + fmt(availableQty) +
+    " kekurangan " + fmt(shortageQty) +
+    (normalizedUnit ? " " + normalizedUnit : "");
+}
 function percent_(n, d) { return d ? Math.round((n / d) * 1000) / 10 : 0; }
 function normalizeDivision_(v) { return String(v || "LAINNYA").trim().toUpperCase().replace(/DAPUR1/g, "DAPUR 1").replace(/DAPUR2/g, "DAPUR 2") || "LAINNYA"; }
 
@@ -3506,9 +3518,9 @@ function onEdit(e) {
     if (sheetName === "Stock CV" || sheetName === "Stock PT" || sheetName === "Stock Bahan Baku" || sheetName === "Stock awal") {
       try { syncDivisionStockLightweight_(); } catch (divErr) { console.error("onEdit sync divisi: " + divErr.message); }
     }
-    if (sheetName === "Barang masuk" || sheetName === "purchase order") {
-      try { refreshDashboardPOSection_({ renderCharts: false, lightweight: true }); } catch (poErr) { console.error("Dashboard PO ringan gagal: " + poErr.message); }
-    }
+    // Status PO tidak ditulis dua kali dari onEdit dan refreshDashboardLive_.
+    // Jika patch Dashboard aktif, dashboardSyncPatchTick_ menjadi jalur sinkronisasi
+    // terjadwal; jika tidak aktif, refreshDashboardLive_ menangani blok PO sekali.
     // Setiap perubahan sumber Dashboard juga memperbarui ringkasan/chart-data tanpa
     // membuat ulang chart. Penulisan transaksi API tetap aman; interval 5 menit
     // menjadi jalur sinkronisasi kedua untuk perubahan yang dibuat oleh PWA/API. 
@@ -4068,7 +4080,7 @@ function refreshDashboardPOSection_(options) {
     currentCount: currentCount,
     previousCount: previousCount,
     sheet: 'Dashboard',
-    purchaseOrderWriteEnabled: true,
+    purchaseOrderWriteEnabled: false,
     updatedAt: new Date().toISOString()
   };
 }
