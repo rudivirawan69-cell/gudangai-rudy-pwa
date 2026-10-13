@@ -3955,7 +3955,10 @@ function getStatusPO() {
     nama: findHeader(/NAMA/, 1),
     poCV: findHeader(/PO\s*CV/, 4),
     poPT: findHeader(/PO\s*PT/, 5),
-    total: findHeader(/TOTAL/, 6)
+    total: findHeader(/TOTAL/, 6),
+    size: findHeader(/SIZE|UKURAN/, 2),
+    satuan: findHeader(/SATUAN|UNIT/, 3),
+    tanggal: findHeader(/TGL|TANGGAL|KEDATANGAN/, 7)
   };
   const rows = last >= PO_DATA_START_ROW
     ? po.getRange(PO_DATA_START_ROW, PO_DATA_START_COL, last - PO_DATA_START_ROW + 1, PO_DATA_NUM_COLS).getValues()
@@ -4025,7 +4028,9 @@ function getStatusPO() {
     const cvCandidates = allStockForPO_.filter(function(it) { return it.entitas === "CV" && normalizePONameKey_(it.nama) === normalizePONameKey_(nama); });
     const ptCandidates = allStockForPO_.filter(function(it) { return it.entitas === "PT" && normalizePONameKey_(it.nama) === normalizePONameKey_(nama); });
     items.push({
-      no: no, nama: nama, totalPO: total, poCV: poCV, poPT: poPT, kodeCV: cvCandidates.length === 1 ? cvCandidates[0].kode : null, kodePT: ptCandidates.length === 1 ? ptCandidates[0].kode : null,
+      no: no, nama: nama, size: String(r[poCols.size] || "").trim(), satuan: String(r[poCols.satuan] || "").trim(),
+      tanggalKedatangan: r[poCols.tanggal] instanceof Date ? Utilities.formatDate(r[poCols.tanggal], TIMEZONE, DATE_FORMAT) : String(r[poCols.tanggal] || "").trim(),
+      totalPO: total, poCV: poCV, poPT: poPT, kodeCV: cvCandidates.length === 1 ? cvCandidates[0].kode : null, kodePT: ptCandidates.length === 1 ? ptCandidates[0].kode : null,
       qtyDatang: datang, qtyBelumDatang: belumDatang, status: status,
       // kodeUnik tetap disediakan untuk label, tetapi pembacaan tanggal tidak bergantung padanya.
       kodeUnik: noPO ? ('No : ' + noPO + '[ ITEM : ' + String(no).padStart(2, '0') + ' ]') : null,
