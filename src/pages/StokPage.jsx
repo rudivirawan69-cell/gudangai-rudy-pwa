@@ -28,7 +28,7 @@ function StockCard({ item }) {
   }[level];
 
   return (
-    <div className={"stock-card w-full rounded-2xl border shadow-sm border-l-4 px-4 py-3 box-border transition-all duration-300 ease-out hover:-translate-y-0.5 hover:shadow-lg active:scale-[.99] " + border + " stock-level-" + level + " " + (level === 'danger' ? "border-red-200 bg-gradient-to-br from-rose-50 to-white" : level === 'warning' ? "border-amber-200 bg-gradient-to-br from-amber-50 to-white" : level === 'zero' ? "border-slate-200 bg-gradient-to-br from-slate-50 to-white" : "border-emerald-100 bg-gradient-to-br from-emerald-50/70 to-white")}>
+    <div className={`stock-card w-full rounded-2xl bg-white border border-slate-100 shadow-sm border-l-4 ${border} px-4 py-3 box-border`}>
       <div className="flex items-center gap-3 min-w-0">
         <div className="flex-1 min-w-0">
           <p className="text-[11px] text-slate-400 font-mono font-medium truncate">{item.kode}</p>
@@ -148,11 +148,9 @@ export default function StokPage() {
             key={s.key}
             type="button"
             onClick={() => setFilterStatus(s.filter)}
-            aria-pressed={filterStatus === s.filter}
-            className={"stock-metric-surface rounded-2xl border px-3 py-3 text-left transition-all duration-300 ease-out hover:-translate-y-0.5 hover:shadow-lg active:scale-[.97] " +
-              (filterStatus === s.filter
-                ? "ring-2 " + s.ring + " " + (s.key === 'kritis' ? "border-red-200 bg-gradient-to-br from-rose-100 to-white" : s.key === 'menipis' ? "border-amber-200 bg-gradient-to-br from-amber-100 to-white" : s.key === 'aman' ? "border-emerald-200 bg-gradient-to-br from-emerald-100 to-white" : "border-slate-300 bg-gradient-to-br from-slate-100 to-white")
-                : "border-slate-100 bg-white shadow-sm") + (filterStatus === s.filter ? " stock-metric-active-" + (s.key === 'kritis' ? 'danger' : s.key === 'menipis' ? 'warning' : s.key === 'aman' ? 'safe' : 'all') : "")}
+            className={`stock-metric-surface rounded-2xl bg-white border border-slate-100 shadow-sm px-3 py-3 text-left transition ${
+              filterStatus === s.filter ? `ring-2 ${s.ring}` : ''
+            }`}
           >
             <div className="flex items-center justify-between"><span className={`stock-metric-icon ${s.iconClass}`}><s.icon className="w-5 h-5" /></span><span className="text-[9px] font-extrabold text-slate-400">STATUS</span></div>
             <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wide mt-3">{s.label}</p>
