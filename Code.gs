@@ -3859,7 +3859,7 @@ function recordPOArrival(body) {
   const tx = addTransaction({
     action: "addTransaction", operation: "addTransaction", sheet: "Barang masuk", entitas: entitas, kodeBarang: kode, qty: qty,
     tanggal: body.tanggal || Utilities.formatDate(new Date(), TIMEZONE, DATE_FORMAT),
-    keterangan: "DATANG PO " + (getPOInfoFromHeader_(po).noPO || "-") + " [ITEM : " + String(found.no).padStart(2, "0") + "]",
+    keterangan: "No : " + (getPOInfoFromHeader_(po).noPO || "-") + " [ITEM : " + String(found.no).padStart(2, "0") + " ]",
     requestId: requestId, transactionId: transactionId, nonce: String(body.nonce || transactionId), queueApproved: true, client: body.client || {}
   });
   if (!tx || tx.success !== true || tx.writeOccurred !== true) return Object.assign({}, tx || { success: false }, { code: (tx && tx.code) || "PO_ARRIVAL_WRITE_FAILED" });
