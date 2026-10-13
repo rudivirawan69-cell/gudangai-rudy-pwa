@@ -1123,23 +1123,47 @@ function bulkTransaction(body) {
 
   // Load stok 1x (untuk shortage HOLD pada keluar)
   var stockMap = {};
+  var stockLoadOk = false;
+  var stockLoadError = "";
   try {
     var allStock = getAllStock(entitas);
-    if (allStock && allStock.success && allStock.items) {
+    if (allStock && allStock.success === true && Array.isArray(allStock.items)) {
       allStock.items.forEach(function(it) {
-        stockMap[String(it.kode || "").trim()] = {
+        var stockCode = String(it.kode || "").trim();
+        if (!stockCode) return;
+        stockMap[stockCode] = {
           stockAkhir: clampStockToZero_(it.stockAkhir),
           nama: it.nama || "",
           satuan: it.satuan || it.unit || "",
           entitas: it.entitas || entitas
         };
       });
+      stockLoadOk = true;
+    } else {
+      stockLoadError = String(allStock && (allStock.error || allStock.code) || "getAllStock tidak mengembalikan data stok yang valid");
     }
   } catch (eStock) {
-    console.error("bulkTransaction stock load: " + eStock.message);
+    stockLoadError = String(eStock && eStock.message || eStock);
+    console.error("bulkTransaction stock load: " + stockLoadError);
   }
 
   var isKeluar = sheetName === "Barang keluar";
+  // FAIL CLOSED: jika stok tidak dapat dibaca, jangan menganggap semua stok = 0
+  // lalu membuat HOLD palsu. Tolak sebelum ledger claim atau penulisan transaksi.
+  if (isKeluar && !stockLoadOk) {
+    return { success: false, status: "REJECTED", code: "STOCK_READ_FAILED", batchId: batchId,
+      writeOccurred: false, retryable: true,
+      error: "Stok tidak berhasil dibaca. Transaksi keluar dibatalkan tanpa penulisan agar tidak membuat HOLD palsu. " + stockLoadError };
+  }
+  if (isKeluar) {
+    var missingStockCodes = prepared.filter(function(tx) { return !Object.prototype.hasOwnProperty.call(stockMap, String(tx.kodeBarang || "").trim()); })
+      .map(function(tx) { return String(tx.kodeBarang || "").trim(); });
+    if (missingStockCodes.length) {
+      return { success: false, status: "REJECTED", code: "STOCK_CODE_NOT_FOUND", batchId: batchId,
+        writeOccurred: false, retryable: false, missingCodes: missingStockCodes,
+        error: "Kode transaksi keluar tidak ditemukan dalam snapshot stok. Tidak ada transaksi yang ditulis." };
+    }
+  }
   var lock = LockService.getScriptLock();
   if (!lock.tryLock(30000)) {
     return { success: false, status: "UNKNOWN", code: "LOCK_TIMEOUT", batchId: batchId, writeOccurred: "unknown", error: "Lock backend tidak tersedia; lakukan read-back sebelum retry." };
@@ -4085,6 +4109,65 @@ function refreshDashboardPOSection_(options) {
     purchaseOrderWriteEnabled: false,
     updatedAt: new Date().toISOString()
   };
+}
+
+function auditPOStatusReadOnly_() {
+  // AUDIT READ-ONLY: tidak menulis, membersihkan, atau memformat sheet apa pun.
+  const ss = getSS();
+  const po = ss.getSheetByName("purchase order");
+  const dash = ss.getSheetByName("Dashboard");
+  const result = {
+    success: true,
+    mode: "READ_ONLY",
+    checkedAt: new Date().toISOString(),
+    spreadsheet: ss.getName(),
+    poSheetExists: !!po,
+    dashboardExists: !!dash
+  };
+  if (po) {
+    const lastRow = po.getLastRow();
+    const lastCol = Math.max(9, po.getLastColumn());
+    result.po = {
+      lastRow: lastRow,
+      headerRow: PO_HEADER_ROW,
+      dataStartRow: PO_DATA_START_ROW,
+      header: po.getRange(PO_HEADER_ROW, 1, 1, lastCol).getDisplayValues()[0],
+      firstDataRows: lastRow >= PO_DATA_START_ROW
+        ? po.getRange(PO_DATA_START_ROW, 1, Math.min(10, lastRow - PO_DATA_START_ROW + 1), lastCol).getDisplayValues()
+        : [],
+      headerInfo: getPOInfoFromHeader_(po)
+    };
+  }
+  try {
+    const status = getStatusPO();
+    result.statusPO = status && status.success ? {
+      success: true, noPO: status.noPO || null, weekKey: status.weekKey || null,
+      itemCount: (status.items || []).length, summary: status.summary || null,
+      firstItems: (status.items || []).slice(0, 10).map(function(x) {
+        return { no: x.no, nama: x.nama, totalPO: x.totalPO, qtyDatang: x.qtyDatang,
+          qtyBelumDatang: x.qtyBelumDatang, status: x.status };
+      })
+    } : { success: false, error: status && status.error || "getStatusPO tidak mengembalikan data" };
+  } catch (e) {
+    result.statusPO = { success: false, error: String(e && e.message || e) };
+  }
+  try {
+    const previous = getPreviousPOStatus_() || {};
+    result.previousWeek = { weekKey: previous.weekKey || null, noPO: previous.noPO || null,
+      itemCount: (previous.items || []).length, summary: previous.summary || null };
+  } catch (e) {
+    result.previousWeek = { error: String(e && e.message || e) };
+  }
+  if (dash) {
+    result.dashboard = {
+      criticalRows28to30: dash.getRange(28, 1, 3, 6).getDisplayValues(),
+      currentPOHeaderRow49: dash.getRange(49, 1, 1, 6).getDisplayValues()[0],
+      currentPOFirstRows50to52: dash.getRange(50, 1, 3, 6).getDisplayValues(),
+      previousPOHeaderRow49: dash.getRange(49, 8, 1, 6).getDisplayValues()[0],
+      previousPOFirstRows50to52: dash.getRange(50, 8, 3, 6).getDisplayValues()
+    };
+  }
+  return result;
 }
 
 function getCurrentSyncVersions_() {
