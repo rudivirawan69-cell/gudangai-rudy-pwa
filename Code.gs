@@ -2919,8 +2919,11 @@ function refreshDashboard(force) {
     if (sh.getMaxColumns() < 14) sh.insertColumnsAfter(sh.getMaxColumns(), 14 - sh.getMaxColumns());
     // Force rebuild hanya atas permintaan admin. Ini bukan jalur transaksi/onEdit.
     try { clearDashboardCharts_(sh); } catch (e) {}
-    sh.getRange(1, 1, Math.min(sh.getMaxRows(), 30), 14).breakApart();
-    sh.getRange(1, 1, Math.min(sh.getMaxRows(), 30), 14).clearContent();
+    // Rebuild hanya membersihkan area dashboard atas sampai baris 27.
+    // Baris 28–45 dikhususkan untuk tabel item kritis dan harus dipertahankan.
+    const safeRebuildRows = Math.min(sh.getMaxRows(), 27);
+    sh.getRange(1, 1, safeRebuildRows, 14).breakApart();
+    sh.getRange(1, 1, safeRebuildRows, 14).clearContent();
     sh.setFrozenRows(3);
     sh.getRange("A1:N1").merge().setValue("DASHBOARD GUDANG NASGOR 69").setFontSize(20).setFontWeight("bold");
     sh.getRange("A2:N2").merge().setValue("Pantauan Stok & Aktivitas — Real Time | Update: " + (data.lastUpdate || data.generatedAt));
@@ -4340,8 +4343,8 @@ function dashboardSyncPatchRefresh_(options) {
     sh.getRange(13,1,15,6).clearContent();
     sh.getRange(12,1,1,6).setValues([["DIVISI","TOTAL ITEM","AMAN","WASPADA","KRITIS","% KRITIS"]]).setFontWeight("bold");
     if (divRows.length) sh.getRange(13,1,divRows.length,6).setValues(divRows);
-    sh.getRange(13,2,80,4).setNumberFormat("#,##0").setHorizontalAlignment("center");
-    sh.getRange(13,6,80,1).setNumberFormat("0.0%").setHorizontalAlignment("center");
+    sh.getRange(13,2,15,4).setNumberFormat("#,##0").setHorizontalAlignment("center");
+    sh.getRange(13,6,15,1).setNumberFormat("0.0%").setHorizontalAlignment("center");
 
     const hiddenDiv = [["DIVISI","AMAN","WASPADA","KRITIS"]].concat((data.statusPerDivisi || []).map(function(d) {
       return [d.divisi,Number(d.aman)||0,Number(d.waspada)||0,Number(d.kritis)||0];
