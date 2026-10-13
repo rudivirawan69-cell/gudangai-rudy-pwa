@@ -631,8 +631,12 @@ function StatusPOCard({ data, loading, error, onRefresh, onConfirm, confirmingId
       const projectedTotal = alreadyArrived + qty;
       const status = projectedTotal >= qtyPO ? 'Selesai' : 'Sebagian';
       const ok = await onConfirm?.(arrivalItem, status, qty, arrivalTargetNoPO);
-      if (ok) closeArrivalCart();
-      else setArrivalError('Gagal menyimpan kedatangan. Periksa koneksi/API.');
+      if (ok) {
+        setArrivalItem(null);
+        setArrivalQty('');
+        setArrivalError('');
+        setArrivalTargetNoPO('');
+      } else setArrivalError('Gagal menyimpan kedatangan. Periksa koneksi/API.');
     } catch (err) {
       setArrivalError(err?.message || 'Gagal menyimpan kedatangan.');
     } finally {
@@ -1125,7 +1129,7 @@ export default function DashboardPage({ onNavigate }) {
 
   return (
     <div className="dashboard-shell w-full max-w-6xl mx-auto px-3 sm:px-5 lg:px-7 pt-4 pb-24 space-y-4">
-      <div className="dashboard-header-card dashboard-3d-card rounded-2xl bg-white border border-slate-200 shadow-sm px-4 sm:px-5 py-4>
+      <div className="dashboard-header-card dashboard-3d-card rounded-2xl bg-white border border-slate-200 shadow-sm px-4 sm:px-5 py-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
             <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-cyan-700">{greeting} · GUDANG PUSAT</p>
