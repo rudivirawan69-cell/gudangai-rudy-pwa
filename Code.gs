@@ -85,7 +85,10 @@ const PO_DATA_START_ROW = 6;
 const PO_DATA_START_COL = 2; // B
 const PO_DATA_NUM_COLS = 8; // B:I
 const PO_LOCK_TIMEOUT_MS = 20000;
-const PO_SECTION_CURRENT_ROW = 46;
+const STATUS_PO_LAYOUT_VERSION = '6.9.0-LOCKED-ROW46';
+const PO_START_ROW = 46;
+const PO_HEADER_ROW = 49; // Header Dashboard Status PO; berbeda dari header sheet purchase order.
+const PO_SECTION_CURRENT_ROW = PO_START_ROW;
 const PO_DASHBOARD_MAX_VISIBLE_ROWS = 50;
 const OPS_TITLE_ROWS = 2;
 const OPS_HEADER_ROW = 3;
@@ -970,7 +973,8 @@ function addTransaction(body) {
         if (kekurangan > 0) {
           shortageMode = true;
           finalQty = 0;
-          const structured = "Input pending " + numericQty + " > sisa stock " + sisa + " > kurang " + kekurangan;
+          const unit = String(stockInfo.satuan || "pack").trim().toLowerCase();
+          const structured = "pending ❌ PO " + numericQty + " sisa stock " + sisa + " kekurangan " + kekurangan + " " + unit;
           keterangan = keterangan ? (keterangan + " | " + structured) : structured;
           flags.push("STOCK_KURANG", "STOCK_KURANG_HOLD", "QTY_HOLD_0");
           try {
@@ -1202,7 +1206,8 @@ function bulkTransaction(body) {
         if (kekurangan > 0) {
           shortageMode = true;
           finalQty = 0;
-          var structured = "HOLD; orderQty: " + numericQty + "; availableQty: " + sisa + "; shortageQty: " + kekurangan + "; followUp: verifikasi pembelian manual";
+          var unit = String((st && st.satuan) || "pack").trim().toLowerCase();
+          var structured = "pending ❌ PO " + numericQty + " sisa stock " + sisa + " kekurangan " + kekurangan + " " + unit;
           keterangan = keterangan ? (keterangan + " | " + structured) : structured;
         }
         if (st) st.stockAkhir = Math.max(0, sisa - (shortageMode ? 0 : finalQty));
@@ -3918,8 +3923,8 @@ function getStatusPO() {
   const noPO = info.noPO;
   const last = po.getLastRow();
   const rows = last >= PO_DATA_START_ROW
-    ? po.getRange(PO_DATA_START_ROW, PO_DATA_START_COL, last - PO_DATA_START_ROW + 1, PO_DATA_NUM_COLS).getDisplayValues()
-    : [];
+    ? po.getRange(PO_DATA_START_ROW, PO_DATA_START_COL, last - PO_DATA_START_ROW + 1, PO_DATA_NUM_COLS).getValues()
+    : []; // Kolom H (r[6]) dibaca sebagai nilai numerik hasil formula, bukan teks format tampilan.
   const allStockForPO_ = getAllStock("ALL").items || [];
 
   // Peta kedatangan:
@@ -3966,7 +3971,8 @@ function getStatusPO() {
     const nama = String(r[1] || '').trim();
     const poCV = toNumber_(r[4]);
     const poPT = toNumber_(r[5]);
-    const total = Math.max(0, toNumber_(r[6]) || poCV + poPT);
+    const totalFromColumnH = toNumber_(r[6]); // purchase order kolom H; indeks 6 pada range B:I.
+    const total = Math.max(0, totalFromColumnH > 0 ? totalFromColumnH : (poCV + poPT));
     if (!nama || total <= 0) return;
     const byIndex = arrivalsByIndex[no] || 0;
     const byName = arrivalsByName[normalizePONameKey_(nama)] || 0;
@@ -4021,7 +4027,7 @@ function renderPOStatusBlock_(sheet, topRow, title, subtitle, data, items, start
     .setFontWeight('bold').setFontSize(9).setFontColor('#FFFFFF').setBackground(UI_PRIMARY).setHorizontalAlignment('center').setVerticalAlignment('middle').setWrap(true)
     .setBorder(true, true, true, true, true, true, UI_BORDER, SpreadsheetApp.BorderStyle.SOLID);
   const visible = (items || []).slice(0, PO_DASHBOARD_MAX_VISIBLE_ROWS);
-  const rows = visible.map(function(x) { return [x.no, x.nama, x.totalPO || 0, x.qtyDatang || 0, x.qtyBelumDatang != null ? x.qtyBelumDatang : Math.max(0, (x.totalPO || 0) - (x.qtyDatang || 0)), x.status || 'MENUNGGU']; });
+  const rows = visible.map(function(x) { const total = Number(x.totalPO) || 0; const datang = Number(x.qtyDatang) || 0; return [x.no, x.nama, total, datang, x.qtyBelumDatang != null ? Number(x.qtyBelumDatang) || 0 : Math.max(0, total - datang), x.status || 'MENUNGGU']; });
   if (rows.length) {
     sheet.getRange(topRow + 4, col, rows.length, cols).setValues(rows);
     const bodyRange = sheet.getRange(topRow + 4, col, rows.length, cols);
@@ -4063,8 +4069,8 @@ function refreshDashboardPOSection_(options) {
   const data = getStatusPO();
   if (!data || !data.success) return data || { success: false, code: 'PO_STATUS_EMPTY', error: 'Data Status PO tidak tersedia' };
   const previous = getPreviousPOStatus_() || {};
-  const currentTop = 46;
-  const previousTop = 46;
+  const currentTop = PO_START_ROW;
+  const previousTop = PO_START_ROW;
   const currentItems = data.items || [];
   const previousItems = previous.items || [];
   const currentCount = Math.min(PO_DASHBOARD_MAX_VISIBLE_ROWS, currentItems.length);
@@ -4101,8 +4107,8 @@ function refreshDashboardPOSection_(options) {
   return {
     success: true,
     status: 'OK',
-    sectionCurrent: 4,
-    sectionPrevious: 5,
+    sectionCurrent: PO_START_ROW,
+    sectionPrevious: PO_START_ROW,
     currentTop: currentTop,
     previousTop: previousTop,
     currentCount: currentCount,
