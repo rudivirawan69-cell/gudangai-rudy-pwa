@@ -552,7 +552,7 @@ function mapIdempotencyRow_(row, rowNumber) {
     requestId: String(r[4] || ""), deviceId: String(r[5] || ""), operation: String(r[6] || ""),
     sheet: String(r[7] || ""), entitas: String(r[8] || ""), kodeBarang: String(r[9] || ""),
     qty: r[10], tanggal: String(r[11] || ""), status: String(r[12] || ""), dataRow: r[13] || "",
-    writeOccurred: String(r[14] || ""), errorCode: String(r[15] || ""), details: String(r[16] || "")
+    writeOccurred: r[14] === false ? "false" : String(r[14] == null ? "" : r[14]), errorCode: String(r[15] || ""), details: String(r[16] || "")
   };
 }
 
