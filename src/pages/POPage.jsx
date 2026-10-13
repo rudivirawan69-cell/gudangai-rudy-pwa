@@ -163,7 +163,7 @@ function ItemCard({ item, onUpdate, onRemove, editable, compact = false }) {
           </button>
         )}
       </div>
-      <div className="mt-1.5 flex items-center gap-2">
+      <div className="mt-2 flex items-center gap-2">
         {editable ? (
           <>
             <button type="button" onClick={() => onUpdate(item, { qty: Math.max(0, (Number(item.qty) || 0) - 1) })}
@@ -185,18 +185,17 @@ function ItemCard({ item, onUpdate, onRemove, editable, compact = false }) {
         ) : (
           <span className="text-sm font-extrabold text-slate-900 tabular-nums">{item.qty ?? item.kurang}</span>
         )}
-        <div className="flex-1" />
-        <label className={"flex shrink-0 " + (compact ? "w-full flex-col items-stretch gap-1 mt-1" : "items-center gap-1")}>
-          <span className="text-[9px] font-bold text-slate-500 uppercase">Tgl kedatangan</span>
-          <input
-            type="date"
-            value={item.tglKedatangan || defaultTglISO()}
-            onChange={(e) => onUpdate && onUpdate(item, { tglKedatangan: e.target.value })}
-            disabled={!editable}
-            className={"text-[11px] font-semibold text-slate-800 border border-slate-200 rounded-lg px-1.5 py-1 bg-white " + (compact ? "w-full min-w-0" : "max-w-[8.5rem]")}
-          />
-        </label>
       </div>
+      <label className={"mt-2 flex " + (compact ? "w-full flex-col items-stretch gap-1" : "items-center gap-1")}>
+        <span className="text-[9px] font-bold text-slate-500 uppercase">Tgl kedatangan</span>
+        <input
+          type="date"
+          value={item.tglKedatangan || defaultTglISO()}
+          onChange={(e) => onUpdate && onUpdate(item, { tglKedatangan: e.target.value })}
+          disabled={!editable}
+          className={"text-[11px] font-semibold text-slate-800 border border-slate-200 rounded-lg px-1.5 py-1 bg-white " + (compact ? "w-full min-w-0" : "max-w-[8.5rem]")}
+        />
+      </label>
       <p className="text-[10px] text-cyan-700 font-semibold mt-1 tabular-nums">
         Kedatangan: {formatTglKedatangan(item.tglKedatangan || defaultTglISO())}
       </p>
