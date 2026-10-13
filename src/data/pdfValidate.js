@@ -215,19 +215,27 @@ export function parsePdfLinesToItems(text) {
     if (/^(nama\s*barang|barang|kode|satuan|unit|qty|quantity|harga|jumlah\s*harga)\b/i.test(line)) continue;
     if (/^(frozen\s*&\s*kering|rekap\s*order|keterangan|pt\.|cv\.)/i.test(line)) continue;
 
-    const nums = [...line.matchAll(/(\d+(?:[.,]\d+)?)/g)];
+    // Tanggal kedatangan dapat berada setelah TOTAL pada PDF PO. Buang
+    // tanggal trailing terlebih dahulu agar tahun (mis. 2026) tidak dianggap qty.
+    const withoutTrailingDate = line
+      .replace(/\s+\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4}\s*$/, '')
+      .replace(/\s+\d{1,2}[- ](?:jan|feb|mar|apr|mei|jun|jul|agu|sep|okt|nov|des)[a-z]*[- ]\d{4}\s*$/i, '')
+      .replace(/\s+\d{4}-\d{2}-\d{2}\s*$/, '')
+      .trim();
+    const nums = [...withoutTrailingDate.matchAll(/(\d+(?:[.,]\d+)?)/g)];
     if (!nums.length) continue;
 
-    // TOTAL selalu diambil dari angka paling kanan. Jangan memotong nama pada
-    // unit pertama karena unit seperti "0.5 kg", "10 pcs", dll. bisa berada
-    // di dalam nama barang itu sendiri.
+    // TOTAL adalah angka terakhir sebelum tanggal; angka ukuran yang berada
+    // di nama barang tetap dipisahkan dari teks nama di bawah.
     const last = nums[nums.length - 1];
     const qty = parseFloat(last[1].replace(',', '.'));
     if (!(qty > 0) || qty > 99999) continue;
 
-    let rawName = line.slice(0, last.index).trim();
+    let rawName = withoutTrailingDate.slice(0, last.index).trim();
     rawName = sanitizePdfProductName(rawName)
-      .replace(/\b(pack|pcs|pail|ekor|kg|box|unit|porsi|gram|liter|lusin|botol|kaleng|karung)\b/gi, ' ')
+      // Size/kemasan di ujung nama review tidak ikut nama murni.
+      .replace(/\s*\([^)]*\b(?:\d+(?:[.,]\d+)?\s*(?:kg|gram|gr|pcs|pack|pail|liter|ml)|\d+\s*(?:pcs|pack|pail))[^)]*\)\s*$/i, '')
+      .replace(/\s+\d+(?:[.,]\d+)?\s*(?:kg|gram|gr|pcs|pack|pail|liter|ml)\s*$/i, '')
       .replace(/\s+/g, ' ')
       .trim();
 
