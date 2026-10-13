@@ -186,13 +186,21 @@ export default function InputPage() {
       // ke kode CV, dan tidak masuk ke keranjang transaksi.
       let skippedRawMaterialCount = 0;
       if (validationEntity === 'CV') {
+        const normalizeRawMaterialName = (value) => String(value || '')
+          .normalize('NFKC').toLowerCase()
+          .replace(/\([^)]*\)/g, ' ')
+          .replace(/\b\d+(?:[.,]\d+)?\s*(?:kg|gram|gr|pcs|pack|pail|liter|ml|ekor)\b/g, ' ')
+          .replace(/\b(?:kg|gram|gr|pcs|pack|pail|liter|ml|ekor)\b/g, ' ')
+          .replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
         const bbptNames = getMasterByEntity('PT')
           .filter((m) => /^BBPT-/i.test(String(m.kode || '')))
-          .map((m) => String(m.nama || '').normalize('NFKC').toLowerCase().replace(/\([^)]*\)/g, ' ').replace(/[^a-z0-9]+/g, ' ').trim())
+          .map((m) => normalizeRawMaterialName(m.nama))
           .filter(Boolean);
         const isBBPTRawMaterial = (row) => {
-          const name = String(row.rawName || row.nameFromPdf || row.name || '').normalize('NFKC').toLowerCase().replace(/\([^)]*\)/g, ' ').replace(/[^a-z0-9]+/g, ' ').trim();
-          return !!name && bbptNames.some((masterName) => name === masterName || name.includes(masterName) || masterName.includes(name));
+          const name = normalizeRawMaterialName(row.rawName || row.nameFromPdf || row.name || '');
+          // Cocok exact saja: "Ayam Negeri 2 Dada + 2 Paha" adalah barang jadi,
+          // bukan bahan baku "Ayam Negeri".
+          return !!name && bbptNames.includes(name);
         };
         const before = rows.length;
         rows = rows.filter((row) => !isBBPTRawMaterial(row));
