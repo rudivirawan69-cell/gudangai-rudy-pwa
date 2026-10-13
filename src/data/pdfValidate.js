@@ -323,8 +323,25 @@ function findFuzzyMasterMatch(entity, rawName, master) {
   return { item: best.item, matchType: 'fuzzy-ocr', score: best.score };
 }
 
+function filterPdfMasterForEntity(entity, masterList) {
+  const ent = String(entity || '').trim().toUpperCase() === 'CV' ? 'CV' : 'PT';
+  const source = Array.isArray(masterList) ? masterList : [];
+  return source.filter((item) => {
+    const kode = String(item?.kode || item?.kodeBarang || '').trim().toUpperCase();
+    const divisi = String(item?.divisi || item?.division || '').trim().toUpperCase().replace(/\s+/g, ' ');
+    if (ent === 'CV') {
+      // CV PDF hanya memakai barang jadi/produksi; bahan baku BBCV/BBPT tidak boleh masuk keranjang CV.
+      return /^CV-/.test(kode) && divisi !== 'BAHAN BAKU' && !/^(?:BBCV|BBPT)-/.test(kode);
+    }
+    // PT boleh memakai kode PT, WK, MM, dan BBPT; kode CV/BBCV ditolak.
+    return /^(?:PT|WK|MM|BBPT)-/.test(kode);
+  });
+}
+
 export function validatePdfItems(entity, textOrItems, masterOverride) {
-  const master = masterOverride || getMasterByEntity(entity) || [];
+  const sourceMaster = Array.isArray(masterOverride) ? masterOverride : (getMasterByEntity(entity) || []);
+  const master = filterPdfMasterForEntity(entity, sourceMaster);
+  const allowedCodes = new Set(master.map((item) => String(item?.kode || item?.kodeBarang || '').trim()));
   const items = Array.isArray(textOrItems) ? textOrItems : parsePdfLinesToItems(textOrItems);
   const results = [];
 
@@ -347,8 +364,13 @@ export function validatePdfItems(entity, textOrItems, masterOverride) {
     if (!match) {
       const aliasResult = matchByAlias(entity, sanitizePdfProductName(rawNameOriginal));
       if (aliasResult) {
-        match = aliasResult;
-        note = aliasResult.matchType || 'alias';
+        const aliasItem = aliasResult.item || aliasResult;
+        const aliasKode = String(aliasItem?.kode || aliasItem?.kodeBarang || '').trim();
+        // Jangan menerima alias dari luar master yang sudah disaring untuk entitas yang dipilih.
+        if (aliasKode && allowedCodes.has(aliasKode)) {
+          match = aliasResult;
+          note = aliasResult.matchType || 'alias';
+        }
       }
     }
 
