@@ -569,6 +569,7 @@ export default function InputPage() {
           const r = resultMap.get(item.clientItemId);
           return r?.success === true || r?.skipped === true;
         });
+        const notificationKey = 'tx:' + String(res.requestId || res.transactionId || orderedCart.map((item) => item.clientItemId).join('|')) + ':' + txType + ':' + entity;
 
         // Riwayat hanya boleh dibuat dari konfirmasi per-item backend.
         // Item yang hanya masuk antrian tidak boleh tampil sebagai "berhasil".
@@ -592,6 +593,7 @@ export default function InputPage() {
 
         if (queuedCount > 0) {
           pushNotification({
+            dedupeKey: notificationKey,
             type: 'warning',
             title: confirmedItems.length > 0 ? 'Transaksi sebagian selesai' : 'Transaksi masuk Antrian Sinkronisasi',
             body: confirmedItems.length + ' sukses · ' + queuedCount + ' antrian' +
@@ -604,17 +606,17 @@ export default function InputPage() {
             ' — lanjutkan dari Antrian bila perlu.'
           );
         } else if (confirmedItems.length === cart.length) {
-          pushNotification({ type: 'success', title: 'Transaksi selesai', body: confirmedItems.length + ' item ' + txType + ' ' + entity + ' terkonfirmasi ditulis backend.' });
+          pushNotification({ dedupeKey: notificationKey, type: 'success', title: 'Transaksi selesai', body: confirmedItems.length + ' item ' + entity + ' sukses terkonfirmasi ditulis backend. Tanpa antrian.' });
           setStatusBanner('Berhasil dikonfirmasi · ' + confirmedItems.length + ' item');
         } else {
-          pushNotification({ type: 'error', title: 'Belum ada konfirmasi penulisan', body: 'Tidak ada item yang dinyatakan tertulis per-item oleh backend.' });
+          pushNotification({ dedupeKey: notificationKey, type: 'error', title: 'Belum ada konfirmasi penulisan', body: 'Backend belum mengonfirmasi item tertulis. Periksa antrian sebelum mengulang.' });
           setStatusBanner('Belum terkonfirmasi — item tetap diamankan di antrian');
         }
 
         setCart([]); setAccuracy(null); setPdfReview([]);
         window.dispatchEvent(new Event('gudangai-stock-refresh'));
       } else {
-        pushNotification({ type: 'error', title: 'Transaksi belum dikirim', body: res?.error || 'Tidak ada data yang dinyatakan berhasil.' });
+        pushNotification({ dedupeKey: 'tx:' + String(res?.requestId || orderedCart.map((item) => item.clientItemId).join('|')) + ':' + txType + ':' + entity, type: 'error', title: 'Transaksi belum dikirim', body: res?.error || 'Tidak ada data yang dinyatakan berhasil.' });
         setStatusBanner(res?.error || 'Gagal kirim');
       }
     } catch (err) { setStatusBanner(err.message || 'Gagal kirim'); }
