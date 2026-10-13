@@ -192,18 +192,25 @@ export default function InputPage() {
           .replace(/\b\d+(?:[.,]\d+)?\s*(?:kg|gram|gr|pcs|pack|pail|liter|ml|ekor)\b/g, ' ')
           .replace(/\b(?:kg|gram|gr|pcs|pack|pail|liter|ml|ekor)\b/g, ' ')
           .replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
-        const bbptNames = getMasterByEntity('PT')
-          .filter((m) => /^BBPT-/i.test(String(m.kode || '')))
-          .map((m) => normalizeRawMaterialName(m.nama))
-          .filter(Boolean);
-        const isBBPTRawMaterial = (row) => {
+        const rawMaterialNames = [
+          ...getMasterByEntity('CV')
+            .filter((m) => /^BBCV-/i.test(String(m.kode || '')) || String(m.divisi || '').trim().toUpperCase() === 'BAHAN BAKU')
+            .map((m) => normalizeRawMaterialName(m.nama)),
+          ...getMasterByEntity('PT')
+            .filter((m) => /^BBPT-/i.test(String(m.kode || '')) || String(m.divisi || '').trim().toUpperCase() === 'BAHAN BAKU')
+            .map((m) => normalizeRawMaterialName(m.nama)),
+        ].filter(Boolean);
+        const isRawMaterial = (row) => {
+          const code = String(row.kode || row.kodeBarang || '').trim().toUpperCase();
+          const division = String(row.divisi || row.division || '').trim().toUpperCase();
+          if (/^(?:BBCV|BBPT)-/.test(code) || division === 'BAHAN BAKU') return true;
           const name = normalizeRawMaterialName(row.rawName || row.nameFromPdf || row.name || '');
-          // Cocok exact saja: "Ayam Negeri 2 Dada + 2 Paha" adalah barang jadi,
-          // bukan bahan baku "Ayam Negeri".
-          return !!name && bbptNames.includes(name);
+          // Cocok exact saja agar "Ayam Negeri 2 Dada + 2 Paha" tidak terhapus
+          // ketika master bahan baku hanya bernama "Ayam Negeri".
+          return !!name && rawMaterialNames.includes(name);
         };
         const before = rows.length;
-        rows = rows.filter((row) => !isBBPTRawMaterial(row));
+        rows = rows.filter((row) => !isRawMaterial(row));
         skippedRawMaterialCount = before - rows.length;
       }
       if (!rows.length) {
@@ -230,7 +237,7 @@ export default function InputPage() {
       }));
       const total = matched.length + amb.length + un.length;
       const acc = total ? Math.round((matched.length / total) * 100) : 0;
-      setAccuracy({ pct: acc, matched: matched.length, skipped: 0, needPick: review.length, total });
+      setAccuracy({ pct: acc, matched: matched.length, skipped: skippedRawMaterialCount, needPick: review.length, total: total + skippedRawMaterialCount });
       // Only confirmed master matches enter the transaction cart.
       // Unmatched/ambiguous rows are retained for manual mapping; nothing is silently dropped.
       mergePdfIntoCart(matched, review);
