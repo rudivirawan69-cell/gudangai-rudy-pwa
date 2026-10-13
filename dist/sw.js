@@ -1,5 +1,5 @@
 /* GudangAI RUDY — Service Worker */
-const BUILD_VERSION = '2026-10-05T01:35:55.953Z';
+const BUILD_VERSION = '2026-10-13T05:41:19.365Z';
 const CACHE_NAME = `gudangai-${BUILD_VERSION}`;
 const PRECACHE = [
   '/',
