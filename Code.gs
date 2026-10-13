@@ -747,8 +747,11 @@ function getRequestStatus_(body) {
     const rec = mapIdempotencyRow_(rows[i], start + i);
     if (rec.requestId !== requestId) continue;
     const rb = readBackTransactionByIdentity_({ transactionId: rec.transactionId, nonce: rec.nonce }, rec.sheet);
-    if (rb && rb.matched && rec.status !== "APPLIED") updateIdempotencyRecord_(rec, { status: "APPLIED", dataRow: rb.row, writeOccurred: true, errorCode: "" });
-    return { success: rb.matched || rec.status === "APPLIED", status: rb.matched ? "APPLIED" : (rec.status || "UNKNOWN"), code: rb.matched ? "READBACK_CONFIRMED" : (rec.errorCode || "REQUEST_FOUND"), requestId: requestId, transactionId: rec.transactionId, nonce: rec.nonce, writeOccurred: rb.matched ? true : rec.writeOccurred, readBack: rb, record: rec };
+    if (rb && rb.matched) {
+      const confirmed = rec.status === "APPLIED" ? rec : updateIdempotencyRecord_(rec, { status: "APPLIED", dataRow: rb.row, writeOccurred: true, errorCode: "" });
+      return { success: true, status: "APPLIED", code: "READBACK_CONFIRMED", requestId: requestId, transactionId: rec.transactionId, nonce: rec.nonce, writeOccurred: true, readBack: rb, record: confirmed || rec };
+    }
+    return { success: false, status: "UNKNOWN", code: "READBACK_REQUIRED", requestId: requestId, transactionId: rec.transactionId, nonce: rec.nonce, writeOccurred: rec.writeOccurred || "unknown", retryable: false, error: "Ledger ditemukan tetapi baris transaksi belum dapat dikonfirmasi. Jangan kirim ulang otomatis.", readBack: rb, record: rec };
   }
   return { success: false, status: "NOT_FOUND", code: "REQUEST_NOT_FOUND", requestId: requestId, writeOccurred: false };
 }
@@ -760,11 +763,14 @@ function getTransactionStatus(body) {
   const rec = findIdempotencyRecord_(transactionId, nonce);
   const readBack = readBackTransactionByIdentity_({ transactionId: transactionId, nonce: nonce }, body.sheet);
   if (rec) {
-    if (readBack.matched && rec.status !== "APPLIED") {
-      const updated = updateIdempotencyRecord_(rec, { status: "APPLIED", dataRow: readBack.row, writeOccurred: true, errorCode: "" });
-      return { success: true, status: "APPLIED", code: "READBACK_CONFIRMED", transactionId: transactionId || rec.transactionId, nonce: nonce || rec.nonce, record: updated, readBack: readBack };
+    if (readBack.matched) {
+      const updated = rec.status === "APPLIED" ? rec : updateIdempotencyRecord_(rec, { status: "APPLIED", dataRow: readBack.row, writeOccurred: true, errorCode: "" });
+      return { success: true, status: "APPLIED", code: "READBACK_CONFIRMED", transactionId: transactionId || rec.transactionId, nonce: nonce || rec.nonce, writeOccurred: true, record: updated || rec, readBack: readBack };
     }
-    return { success: rec.status === "APPLIED", status: rec.status, code: rec.errorCode || "LEDGER_FOUND", transactionId: transactionId || rec.transactionId, nonce: nonce || rec.nonce, writeOccurred: rec.writeOccurred, retryable: rec.status === "FAILED" && rec.writeOccurred === "false", record: rec, readBack: readBack };
+    if (rec.status === "APPLIED" || rec.status === "COMPLETED" || rec.status === "IN_PROGRESS" || String(rec.writeOccurred) === "true" || String(rec.writeOccurred) === "unknown") {
+      return { success: false, status: "UNKNOWN", code: "READBACK_REQUIRED", transactionId: transactionId || rec.transactionId, nonce: nonce || rec.nonce, writeOccurred: rec.writeOccurred || "unknown", retryable: false, error: "Ledger ditemukan tetapi baris transaksi belum dapat dikonfirmasi. Jangan kirim ulang otomatis.", record: rec, readBack: readBack };
+    }
+    return { success: false, status: rec.status || "UNKNOWN", code: rec.errorCode || "LEDGER_FOUND", transactionId: transactionId || rec.transactionId, nonce: nonce || rec.nonce, writeOccurred: rec.writeOccurred, retryable: rec.status === "FAILED" && String(rec.writeOccurred) === "false", record: rec, readBack: readBack };
   }
   if (readBack.matched) return { success: true, status: "APPLIED", code: "READBACK_FOUND", transactionId: transactionId || null, nonce: nonce || null, writeOccurred: true, readBack: readBack };
   return { success: false, status: "NOT_FOUND", code: "IDENTITY_NOT_FOUND", transactionId: transactionId || null, nonce: nonce || null, writeOccurred: false, readBack: readBack };
