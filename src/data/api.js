@@ -545,7 +545,11 @@ export async function fetchRemoteTransactionHistory(days = 7) {
 }
 export function pushNotification(n) {
   const list = getNotifications();
-  const item = { ...n, id: 'N-' + Date.now(), read: false, at: Date.now() };
+  const dedupeKey = String(n?.dedupeKey || '').trim();
+  const existingIndex = dedupeKey ? list.findIndex((item) => String(item?.dedupeKey || '') === dedupeKey) : -1;
+  const existing = existingIndex >= 0 ? list[existingIndex] : null;
+  const item = { ...n, id: existing?.id || ('N-' + Date.now()), read: false, at: Date.now() };
+  if (existingIndex >= 0) list.splice(existingIndex, 1);
   list.unshift(item);
   try { localStorage.setItem(NOTIF_KEY, JSON.stringify(list.slice(0, 50))); } catch (_) {}
   try { window.dispatchEvent(new CustomEvent('gudangai-notification', { detail: item })); } catch (_) {}
