@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "node scripts/assemble-api.mjs && node scripts/write-icons.mjs && node scripts/write-sw-version.mjs && vite build",
+    "build": "node scripts/assemble-api.mjs && node scripts/write-icons.mjs && node scripts/write-sw-version.mjs && vite build && node -e \"require('node:fs').rmSync('dist/_redirects',{force:true})\"",
     "lint": "oxlint",
     "preview": "vite preview",
     "write-icons": "node scripts/write-icons.mjs",
