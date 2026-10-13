@@ -587,7 +587,6 @@ function StatusPOCard({ data, loading, error, onRefresh, onConfirm, confirmingId
   const [arrivalError, setArrivalError] = useState('');
   const [arrivalSaving, setArrivalSaving] = useState(false);
   const [arrivalTargetNoPO, setArrivalTargetNoPO] = useState('');
-  const [arrivalEntity, setArrivalEntity] = useState('CV');
   const [activePOView, setActivePOView] = useState('current');
   const sourceItems = Array.isArray(data?.items) ? data.items : [];
   const previousSnapshot = data?.previousWeek || data?.previous || data?.lastWeek || null;
@@ -600,7 +599,6 @@ function StatusPOCard({ data, loading, error, onRefresh, onConfirm, confirmingId
     setArrivalTargetNoPO(String(targetNoPO || ''));
     const cvQty = Number(item?.poCV) || 0;
     const ptQty = Number(item?.poPT) || 0;
-    setArrivalEntity(cvQty > 0 && ptQty <= 0 ? 'CV' : ptQty > 0 && cvQty <= 0 ? 'PT' : 'CV');
   };
 
   const closeArrivalCart = () => {
@@ -609,7 +607,6 @@ function StatusPOCard({ data, loading, error, onRefresh, onConfirm, confirmingId
     setArrivalQty('');
     setArrivalError('');
     setArrivalTargetNoPO('');
-    setArrivalEntity('CV');
   };
 
   const submitArrivalCart = async () => {
@@ -649,7 +646,6 @@ function StatusPOCard({ data, loading, error, onRefresh, onConfirm, confirmingId
         setArrivalQty('');
         setArrivalError('');
         setArrivalTargetNoPO('');
-        setArrivalEntity('CV');
       } else setArrivalError('Gagal menyimpan kedatangan. Periksa koneksi/API.');
     } catch (err) {
       setArrivalError(err?.message || 'Gagal menyimpan kedatangan.');
