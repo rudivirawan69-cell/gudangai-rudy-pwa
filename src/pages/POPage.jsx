@@ -142,18 +142,18 @@ function buildReadablePO(items, title) {
   return text;
 }
 
-function ItemCard({ item, onUpdate, onRemove, editable }) {
+function ItemCard({ item, onUpdate, onRemove, editable, compact = false }) {
   return (
-    <div className="stock-card bg-white rounded-xl px-2.5 py-2 border border-slate-200 shadow-sm">
+    <div className={"stock-card po-item-card bg-white rounded-xl border border-slate-200 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md " + (compact ? "px-2 py-2 po-item-card-compact" : "px-3 py-3")}>
       <div className="flex items-start justify-between gap-1.5">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5 mb-0.5">
             <span className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded shrink-0 ${
               item.entity === 'CV' ? 'bg-blue-100 text-blue-700' : 'bg-violet-100 text-violet-700'
             }`}>{item.entity}</span>
-            <p className="text-[13px] font-bold text-slate-900 leading-tight truncate">{item.nama}</p>
+            <p className={"text-[13px] font-bold text-slate-900 leading-tight " + (compact ? "break-words" : "truncate")}>{item.nama}</p>
           </div>
-          <p className="text-[10px] text-slate-500 tabular-nums">
+          <p className={"text-[10px] text-slate-500 tabular-nums " + (compact ? "break-words" : "")}>
             {item.kode} · {item.size || '—'} · {item.satuan || 'Pack'}
           </p>
         </div>
@@ -186,14 +186,14 @@ function ItemCard({ item, onUpdate, onRemove, editable }) {
           <span className="text-sm font-extrabold text-slate-900 tabular-nums">{item.qty ?? item.kurang}</span>
         )}
         <div className="flex-1" />
-        <label className="flex items-center gap-1 shrink-0">
-          <span className="text-[9px] font-bold text-slate-500 uppercase">Tgl</span>
+        <label className={"flex shrink-0 " + (compact ? "w-full flex-col items-stretch gap-1 mt-1" : "items-center gap-1")}>
+          <span className="text-[9px] font-bold text-slate-500 uppercase">Tgl kedatangan</span>
           <input
             type="date"
             value={item.tglKedatangan || defaultTglISO()}
             onChange={(e) => onUpdate && onUpdate(item, { tglKedatangan: e.target.value })}
             disabled={!editable}
-            className="text-[11px] font-semibold text-slate-800 border border-slate-200 rounded-lg px-1.5 py-1 bg-white max-w-[8.5rem]"
+            className={"text-[11px] font-semibold text-slate-800 border border-slate-200 rounded-lg px-1.5 py-1 bg-white " + (compact ? "w-full min-w-0" : "max-w-[8.5rem]")}
           />
         </label>
       </div>
@@ -591,9 +591,9 @@ export default function POPage() {
               </p>
             </div>
           ) : (
-            <div className={`${gapClass} mb-2`}>
+            <div className={density === 'compact' ? 'grid grid-cols-2 gap-2 mb-2' : 'space-y-2.5 mb-2'}>
               {activeList.map((item) => (
-                <ItemCard key={`${item.entity}-${item.kode}`} item={{ ...item, qty: item.kurang, tglKedatangan: defaultTglISO() }} editable={false} />
+                <ItemCard key={`${item.entity}-${item.kode}`} item={{ ...item, qty: item.kurang, tglKedatangan: defaultTglISO() }} editable={false} compact={density === 'compact'} />
               ))}
             </div>
           )}
@@ -606,6 +606,7 @@ export default function POPage() {
                 key={`${item.entity}-${item.kode}`}
                 item={item}
                 editable
+                compact={density === 'compact'}
                 onUpdate={onUpdateItem}
                 onRemove={onRemoveItem}
               />
