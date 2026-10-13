@@ -4,7 +4,7 @@ import { useStock } from '../hooks/useStock';
 import {
   FileText, Trash2, Plus, Minus, Download, ShoppingCart,
   CheckCircle, Snowflake, ChefHat, Loader2, CloudUpload,
-  CalendarDays, CalendarClock, ClipboardCheck, ArrowLeft, RefreshCw, AlertCircle, ChevronRight,
+  CalendarDays, CalendarClock, ClipboardCheck, ArrowLeft, RefreshCw, ChevronRight,
 } from 'lucide-react';
 import { submitPO, getStatusPO, confirmPOStatus } from '../data/api';
 
