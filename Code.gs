@@ -619,6 +619,38 @@ function readBackTransactionByIdentity_(identity, preferredSheet) {
   const targetId = String(identity && identity.transactionId || "").trim();
   const targetNonce = String(identity && identity.nonce || "").trim();
   const sheetNames = preferredSheet ? [preferredSheet] : Object.keys(SHEET_CONFIG);
+
+  // Preferred path: resolve the row from the durable idempotency ledger.
+  // This is required because identity markers are intentionally not stored in Keterangan.
+  const ledgerRecord = (targetId || targetNonce) ? findIdempotencyRecord_(targetId, targetNonce) : null;
+  if (ledgerRecord && ledgerRecord.dataRow && ledgerRecord.sheet &&
+      (!preferredSheet || String(preferredSheet) === String(ledgerRecord.sheet))) {
+    const sheetName = String(ledgerRecord.sheet);
+    const config = SHEET_CONFIG[sheetName];
+    const sheet = config ? getSS().getSheetByName(sheetName) : null;
+    const rowNumber = Number(ledgerRecord.dataRow);
+    if (sheet && Number.isInteger(rowNumber) && rowNumber > config.headerRow && rowNumber <= sheet.getLastRow()) {
+      const r = sheet.getRange(rowNumber, 2, 1, 6).getValues()[0];
+      const note = String(r[5] || "");
+      const dateMatches = normalizeTransactionDateKey_(r[0]) === normalizeTransactionDateKey_(ledgerRecord.tanggal);
+      const codeMatches = String(r[1] || "").trim() === String(ledgerRecord.kodeBarang || "").trim();
+      const actualQty = Number(r[4]) || 0;
+      const expectedQty = Number(ledgerRecord.qty) || 0;
+      // Stock-shortage HOLD intentionally writes qty=0 while the ledger preserves requested qty.
+      const holdQtyMatches = actualQty === 0 && /Input pending/i.test(note);
+      if (dateMatches && codeMatches && (actualQty === expectedQty || holdQtyMatches)) {
+        return {
+          matched: true, sheet: sheetName, row: rowNumber,
+          tanggal: normalizeTransactionDateKey_(r[0]), kodeBarang: String(r[1] || "").trim(),
+          namaBarang: r[2], satuan: r[3], qty: actualQty, keterangan: note,
+          transactionId: targetId || ledgerRecord.transactionId || null,
+          nonce: targetNonce || ledgerRecord.nonce || null
+        };
+      }
+    }
+  }
+
+  // Compatibility fallback for legacy rows that still contain identity markers.
   for (let s = 0; s < sheetNames.length; s++) {
     const sheetName = sheetNames[s];
     if (!(sheetName in SHEET_CONFIG)) continue;
@@ -913,8 +945,10 @@ function addTransaction(body) {
           ledgerRecord = updateIdempotencyRecord_(ledgerRecord, { status: "APPLIED", dataRow: priorRead.row, writeOccurred: true, errorCode: "" });
           return { success: true, status: "APPLIED", code: "IDEMPOTENT_REPLAY", requestId: request.requestId, transactionId: transactionId, nonce: nonce, sheet: sheetName, row: priorRead.row, kode: kode, qty: priorRead.qty, originalQty: numericQty, readBack: priorRead, replayed: true };
         }
-        if (ledgerRecord.status === "UNKNOWN" || ledgerRecord.writeOccurred === "unknown") {
-          return { success: false, status: "UNKNOWN", code: "READBACK_REQUIRED", requestId: request.requestId, transactionId: transactionId, nonce: nonce, writeOccurred: "unknown", error: "Identity memiliki percobaan ambigu; gunakan getTransactionStatus sebelum retry." };
+        // Never repeat a write when a prior attempt may already have committed.
+        // Only an explicitly FAILED + writeOccurred=false record is safe to retry automatically.
+        if (ledgerRecord.status !== "FAILED" || String(ledgerRecord.writeOccurred) !== "false") {
+          return { success: false, status: "UNKNOWN", code: "READBACK_REQUIRED", requestId: request.requestId, transactionId: transactionId, nonce: nonce, writeOccurred: ledgerRecord.writeOccurred || "unknown", retryable: false, error: "Percobaan sebelumnya belum dapat dipastikan dari read-back. Jangan mengulang penulisan; gunakan getTransactionStatus untuk rekonsiliasi." };
         }
         ledgerRecord = updateIdempotencyRecord_(ledgerRecord, { status: "IN_PROGRESS", requestId: request.requestId, deviceId: deviceId, errorCode: "", writeOccurred: false });
       } else {
