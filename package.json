@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "node scripts/assemble-api.mjs && node scripts/write-icons.mjs && node scripts/write-sw-version.mjs && vite build",
-    "lint": "oxlint",
+    "lint": "oxlint src",
     "preview": "vite preview",
     "write-icons": "node scripts/write-icons.mjs",
     "predev": "node scripts/assemble-api.mjs && node scripts/write-icons.mjs",
