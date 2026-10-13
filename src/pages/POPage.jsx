@@ -434,11 +434,72 @@ export default function POPage() {
   };
 
   const totalKurang = activeList.reduce((s, i) => s + i.kurang, 0);
+  const menuCards = [
+    { id: 'generate', title: 'PO', Icon: ShoppingCart, count: null, color: 'from-cyan-500 to-teal-600' },
+    { id: 'current', title: 'Status PO Minggu Ini', Icon: CalendarDays, count: currentPOCount, color: 'from-blue-500 to-indigo-600' },
+    { id: 'previous', title: 'Status PO Minggu Lalu', Icon: CalendarClock, count: previousPOCount, color: 'from-slate-500 to-slate-700' },
+    { id: 'confirm', title: 'Konfirmasi PO', Icon: ClipboardCheck, count: confirmationCount, color: 'from-amber-500 to-orange-600' },
+  ];
+  const viewItems = poView === 'previous' ? previousPOItems : poView === 'confirm' ? currentPOItems.filter((item) => String(item.status || '').toUpperCase() !== 'SELESAI') : currentPOItems;
+
+  if (poView === 'menu') return (
+    <div className="pb-28 space-y-4 animate-fade-in">
+      <header className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <p className="text-[10px] font-extrabold uppercase tracking-[.16em] text-violet-700">GudangAI · Operasional</p>
+        <h1 className="mt-1 text-xl font-extrabold text-slate-900">Purchase Order</h1>
+        <p className="mt-1 text-xs text-slate-600">Pilih fungsi; rincian muncul setelah kartu dibuka.</p>
+        <div className="mt-2 flex items-center justify-between text-[10px] text-slate-500"><span>{remotePO?.weekKey || 'Periode berjalan'}{remotePO?.noPO ? ' · ' + remotePO.noPO : ''}</span><button type="button" onClick={refreshPOStatus} className="inline-flex items-center gap-1 rounded-lg border px-2 py-1 font-bold"><RefreshCw className={"h-3.5 w-3.5 " + (poStatusLoading ? 'animate-spin' : '')}/>Refresh</button></div>
+      </header>
+      {poStatusError && <p role="status" className="rounded-xl border border-amber-200 bg-amber-50 p-2 text-xs font-semibold text-amber-900">{poStatusError}</p>}
+      <div className="grid grid-cols-2 gap-3">
+        {menuCards.map(({id,title,Icon,count,color}) => <button key={id} type="button" onClick={() => {setPoActionMessage('');setPoView(id === 'generate' ? 'generate' : id);}} className="po-menu-card group min-h-[132px] rounded-2xl border border-slate-200 bg-white p-3 text-left shadow-[0_8px_18px_rgba(15,45,60,.10),inset_0_1px_0_white] transition-all duration-200 hover:-translate-y-1 hover:shadow-lg active:scale-[.98]">
+          <span className={"flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br " + color + " text-white shadow-md"}><Icon className="h-5 w-5 stroke-[2.6]"/></span>
+          <span className="mt-3 block text-[12px] font-extrabold leading-snug text-slate-900">{title}</span>
+          <span className="mt-2 flex items-center justify-between text-[10px] font-bold text-slate-500"><span>{count === null ? 'Buka generator' : count + ' item'}</span><ChevronRight className="h-4 w-4 text-violet-600"/></span>
+        </button>)}
+      </div>
+    </div>
+  );
+
+  if (poView === 'current' || poView === 'previous' || poView === 'confirm') {
+    const isPrevious = poView === 'previous';
+    const isConfirm = poView === 'confirm';
+    const title = isPrevious ? 'Status PO Minggu Lalu' : isConfirm ? 'Konfirmasi PO' : 'Status PO Minggu Ini';
+    return (
+      <div className="pb-28 space-y-3 animate-fade-in">
+        <header className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+          <div className="flex justify-between gap-2"><button type="button" onClick={() => setPoView('menu')} className="inline-flex items-center gap-1 rounded-lg border px-2.5 py-2 text-xs font-bold"><ArrowLeft className="h-4 w-4"/>Menu PO</button><button type="button" onClick={refreshPOStatus} className="inline-flex items-center gap-1 rounded-lg bg-slate-50 px-2.5 py-2 text-xs font-bold"><RefreshCw className="h-3.5 w-3.5"/>Refresh</button></div>
+          <h1 className="mt-3 text-lg font-extrabold text-slate-900">{title}</h1>
+          <p className="mt-1 text-[11px] text-slate-500">{isPrevious ? (remotePO?.previousWeek?.weekKey || 'Arsip minggu lalu') : (remotePO?.weekKey || 'Periode berjalan')} · {viewItems.length} item</p>
+        </header>
+        {poActionMessage && <p role="status" className={"rounded-xl border p-2 text-xs font-bold " + (poActionMessage.startsWith('Sukses:') ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-amber-200 bg-amber-50 text-amber-900')}>{poActionMessage}</p>}
+        {poStatusError && <p className="rounded-xl border border-rose-200 bg-rose-50 p-2 text-xs text-rose-800">{poStatusError}</p>}
+        {viewItems.length === 0 ? <div className="rounded-2xl border border-dashed bg-white p-6 text-center"><ClipboardCheck className="mx-auto h-8 w-8 text-slate-400"/><p className="mt-2 text-sm font-bold">{isPrevious ? 'Arsip PO minggu lalu belum tersedia' : isConfirm ? 'Tidak ada PO yang menunggu konfirmasi' : 'Belum ada item PO aktif'}</p><p className="mt-1 text-[11px] text-slate-500">Nama dan kuantitas mengikuti sheet purchase order.</p></div> : <div className="space-y-2">
+          {viewItems.map((item,idx) => {
+            const status = String(item.status || 'MENUNGGU').toUpperCase();
+            const total = Number(item.totalPO ?? item.qtyPO ?? item.total ?? 0) || 0;
+            const datang = Number(item.qtyDatang ?? 0) || 0;
+            const belum = Number(item.qtyBelumDatang ?? Math.max(0,total-datang)) || 0;
+            const mixed = Number(item.poCV)>0 && Number(item.poPT)>0;
+            const entity = Number(item.poCV)>0 ? 'CV' : Number(item.poPT)>0 ? 'PT' : '';
+            const key = String(item.no || item.itemNo || idx+1) + ':' + entity;
+            const canConfirm = isConfirm && !isPrevious && !mixed && !!entity && !!remotePO?.noPO;
+            return <article key={poView+'-'+(item.no||idx)+'-'+item.nama} className={"rounded-xl border bg-white p-3 shadow-sm transition-all duration-200 "+(status==='SELESAI'?'border-emerald-200':status==='SEBAGIAN'?'border-amber-200':'border-slate-200')}>
+              <div className="flex items-start justify-between gap-2"><div className="min-w-0"><p className="text-[10px] font-extrabold text-slate-400">NO. {item.no || item.itemNo || idx+1}</p><p className="mt-0.5 break-words text-[13px] font-extrabold leading-snug text-slate-900">{item.nama || 'Nama barang belum terbaca'}</p><p className="mt-1 text-[10px] text-slate-500">{item.satuan || ''}{item.size ? ' · '+item.size : ''}</p></div><span className={"shrink-0 rounded-full px-2 py-1 text-[9px] font-extrabold "+(status==='SELESAI'?'bg-emerald-100 text-emerald-800':status==='SEBAGIAN'?'bg-amber-100 text-amber-800':'bg-rose-100 text-rose-800')}>{status}</span></div>
+              <div className="mt-3 grid grid-cols-3 gap-2"><div className="rounded-lg bg-slate-50 p-2 text-center"><p className="text-[9px] font-bold">TOTAL</p><p className="text-sm font-extrabold tabular-nums">{total.toLocaleString('id-ID')}</p></div><div className="rounded-lg bg-emerald-50 p-2 text-center"><p className="text-[9px] font-bold text-emerald-700">DATANG</p><p className="text-sm font-extrabold text-emerald-800 tabular-nums">{datang.toLocaleString('id-ID')}</p></div><div className="rounded-lg bg-amber-50 p-2 text-center"><p className="text-[9px] font-bold text-amber-700">BELUM</p><p className="text-sm font-extrabold text-amber-800 tabular-nums">{belum.toLocaleString('id-ID')}</p></div></div>
+              {isConfirm && (mixed ? <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-2 text-[10px] font-semibold text-amber-900">PO memuat CV dan PT sekaligus. Konfirmasi ditahan agar qty tidak salah dialokasikan.</p> : canConfirm ? <div className="mt-3 flex items-end gap-2"><label className="min-w-0 flex-1 text-[10px] font-bold text-slate-600">Qty datang ({entity})<input type="number" min="1" max={Number(entity==='CV'?item.poCV:item.poPT)||total} value={arrivalQtys[key]||''} onChange={(e)=>setArrivalQtys((prev)=>({...prev,[key]:e.target.value}))} className="mt-1 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-extrabold" placeholder="Masukkan qty"/></label><button type="button" disabled={!!confirmingKey} onClick={()=>confirmArrival(item,entity)} className="rounded-lg bg-emerald-600 px-3 py-2.5 text-[11px] font-extrabold text-white disabled:opacity-50">{confirmingKey===key?'Menyimpan…':'Konfirmasi'}</button></div> : <p className="mt-3 text-[10px] font-semibold text-slate-500">Konfirmasi menunggu nomor PO dan kode master yang terverifikasi.</p>)}
+            </article>;
+          })}
+        </div>}
+      </div>
+    );
+  }
 
   return (
     <div className="pb-28 animate-fade-in">
       <div className="flex items-start justify-between gap-2 mb-2">
         <div className="min-w-0">
+          <button type="button" onClick={() => setPoView('menu')} className="mb-2 inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[10px] font-bold text-slate-700"><ArrowLeft className="h-3.5 w-3.5"/>Menu PO</button>
           <h2 className="text-lg font-extrabold text-slate-900">PO Generator</h2>
           <p className="text-xs text-slate-500 mt-0.5">
             2 jalur: <b className="text-cyan-700">PO CS</b> · <b className="text-orange-700">PO Produksi</b>
