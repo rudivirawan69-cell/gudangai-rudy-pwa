@@ -4149,7 +4149,6 @@ function dashboardSyncPatchDisableConflictingTriggers_() {
       ScriptApp.deleteTrigger(t);
       removed++;
     }
-    }
   });
   return removed;
 }
