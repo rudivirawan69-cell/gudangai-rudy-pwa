@@ -4373,11 +4373,47 @@ function dashboardSyncPatchRefresh_(options) {
 }
 
 function dashboardSyncPatchVerify() {
-  const ss=getSS(), sh=ss.getSheetByName("Dashboard"), all=getAllStock("ALL"), po=getStatusPO();
-  const triggers=ScriptApp.getProjectTriggers().map(function(t){return t.getHandlerFunction();});
-  return {success:true,patch:DASHBOARD_SYNC_PATCH_VERSION,enabled:isDashboardSyncPatchEnabled_(),dashboardExists:!!sh,
-    totalMaster:all&&all.success?all.count:null,expectedMaster:191,poApi:!!(po&&po.success),
-    conflictingTriggersStillPresent:triggers.filter(function(x){return x==="refreshAllData"||x==="refreshDashboard";}),
-    patchTriggers:triggers.filter(function(x){return x==="dashboardSyncPatchTick_";}),
-    lastSync:PropertiesService.getScriptProperties().getProperty(DASHBOARD_SYNC_PATCH_LAST),checkedAt:new Date().toISOString()};
+  const ss = getSS();
+  const sh = ss.getSheetByName("Dashboard");
+  const all = getAllStock("ALL");
+  const po = getStatusPO();
+  const previous = getPreviousPOStatus_() || {};
+  const triggers = ScriptApp.getProjectTriggers().map(function(t) { return t.getHandlerFunction(); });
+  const conflictingNames = [
+    "refreshAllData", "refreshDashboard", "testDashboardV7", "dashboardV7",
+    "refreshDashboardV7", "ujiDashboardV7", "testDashboard", "refreshDashboardLegacy"
+  ];
+  const dashboardProbe = sh ? {
+    criticalRows28to30: sh.getRange(28, 1, 3, 6).getDisplayValues(),
+    currentPOHeaderRow49: sh.getRange(49, 1, 1, 6).getDisplayValues()[0],
+    currentPOFirstRows50to52: sh.getRange(50, 1, 3, 6).getDisplayValues(),
+    previousPOHeaderRow49: sh.getRange(49, 8, 1, 6).getDisplayValues()[0],
+    previousPOFirstRows50to52: sh.getRange(50, 8, 3, 6).getDisplayValues()
+  } : null;
+  const poSummary = po && po.success ? {
+    noPO: po.noPO || null,
+    weekKey: po.weekKey || null,
+    itemCount: (po.items || []).length,
+    firstItems: (po.items || []).slice(0, 5).map(function(x) {
+      return { no: x.no, nama: x.nama, totalPO: x.totalPO, qtyDatang: x.qtyDatang, qtyBelumDatang: x.qtyBelumDatang, status: x.status };
+    }),
+    totalPOQty: po.summary && po.summary.totalPOQty || 0,
+    totalKonfirmasiQty: po.summary && po.summary.totalKonfirmasiQty || 0
+  } : { error: po && po.error || "Status PO tidak tersedia" };
+  return {
+    success: true,
+    patch: DASHBOARD_SYNC_PATCH_VERSION,
+    enabled: isDashboardSyncPatchEnabled_(),
+    dashboardExists: !!sh,
+    totalMaster: all && all.success ? all.count : null,
+    expectedMaster: 191,
+    poApi: !!(po && po.success),
+    poSummary: poSummary,
+    previousWeek: { weekKey: previous.weekKey || null, itemCount: (previous.items || []).length, hasArchive: !!previous.weekKey },
+    conflictingTriggersStillPresent: triggers.filter(function(x) { return conflictingNames.indexOf(x) >= 0; }),
+    patchTriggers: triggers.filter(function(x) { return x === "dashboardSyncPatchTick_"; }),
+    dashboardProbe: dashboardProbe,
+    lastSync: PropertiesService.getScriptProperties().getProperty(DASHBOARD_SYNC_PATCH_LAST),
+    checkedAt: new Date().toISOString()
+  };
 }
