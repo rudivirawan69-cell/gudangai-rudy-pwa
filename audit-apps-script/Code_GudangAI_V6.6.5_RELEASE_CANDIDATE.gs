@@ -4106,16 +4106,10 @@ function dashboardSyncPatchRefresh_(options) {
       sh.getRange(x[0]).setValue(cards[i][0] + "\n\n" + cards[i][1] + " " + cards[i][2]);
     });
 
-    const divisionCapacity = PO_START_ROW - 13 - 1; // rows 13–27 only
-    const divRowsAll = (data.statusPerDivisi || []).map(function(d) {
-      return [d.divisi, Number(d.total)||0, Number(d.aman)||0, Number(d.waspada)||0, Number(d.kritis)||0, percent_(d.kritis||0,d.total||0)/100];
-    });
-    const divRows = divRowsAll.slice(0, divisionCapacity);
-    sh.getRange(12,1,1 + divisionCapacity,6).clearContent();
-    sh.getRange(12,1,1,6).setValues([["DIVISI","TOTAL ITEM","AMAN","WASPADA","KRITIS","% KRITIS"]]).setFontWeight("bold");
-    if (divRows.length) sh.getRange(13,1,divRows.length,6).setValues(divRows);
-    sh.getRange(13,2,divisionCapacity,4).setNumberFormat("#,##0").setHorizontalAlignment("center");
-    sh.getRange(13,6,divisionCapacity,1).setNumberFormat("0.0%").setHorizontalAlignment("center");
+    // Chart berlabuh di A10 dan memakai sumber tersembunyi P:S.
+    // Kosongkan hanya sel di belakang area chart agar chart tidak menimpa tabel data yang perlu dibaca.
+    // Baris 28–45 dipertahankan utuh untuk tabel barang kritis.
+    sh.getRange(12, 1, PO_START_ROW - 12 - 1, 6).clearContent();
 
     const hiddenDiv = [["DIVISI","AMAN","WASPADA","KRITIS"]].concat((data.statusPerDivisi || []).map(function(d) {
       return [d.divisi,Number(d.aman)||0,Number(d.waspada)||0,Number(d.kritis)||0];
