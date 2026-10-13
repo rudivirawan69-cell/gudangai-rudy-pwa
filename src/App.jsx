@@ -168,12 +168,12 @@ function AppShell() {
         </div>
       </main>
       <nav className="nav-bar fixed bottom-0 left-0 right-0 safe-bottom z-40">
-        <div className="max-w-lg mx-auto flex relative" style={{ "--nav-index": TABS.findIndex((t) => t.id === tab) }}>
+        <div className="max-w-lg mx-auto flex relative" style={{ "--nav-index": Math.max(0, TABS.findIndex((t) => t.id === (tab === 'po' ? 'dashboard' : tab))) }}>
           <span className="nav-moving-ball nav-moving-ball-mobile" aria-hidden="true" />
           <span className="nav-moving-ball nav-moving-ball-desktop" aria-hidden="true" />
           {TABS.map((t) => {
             const Icon = t.icon;
-            const isActive = tab === t.id;
+            const isActive = (tab === 'po' ? 'dashboard' : tab) === t.id;
             return (
               <button
                 key={t.id}
