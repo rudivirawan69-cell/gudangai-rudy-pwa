@@ -226,6 +226,12 @@ export function parsePdfLinesToItems(text) {
     if (!(qty > 0) || qty > 99999) continue;
 
     let rawName = line.slice(0, last.index).trim();
+    // Hapus ukuran berat/volume di ujung nama sebelum kata unit dibuang.
+    // Contoh: "Tulang Kepala Ceker 1 kg 25" -> nama "Tulang Kepala Ceker", qty 25.
+    // Satuan pcs/pack tidak dihapus di sini karena dapat menjadi bagian nama master.
+    rawName = rawName
+      .replace(/\s+\d+(?:[.,]\d+)?\s*(?:kilograms?|kg|grams?|gr|g|milliliters?|ml|liters?|ltr|l)\s*$/i, '')
+      .trim();
     rawName = sanitizePdfProductName(rawName)
       .replace(/\b(pack|pcs|pail|ekor|kg|box|unit|porsi|gram|liter|lusin|botol|kaleng|karung)\b/gi, ' ')
       .replace(/\s+/g, ' ')
@@ -312,8 +318,25 @@ function findFuzzyMasterMatch(entity, rawName, master) {
   return { item: best.item, matchType: 'fuzzy-ocr', score: best.score };
 }
 
+function filterPdfMasterForEntity(entity, masterList) {
+  const ent = String(entity || '').trim().toUpperCase() === 'CV' ? 'CV' : 'PT';
+  const source = Array.isArray(masterList) ? masterList : [];
+  return source.filter((item) => {
+    const kode = String(item?.kode || item?.kodeBarang || '').trim().toUpperCase();
+    const divisi = String(item?.divisi || item?.division || '').trim().toUpperCase().replace(/\s+/g, ' ');
+    if (ent === 'CV') {
+      // CV PDF hanya memakai barang jadi/produksi: tidak boleh mengambil bahan baku BBCV/BBPT.
+      return /^CV-/.test(kode) && divisi !== 'BAHAN BAKU' && !/^(?:BBCV|BBPT)-/.test(kode);
+    }
+    // Master PT boleh memakai kode PT, WK, MM, dan BBPT; kode CV/BBCV ditolak.
+    return /^(?:PT|WK|MM|BBPT)-/.test(kode);
+  });
+}
+
 export function validatePdfItems(entity, textOrItems, masterOverride) {
-  const master = masterOverride || getMasterByEntity(entity) || [];
+  const sourceMaster = Array.isArray(masterOverride) ? masterOverride : (getMasterByEntity(entity) || []);
+  const master = filterPdfMasterForEntity(entity, sourceMaster);
+  const allowedCodes = new Set(master.map((item) => String(item?.kode || item?.kodeBarang || '').trim()));
   const items = Array.isArray(textOrItems) ? textOrItems : parsePdfLinesToItems(textOrItems);
   const results = [];
 
@@ -336,8 +359,13 @@ export function validatePdfItems(entity, textOrItems, masterOverride) {
     if (!match) {
       const aliasResult = matchByAlias(entity, sanitizePdfProductName(rawNameOriginal));
       if (aliasResult) {
-        match = aliasResult;
-        note = aliasResult.matchType || 'alias';
+        const aliasItem = aliasResult.item || aliasResult;
+        const aliasKode = String(aliasItem?.kode || aliasItem?.kodeBarang || '').trim();
+        // Alias hanya sah jika kode hasilnya berada di master yang sudah difilter untuk entitas ini.
+        if (aliasKode && allowedCodes.has(aliasKode)) {
+          match = aliasResult;
+          note = aliasResult.matchType || 'alias';
+        }
       }
     }
 
