@@ -639,7 +639,7 @@ function readBackTransactionByIdentity_(identity, preferredSheet) {
       const actualQty = Number(r[4]) || 0;
       const expectedQty = Number(ledgerRecord.qty) || 0;
       // Stock-shortage HOLD intentionally writes qty=0 while the ledger preserves requested qty.
-      const holdQtyMatches = actualQty === 0 && /Input pending/i.test(note);
+      const holdQtyMatches = actualQty === 0 && /(?:Input pending|pending\s*❌\s*PO)/i.test(note);
       if (dateMatches && codeMatches && (actualQty === expectedQty || holdQtyMatches)) {
         return {
           matched: true, sheet: sheetName, row: rowNumber,
