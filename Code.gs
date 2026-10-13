@@ -3570,14 +3570,17 @@ function onEdit(e) {
     if (sheetName === "Stock CV" || sheetName === "Stock PT" || sheetName === "Stock Bahan Baku" || sheetName === "Stock awal") {
       try { syncDivisionStockLightweight_(); } catch (divErr) { console.error("onEdit sync divisi: " + divErr.message); }
     }
-    // Satu jalur refresh per edit: saat patch nonaktif, refreshDashboardLive_ di bawah
-    // memperbarui tabel PO. Saat patch aktif, dashboardSyncPatchTick_ menyinkronkan berkala.
-    // Setiap perubahan sumber Dashboard juga memperbarui ringkasan/chart-data tanpa
-    // membuat ulang chart. Penulisan transaksi API tetap aman; interval 5 menit
-    // menjadi jalur sinkronisasi kedua untuk perubahan yang dibuat oleh PWA/API. 
-    if (!isDashboardSyncPatchEnabled_() &&
-        ["Stock CV", "Stock PT", "Stock Bahan Baku", "Stock awal", "Barang masuk", "purchase order", "Barang keluar", "Barang Rusak"].indexOf(sheetName) >= 0) {
-      try { refreshDashboardLive_(); } catch (dashErr) { console.error("Dashboard live gagal: " + dashErr.message); }
+    // Tepat satu jalur refresh per edit. Patch aktif memakai renderer terkunci;
+    // patch nonaktif memakai renderer ringan lama. Tidak ada pemanggilan PO kedua.
+    const dashboardSources = ["Stock CV", "Stock PT", "Stock Bahan Baku", "Stock awal", "Barang masuk", "purchase order", "Barang keluar", "Barang Rusak"];
+    if (dashboardSources.indexOf(sheetName) >= 0) {
+      try {
+        if (isDashboardSyncPatchEnabled_()) {
+          dashboardSyncPatchRefresh_({ reason: "onEdit-" + sheetName });
+        } else {
+          refreshDashboardLive_();
+        }
+      } catch (dashErr) { console.error("Dashboard live gagal: " + dashErr.message); }
     }
   } catch (err) { console.error("onEdit ringan gagal: " + err.message); }
 }
