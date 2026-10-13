@@ -6,7 +6,7 @@ import { useConnection } from './hooks/useConnection';
 import { useBootstrap } from './hooks/useBootstrap';
 import {
   LayoutDashboard, Package, PackagePlus, Clock, Settings,
-  Wifi, WifiOff, AlertTriangle, Loader2, FileText,
+  Wifi, WifiOff, AlertTriangle, Loader2,
 } from 'lucide-react';
 
 const DashboardPage = lazy(() => import('./pages/DashboardPage'));
@@ -45,7 +45,6 @@ const TABS = [
   { id: 'dashboard', label: 'Beranda', icon: LayoutDashboard, active: 'text-cyan-300', chip: 'bg-cyan-500/20' },
   { id: 'stok', label: 'Stok', icon: Package, active: 'text-blue-300', chip: 'bg-blue-500/20' },
   { id: 'input', label: 'Input', icon: PackagePlus, active: 'text-emerald-300', chip: 'bg-emerald-500/20' },
-  { id: 'po', label: 'PO', icon: FileText, active: 'text-violet-300', chip: 'bg-violet-500/20' },
   { id: 'riwayat', label: 'Riwayat', icon: Clock, active: 'text-amber-300', chip: 'bg-amber-500/20' },
   { id: 'settings', label: 'Atur', icon: Settings, active: 'text-slate-200', chip: 'bg-slate-500/20' },
 ];
@@ -55,7 +54,6 @@ const TAB_ACCENT = {
   stok: 'from-blue-400 to-blue-600',
   input: 'from-emerald-400 to-emerald-600',
   riwayat: 'from-amber-400 to-amber-600',
-  po: 'from-violet-400 to-violet-600',
   settings: 'from-slate-400 to-slate-600',
 };
 
@@ -170,12 +168,12 @@ function AppShell() {
         </div>
       </main>
       <nav className="nav-bar fixed bottom-0 left-0 right-0 safe-bottom z-40">
-        <div className="max-w-lg mx-auto flex relative" style={{ "--nav-index": Math.max(0, TABS.findIndex((t) => t.id === tab)) }}>
+        <div className="max-w-lg mx-auto flex relative" style={{ "--nav-index": Math.max(0, TABS.findIndex((t) => t.id === (tab === 'po' ? 'dashboard' : tab))) }}>
           <span className="nav-moving-ball nav-moving-ball-mobile" aria-hidden="true" />
           <span className="nav-moving-ball nav-moving-ball-desktop" aria-hidden="true" />
           {TABS.map((t) => {
             const Icon = t.icon;
-            const isActive = tab === t.id;
+            const isActive = (tab === 'po' ? 'dashboard' : tab) === t.id;
             return (
               <button
                 key={t.id}
@@ -186,7 +184,7 @@ function AppShell() {
                 }`}
               >
                 <div className={`nav-icon-wrap p-1.5 rounded-xl ${isActive ? t.chip : ''}`}>
-                  <Icon className="w-5 h-5 stroke-[2.6]" />
+                  <Icon className="w-5 h-5" />
                 </div>
                 <span className={`nav-label text-[10px] mt-0.5 ${
                   isActive ? 'font-bold opacity-100' : 'font-medium opacity-80'
