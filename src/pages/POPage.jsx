@@ -4,8 +4,9 @@ import { useStock } from '../hooks/useStock';
 import {
   FileText, Trash2, Plus, Minus, Download, ShoppingCart,
   CheckCircle, Snowflake, ChefHat, Loader2, CloudUpload,
+  CalendarDays, CalendarClock, ClipboardCheck, ArrowLeft, RefreshCw, AlertCircle, ChevronRight,
 } from 'lucide-react';
-import { submitPO } from '../data/api';
+import { submitPO, getStatusPO, confirmPOStatus } from '../data/api';
 
 /** Fallback batas aman (dipakai jika live stockAman = 0). */
 const STOCK_AMAN = {
@@ -204,8 +205,93 @@ function ItemCard({ item, onUpdate, onRemove, editable }) {
 }
 
 export default function POPage() {
+  const [poView, setPoView] = useState('menu');
+  const [remotePO, setRemotePO] = useState(null);
+  const [poStatusLoading, setPoStatusLoading] = useState(true);
+  const [poStatusError, setPoStatusError] = useState('');
+  const [poActionMessage, setPoActionMessage] = useState('');
+  const [arrivalQtys, setArrivalQtys] = useState({});
+  const [confirmingKey, setConfirmingKey] = useState('');
   const [density, setDensity] = useState(() => localStorage.getItem('gudangai_density') || 'comfortable');
   const gapClass = density === 'compact' ? 'space-y-1.5' : 'space-y-2.5';
+
+  useEffect(() => {
+    let active = true;
+    const load = async (silent = false) => {
+      if (!silent && active) setPoStatusLoading(true);
+      try {
+        const res = await getStatusPO();
+        if (!active) return;
+        if (res?.success) {
+          setRemotePO(res);
+          setPoStatusError('');
+        } else {
+          setPoStatusError(res?.error || 'Status PO belum tersedia dari backend.');
+        }
+      } catch (err) {
+        if (active) setPoStatusError(err?.message || 'Gagal membaca Status PO.');
+      } finally {
+        if (active && !silent) setPoStatusLoading(false);
+      }
+    };
+    void load();
+    const timer = setInterval(() => {
+      if (document.visibilityState === 'visible' && navigator.onLine) void load(true);
+    }, 15000);
+    const onChanged = () => { void load(true); };
+    window.addEventListener('gudangai-po-changed', onChanged);
+    window.addEventListener('online', onChanged);
+    return () => {
+      active = false;
+      clearInterval(timer);
+      window.removeEventListener('gudangai-po-changed', onChanged);
+      window.removeEventListener('online', onChanged);
+    };
+  }, []);
+
+  const currentPOItems = Array.isArray(remotePO?.items) ? remotePO.items : [];
+  const previousPOItems = Array.isArray(remotePO?.previousWeek?.items) ? remotePO.previousWeek.items : [];
+  const currentPOCount = currentPOItems.length;
+  const previousPOCount = previousPOItems.length;
+  const confirmationCount = currentPOItems.filter((item) => String(item.status || '').toUpperCase() !== 'SELESAI').length;
+  const refreshPOStatus = async () => {
+    setPoStatusLoading(true);
+    try {
+      const res = await getStatusPO();
+      if (res?.success) { setRemotePO(res); setPoStatusError(''); }
+      else setPoStatusError(res?.error || 'Status PO belum tersedia dari backend.');
+    } catch (err) { setPoStatusError(err?.message || 'Gagal membaca Status PO.'); }
+    finally { setPoStatusLoading(false); }
+  };
+  const confirmArrival = async (item, entity) => {
+    const key = String(item.no || item.itemNo || item.nama) + ':' + entity;
+    if (confirmingKey) return;
+    const qty = Number(arrivalQtys[key] || 0);
+    if (!Number.isFinite(qty) || qty <= 0) { setPoActionMessage('Isi qty kedatangan lebih dari 0.'); return; }
+    if (!remotePO?.noPO) { setPoActionMessage('Konfirmasi ditahan: nomor PO aktif belum terbaca dari Spreadsheet.'); return; }
+    const entityPOQty = Number(entity === 'CV' ? item.poCV : item.poPT) || 0;
+    if (qty > entityPOQty) { setPoActionMessage('Qty konfirmasi tidak boleh melebihi PO ' + entity + ' (' + entityPOQty + ').'); return; }
+    setConfirmingKey(key);
+    setPoActionMessage('Mencatat kedatangan ke backend…');
+    try {
+      const res = await confirmPOStatus({
+        requestId: 'POARR-' + Date.now().toString(36) + '-' + String(item.no || item.itemNo || 'x') + '-' + entity,
+        itemNo: item.no || item.itemNo,
+        nama: item.nama,
+        entitas: entity,
+        kode: entity === 'CV' ? item.kodeCV : item.kodePT,
+        qtyDatangBaru: qty,
+      });
+      if (res?.success === true && res?.writeOccurred !== false) {
+        setPoActionMessage('Sukses: ' + (res.nama || item.nama) + ' ' + entity + ' terkonfirmasi ditulis backend.');
+        setArrivalQtys((prev) => ({ ...prev, [key]: '' }));
+        await refreshPOStatus();
+      } else {
+        setPoActionMessage('Belum terkonfirmasi: ' + (res?.error || res?.code || 'backend tidak memastikan penulisan.'));
+      }
+    } catch (err) { setPoActionMessage('Belum terkonfirmasi: ' + (err?.message || 'gagal menghubungi backend.')); }
+    finally { setConfirmingKey(''); }
+  };
 
   const stockCV = useStock('CV');
   const stockPT = useStock('PT');
