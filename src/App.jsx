@@ -186,7 +186,7 @@ function AppShell() {
                 }`}
               >
                 <div className={`nav-icon-wrap p-1.5 rounded-xl ${isActive ? t.chip : ''}`}>
-                  <Icon className="w-5 h-5" />
+                  <Icon className="w-5 h-5 stroke-[2.6]" />
                 </div>
                 <span className={`nav-label text-[10px] mt-0.5 ${
                   isActive ? 'font-bold opacity-100' : 'font-medium opacity-80'
