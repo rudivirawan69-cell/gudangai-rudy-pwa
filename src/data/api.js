@@ -452,23 +452,11 @@ async function submitItems(action, entity, items, tanggal, options = {}) {
         error: msg,
       })));
       emitProgress(list.length, list.length, { successCount: totalSuccess, failCount: totalFail });
-      pushNotification({
-        type: 'warning',
-        title: totalSuccess > 0 ? 'Sebagian item perlu Antrian Sinkronisasi' : 'Item diamankan di Antrian Sinkronisasi',
-        body: totalSuccess + ' sukses · ' + remainingItems.length + ' antrian. Detail: ' + msg,
-      });
+      // Notification is emitted once by InputPage after aggregating backend results.
       break;
     }
   }
-  if (totalQueued > 0) {
-    pushNotification({
-      type: 'warning',
-      title: totalSuccess > 0 ? 'Transaksi sebagian selesai' : 'Transaksi masuk Antrian Sinkronisasi',
-      body: totalSuccess + ' sukses · ' + totalQueued + ' antrian' + (totalFail ? ' · ' + totalFail + ' gagal konfirmasi' : '') + '. Lanjutkan dari Antrian bila perlu.',
-    });
-  } else {
-    pushNotification({ type: 'success', title: 'Transaksi selesai', body: totalSuccess + ' item berhasil ditulis tanpa antrian.' });
-  }
+  // InputPage owns the single user-facing notification for this submit operation.
   return {
     success: totalSuccess === list.length,
     partial: totalSuccess > 0 && totalSuccess < list.length,
