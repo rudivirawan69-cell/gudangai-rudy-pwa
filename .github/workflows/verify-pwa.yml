@@ -31,6 +31,10 @@ jobs:
         run: npm ci
       - name: Validate Apps Script candidate syntax
         run: cp audit-apps-script/Code_GudangAI_V6.6.5_RELEASE_CANDIDATE.gs /tmp/Code_GudangAI_candidate.js && node --check /tmp/Code_GudangAI_candidate.js
+      - name: Validate active Code.gs syntax
+        run: cp Code.gs /tmp/Code_GudangAI_active.js && node --check /tmp/Code_GudangAI_active.js
+      - name: Validate PDF validation module syntax
+        run: node --check src/data/pdfValidate.js
       - name: Lint
         run: npm run lint
       - name: Production build
