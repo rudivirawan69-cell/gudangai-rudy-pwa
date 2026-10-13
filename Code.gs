@@ -2844,7 +2844,8 @@ function refreshDashboardLive_() {
     const divRows = (data.statusPerDivisi || []).map(function(d) {
       return [d.divisi, d.total, d.aman, d.waspada, d.kritis, percent_(d.kritis, d.total) / 100];
     });
-    sh.getRange(13, 1, 80, 6).clearContent();
+    // Area tabel divisi dibatasi ke baris 13–27. Baris 28–45 milik tabel kritis dan tidak boleh dibersihkan.
+    sh.getRange(13, 1, 15, 6).clearContent();
     sh.getRange(12, 1, 1, 6).setValues([["DIVISI", "TOTAL ITEM", "AMAN", "WASPADA", "KRITIS", "% KRITIS"]]);
     if (divRows.length) {
       sh.getRange(13, 1, divRows.length, 6).setValues(divRows);
@@ -2895,6 +2896,11 @@ function refreshDashboard(force) {
   if (isDashboardSyncPatchEnabled_()) {
     if (force !== true) return { success: true, skippedHeavyRebuild: true, patch: true, lastUpdate: getLastUpdateTimestamp() };
     return dashboardSyncPatchRefresh_({ reason: "manual-refreshDashboard", force: true });
+  }
+  // Setelah layout dikunci, jangan izinkan rebuild lama membersihkan baris 1–30
+  // yang bisa memuat tabel kritis di baris 28. Gunakan renderer ringan yang aman.
+  if (PropertiesService.getScriptProperties().getProperty(DASHBOARD_LAYOUT_LOCK_KEY) === "1") {
+    return dashboardSyncPatchRefresh_({ reason: "manual-refreshDashboard-locked-layout", force: true });
   }
   // Dashboard sheet adalah tampilan sekunder. Jangan rebuild setiap transaksi/onEdit.
   // force=true hanya untuk admin/manual refresh.
@@ -4330,7 +4336,8 @@ function dashboardSyncPatchRefresh_(options) {
     const divRows = (data.statusPerDivisi || []).map(function(d) {
       return [d.divisi, Number(d.total)||0, Number(d.aman)||0, Number(d.waspada)||0, Number(d.kritis)||0, percent_(d.kritis||0,d.total||0)/100];
     });
-    sh.getRange(12,1,80,6).clearContent();
+    // Jangan menyapu A28:F45: area itu milik tabel item kritis. Data divisi hanya memakai baris 13–27.
+    sh.getRange(13,1,15,6).clearContent();
     sh.getRange(12,1,1,6).setValues([["DIVISI","TOTAL ITEM","AMAN","WASPADA","KRITIS","% KRITIS"]]).setFontWeight("bold");
     if (divRows.length) sh.getRange(13,1,divRows.length,6).setValues(divRows);
     sh.getRange(13,2,80,4).setNumberFormat("#,##0").setHorizontalAlignment("center");
