@@ -7,7 +7,7 @@ import {
 import { DIVISIONS } from '../data/master';
 import {
   AlertTriangle, RefreshCw, FileText, Package, Users, Boxes, ShieldAlert, CheckCircle2, AlertCircle, X,
-  CalendarDays, CalendarClock, ClipboardCheck, FilePlus2, Mail, Clock3, Layers3, ArrowUpRight,
+  ClipboardCheck, Mail, Clock3, Layers3,
 } from 'lucide-react';
 
 function classifyItem(it) {
@@ -553,7 +553,7 @@ function StatusPOCard({ data, loading, error, onRefresh, onConfirm, confirmingId
   const [arrivalError, setArrivalError] = useState('');
   const [arrivalSaving, setArrivalSaving] = useState(false);
   const [arrivalTargetNoPO, setArrivalTargetNoPO] = useState('');
-  const [activePOView, setActivePOView] = useState('current');
+  const [activePOView] = useState('current');
   const sourceItems = Array.isArray(data?.items) ? data.items : [];
   const previousSnapshot = data?.previousWeek || data?.previous || data?.lastWeek || null;
   const previousItemsSnapshot = Array.isArray(previousSnapshot?.items) ? previousSnapshot.items : [];
