@@ -972,8 +972,7 @@ function addTransaction(body) {
         if (kekurangan > 0) {
           shortageMode = true;
           finalQty = 0;
-          const unit = String(stockInfo.satuan || "pack").trim().toLowerCase();
-          const structured = "pending ❌ PO " + numericQty + " sisa stock " + sisa + " kekurangan " + kekurangan + " " + unit;
+          const structured = formatStockShortageHold_(numericQty, sisa, kekurangan, stockInfo.satuan || "pack");
           keterangan = keterangan ? (keterangan + " | " + structured) : structured;
           flags.push("STOCK_KURANG", "STOCK_KURANG_HOLD", "QTY_HOLD_0");
           try {
@@ -1130,6 +1129,7 @@ function bulkTransaction(body) {
         stockMap[String(it.kode || "").trim()] = {
           stockAkhir: clampStockToZero_(it.stockAkhir),
           nama: it.nama || "",
+          satuan: it.satuan || it.unit || "",
           entitas: it.entitas || entitas
         };
       });
@@ -1205,8 +1205,7 @@ function bulkTransaction(body) {
         if (kekurangan > 0) {
           shortageMode = true;
           finalQty = 0;
-          var unit = String((st && st.satuan) || "pack").trim().toLowerCase();
-          var structured = "pending ❌ PO " + numericQty + " sisa stock " + sisa + " kekurangan " + kekurangan + " " + unit;
+          var structured = formatStockShortageHold_(numericQty, sisa, kekurangan, (st && st.satuan) || "pack");
           keterangan = keterangan ? (keterangan + " | " + structured) : structured;
         }
         if (st) st.stockAkhir = Math.max(0, sisa - (shortageMode ? 0 : finalQty));
@@ -2611,6 +2610,17 @@ function getDashboardData() {
 function getDashboard() { return getDashboardData(); }
 
 function toNumber_(v) { const n = Number(String(v).replace(/[^0-9,.-]/g, "").replace(/,/g, ".")); return isNaN(n) ? 0 : n; }
+function formatStockShortageHold_(orderQty, availableQty, shortageQty, unit) {
+  function fmt(value) {
+    const n = Number(value);
+    return Number.isFinite(n) ? String(n) : "0";
+  }
+  const normalizedUnit = String(unit || "").trim().toLowerCase();
+  return "pending ❌ PO " + fmt(orderQty) +
+    " sisa stock " + fmt(availableQty) +
+    " kekurangan " + fmt(shortageQty) +
+    (normalizedUnit ? " " + normalizedUnit : "");
+}
 function percent_(n, d) { return d ? Math.round((n / d) * 1000) / 10 : 0; }
 function normalizeDivision_(v) { return String(v || "LAINNYA").trim().toUpperCase().replace(/DAPUR1/g, "DAPUR 1").replace(/DAPUR2/g, "DAPUR 2") || "LAINNYA"; }
 
