@@ -155,7 +155,7 @@ function DivisionStatus3D({ items, sourceRows }) {
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-      {rows.map((r) => {}
+      {rows.map((r) => {
         const kritisPct = r.total ? Math.round((r.kritis / r.total) * 100) : 0;
         const aPct = r.total ? (r.aman / r.total) * 100 : 0;
         const wPct = r.total ? (r.waspada / r.total) * 100 : 0;
