@@ -7,7 +7,7 @@ import {
 import { DIVISIONS } from '../data/master';
 import {
   AlertTriangle, RefreshCw, FileText, Package, Users, Boxes, ShieldAlert, CheckCircle2, AlertCircle, X,
-  ClipboardCheck, Mail, Clock3, Layers3,
+  CalendarDays, CalendarClock, ClipboardCheck, FilePlus2, Mail, Clock3, Layers3, ArrowUpRight,
 } from 'lucide-react';
 
 function classifyItem(it) {
@@ -154,7 +154,7 @@ function DivisionStatus3D({ items, sourceRows }) {
   }
 
   return (
-    <div className="grid grid-cols-2 gap-2">
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
       {rows.map((r) => {
         const kritisPct = r.total ? Math.round((r.kritis / r.total) * 100) : 0;
         const aPct = r.total ? (r.aman / r.total) * 100 : 0;
@@ -162,9 +162,9 @@ function DivisionStatus3D({ items, sourceRows }) {
         const kPct = r.total ? (r.kritis / r.total) * 100 : 0;
         const ringColor = kritisPct >= 50 ? '#ef4444' : kritisPct >= 25 ? '#f59e0b' : '#10b981';
         return (
-          <div key={r.divisi} className="division-status-card rounded-xl border border-slate-100 bg-white/90 px-2 py-2 flex items-center gap-2 min-w-0 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md active:scale-[.99]">
+          <div key={r.divisi} className="division-status-card rounded-xl border border-slate-100 bg-white/90 px-3 py-3 flex items-center gap-3 min-w-0">
             <div className="relative shrink-0">
-              <RingChart pct={kritisPct || 1} color={ringColor} size={36} stroke={4} />
+              <RingChart pct={kritisPct || 1} color={ringColor} size={44} stroke={5} />
               <span className="absolute inset-0 flex items-center justify-center text-[11px] font-extrabold text-slate-800 tabular-nums">
                 {kritisPct}%
               </span>
@@ -546,14 +546,48 @@ function DashboardTotals({ totalItem }) {
   );
 }
 
+function POQuickActions({ onNavigate, onSelect, activeView, currentCount = 0, previousCount = 0, confirmCount = 0 }) {
+  const actions = [
+    { id: 'generate', title: 'PO', subtitle: 'Generate dan simpan PO', Icon: FilePlus2, count: null, action: () => onNavigate?.('po') },
+    { id: 'current', title: 'Status PO Minggu Ini', subtitle: 'Periode berjalan', Icon: CalendarDays, count: currentCount, action: () => onSelect?.('current') },
+    { id: 'previous', title: 'Status PO Minggu Lalu', subtitle: 'Periode sebelumnya', Icon: CalendarClock, count: previousCount, action: () => onSelect?.('previous') },
+    { id: 'confirm', title: 'Konfirmasi PO', subtitle: 'Kedatangan yang perlu dicatat', Icon: ClipboardCheck, count: confirmCount, action: () => onSelect?.('confirm') },
+  ];
+  return (
+    <div className="po-shortcuts-grid grid grid-cols-2 sm:grid-cols-4 gap-2" aria-label="Akses cepat PO">
+      {actions.map(({ id, title, subtitle, Icon, count, action }) => {
+        const selected = id !== 'generate' && activeView === id;
+        return (
+          <button
+            key={id}
+            type="button"
+            onClick={action}
+            aria-pressed={id === 'generate' ? undefined : selected}
+            className={`po-shortcut dashboard-3d-card ${selected ? 'is-selected' : ''}`}
+          >
+            <span className={`po-shortcut-icon po-shortcut-icon-${id}`}><Icon className="h-5 w-5" aria-hidden="true" /></span>
+            <span className="po-shortcut-copy">
+              <span className="po-shortcut-title">{title}</span>
+              <span className="po-shortcut-subtitle">{subtitle}</span>
+            </span>
+            <span className="po-shortcut-footer">
+              {count !== null ? <span className="po-shortcut-count tabular-nums">{count} item</span> : <span className="po-shortcut-count">Buka</span>}
+              <ArrowUpRight className="h-4 w-4 shrink-0" aria-hidden="true" />
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
-function StatusPOCard({ data, loading, error, onRefresh, onConfirm, confirmingId, onNavigate, compactHome = false }) {
+function StatusPOCard({ data, loading, error, onRefresh, onConfirm, confirmingId, onNavigate }) {
   const [arrivalItem, setArrivalItem] = useState(null);
   const [arrivalQty, setArrivalQty] = useState('');
   const [arrivalError, setArrivalError] = useState('');
   const [arrivalSaving, setArrivalSaving] = useState(false);
   const [arrivalTargetNoPO, setArrivalTargetNoPO] = useState('');
-  const [activePOView] = useState('current');
+  const [activePOView, setActivePOView] = useState('current');
   const sourceItems = Array.isArray(data?.items) ? data.items : [];
   const previousSnapshot = data?.previousWeek || data?.previous || data?.lastWeek || null;
   const previousItemsSnapshot = Array.isArray(previousSnapshot?.items) ? previousSnapshot.items : [];
@@ -633,6 +667,7 @@ function StatusPOCard({ data, loading, error, onRefresh, onConfirm, confirmingId
           </div>
         </div>
         <div className="h-28 rounded-xl bg-slate-50 animate-pulse" />
+        <POQuickActions onNavigate={onNavigate} onSelect={setActivePOView} activeView={activePOView} />
       </div>
     );
   }
@@ -650,6 +685,7 @@ function StatusPOCard({ data, loading, error, onRefresh, onConfirm, confirmingId
           <button type="button" onClick={onRefresh} className="text-[11px] text-cyan-700 font-semibold">Muat ulang</button>
         </div>
         <p className="text-[12px] text-slate-500">{error || 'Belum ada data PO aktif. Pastikan API Secret di Atur.'}</p>
+        <POQuickActions onNavigate={onNavigate} onSelect={setActivePOView} activeView={activePOView} />
       </div>
     );
   }
@@ -669,31 +705,6 @@ function StatusPOCard({ data, loading, error, onRefresh, onConfirm, confirmingId
       : items;
   const targetNoPO = activePOView === 'previous' ? previousSnapshot?.noPO : data.noPO;
   const canConfirmTarget = activePOView !== 'previous' && Boolean(targetNoPO);
-
-  if (compactHome) {
-    return (
-      <div className="dashboard-po-card rounded-2xl bg-white border border-slate-100 shadow-sm p-4 space-y-3">
-        <div className="flex items-center justify-between gap-2">
-          <div className="min-w-0">
-            <h3 className="text-sm font-extrabold text-slate-900">Status PO</h3>
-            <p className="text-[10px] text-slate-500 truncate">{data.weekKey || 'Periode berjalan'} · {data.noPO ? 'No. ' + data.noPO : 'PO aktif'}</p>
-          </div>
-          <button type="button" onClick={onRefresh} className="w-9 h-9 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-500" aria-label="Refresh Status PO">
-            <RefreshCw className="w-4 h-4" />
-          </button>
-        </div>
-        <DonutPO complete={selesai} progress={sebagian} pending={menunggu} size={128} />
-        <div className="grid grid-cols-3 gap-2">
-          <div className="rounded-lg bg-emerald-50 px-2 py-2 text-center"><p className="text-[10px] font-bold text-emerald-700">Datang</p><p className="text-lg font-extrabold text-emerald-700">{selesai}</p></div>
-          <div className="rounded-lg bg-amber-50 px-2 py-2 text-center"><p className="text-[10px] font-bold text-amber-700">Sebagian</p><p className="text-lg font-extrabold text-amber-700">{sebagian}</p></div>
-          <div className="rounded-lg bg-slate-50 px-2 py-2 text-center"><p className="text-[10px] font-bold text-slate-600">Belum</p><p className="text-lg font-extrabold text-slate-800">{menunggu}</p></div>
-        </div>
-        <button type="button" onClick={() => onNavigate?.('po')} className="w-full rounded-xl border border-violet-200 bg-violet-50 py-2.5 text-xs font-extrabold text-violet-800 transition active:scale-[.98]">
-          Buka menu PO
-        </button>
-      </div>
-    );
-  }
 
   return (
     <div className="dashboard-po-card rounded-2xl bg-white border border-slate-100 shadow-sm p-4 space-y-4">
@@ -738,6 +749,15 @@ function StatusPOCard({ data, loading, error, onRefresh, onConfirm, confirmingId
           <p className="text-[10px] text-slate-500 tabular-nums">{menunggu} item</p>
         </div>
       </div>
+
+      <POQuickActions
+        onNavigate={onNavigate}
+        onSelect={setActivePOView}
+        activeView={activePOView}
+        currentCount={items.length}
+        previousCount={previousItems.length}
+        confirmCount={items.filter((it) => it.status !== 'Selesai').length}
+      />
 
       <div id="po-detail-list" className="space-y-3 scroll-mt-24">
         <div className="flex items-start justify-between gap-2">
@@ -1123,11 +1143,7 @@ export default function DashboardPage({ onNavigate }) {
           <div className="min-w-0 flex-1">
             <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-cyan-700">{greeting} · GUDANG PUSAT</p>
             <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 truncate mt-1 leading-tight">Dashboard Operasional</h1>
-            <div className="mt-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 flex items-start gap-2 shadow-sm">
-              <AlertCircle className="w-4 h-4 shrink-0 text-amber-700 mt-0.5" aria-hidden="true" />
-              <p className="text-[12px] font-extrabold leading-snug text-amber-900">{reminder}</p>
-            </div>
-            <p className="text-[10px] text-slate-500 mt-1">Petugas: {name}</p>
+            <p className="text-[13px] text-slate-600 mt-1 leading-snug">{reminder} <span className="text-slate-400">· {name}</span></p>
             <div className="mt-2.5 grid gap-1.5 text-[10px] font-medium text-slate-600">
               <div className="flex min-w-0 items-center gap-1.5">
                 <Clock3 className="h-3.5 w-3.5 shrink-0 text-cyan-700" aria-hidden="true" />
@@ -1186,7 +1202,6 @@ export default function DashboardPage({ onNavigate }) {
         onConfirm={handleConfirm}
         confirmingId={confirmingId}
         onNavigate={onNavigate}
-        compactHome
       />
       </section>
 
