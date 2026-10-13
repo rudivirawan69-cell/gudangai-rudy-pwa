@@ -3805,6 +3805,28 @@ function getPOInfoFromHeader_(sheet) {
   };
 }
 
+function parsePOQty_(value) {
+  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+  const raw = String(value == null ? "" : value).trim().replace(/\s+/g, "");
+  if (!raw) return 0;
+  let n = raw.replace(/[^0-9,.-]/g, "");
+  const comma = n.lastIndexOf(",");
+  const dot = n.lastIndexOf(".");
+  if (comma >= 0 && dot >= 0) {
+    // Separator paling kanan dianggap desimal; separator lainnya adalah ribuan.
+    if (comma > dot) n = n.replace(/\./g, "").replace(",", ".");
+    else n = n.replace(/,/g, "");
+  } else if (comma >= 0) {
+    const decimals = n.length - comma - 1;
+    n = decimals > 0 && decimals <= 2 ? n.replace(",", ".") : n.replace(/,/g, "");
+  } else if (dot >= 0) {
+    const decimals = n.length - dot - 1;
+    if (decimals === 3) n = n.replace(/\./g, "");
+  }
+  const parsed = Number(n);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
 function normalizePONameKey_(value) {
   return String(value == null ? '' : value).toLowerCase().replace(/[“”‘’]/g, '').replace(/\s+/g, ' ').trim();
 }
@@ -3958,11 +3980,13 @@ function getStatusPO() {
     const rawNo = String(r[poCols.no] == null ? "" : r[poCols.no]).trim();
     const no = Number(rawNo) || idx + 1;
     const nama = String(r[poCols.nama] || '').trim();
-    const poCV = toNumber_(r[poCols.poCV]);
-    const poPT = toNumber_(r[poCols.poPT]);
-    const totalFromColumnH = toNumber_(r[poCols.total]); // Header TOTAL menentukan kolom aktual; format baku adalah H.
+    const poCV = parsePOQty_(r[poCols.poCV]);
+    const poPT = parsePOQty_(r[poCols.poPT]);
+    const totalFromColumnH = parsePOQty_(r[poCols.total]); // Kolom TOTAL/H menjadi sumber utama; format baku B:I.
     const total = Math.max(0, totalFromColumnH > 0 ? totalFromColumnH : (poCV + poPT));
-    if (!nama || total <= 0) return;
+    // Jangan hilangkan nomor/nama barang hanya karena sel TOTAL formula kosong/berformat teks.
+    // Item bernama tetap tampil dengan qty 0 agar masalah sumber data terlihat, bukan menjadi tabel kosong.
+    if (!nama) return;
     const byIndex = arrivalsByIndex[no] || 0;
     const byName = arrivalsByName[normalizePONameKey_(nama)] || 0;
     // Utamakan index; jika 0, pakai cadangan nama (lebih sederhana, tetap dibatasi No PO).
