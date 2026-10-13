@@ -558,7 +558,11 @@ export default function InputPage() {
         if (!items.length) { setStatusBanner('Isi minimal 1 jumlah barang sebelum dikirim.'); return; }
       const fn = txType === 'masuk' ? submitBarangMasuk : txType === 'rusak' ? submitBarangRusak : submitBarangKeluar;
       const res = await fn({ entity, tanggal, items });
-      if (res?.success !== false) {
+      // Partial/queued results still need per-item reconciliation and one consolidated notice.
+      // Only treat the request as a hard failure when the backend confirms no success and no queue.
+      const hasPartialOutcome = Number(res?.queuedCount || 0) > 0 ||
+        (Array.isArray(res?.results) && res.results.some((r) => r?.success === true || r?.queued === true || r?.skipped === true));
+      if (res && (res.success !== false || hasPartialOutcome)) {
         const okCount = Number(res.count || 0);
         const queuedCount = Number(res.queuedCount || 0);
         const failCount = Number(res.failed || 0);
