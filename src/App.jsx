@@ -5,7 +5,7 @@ import LoginPage from './pages/LoginPage';
 import { useConnection } from './hooks/useConnection';
 import { useBootstrap } from './hooks/useBootstrap';
 import {
-  LayoutDashboard, Package, PackagePlus, FileText, Clock, Settings,
+  LayoutDashboard, Package, PackagePlus, Clock, Settings,
   Wifi, WifiOff, AlertTriangle, Loader2,
 } from 'lucide-react';
 
