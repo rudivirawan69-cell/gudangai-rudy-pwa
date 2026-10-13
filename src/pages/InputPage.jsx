@@ -13,7 +13,7 @@ import {
   saveToHistory,
   pushNotification, getNotifications, markNotificationsRead, unreadNotificationCount,
 } from '../data/api';
-import { searchMaster } from '../data/master';
+import { searchMaster, getMasterByEntity } from '../data/master';
 import { useBootstrapRevision } from '../hooks/useBootstrapRevision';
 import { searchLiveStock } from '../data/liveSearch';
 
@@ -177,8 +177,33 @@ export default function InputPage() {
       // Teks paste/PDF/foto tidak boleh mengubah CV menjadi PT hanya karena
       // nama supplier/header di dalam dokumen mengandung "PT".
       const validationEntity = entity;
-      const rows = parseLinesFromText(text, lines);
+      let rows = parseLinesFromText(text, lines);
       if (!rows.length) { setStatusBanner('Tidak ada baris barang terdeteksi dari ' + sourceLabel + '.'); return; }
+
+      // PDF CV untuk barang jadi/matang tidak boleh memasukkan bahan baku PT
+      // (BBPT) seperti Bebek, Iga Sapi, atau Ayam Negeri ke keranjang validasi CV.
+      // Baris yang dikenali sebagai master BBPT dipisahkan, tidak dipetakan silang
+      // ke kode CV, dan tidak masuk ke keranjang transaksi.
+      let skippedRawMaterialCount = 0;
+      if (validationEntity === 'CV') {
+        const bbptNames = getMasterByEntity('PT')
+          .filter((m) => /^BBPT-/i.test(String(m.kode || '')))
+          .map((m) => String(m.nama || '').normalize('NFKC').toLowerCase().replace(/\([^)]*\)/g, ' ').replace(/[^a-z0-9]+/g, ' ').trim())
+          .filter(Boolean);
+        const isBBPTRawMaterial = (row) => {
+          const name = String(row.rawName || row.nameFromPdf || row.name || '').normalize('NFKC').toLowerCase().replace(/\([^)]*\)/g, ' ').replace(/[^a-z0-9]+/g, ' ').trim();
+          return !!name && bbptNames.some((masterName) => name === masterName || name.includes(masterName) || masterName.includes(name));
+        };
+        const before = rows.length;
+        rows = rows.filter((row) => !isBBPTRawMaterial(row));
+        skippedRawMaterialCount = before - rows.length;
+      }
+      if (!rows.length) {
+        setStatusBanner(validationEntity === 'CV' && skippedRawMaterialCount
+          ? 'PDF CV: ' + skippedRawMaterialCount + ' baris bahan baku PT/BBPT dilewati; keranjang CV hanya untuk barang jadi/matang.'
+          : 'Tidak ada baris barang yang sesuai untuk divalidasi dari ' + sourceLabel + '.');
+        return;
+      }
       const validation = validateItems(rows, validationEntity);
       let stock = null;
       try { stock = await fetchStock(validationEntity, { allowDemo: false }); } catch (_) { stock = null; }
@@ -205,6 +230,7 @@ export default function InputPage() {
       const parts = [];
       if (matched.length) parts.push(matched.length + ' cocok');
       if (review.length) parts.push(review.length + ' perlu validasi');
+      if (skippedRawMaterialCount) parts.push(skippedRawMaterialCount + ' bahan baku PT/BBPT dilewati (khusus barang jadi CV)');
       setStatusBanner(sourceLabel + ' ' + total + ' baris · ' + parts.join(' · '));
     } catch (err) {
       setStatusBanner(err.message || 'Gagal memvalidasi ' + sourceLabel);
