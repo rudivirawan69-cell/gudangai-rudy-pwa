@@ -4260,6 +4260,23 @@ function dashboardApplyProfessionalLayoutOnce_() {
   PropertiesService.getScriptProperties().setProperty(DASHBOARD_LAYOUT_LOCK_KEY, "1");
   return { success: true, layout: "LOCKED_ROW46", currentPO: "A46:F99", previousPO: "H46:M99" };
 }
+function forceLockPOLayoutRow46() {
+  // Compatibility entry point for administrators: explicitly install the row-46 layout,
+  // disable known legacy Dashboard refresh triggers, and perform one safe refresh.
+  const installed = dashboardSyncPatchInstall();
+  if (!installed || installed.success !== true) return installed || { success: false, error: "Layout lock gagal dipasang." };
+  const refreshed = dashboardSyncPatchRefresh_({ reason: "forceLockPOLayoutRow46" });
+  return {
+    success: refreshed && refreshed.success === true,
+    layout: "LOCKED_ROW46",
+    currentPO: "A46:F99",
+    previousPO: "H46:M99",
+    protectedCriticalRows: "A28:F45",
+    install: installed,
+    refresh: refreshed
+  };
+}
+
 function dashboardRefreshPOSectionLight_() {
   // Satu-satunya penulis tabel Status PO Dashboard.
   // Zona baris 28–45 adalah milik tabel kritis dan tidak boleh disentuh.
