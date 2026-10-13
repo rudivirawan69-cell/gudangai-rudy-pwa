@@ -2894,89 +2894,14 @@ function refreshDashboardLive_() {
 }
 
 function refreshDashboard(force) {
-  if (isDashboardSyncPatchEnabled_()) {
-    if (force !== true) return { success: true, skippedHeavyRebuild: true, patch: true, lastUpdate: getLastUpdateTimestamp() };
-    return dashboardSyncPatchRefresh_({ reason: "manual-refreshDashboard", force: true });
-  }
-  // Setelah layout dikunci, jangan izinkan rebuild lama membersihkan baris 1–30
-  // yang bisa memuat tabel kritis di baris 28. Gunakan renderer ringan yang aman.
-  if (PropertiesService.getScriptProperties().getProperty(DASHBOARD_LAYOUT_LOCK_KEY) === "1") {
-    return dashboardSyncPatchRefresh_({ reason: "manual-refreshDashboard-locked-layout", force: true });
-  }
-  // Dashboard sheet adalah tampilan sekunder. Jangan rebuild setiap transaksi/onEdit.
-  // force=true hanya untuk admin/manual refresh.
-  if (force !== true) {
-    return { success: true, skippedHeavyRebuild: true, reason: "Dashboard rebuild dinonaktifkan pada jalur otomatis.", lastUpdate: getLastUpdateTimestamp(), dirty: isDataDirty_() };
-  }
-  const lock = LockService.getDocumentLock();
-  if (!lock.tryLock(15000)) return { success: false, error: "Dashboard sedang diperbarui proses lain." };
-  try {
-    const ss = getSS();
-    let sh = ss.getSheetByName("Dashboard");
-    if (!sh) sh = ss.insertSheet("Dashboard", 0);
-    const data = getDashboardData();
-    if (!data.success) return data;
-    if (sh.getMaxRows() < 55) sh.insertRowsAfter(sh.getMaxRows(), 55 - sh.getMaxRows());
-    if (sh.getMaxColumns() < 14) sh.insertColumnsAfter(sh.getMaxColumns(), 14 - sh.getMaxColumns());
-    // Force rebuild hanya atas permintaan admin. Ini bukan jalur transaksi/onEdit.
-    try { clearDashboardCharts_(sh); } catch (e) {}
-    // Rebuild hanya membersihkan area dashboard atas sampai baris 27.
-    // Baris 28–45 dikhususkan untuk tabel item kritis dan harus dipertahankan.
-    const safeRebuildRows = Math.min(sh.getMaxRows(), 27);
-    sh.getRange(1, 1, safeRebuildRows, 14).breakApart();
-    sh.getRange(1, 1, safeRebuildRows, 14).clearContent();
-    sh.setFrozenRows(3);
-    sh.getRange("A1:N1").merge().setValue("DASHBOARD GUDANG NASGOR 69").setFontSize(20).setFontWeight("bold");
-    sh.getRange("A2:N2").merge().setValue("Pantauan Stok & Aktivitas — Real Time | Update: " + (data.lastUpdate || data.generatedAt));
-    sh.getRange("A4:N4").merge().setValue("RINGKASAN EKSEKUTIF").setFontWeight("bold");
-    const cards = [["TOTAL ITEM AKTIF", data.totalItemAktif, "item"], ["KRITIS", data.kritis, percent_(data.kritis, data.totalItemAktif) + "%"], ["WASPADA", data.waspada, percent_(data.waspada, data.totalItemAktif) + "%"], ["AMAN", data.aman, percent_(data.aman, data.totalItemAktif) + "%"]];
-    [["A6:C9"],["D6:F9"],["G6:I9"],["J6:L9"]].forEach(function(x, i) { const r = sh.getRange(x[0]); r.merge(); r.setValue(cards[i][0] + "\n\n" + cards[i][1] + " " + cards[i][2]).setFontSize(16).setFontWeight("bold").setHorizontalAlignment("center").setVerticalAlignment("middle"); });
-    sh.getRange("A11:F11").merge().setValue("1 GRAFIK STATUS PER DIVISI").setFontWeight("bold");
-    sh.getRange("A12:F12").setValues([["DIVISI", "TOTAL ITEM", "AMAN", "WASPADA", "KRITIS", "% KRITIS"]]).setFontWeight("bold");
-    const divRows = data.statusPerDivisi.map(function(d) { return [d.divisi, d.total, d.aman, d.waspada, d.kritis, percent_(d.kritis, d.total) / 100]; });
-    if (divRows.length) {
-      sh.getRange(13, 1, divRows.length, 6).setValues(divRows);
-      sh.getRange(13, 2, divRows.length, 4).setNumberFormat("#,##0").setHorizontalAlignment("center");
-      sh.getRange(13, 6, divRows.length, 1).setNumberFormat("0.0%").setHorizontalAlignment("center");
-    }
-    // Grafik batang mendatar (horizontal) status stok per divisi — AMAN / WASPADA / KRITIS.
-    let divisionChart = null;
-    try { divisionChart = renderDivisionBarChart_(sh, 13, data); } catch (chartDivErr) {
-      console.error("renderDivisionBarChart_ gagal: " + chartDivErr.message);
-      divisionChart = { error: String(chartDivErr.message || chartDivErr) };
-    }
-    // Section 2: grafik donat status PO minggu ini. Tidak memakai data dummy.
-    const poNow = getStatusPO();
-    sh.getRange("H11:N11").merge().setValue("2 GRAFIK DONAT STATUS PO MINGGU INI").setFontWeight("bold");
-    if (poNow && poNow.success) {
-      try {
-        renderPODonutChart_(sh, 12, "Status PO — Minggu Ini", poNow.summary || {}, "Status PO — Minggu Ini");
-      } catch (donutErr) {
-        console.error("renderPODonutChart_ gagal: " + donutErr.message);
-      }
-    }
-    // Section 3: volume transaksi minggu berjalan.
-    const vol = getVolumeSummaryThisWeek_();
-    sh.getRange("A22:N22").merge().setValue("3 VOLUME MINGGU INI — " + (vol.minggu || "-")).setFontWeight("bold");
-    sh.getRange("A23:H23").setValues([["BARANG MASUK", "BARANG KELUAR", "BARANG RUSAK", "TOTAL VOLUME", "", "", "", ""]]).setFontWeight("bold");
-    sh.getRange("A24:D24").setValues([[vol.masuk || 0, vol.keluar || 0, vol.rusak || 0, vol.total || 0]]).setNumberFormat("#,##0").setHorizontalAlignment("center");
-    let poSection = null;
-    try { poSection = refreshDashboardPOSection_({ renderCharts: false, force: true }); }
-    catch (poErr) { poSection = { success: false, error: String(poErr && poErr.message || poErr) }; }
-    updateLastUpdateTimestamp();
-    clearDataDirty_();
-    return {
-      success: true, sheet: "Dashboard", updatedAt: getLastUpdateTimestamp(),
-      poSection: poSection, divisionChart: divisionChart,
-      summary: { total: data.totalItemAktif, aman: data.aman, waspada: data.waspada, kritis: data.kritis }
-    };
-  } finally { if (lock.hasLock()) lock.releaseLock(); }
+  // Rebuild lama dinonaktifkan permanen: semua refresh melewati renderer aman
+  // yang tidak membersihkan atau menulis zona tabel kritis A28:F45.
+  return dashboardSyncPatchRefresh_({
+    reason: force === true ? "manual-refreshDashboard-safe" : "refreshDashboard-safe",
+    force: force === true
+  });
 }
 
-
-// ============================================================
-// 15. PO RECOMMENDATIONS [V6.2 formal format]
-// ============================================================
 function getPOTableConstants_() {
   return { headerRow: PO_HEADER_ROW, dataStartRow: PO_DATA_START_ROW, startCol: PO_DATA_START_COL, numCols: PO_DATA_NUM_COLS };
 }
@@ -4218,7 +4143,11 @@ function dashboardSyncPatchDisableConflictingTriggers_() {
   // Nonaktifkan trigger lama yang berpotensi menjalankan rebuild Dashboard
   // dan menulis ulang blok lama. Jangan menghapus weeklyPOAutomation karena
   // fungsi itu membuat PO; penulisan Status PO-nya sudah dipusatkan ke baris 46.
-  const conflicting = ["refreshAllData", "refreshDashboard"];
+  const conflicting = [
+    "refreshAllData", "refreshDashboard",
+    "testDashboardV7", "dashboardV7", "refreshDashboardV7",
+    "ujiDashboardV7", "testDashboard", "refreshDashboardLegacy"
+  ];
   let removed = 0;
   ScriptApp.getProjectTriggers().forEach(function(t) {
     const handler = t.getHandlerFunction();
