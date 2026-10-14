@@ -2885,7 +2885,7 @@ function refreshDashboardLive_() {
     sh.getRange(13, 16, hiddenDiv.length, 4).setValues(hiddenDiv);
 
     // Donut PO membaca range P12:Q15; cukup update datanya, chart tidak perlu dibuat ulang.
-    const poNow = getStatusPO();
+    const poNow = getCurrentWeekPOStatus_();
     if (poNow && poNow.success) {
       // Donut memakai U12:V15. Jangan gunakan P:Q karena P:S adalah
       // sumber data grafik status stok per divisi.
@@ -2969,6 +2969,7 @@ function writePORecommendations() {
 
   ensurePOHeader(sheet, PO_HEADER_ROW);
   updatePODateRow4(sheet);
+  writePONumberRow5_(sheet, "PO-" + getWeekKey_(new Date()));
   ensurePORowsCapacity_(sheet, Math.max(PO_DATA_START_ROW, neededEnd));
   clearPOTableData(sheet);
 
@@ -3094,6 +3095,10 @@ function writePurchaseOrder_(body) {
   const items = normalizePOItems_(body);
   if (!items.length) return { success: false, status: "REJECTED", code: "PO_ITEMS_REQUIRED", requestId: requestId, writeOccurred: false, error: "Final PO tidak berisi item yang valid." };
 
+  const suppliedNoPO = String(body.noPO || body.nomorPO || body.poNumber || "").trim();
+  const resolvedNoPO = suppliedNoPO || ("PO-" + getWeekKey_(new Date()) + "-" +
+    requestId.replace(/[^A-Za-z0-9]/g, "").slice(-6).toUpperCase());
+
   const digest = poPayloadDigest_(body, items);
   const prior = findIdempotencyRecord_(requestId, requestId);
   if (prior && prior.operation === "writePurchaseOrder") {
@@ -3111,7 +3116,7 @@ function writePurchaseOrder_(body) {
       try {
         const sheet = getSS().getSheetByName("purchase order");
         if (sheet && poSheetMatchesItems_(sheet, items)) {
-          const reconciledResult = { success: true, status: "APPLIED", code: "READBACK_CONFIRMED", requestId: requestId, transactionId: requestId, operation: "writePurchaseOrder", sheet: "purchase order", dataStartRow: PO_DATA_START_ROW, headerRow: PO_HEADER_ROW, count: items.length, noPO: String(body.noPO || body.nomorPO || body.poNumber || "").trim() || null, totalQty: items.reduce(function(a, x) { return a + Number(x.total || 0); }, 0), writeOccurred: true, replayed: true, message: "PO sebelumnya sudah tersimpan; retry tidak menulis ulang." };
+          const reconciledResult = { success: true, status: "APPLIED", code: "READBACK_CONFIRMED", requestId: requestId, transactionId: requestId, operation: "writePurchaseOrder", sheet: "purchase order", dataStartRow: PO_DATA_START_ROW, headerRow: PO_HEADER_ROW, count: items.length, noPO: resolvedNoPO, totalQty: items.reduce(function(a, x) { return a + Number(x.total || 0); }, 0), writeOccurred: true, replayed: true, message: "PO sebelumnya sudah tersimpan; retry tidak menulis ulang." };
           updateIdempotencyRecord_(prior, { status: "APPLIED", writeOccurred: true, dataRow: PO_DATA_START_ROW, errorCode: "", details: JSON.stringify(Object.assign({}, reconciledResult, { digest: digest })) });
           return reconciledResult;
         }
@@ -3153,7 +3158,7 @@ function writePurchaseOrder_(body) {
     rolloverPOWeekIfNeeded_();
     ensurePOHeader(sheet, PO_HEADER_ROW);
     updatePODateRow4(sheet);
-    if (body.noPO || body.nomorPO || body.poNumber) writePONumberRow5_(sheet, body.noPO || body.nomorPO || body.poNumber);
+    writePONumberRow5_(sheet, resolvedNoPO);
     // Siapkan data baru sebelum membersihkan sisa tabel lama. Jika setValues gagal,
     // PO yang sedang aktif tetap utuh dan tidak hilang akibat clearContent lebih dahulu.
     const rows = items.map(function(x) {
@@ -3172,7 +3177,7 @@ function writePurchaseOrder_(body) {
 
     const result = { success: true, status: "APPLIED", code: "PO_WRITE_APPLIED", requestId: requestId,
       transactionId: requestId, operation: "writePurchaseOrder", sheet: "purchase order", dataStartRow: PO_DATA_START_ROW,
-      headerRow: PO_HEADER_ROW, count: rows.length, noPO: String(body.noPO || body.nomorPO || body.poNumber || "").trim() || null,
+      headerRow: PO_HEADER_ROW, count: rows.length, noPO: resolvedNoPO,
       totalQty: rows.reduce(function(a, x) { return a + Number(x[6] || 0); }, 0),
       formatting: formatting, writeOccurred: true, retries: 0, execMs: Date.now() - started,
       message: "Final PO berhasil ditulis ke purchase order B6:I." };
@@ -4117,6 +4122,33 @@ function renderPODonutChart_(sheet, chartStartRow, title, summary, chartTitle) {
   sheet.insertChart(chart);
 }
 
+function getCurrentWeekPOStatus_() {
+  // Snapshot a dated previous-week PO before presenting the current-week block.
+  rolloverPOWeekIfNeeded_();
+  const live = getStatusPO();
+  if (!live || live.success !== true) return live;
+  const currentWeekKey = getWeekKey_(new Date());
+  if (String(live.weekKey || "") === currentWeekKey) return live;
+
+  // Keep last week's PO in the archive rather than mislabelling it as current.
+  // This wrapper is read-only against the "purchase order" sheet.
+  const emptySummary = {
+    totalAktif: 0, totalKonfirmasi: 0, itemMenunggu: 0, itemSebagian: 0,
+    itemSelesai: 0, totalItem: 0, totalPOQty: 0,
+    totalKonfirmasiQty: 0, totalSisaQty: 0
+  };
+  return Object.assign({}, live, {
+    noPO: null,
+    tanggalPO: null,
+    weekKey: currentWeekKey,
+    summary: emptySummary,
+    items: [],
+    previousWeek: getPreviousPOStatus_(),
+    isCurrentWeekEmpty: true,
+    activeSourceWeekKey: live.weekKey || null
+  });
+}
+
 function refreshDashboardPOSection_(options) {
   options = options || {};
   const ss = getSS();
@@ -4125,7 +4157,7 @@ function refreshDashboardPOSection_(options) {
 
   // Layout terkunci: dua tabel sejajar, keduanya mulai baris 46.
   // Fungsi ini tidak mendelegasikan penulisan PO ke penulis dashboard lama.
-  const data = getStatusPO();
+  const data = getCurrentWeekPOStatus_();
   if (!data || !data.success) return data || { success: false, code: 'PO_STATUS_EMPTY', error: 'Data Status PO tidak tersedia' };
   const previous = getPreviousPOStatus_() || {};
   const currentTop = PO_START_ROW;
@@ -4482,7 +4514,7 @@ function dashboardSyncPatchRefresh_(options) {
       try { renderDivisionBarChart_(sh,13,data); } catch(e) { console.error("PATCH chart divisi: "+e.message); }
     }
 
-    const poNow = getStatusPO();
+    const poNow = getCurrentWeekPOStatus_();
     if (poNow && poNow.success) {
       sh.getRange(12,21,4,2).setValues([
         ["STATUS PO","QTY"],
