@@ -20,9 +20,9 @@ export const THEME_META = {
   },
   warm_productive: {
     id: 'warm_productive',
-    label: 'Warm Productive',
-    short: 'Warm',
-    description: '3D hangat · krem produktif',
+    label: 'Blue Pro',
+    short: 'Blue',
+    description: '3D biru profesional · kontras jelas',
   },
 };
 
