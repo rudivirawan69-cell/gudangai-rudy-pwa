@@ -1,0 +1,23 @@
+/* UI polish — nav6, PO hub, stok glow */
+.nav-bar-6 > div { min-height: 70px; }
+.nav-bar-6 .nav-btn { min-width: 0; }
+.nav-bar-6 .nav-moving-ball-mobile { width: calc(100% / 6); }
+.stock-filter-card { will-change: transform, box-shadow; }
+.stock-card-anim { animation: stockCardIn 0.28s cubic-bezier(0.22, 1, 0.36, 1) both; }
+@keyframes stockCardIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+.stock-card-glow-kritis { box-shadow: 0 0 0 1px rgba(225,29,72,0.2), 0 8px 20px rgba(225,29,72,0.08) !important; background: linear-gradient(90deg, rgba(254,226,226,0.45) 0%, #fff 28%) !important; }
+.stock-card-glow-waspada { box-shadow: 0 0 0 1px rgba(245,158,11,0.22), 0 8px 20px rgba(245,158,11,0.07) !important; background: linear-gradient(90deg, rgba(254,243,199,0.4) 0%, #fff 28%) !important; }
+.stock-card-glow-aman { box-shadow: 0 0 0 1px rgba(15,159,154,0.18), 0 8px 20px rgba(15,159,154,0.06) !important; background: linear-gradient(90deg, rgba(204,251,241,0.35) 0%, #fff 28%) !important; }
+.stock-list-kritis { border-radius: 1rem; padding: 0.25rem; background: rgba(254,226,226,0.25); }
+.stock-list-waspada { border-radius: 1rem; padding: 0.25rem; background: rgba(254,243,199,0.2); }
+.stock-list-aman { border-radius: 1rem; padding: 0.25rem; background: rgba(204,251,241,0.2); }
+.po-hub-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.65rem; }
+.po-hub-card { border-radius: 1.1rem; border: 1px solid #e2e8f0; background: #fff; box-shadow: 0 1px 0 rgba(255,255,255,0.95) inset, 0 8px 20px rgba(15,23,42,0.06); padding: 0.85rem; text-align: left; transition: transform 0.18s ease, box-shadow 0.18s ease; min-height: 5.25rem; }
+.po-hub-card:active { transform: scale(0.98); }
+.po-hub-card.is-open { border-color: rgba(8,145,178,0.45); box-shadow: 0 0 0 2px rgba(8,145,178,0.15), 0 12px 28px rgba(15,23,42,0.1); }
+.po-hub-card .hub-title { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; color: #64748b; }
+.po-hub-card .hub-value { font-size: 1.35rem; font-weight: 800; color: #0f172a; font-variant-numeric: tabular-nums; margin-top: 0.25rem; }
+.po-hub-detail { margin-top: 0.75rem; padding: 0.75rem; border-radius: 0.85rem; background: #f8fafc; border: 1px solid #e2e8f0; font-size: 12px; color: #334155; animation: stockCardIn 0.22s ease both; }
+.po-grid-compact { display: grid; grid-template-columns: 1fr 1fr; gap: 0.65rem; }
+.po-grid-comfortable { display: flex; flex-direction: column; gap: 0.75rem; }
+.dashboard-reminder-banner { margin-top: 0.65rem; padding: 0.65rem 0.85rem; border-radius: 0.85rem; background: linear-gradient(135deg, rgba(8,145,178,0.12), rgba(15,159,154,0.08)); border: 1px solid rgba(8,145,178,0.22); color: #0e7490; font-size: 13px; font-weight: 700; }
