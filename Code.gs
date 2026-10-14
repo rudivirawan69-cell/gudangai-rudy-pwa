@@ -993,7 +993,8 @@ function addTransaction(body) {
           shortageMode = true;
           finalQty = 0;
           const structured = formatStockShortageHold_(numericQty, sisa, kekurangan, stockInfo.satuan || "pack");
-          keterangan = keterangan ? (keterangan + " | " + structured) : structured;
+          // HOLD replaces stale user/queue text; keep only current verified shortage facts.
+          keterangan = structured;
           flags.push("STOCK_KURANG", "STOCK_KURANG_HOLD", "QTY_HOLD_0");
           try {
             MailApp.sendEmail(ADMIN_EMAIL, "[GudangAI][STOCK KURANG] " + kode + " " + (stockInfo.nama || ""),
@@ -1281,7 +1282,8 @@ function bulkTransaction(body) {
           shortageMode = true;
           finalQty = 0;
           var structured = formatStockShortageHold_(numericQty, sisa, kekurangan, (st && st.satuan) || "pack");
-          keterangan = keterangan ? (keterangan + " | " + structured) : structured;
+          // HOLD replaces stale user/queue text; keep only current verified shortage facts.
+          keterangan = structured;
         }
         if (st) st.stockAkhir = Math.max(0, sisa - (shortageMode ? 0 : finalQty));
       }
