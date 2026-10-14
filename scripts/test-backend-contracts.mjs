@@ -113,7 +113,24 @@ assert.match(statusPO, /parsePOQty_\(r\[poCols\.total\]\)/);
 assert.match(statusPO, /if \(!nama\) return;/);
 assert.match(functionBody('recordPOArrival'), /parsePOQty_\(r\[6\]\)/);
 
-// Contract 9: only InputPage emits the consolidated user notification for an input run.
+// Contract 9: HOLD must remain a separate status through read-back and idempotent replay.
+// A stored Qty=0 with a pending description is not a successful stock-out.
+const readBack = functionBody('readBackTransactionByIdentity_');
+assert.match(readBack, /shortage: holdQtyMatches/);
+assert.match(readBack, /stockPolicy: holdQtyMatches/);
+assert.match(functionBody('addTransaction'), /const replayIsHold = priorRead\.shortage === true/);
+const bulk = functionBody('bulkTransaction');
+assert.match(bulk, /var appliedReadBack = readBackTransactionByIdentity_\(\{ transactionId: item\.transactionId, nonce: item\.nonce \}, sheetName\)/);
+assert.match(bulk, /shortage: appliedIsHold/);
+assert.match(bulk, /stockPolicy: appliedReadBack\.stockPolicy/);
+
+// Contract 10: InputPage must not count a zero-qty HOLD as a successful stock movement.
+assert.match(input, /const isHoldResult =/);
+assert.match(input, /qty: 0, requestedQty:/);
+assert.match(input, /status: heldItems\.length \? \(confirmedItems\.length \? 'sebagian' : 'hold'\) : 'sukses'/);
+assert.match(input, /Stok kurang — HOLD/);
+
+// Contract 11: only InputPage emits the consolidated user notification for an input run.
 // An API fallback can still return queued/partial outcomes but must not add a second bell entry.
 const submitStart = api.indexOf('async function submitItems(');
 const submitEnd = api.indexOf('\nexport function getPendingQueue()', submitStart);
@@ -122,7 +139,7 @@ assert.doesNotMatch(api.slice(submitStart, submitEnd), /pushNotification\(/);
 assert.match(api, /export function pushNotification\(n\)[\s\S]*?dedupeKey/);
 assert.match(input, /hasPartialOutcome = Number\(res\?\.queuedCount \|\| 0\)/);
 
-// Contract 10: no duplicate top-level function declarations in the Apps Script file.
+// Contract 12: no duplicate top-level function declarations in the Apps Script file.
 const fnNames = [...gs.matchAll(/^function\s+([A-Za-z_$][\w$]*)\s*\(/gm)].map(m => m[1]);
 const seen = new Set();
 const duplicates = [];
