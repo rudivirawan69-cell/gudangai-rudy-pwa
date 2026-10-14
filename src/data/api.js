@@ -88,6 +88,7 @@ async function fetchWithRetry(url, options = {}, retries = RETRY_COUNT, timeoutM
   throw lastError;
 }
 async function postJson(payload, { retries = RETRY_COUNT, timeoutMs = REQUEST_TIMEOUT_MS } = {}) {
+  if (import.meta.env.VITE_AUDIT_PREVIEW === 'true') throw new Error('Mode audit: transaksi dinonaktifkan agar tidak menulis ke spreadsheet produksi.');
   const url = getApiUrl();
   if (!url) throw new Error('URL API belum diatur');
   const body = JSON.stringify({ schemaVersion: SCHEMA_VERSION, secret: getApiSecret() || undefined, client: { app: 'gudangai-rudy-pwa', deviceId: deviceId() }, ...payload });
