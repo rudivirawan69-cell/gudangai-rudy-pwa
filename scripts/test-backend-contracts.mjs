@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 const gs = readFileSync(new URL('../Code.gs', import.meta.url), 'utf8');
 const pdf = readFileSync(new URL('../src/data/pdfValidate.js', import.meta.url), 'utf8');
 const input = readFileSync(new URL('../src/pages/InputPage.jsx', import.meta.url), 'utf8');
+const api = readFileSync(new URL('../src/data/api.js', import.meta.url), 'utf8');
 
 function functionBody(name) {
   const start = gs.indexOf('function ' + name + '(');
@@ -54,11 +55,37 @@ assert.ok(pdf.includes('return /^(?:PT|WK|MM)-/.test(kode)'), 'PT PDF filter mus
 assert.ok(input.includes("validationEntity === 'CV' || validationEntity === 'PT'"),
   'Raw-material PDF filter must run for both CV and PT');
 
-// Contract 7: no duplicate top-level function declarations in the Apps Script file.
+// Contract 7: PO number metadata may never overwrite the B5:I5 source headers.
+const poNoWriter = functionBody('writePONumberRow5_');
+assert.match(poNoWriter, /sheet\.getRange\(5,\s*1\)\.setValue\(label\)/);
+assert.doesNotMatch(poNoWriter, /sheet\.getRange\(5,\s*2\)\.setValue\(/);
+
+const rollover = functionBody('rolloverPOWeekIfNeeded_');
+assert.match(rollover, /const activeKey = status && status\.success \? String\(status\.weekKey \|\| ""\) : ""/);
+assert.match(functionBody('writePurchaseOrder_'), /rolloverPOWeekIfNeeded_\(\);[\s\S]*?ensurePOHeader/);
+assert.match(functionBody('writePORecommendations'), /rolloverPOWeekIfNeeded_\(\);[\s\S]*?clearPOTableData/);
+
+// Contract 8: status reader must parse formatted qty values and keep named PO rows
+// visible for diagnosis if TOTAL is blank instead of silently hiding the item.
+const statusPO = functionBody('getStatusPO');
+assert.match(statusPO, /parsePOQty_\(r\[poCols\.total\]\)/);
+assert.match(statusPO, /if \(!nama\) return;/);
+assert.match(functionBody('recordPOArrival'), /parsePOQty_\(r\[6\]\)/);
+
+// Contract 9: only InputPage emits the consolidated user notification for an input run.
+// An API fallback can still return queued/partial outcomes but must not add a second bell entry.
+const submitStart = api.indexOf('async function submitItems(');
+const submitEnd = api.indexOf('\nexport function getPendingQueue()', submitStart);
+assert.ok(submitStart >= 0 && submitEnd > submitStart);
+assert.doesNotMatch(api.slice(submitStart, submitEnd), /pushNotification\(/);
+assert.match(api, /export function pushNotification\(n\)[\s\S]*?dedupeKey/);
+assert.match(input, /hasPartialOutcome = Number\(res\?\.queuedCount \|\| 0\)/);
+
+// Contract 10: no duplicate top-level function declarations in the Apps Script file.
 const fnNames = [...gs.matchAll(/^function\s+([A-Za-z_$][\w$]*)\s*\(/gm)].map(m => m[1]);
 const seen = new Set();
 const duplicates = [];
 for (const name of fnNames) { if (seen.has(name)) duplicates.push(name); seen.add(name); }
 assert.deepEqual(duplicates, []);
 
-console.log('Backend contract tests passed: locked PO rows, bulk stock fail-closed, shared HOLD, PO quantity parsing, PDF entity filtering, and duplicate-function scan.');
+console.log('Backend production contracts passed: locked Dashboard rows, stock fail-closed, shared HOLD, PO quantity/header/rollover safety, PDF entity filtering, single transaction notice, and duplicate-function scan.');
