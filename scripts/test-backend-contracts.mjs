@@ -79,6 +79,13 @@ assert.match(currentWeekPO, /items: \[\]/);
 assert.match(functionBody('refreshDashboardPOSection_'),
   /rolloverPOWeekIfNeeded_\(\);[\s\S]*?const data = getCurrentWeekPOStatus_\(\);/);
 
+// Cap visible division rows so an unexpected large division list can never
+// spill into the protected critical-item area beginning at row 28.
+assert.match(functionBody('refreshDashboardLive_'),
+  /const divRows = \(data\.statusPerDivisi \|\| \[\]\)\.slice\(0, 15\)\.map/);
+assert.match(functionBody('dashboardSyncPatchRefresh_'),
+  /const divRows = \(data\.statusPerDivisi \|\| \[\]\)\.slice\(0, 15\)\.map/);
+
 // Contract 11: explicitly disable archived V6.6.5 writer/test handlers that can
 // clear protected rows 28–45 or write PO tables to the obsolete row-42/48 layout.
 const triggerGuard = functionBody('dashboardSyncPatchDisableConflictingTriggers_');
