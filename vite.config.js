@@ -4,6 +4,6 @@ import { defineConfig } from 'vite'
 
 export default defineConfig(({ mode }) => ({
   plugins: [react(), tailwindcss()],
-  base: process.env.GITHUB_ACTIONS === 'true' ? '/gudangai-rudy-pwa/' : '/',
+  base: process.env.CLOUDFLARE_WORKERS === 'true' ? '/' : (process.env.GITHUB_ACTIONS === 'true' ? '/gudangai-rudy-pwa/' : '/'),
   server: { host: true, port: 5173 },
 }))
