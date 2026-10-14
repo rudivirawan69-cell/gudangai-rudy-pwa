@@ -209,45 +209,64 @@ export function parsePdfLinesToItems(text) {
   const items = [];
   let sourceIndex = 0;
 
+  function parseProductSegment(segment) {
+    const nums = [...String(segment || '').matchAll(/(\d+(?:[.,]\d+)?)/g)];
+    if (!nums.length) return null;
+    const last = nums[nums.length - 1];
+    const qty = parseFloat(last[1].replace(',', '.'));
+    if (!(qty > 0) || qty > 99999) return null;
+
+    let rawName = String(segment).slice(0, last.index).trim();
+    rawName = sanitizePdfProductName(rawName)
+      .replace(/\s+(?:\d+(?:[.,]\d+)?\s+){1,3}\d+(?:[.,]\d+)?\s*$/, '')
+      .replace(/\s*\([^)]*\b(?:\d+(?:[.,]\d+)?\s*(?:kg|gram|gr|pcs|pack|pail|liter|ml)|\d+\s*(?:pcs|pack|pail))[^)]*\)/gi, '')
+      .replace(/\s+\d+(?:[.,]\d+)?\s*(?:kg|gram|gr|pcs|pack|pail|liter|ml)\b/gi, '')
+      .replace(/\b(?:pack|pcs|pail|ekor|kg|box|unit|porsi|gram|liter|ml)\b/gi, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (rawName.length < 2 || /^\d[\d\s./-]*$/.test(rawName)) return null;
+    return { rawName, qty };
+  }
+
   for (const line of lines) {
     if (isPdfNonItemLine(line)) continue;
     if (/^(no\.?|total|grand|sub\s*total|jumlah|halaman|page|tanggal|alamat|telepon|telp|invoice|nota)\b/i.test(line)) continue;
     if (/^(nama\s*barang|barang|kode|satuan|unit|qty|quantity|harga|jumlah\s*harga)\b/i.test(line)) continue;
     if (/^(frozen\s*&\s*kering|rekap\s*order|keterangan|pt\.|cv\.)/i.test(line)) continue;
 
-    // Tanggal kedatangan dapat berada setelah TOTAL pada PDF PO. Buang
-    // tanggal trailing terlebih dahulu agar tahun (mis. 2026) tidak dianggap qty.
     const withoutTrailingDate = line
       .replace(/\s+\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4}\s*$/, '')
       .replace(/\s+\d{1,2}[- ](?:jan|feb|mar|apr|mei|jun|jul|agu|sep|okt|nov|des)[a-z]*[- ]\d{4}\s*$/i, '')
       .replace(/\s+\d{4}-\d{2}-\d{2}\s*$/, '')
       .trim();
-    const nums = [...withoutTrailingDate.matchAll(/(\d+(?:[.,]\d+)?)/g)];
-    if (!nums.length) continue;
+    if (!withoutTrailingDate) continue;
 
-    // TOTAL adalah angka terakhir sebelum tanggal; angka ukuran yang berada
-    // di nama barang tetap dipisahkan dari teks nama di bawah.
-    const last = nums[nums.length - 1];
-    const qty = parseFloat(last[1].replace(',', '.'));
-    if (!(qty > 0) || qty > 99999) continue;
+    // Split combined PDF/paste rows only when each product has its own trailing quantity.
+    // "Ayam Penyet 2 Dada + 2 Paha" remains intact because '+' is followed by a digit.
+    const plusParts = withoutTrailingDate.split(/\s+\+\s+(?=[A-Za-z])/);
+    if (plusParts.length > 1) {
+      const parsedParts = plusParts.map(parseProductSegment);
+      if (parsedParts.every(Boolean)) {
+        for (const part of parsedParts) {
+          sourceIndex += 1;
+          items.push({
+            rawName: part.rawName,
+            qty: part.qty,
+            sourceIndex,
+            pdfNo: (line.match(/^\s*(\d{1,4})\b/) || [])[1] || null,
+            sourceLine: line,
+          });
+        }
+        continue;
+      }
+    }
 
-    let rawName = withoutTrailingDate.slice(0, last.index).trim();
-    rawName = sanitizePdfProductName(rawName)
-      // Kolom kuantitas sebelumnya (PO CV/PT) bukan bagian nama barang.
-      .replace(/\s+(?:\d+(?:[.,]\d+)?\s+){1,3}\d+(?:[.,]\d+)?\s*$/, '')
-      // Size/kemasan yang tercampur di nama review harus dibuang.
-      .replace(/\s*\([^)]*\b(?:\d+(?:[.,]\d+)?\s*(?:kg|gram|gr|pcs|pack|pail|liter|ml)|\d+\s*(?:pcs|pack|pail))[^)]*\)/gi, '')
-      .replace(/\s+\d+(?:[.,]\d+)?\s*(?:kg|gram|gr|pcs|pack|pail|liter|ml)\b/gi, '')
-      .replace(/\b(?:pack|pcs|pail|ekor|kg|box|unit|porsi|gram|liter|ml)\b/gi, ' ')
-      .replace(/\s+/g, ' ')
-      .trim();
-
-    if (rawName.length < 2 || /^\d[\d\s./-]*$/.test(rawName)) continue;
-
+    const parsed = parseProductSegment(withoutTrailingDate);
+    if (!parsed) continue;
     sourceIndex += 1;
     items.push({
-      rawName,
-      qty,
+      rawName: parsed.rawName,
+      qty: parsed.qty,
       sourceIndex,
       pdfNo: (line.match(/^\s*(\d{1,4})\b/) || [])[1] || null,
       sourceLine: line,
@@ -340,9 +359,10 @@ function filterPdfMasterForEntity(entity, masterList) {
 }
 
 export function validatePdfItems(entity, textOrItems, masterOverride) {
-  const sourceMaster = Array.isArray(masterOverride) ? masterOverride : (getMasterByEntity(entity) || []);
-  const master = filterPdfMasterForEntity(entity, sourceMaster);
-  const allowedCodes = new Set(master.map((item) => String(item?.kode || item?.kodeBarang || '').trim()));
+  const selectedEntity = String(entity || '').trim().toUpperCase() === 'CV' ? 'CV' : 'PT';
+  const sourceMaster = Array.isArray(masterOverride) ? masterOverride : (getMasterByEntity(selectedEntity) || []);
+  const master = filterPdfMasterForEntity(selectedEntity, sourceMaster);
+  const allowedCodes = new Set(master.map((item) => String(item?.kode || item?.kodeBarang || '').trim().toUpperCase()));
   const items = Array.isArray(textOrItems) ? textOrItems : parsePdfLinesToItems(textOrItems);
   const results = [];
 
@@ -352,45 +372,62 @@ export function validatePdfItems(entity, textOrItems, masterOverride) {
     const qty = Number(it.qty) || 0;
     if (!rawNameOriginal || qty <= 0) continue;
 
-    const deterministic = resolvePdfNameDeterministic(entity, rawNameOriginal, master);
+    // BBCV/BBPT raw material may pass only when its matching code is explicitly present.
+    const explicitRawCode = rawNameOriginal.match(/\b(BBCV|BBPT)[\s-]?(\d{3,4})\b/i);
     let match = null;
     let status = 'matched';
     let note = '';
 
-    if (deterministic) {
-      match = deterministic.item || deterministic;
-      note = deterministic.matchType || 'deterministic';
-    }
+    if (explicitRawCode) {
+      const prefix = explicitRawCode[1].toUpperCase();
+      const code = prefix + '-' + explicitRawCode[2].padStart(4, '0');
+      const expectedPrefix = selectedEntity === 'CV' ? 'BBCV' : 'BBPT';
+      const rawItem = sourceMaster.find((item) =>
+        String(item?.kode || item?.kodeBarang || '').trim().toUpperCase() === code &&
+        String(item?.divisi || item?.division || '').trim().toUpperCase().replace(/\s+/g, ' ') === 'BAHAN BAKU'
+      );
+      if (prefix === expectedPrefix && rawItem) {
+        match = { item: rawItem, matchType: 'explicit-raw-code' };
+        note = 'explicit-raw-code';
+      } else {
+        status = 'unmatched';
+        note = 'kode bahan baku tidak sesuai entitas atau tidak ada di master';
+      }
+    } else {
+      const deterministic = resolvePdfNameDeterministic(selectedEntity, rawNameOriginal, master);
+      if (deterministic) {
+        match = deterministic.item || deterministic;
+        note = deterministic.matchType || 'deterministic';
+      }
 
-    if (!match) {
-      const aliasResult = matchByAlias(entity, sanitizePdfProductName(rawNameOriginal));
-      if (aliasResult) {
-        const aliasItem = aliasResult.item || aliasResult;
-        const aliasKode = String(aliasItem?.kode || aliasItem?.kodeBarang || '').trim();
-        // Jangan menerima alias dari luar master yang sudah disaring untuk entitas yang dipilih.
-        if (aliasKode && allowedCodes.has(aliasKode)) {
-          match = aliasResult;
-          note = aliasResult.matchType || 'alias';
+      if (!match) {
+        const aliasResult = matchByAlias(selectedEntity, sanitizePdfProductName(rawNameOriginal));
+        if (aliasResult) {
+          const aliasItem = aliasResult.item || aliasResult;
+          const aliasKode = String(aliasItem?.kode || aliasItem?.kodeBarang || '').trim().toUpperCase();
+          if (aliasKode && allowedCodes.has(aliasKode)) {
+            match = aliasResult;
+            note = aliasResult.matchType || 'alias';
+          }
+        }
+      }
+
+      if (!match) {
+        const fuzzy = findFuzzyMasterMatch(selectedEntity, rawNameOriginal, master);
+        if (fuzzy) {
+          match = fuzzy;
+          note = fuzzy.matchType;
         }
       }
     }
 
-    if (!match) {
-      const fuzzy = findFuzzyMasterMatch(entity, rawNameOriginal, master);
-      if (fuzzy) {
-        match = fuzzy;
-        note = fuzzy.matchType;
-      }
-    }
-
-    if (!match) {
+    if (!match && status === 'matched') {
       status = 'unmatched';
       note = 'tidak cocok master';
     }
 
     const masterItem = match?.kode ? match : (match?.item || null);
     const kode = masterItem?.kode || match?.kode || null;
-
     results.push({
       no: i + 1,
       sourceIndex: Number(it.sourceIndex) || (i + 1),
@@ -408,7 +445,6 @@ export function validatePdfItems(entity, textOrItems, masterOverride) {
   }
   return results;
 }
-
 export function parseLinesFromText(text, _lines = []) {
   return parsePdfLinesToItems(text).map((it, idx) => ({
     no: idx + 1,
