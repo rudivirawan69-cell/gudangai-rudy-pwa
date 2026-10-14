@@ -2866,7 +2866,7 @@ function refreshDashboardLive_() {
     });
 
     // Tabel sumber chart divisi tetap di A13:F; chart tersembunyi membaca P13:S.
-    const divRows = (data.statusPerDivisi || []).map(function(d) {
+    const divRows = (data.statusPerDivisi || []).slice(0, 15).map(function(d) {
       return [d.divisi, d.total, d.aman, d.waspada, d.kritis, percent_(d.kritis, d.total) / 100];
     });
     // Area tabel divisi dibatasi ke baris 13–27. Baris 28–45 milik tabel kritis dan tidak boleh dibersihkan.
@@ -4498,7 +4498,7 @@ function dashboardSyncPatchRefresh_(options) {
       sh.getRange(x[0]).setValue(cards[i][0] + "\n\n" + cards[i][1] + " " + cards[i][2]);
     });
 
-    const divRows = (data.statusPerDivisi || []).map(function(d) {
+    const divRows = (data.statusPerDivisi || []).slice(0, 15).map(function(d) {
       return [d.divisi, Number(d.total)||0, Number(d.aman)||0, Number(d.waspada)||0, Number(d.kritis)||0, percent_(d.kritis||0,d.total||0)/100];
     });
     // Jangan menyapu A28:F45: area itu milik tabel item kritis. Data divisi hanya memakai baris 13–27.
