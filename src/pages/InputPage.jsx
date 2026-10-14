@@ -569,49 +569,85 @@ export default function InputPage() {
         const resultMap = new Map((res.results || [])
           .filter(r => r?.clientItemId)
           .map(r => [r.clientItemId, r]));
+        const isHoldResult = (result, item) => {
+          if (!result) return false;
+          if (result.shortage === true || result.stockPolicy === 'STOCK_KURANG_HOLD_QTY_0' ||
+              (Array.isArray(result.flags) && result.flags.includes('STOCK_KURANG_HOLD'))) return true;
+          const note = String(result?.readBack?.keterangan || result?.keterangan || '');
+          if (/(?:Input pending|pending\s*❌\s*PO)/i.test(note) && Number(result.qty) === 0) return true;
+          // Older backend responses may omit the shortage flag; for an outbound
+          // write, qty=0 with a positive requested qty is never a completed stock movement.
+          return txType === 'keluar' && Number(result.qty) === 0 &&
+            Number(result.originalQty != null ? result.originalQty : item.qty) > 0;
+        };
+        const heldItems = cart.filter((item) => isHoldResult(resultMap.get(item.clientItemId), item));
+        const heldIds = new Set(heldItems.map((item) => item.clientItemId));
         const confirmedItems = cart.filter((item) => {
-          const r = resultMap.get(item.clientItemId);
-          return r?.success === true || r?.skipped === true;
+          const result = resultMap.get(item.clientItemId);
+          return (result?.success === true || result?.skipped === true) && !heldIds.has(item.clientItemId);
         });
         const notificationKey = 'tx:' + String(res.requestId || res.transactionId || orderedCart.map((item) => item.clientItemId).join('|')) + ':' + txType + ':' + entity;
+        const unaccountedCount = Math.max(0, cart.length - confirmedItems.length - heldItems.length - queuedCount);
 
-        // Riwayat hanya boleh dibuat dari konfirmasi per-item backend.
-        // Item yang hanya masuk antrian tidak boleh tampil sebagai "berhasil".
-        if (confirmedItems.length > 0) {
+        // HOLD is a recorded zero-qty hold, not a successful stock movement.
+        // Keep one consolidated history entry with explicit per-item outcomes.
+        const reconciledItems = [...confirmedItems, ...heldItems].map((item) => {
+          const result = resultMap.get(item.clientItemId);
+          const isHold = heldIds.has(item.clientItemId);
+          return isHold
+            ? { ...item, qty: 0, requestedQty: Number(result?.originalQty != null ? result.originalQty : item.qty) || 0,
+                transactionStatus: 'hold', keterangan: result?.readBack?.keterangan || result?.keterangan || item.keterangan || 'pending ❌ PO' }
+            : { ...item, transactionStatus: 'sukses' };
+        });
+        if (reconciledItems.length > 0) {
           saveToHistory({
             type: txType,
             entity,
-            items: confirmedItems,
+            items: reconciledItems,
             tanggal,
             at: Date.now(),
-            status: 'sukses',
-            source: 'backend-confirmed',
+            status: heldItems.length ? (confirmedItems.length ? 'sebagian' : 'hold') : 'sukses',
+            source: 'backend-reconciled',
             syncSummary: {
               total: cart.length,
               success: confirmedItems.length,
+              held: heldItems.length,
               queued: queuedCount,
-              failed: Math.max(0, cart.length - confirmedItems.length - queuedCount)
+              failed: unaccountedCount
             }
           });
         }
 
         if (queuedCount > 0) {
+          const parts = [];
+          if (confirmedItems.length) parts.push(confirmedItems.length + ' sukses');
+          if (heldItems.length) parts.push(heldItems.length + ' HOLD (qty keluar 0)');
+          parts.push(queuedCount + ' antrian');
+          if (unaccountedCount) parts.push(unaccountedCount + ' belum teridentifikasi');
           pushNotification({
             dedupeKey: notificationKey,
             type: 'warning',
-            title: confirmedItems.length > 0 ? 'Transaksi sebagian selesai' : 'Transaksi masuk Antrian Sinkronisasi',
-            body: confirmedItems.length + ' sukses · ' + queuedCount + ' antrian' +
-              (Math.max(0, cart.length - confirmedItems.length - queuedCount) ? ' · ' + Math.max(0, cart.length - confirmedItems.length - queuedCount) + ' belum teridentifikasi' : '') +
-              '. Tidak ada item dibuang.'
+            title: confirmedItems.length > 0 || heldItems.length > 0 ? 'Transaksi sebagian selesai' : 'Transaksi masuk Antrian Sinkronisasi',
+            body: parts.join(' · ') + '. Item HOLD tidak mengurangi stok; item antrian tetap diamankan.'
           });
-          setStatusBanner(
-            confirmedItems.length + ' sukses · ' + queuedCount + ' antrian' +
-            (failCount ? ' · ' + failCount + ' gagal konfirmasi' : '') +
-            ' — lanjutkan dari Antrian bila perlu.'
-          );
+          setStatusBanner(parts.join(' · ') + (failCount ? ' · ' + failCount + ' gagal konfirmasi' : '') + ' — periksa Antrian untuk item yang belum tersinkron.');
+        } else if (heldItems.length > 0) {
+          const holdMessage = heldItems.length + ' item ' + entity + ' ditahan (HOLD); qty keluar ditulis 0 dan stok tidak dikurangi.';
+          const successMessage = confirmedItems.length ? confirmedItems.length + ' item stok berhasil ditulis · ' : '';
+          pushNotification({
+            dedupeKey: notificationKey,
+            type: 'warning',
+            title: confirmedItems.length ? 'Transaksi sebagian selesai — ada HOLD' : 'Stok kurang — HOLD',
+            body: successMessage + holdMessage + ' Tanpa antrian.'
+          });
+          setStatusBanner(successMessage + holdMessage + ' Tanpa antrian.');
         } else if (confirmedItems.length === cart.length) {
           pushNotification({ dedupeKey: notificationKey, type: 'success', title: 'Transaksi selesai', body: confirmedItems.length + ' item ' + entity + ' sukses terkonfirmasi ditulis backend. Tanpa antrian.' });
           setStatusBanner('Berhasil dikonfirmasi · ' + confirmedItems.length + ' item');
+        } else if (confirmedItems.length > 0) {
+          const partialMessage = confirmedItems.length + ' sukses · ' + unaccountedCount + ' belum terkonfirmasi.';
+          pushNotification({ dedupeKey: notificationKey, type: 'warning', title: 'Transaksi sebagian terkonfirmasi', body: partialMessage + ' Periksa antrian sebelum mencoba ulang.' });
+          setStatusBanner(partialMessage);
         } else {
           pushNotification({ dedupeKey: notificationKey, type: 'error', title: 'Belum ada konfirmasi penulisan', body: 'Backend belum mengonfirmasi item tertulis. Periksa antrian sebelum mengulang.' });
           setStatusBanner('Belum terkonfirmasi — item tetap diamankan di antrian');
