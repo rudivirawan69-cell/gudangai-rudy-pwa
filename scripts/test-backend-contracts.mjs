@@ -63,7 +63,18 @@ assert.doesNotMatch(poNoWriter, /sheet\.getRange\(5,\s*2\)\.setValue\(/);
 const rollover = functionBody('rolloverPOWeekIfNeeded_');
 assert.match(rollover, /const activeKey = status && status\.success \? String\(status\.weekKey \|\| ""\) : ""/);
 assert.match(functionBody('writePurchaseOrder_'), /rolloverPOWeekIfNeeded_\(\);[\s\S]*?ensurePOHeader/);
+assert.match(functionBody('writePurchaseOrder_'), /const resolvedNoPO = suppliedNoPO/);
+assert.match(functionBody('writePurchaseOrder_'), /writePONumberRow5_\(sheet, resolvedNoPO\)/);
 assert.match(functionBody('writePORecommendations'), /rolloverPOWeekIfNeeded_\(\);[\s\S]*?clearPOTableData/);
+assert.match(functionBody('writePORecommendations'), /writePONumberRow5_\(sheet, "PO-" \+ getWeekKey_\(new Date\(\)\)\)/);
+
+// Both GET and POST Status PO endpoints must return the same week-scoped status
+// so the PWA current-week view agrees with the Spreadsheet Dashboard.
+assert.equal((gs.match(/case "getStatusPO": return jsonResponse\(getCurrentWeekPOStatus_\(\)\);/g) || []).length, 2);
+const currentWeekPO = functionBody('getCurrentWeekPOStatus_');
+assert.match(currentWeekPO, /rolloverPOWeekIfNeeded_\(\)/);
+assert.match(currentWeekPO, /isCurrentWeekEmpty: true/);
+assert.match(currentWeekPO, /items: \[\]/);
 
 // Contract 8: status reader must parse formatted qty values and keep named PO rows
 // visible for diagnosis if TOTAL is blank instead of silently hiding the item.
