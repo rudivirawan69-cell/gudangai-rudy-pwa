@@ -72,9 +72,12 @@ assert.match(functionBody('writePORecommendations'), /writePONumberRow5_\(sheet,
 // so the PWA current-week view agrees with the Spreadsheet Dashboard.
 assert.equal((gs.match(/case "getStatusPO": return jsonResponse\(getCurrentWeekPOStatus_\(\)\);/g) || []).length, 2);
 const currentWeekPO = functionBody('getCurrentWeekPOStatus_');
-assert.match(currentWeekPO, /rolloverPOWeekIfNeeded_\(\)/);
+// GET/POST status reads must be side-effect free; archival belongs to write-capable refresh.
+assert.doesNotMatch(currentWeekPO, /rolloverPOWeekIfNeeded_\(\)/);
 assert.match(currentWeekPO, /isCurrentWeekEmpty: true/);
 assert.match(currentWeekPO, /items: \[\]/);
+assert.match(functionBody('refreshDashboardPOSection_'),
+  /rolloverPOWeekIfNeeded_\(\);[\s\S]*?const data = getCurrentWeekPOStatus_\(\);/);
 
 // Contract 8: status reader must parse formatted qty values and keep named PO rows
 // visible for diagnosis if TOTAL is blank instead of silently hiding the item.
