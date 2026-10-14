@@ -2959,6 +2959,8 @@ function writePORecommendations() {
   const sheet = ss.getSheetByName("purchase order");
   if (!sheet) return { success: false, error: "Sheet 'purchase order' tidak ditemukan" };
 
+  // Preserve a dated prior-week PO before recommendations clear or replace B6:I.
+  rolloverPOWeekIfNeeded_();
   const recommendations = generatePORecommendations();
   const existingEnd = findPODataEndRow(sheet, PO_DATA_START_ROW);
   const neededEnd = Math.max(existingEnd, PO_DATA_START_ROW + Math.max(0, recommendations.length) - 1);
@@ -2994,9 +2996,9 @@ function writePORecommendations() {
 
 function normalizePOItem_(item, index) {
   const source = (item && typeof item === "object") ? item : {};
-  const poCV = Math.max(0, Math.floor(toNumber_(source.poCV != null ? source.poCV : source.cv)));
-  const poPT = Math.max(0, Math.floor(toNumber_(source.poPT != null ? source.poPT : source.pt)));
-  const totalCandidate = toNumber_(source.totalQty != null ? source.totalQty : source.total);
+  const poCV = Math.max(0, Math.floor(parsePOQty_(source.poCV != null ? source.poCV : source.cv)));
+  const poPT = Math.max(0, Math.floor(parsePOQty_(source.poPT != null ? source.poPT : source.pt)));
+  const totalCandidate = parsePOQty_(source.totalQty != null ? source.totalQty : source.total);
   const total = Math.max(0, Math.floor(totalCandidate || (poCV + poPT)));
   const finalTotal = Math.max(total, poCV + poPT);
   return {
@@ -3042,7 +3044,7 @@ function poSheetMatchesItems_(sheet, items) {
         const a = String(actual[i][j] == null ? "" : actual[i][j]).trim();
         const e = String(expected[i][j] == null ? "" : expected[i][j]).trim();
         if (j >= 4 && j <= 6) {
-          if (toNumber_(a) !== toNumber_(e)) return false;
+          if (parsePOQty_(a) !== parsePOQty_(e)) return false;
         } else if (a !== e) {
           return false;
         }
@@ -3054,17 +3056,35 @@ function poSheetMatchesItems_(sheet, items) {
   }
 }
 
+
 function writePONumberRow5_(sheet, noPO) {
   const value = String(noPO || "").trim();
   if (!value) return;
-  const row = sheet.getRange(5, 1, 1, Math.max(9, sheet.getLastColumn())).getValues()[0];
-  for (let i = 0; i < row.length; i++) {
-    if (/no\s*(po|:)/i.test(String(row[i] || ""))) {
-      sheet.getRange(5, i + 1).setValue("NO PO : " + value);
+  const label = "NO PO : " + value;
+  const width = Math.max(10, sheet.getLastColumn());
+
+  // Reuse metadata cells when present, but never overwrite B5:I5—the eight PO
+  // table headers are the source of truth for reading rows 6 onward.
+  const row4 = sheet.getRange(4, 1, 1, width).getDisplayValues()[0];
+  for (let i = 0; i < row4.length; i++) {
+    if (/no\s*po\s*[:#-]?/i.test(String(row4[i] || ""))) {
+      sheet.getRange(4, i + 1).setValue(label);
       return;
     }
   }
-  sheet.getRange(5, 2).setValue("NO PO : " + value);
+  const row5 = sheet.getRange(5, 1, 1, width).getDisplayValues()[0];
+  if (/no\s*po\s*[:#-]?/i.test(String(row5[0] || ""))) {
+    sheet.getRange(5, 1).setValue(label);
+    return;
+  }
+  for (let i = 9; i < row5.length; i++) {
+    if (/no\s*po\s*[:#-]?/i.test(String(row5[i] || ""))) {
+      sheet.getRange(5, i + 1).setValue(label);
+      return;
+    }
+  }
+  // A5 is outside B:I, so the PO number remains readable without replacing "NO".
+  sheet.getRange(5, 1).setValue(label);
 }
 
 function writePurchaseOrder_(body) {
@@ -3129,6 +3149,8 @@ function writePurchaseOrder_(body) {
       qty: items.reduce(function(a, x) { return a + x.total; }, 0), tanggal: body.tanggal || "", status: "IN_PROGRESS", writeOccurred: false,
       details: JSON.stringify({ digest: digest, itemCount: items.length }) });
 
+    // Preserve a dated prior-week status before new date/data replace the active PO.
+    rolloverPOWeekIfNeeded_();
     ensurePOHeader(sheet, PO_HEADER_ROW);
     updatePODateRow4(sheet);
     if (body.noPO || body.nomorPO || body.poNumber) writePONumberRow5_(sheet, body.noPO || body.nomorPO || body.poNumber);
@@ -3370,24 +3392,42 @@ function getWeekKey_(date) {
   return target.getUTCFullYear() + "-W" + String(weekNo).padStart(2, "0");
 }
 
+
 function rolloverPOWeekIfNeeded_() {
   const props = PropertiesService.getScriptProperties();
   const currentKey = getWeekKey_(new Date());
-  const previousKey = props.getProperty("GUDANGAI_PO_WEEK_KEY") || "";
-  if (!previousKey) {
-    props.setProperty("GUDANGAI_PO_WEEK_KEY", currentKey);
-    return { changed: false, currentKey: currentKey, previousKey: null };
-  }
-  if (previousKey === currentKey) return { changed: false, currentKey: currentKey, previousKey: previousKey };
-
+  const storedKey = props.getProperty("GUDANGAI_PO_WEEK_KEY") || "";
   let status = null;
   try { status = getStatusPO(); } catch (e) { status = null; }
-  const previousItems = status && status.success ? (status.items || []) : [];
-  const snapshot = { weekKey: previousKey, capturedAt: new Date().toISOString(), noPO: status && status.noPO || null,
-    summary: status && status.summary || null, items: previousItems };
-  props.setProperty("GUDANGAI_PO_LAST_WEEK_STATUS", JSON.stringify(snapshot));
-  props.setProperty("GUDANGAI_PO_WEEK_KEY", currentKey);
-  return { changed: true, currentKey: currentKey, previousKey: previousKey, count: previousItems.length };
+
+  // The active PO's own date is the source of truth, including the first rollover
+  // after redeployment when GUDANGAI_PO_WEEK_KEY has not yet been initialized.
+  const activeKey = status && status.success ? String(status.weekKey || "") : "";
+  const activeItems = status && status.success ? (status.items || []) : [];
+  let archivedWeekKey = null;
+  let archivedCount = 0;
+  if (activeItems.length > 0 && activeKey && activeKey !== currentKey) {
+    const existingArchive = getPreviousPOStatus_() || {};
+    if (String(existingArchive.weekKey || "") !== activeKey) {
+      props.setProperty("GUDANGAI_PO_LAST_WEEK_STATUS", JSON.stringify({
+        weekKey: activeKey,
+        capturedAt: new Date().toISOString(),
+        noPO: status.noPO || null,
+        summary: status.summary || null,
+        items: activeItems
+      }));
+      archivedWeekKey = activeKey;
+      archivedCount = activeItems.length;
+    }
+  }
+  if (storedKey !== currentKey) props.setProperty("GUDANGAI_PO_WEEK_KEY", currentKey);
+  return {
+    changed: storedKey !== currentKey || archivedWeekKey !== null,
+    currentKey: currentKey,
+    previousKey: storedKey || activeKey || null,
+    archivedWeekKey: archivedWeekKey,
+    count: archivedCount
+  };
 }
 
 function getPreviousPOStatus_() {
@@ -3848,7 +3888,7 @@ function recordPOArrival(body) {
   body = body || {};
   const requestId = String(body.requestId || "").trim();
   const transactionId = String(body.transactionId || (requestId ? "POARR-" + requestId : "")).trim();
-  const qty = Number(body.qtyDatangBaru != null ? body.qtyDatangBaru : body.qtyDatang);
+  const qty = parsePOQty_(body.qtyDatangBaru != null ? body.qtyDatangBaru : body.qtyDatang);
   if (!requestId) return { success: false, status: "REJECTED", code: "REQUEST_ID_REQUIRED", error: "requestId wajib untuk kedatangan PO." };
   if (!Number.isFinite(qty) || qty <= 0 || qty > MAX_QTY) return { success: false, status: "REJECTED", code: "INVALID_QTY", error: "Qty kedatangan harus lebih dari 0 dan <= " + MAX_QTY + "." };
 
@@ -3868,7 +3908,10 @@ function recordPOArrival(body) {
     const nama = String(r[1] || "").trim();
     if (!nama) return;
     if ((wantedNo && no === wantedNo) || (wantedName && normalizePONameKey_(nama) === wantedName)) {
-      found = { row: idx + PO_DATA_START_ROW, no: no || String(idx + 1), nama: nama, poCV: toNumber_(r[4]), poPT: toNumber_(r[5]), total: Math.max(0, toNumber_(r[6]) || toNumber_(r[4]) + toNumber_(r[5])) };
+      const poCV = parsePOQty_(r[4]);
+      const poPT = parsePOQty_(r[5]);
+      const totalH = parsePOQty_(r[6]);
+      found = { row: idx + PO_DATA_START_ROW, no: no || String(idx + 1), nama: nama, poCV: poCV, poPT: poPT, total: Math.max(0, totalH > 0 ? totalH : poCV + poPT) };
     }
   });
   if (!found) return { success: false, status: "REJECTED", code: "PO_ITEM_NOT_FOUND", error: "Item PO tidak ditemukan." };
@@ -3948,7 +3991,7 @@ function getStatusPO() {
       ? new RegExp('No\\s*:?\\s*' + safeNoPO + '\\s*\\[\\s*ITEM\\s*:\\s*([0-9]+)\\s*\\]', 'i')
       : null;
     a.forEach(function(r) {
-      const qty = Math.max(0, toNumber_(r[4]));
+      const qty = Math.max(0, parsePOQty_(r[4]));
       const ket = String(r[5] || '').trim();
       const namaMasuk = String(r[2] || '').trim(); // kolom Nama di sheet transaksi (display)
       if (!ket || qty <= 0) return;
