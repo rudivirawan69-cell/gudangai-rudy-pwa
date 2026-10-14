@@ -4328,9 +4328,15 @@ function dashboardSyncPatchDisableConflictingTriggers_() {
   // dan menulis ulang blok lama. Jangan menghapus weeklyPOAutomation karena
   // fungsi itu membuat PO; penulisan Status PO-nya sudah dipusatkan ke baris 46.
   const conflicting = [
-    "refreshAllData", "refreshDashboard",
-    "testDashboardV7", "dashboardV7", "refreshDashboardV7",
-    "ujiDashboardV7", "testDashboard", "refreshDashboardLegacy"
+    // Legacy refresh/test handlers found in the archived V6.6.5 source.
+    // refreshDashboardPODataOnly_ clears A28:F45 despite claiming it writes row 46+;
+    // the V7 data-only refresh can target the old row-42 layout.
+    "refreshAllData", "refreshDashboard", "refreshDashboardV7",
+    "refreshDashboardDataOnly_", "refreshDashboardAfterWrite_",
+    "refreshDashboardPODataOnly_", "refreshDashboardOperationalV68_",
+    "setupDashboardLayoutClean",
+    "testDashboardV7", "dashboardV7", "ujiDashboardV7",
+    "testDashboard", "refreshDashboardLegacy"
   ];
   let removed = 0;
   ScriptApp.getProjectTriggers().forEach(function(t) {
@@ -4564,8 +4570,12 @@ function dashboardSyncPatchVerify() {
   const previous = getPreviousPOStatus_() || {};
   const triggers = ScriptApp.getProjectTriggers().map(function(t) { return t.getHandlerFunction(); });
   const conflictingNames = [
-    "refreshAllData", "refreshDashboard", "testDashboardV7", "dashboardV7",
-    "refreshDashboardV7", "ujiDashboardV7", "testDashboard", "refreshDashboardLegacy"
+    "refreshAllData", "refreshDashboard", "refreshDashboardV7",
+    "refreshDashboardDataOnly_", "refreshDashboardAfterWrite_",
+    "refreshDashboardPODataOnly_", "refreshDashboardOperationalV68_",
+    "setupDashboardLayoutClean",
+    "testDashboardV7", "dashboardV7", "ujiDashboardV7",
+    "testDashboard", "refreshDashboardLegacy"
   ];
   const dashboardProbe = sh ? {
     criticalRows28to30: sh.getRange(28, 1, 3, 6).getDisplayValues(),
