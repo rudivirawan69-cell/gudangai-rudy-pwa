@@ -85,7 +85,10 @@ const PO_DATA_START_ROW = 6;
 const PO_DATA_START_COL = 2; // B
 const PO_DATA_NUM_COLS = 8; // B:I
 const PO_LOCK_TIMEOUT_MS = 20000;
-const PO_SECTION_CURRENT_ROW = 46;
+const STATUS_PO_LAYOUT_VERSION = '6.9.0-LOCKED-ROW46';
+const PO_START_ROW = 46;
+const PO_DASHBOARD_HEADER_ROW = 49; // Header Dashboard; PO_HEADER_ROW=5 tetap khusus sheet purchase order.
+const PO_SECTION_CURRENT_ROW = PO_START_ROW;
 const PO_DASHBOARD_MAX_VISIBLE_ROWS = 50;
 const OPS_TITLE_ROWS = 2;
 const OPS_HEADER_ROW = 3;
@@ -416,7 +419,7 @@ function doPost(e) {
       case "ping": return jsonResponse(getHealthStatus_(body));
       case "healthCheck": return jsonResponse(getHealthStatus_(body));
       case "getStockDelta": return jsonResponse(getStockDelta(body));
-      case "getStatusPO": return jsonResponse(getStatusPO());
+      case "getStatusPO": return jsonResponse(getCurrentWeekPOStatus_());
       case "recordPOArrival": return jsonResponse(recordPOArrival(body));
       case "getPORequestStatus": return jsonResponse(getPORequestStatus(body));
       case "refreshDashboardPO": return jsonResponse(refreshDashboardPOSection_());
@@ -470,7 +473,7 @@ function doGet(e) {
     case "maintenanceCleanup": return jsonResponse(maintenanceCleanup(false));
     case "bootstrap": return jsonResponse(getPwaBootstrap({ entitas: e.parameter.entitas || "ALL" }));
     case "getStockDelta": return jsonResponse(getStockDelta({ sinceTimestamp: e.parameter.sinceTimestamp, entitas: e.parameter.entitas || "ALL" }));
-    case "getStatusPO": return jsonResponse(getStatusPO());
+    case "getStatusPO": return jsonResponse(getCurrentWeekPOStatus_());
     case "getPORequestStatus": return jsonResponse(getPORequestStatus({ requestId: e.parameter.requestId, transactionId: e.parameter.transactionId }));
     case "getSyncMetrics": return jsonResponse(getSyncMetrics());
     default: return jsonResponse({ success: false, status: "REJECTED", code: "UNKNOWN_ACTION", error: "Action tidak dikenali: " + action });
@@ -552,7 +555,7 @@ function mapIdempotencyRow_(row, rowNumber) {
     requestId: String(r[4] || ""), deviceId: String(r[5] || ""), operation: String(r[6] || ""),
     sheet: String(r[7] || ""), entitas: String(r[8] || ""), kodeBarang: String(r[9] || ""),
     qty: r[10], tanggal: String(r[11] || ""), status: String(r[12] || ""), dataRow: r[13] || "",
-    writeOccurred: String(r[14] || ""), errorCode: String(r[15] || ""), details: String(r[16] || "")
+    writeOccurred: r[14] === false ? "false" : String(r[14] == null ? "" : r[14]), errorCode: String(r[15] || ""), details: String(r[16] || "")
   };
 }
 
@@ -619,6 +622,41 @@ function readBackTransactionByIdentity_(identity, preferredSheet) {
   const targetId = String(identity && identity.transactionId || "").trim();
   const targetNonce = String(identity && identity.nonce || "").trim();
   const sheetNames = preferredSheet ? [preferredSheet] : Object.keys(SHEET_CONFIG);
+
+  // Preferred path: resolve the row from the durable idempotency ledger.
+  // This is required because identity markers are intentionally not stored in Keterangan.
+  const ledgerRecord = (targetId || targetNonce) ? findIdempotencyRecord_(targetId, targetNonce) : null;
+  if (ledgerRecord && ledgerRecord.dataRow && ledgerRecord.sheet &&
+      (!preferredSheet || String(preferredSheet) === String(ledgerRecord.sheet))) {
+    const sheetName = String(ledgerRecord.sheet);
+    const config = SHEET_CONFIG[sheetName];
+    const sheet = config ? getSS().getSheetByName(sheetName) : null;
+    const rowNumber = Number(ledgerRecord.dataRow);
+    if (sheet && Number.isInteger(rowNumber) && rowNumber > config.headerRow && rowNumber <= sheet.getLastRow()) {
+      const r = sheet.getRange(rowNumber, 2, 1, 6).getValues()[0];
+      const note = String(r[5] || "");
+      const dateMatches = normalizeTransactionDateKey_(r[0]) === normalizeTransactionDateKey_(ledgerRecord.tanggal);
+      const codeMatches = String(r[1] || "").trim() === String(ledgerRecord.kodeBarang || "").trim();
+      const actualQty = Number(r[4]) || 0;
+      const expectedQty = Number(ledgerRecord.qty) || 0;
+      // Stock-shortage HOLD intentionally writes qty=0 while the ledger preserves requested qty.
+      const holdQtyMatches = actualQty === 0 && /(?:Input pending|pending\s*❌\s*PO)/i.test(note);
+      if (dateMatches && codeMatches && (actualQty === expectedQty || holdQtyMatches)) {
+        return {
+          matched: true, sheet: sheetName, row: rowNumber,
+          tanggal: normalizeTransactionDateKey_(r[0]), kodeBarang: String(r[1] || "").trim(),
+          namaBarang: r[2], satuan: r[3], qty: actualQty, keterangan: note,
+          originalQty: holdQtyMatches ? expectedQty : actualQty,
+          shortage: holdQtyMatches,
+          stockPolicy: holdQtyMatches ? "STOCK_KURANG_HOLD_QTY_0" : "NORMAL",
+          transactionId: targetId || ledgerRecord.transactionId || null,
+          nonce: targetNonce || ledgerRecord.nonce || null
+        };
+      }
+    }
+  }
+
+  // Compatibility fallback for legacy rows that still contain identity markers.
   for (let s = 0; s < sheetNames.length; s++) {
     const sheetName = sheetNames[s];
     if (!(sheetName in SHEET_CONFIG)) continue;
@@ -634,10 +672,17 @@ function readBackTransactionByIdentity_(identity, preferredSheet) {
       const txMatch = targetId && new RegExp("(?:^|[;|]\\s*)GUDANGAI_TX=" + targetId.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\$&") + "(?:;|$)").test(note);
       const nonceMatch = targetNonce && new RegExp("(?:^|[;|]\\s*)GUDANGAI_NONCE=" + targetNonce.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\$&") + "(?:;|$)").test(note);
       if (!txMatch && !nonceMatch) continue;
+      const actualQty = Number(r[4]) || 0;
+      const hold = actualQty === 0 && /(?:Input pending|pending\s*❌\s*PO)/i.test(note);
+      const holdQtyMatch = note.match(/pending\s*❌\s*PO\s*([0-9]+(?:[.,][0-9]+)?)/i) ||
+        note.match(/Input pending\s*([0-9]+(?:[.,][0-9]+)?)/i);
+      const originalQty = holdQtyMatch ? parsePOQty_(holdQtyMatch[1]) : actualQty;
       return {
         matched: true, sheet: sheetName, row: config.headerRow + 1 + i,
         tanggal: normalizeTransactionDateKey_(r[0]), kodeBarang: String(r[1] || "").trim(),
-        namaBarang: r[2], satuan: r[3], qty: Number(r[4]) || 0, keterangan: note,
+        namaBarang: r[2], satuan: r[3], qty: actualQty, keterangan: note,
+        originalQty: hold ? originalQty : actualQty, shortage: hold,
+        stockPolicy: hold ? "STOCK_KURANG_HOLD_QTY_0" : "NORMAL",
         transactionId: targetId || null, nonce: targetNonce || null
       };
     }
@@ -715,8 +760,11 @@ function getRequestStatus_(body) {
     const rec = mapIdempotencyRow_(rows[i], start + i);
     if (rec.requestId !== requestId) continue;
     const rb = readBackTransactionByIdentity_({ transactionId: rec.transactionId, nonce: rec.nonce }, rec.sheet);
-    if (rb && rb.matched && rec.status !== "APPLIED") updateIdempotencyRecord_(rec, { status: "APPLIED", dataRow: rb.row, writeOccurred: true, errorCode: "" });
-    return { success: rb.matched || rec.status === "APPLIED", status: rb.matched ? "APPLIED" : (rec.status || "UNKNOWN"), code: rb.matched ? "READBACK_CONFIRMED" : (rec.errorCode || "REQUEST_FOUND"), requestId: requestId, transactionId: rec.transactionId, nonce: rec.nonce, writeOccurred: rb.matched ? true : rec.writeOccurred, readBack: rb, record: rec };
+    if (rb && rb.matched) {
+      const confirmed = rec.status === "APPLIED" ? rec : updateIdempotencyRecord_(rec, { status: "APPLIED", dataRow: rb.row, writeOccurred: true, errorCode: "" });
+      return { success: true, status: "APPLIED", code: "READBACK_CONFIRMED", requestId: requestId, transactionId: rec.transactionId, nonce: rec.nonce, writeOccurred: true, readBack: rb, record: confirmed || rec };
+    }
+    return { success: false, status: "UNKNOWN", code: "READBACK_REQUIRED", requestId: requestId, transactionId: rec.transactionId, nonce: rec.nonce, writeOccurred: rec.writeOccurred || "unknown", retryable: false, error: "Ledger ditemukan tetapi baris transaksi belum dapat dikonfirmasi. Jangan kirim ulang otomatis.", readBack: rb, record: rec };
   }
   return { success: false, status: "NOT_FOUND", code: "REQUEST_NOT_FOUND", requestId: requestId, writeOccurred: false };
 }
@@ -728,11 +776,14 @@ function getTransactionStatus(body) {
   const rec = findIdempotencyRecord_(transactionId, nonce);
   const readBack = readBackTransactionByIdentity_({ transactionId: transactionId, nonce: nonce }, body.sheet);
   if (rec) {
-    if (readBack.matched && rec.status !== "APPLIED") {
-      const updated = updateIdempotencyRecord_(rec, { status: "APPLIED", dataRow: readBack.row, writeOccurred: true, errorCode: "" });
-      return { success: true, status: "APPLIED", code: "READBACK_CONFIRMED", transactionId: transactionId || rec.transactionId, nonce: nonce || rec.nonce, record: updated, readBack: readBack };
+    if (readBack.matched) {
+      const updated = rec.status === "APPLIED" ? rec : updateIdempotencyRecord_(rec, { status: "APPLIED", dataRow: readBack.row, writeOccurred: true, errorCode: "" });
+      return { success: true, status: "APPLIED", code: "READBACK_CONFIRMED", transactionId: transactionId || rec.transactionId, nonce: nonce || rec.nonce, writeOccurred: true, record: updated || rec, readBack: readBack };
     }
-    return { success: rec.status === "APPLIED", status: rec.status, code: rec.errorCode || "LEDGER_FOUND", transactionId: transactionId || rec.transactionId, nonce: nonce || rec.nonce, writeOccurred: rec.writeOccurred, retryable: rec.status === "FAILED" && rec.writeOccurred === "false", record: rec, readBack: readBack };
+    if (rec.status === "APPLIED" || rec.status === "COMPLETED" || rec.status === "IN_PROGRESS" || String(rec.writeOccurred) === "true" || String(rec.writeOccurred) === "unknown") {
+      return { success: false, status: "UNKNOWN", code: "READBACK_REQUIRED", transactionId: transactionId || rec.transactionId, nonce: nonce || rec.nonce, writeOccurred: rec.writeOccurred || "unknown", retryable: false, error: "Ledger ditemukan tetapi baris transaksi belum dapat dikonfirmasi. Jangan kirim ulang otomatis.", record: rec, readBack: readBack };
+    }
+    return { success: false, status: rec.status || "UNKNOWN", code: rec.errorCode || "LEDGER_FOUND", transactionId: transactionId || rec.transactionId, nonce: nonce || rec.nonce, writeOccurred: rec.writeOccurred, retryable: rec.status === "FAILED" && String(rec.writeOccurred) === "false", record: rec, readBack: readBack };
   }
   if (readBack.matched) return { success: true, status: "APPLIED", code: "READBACK_FOUND", transactionId: transactionId || null, nonce: nonce || null, writeOccurred: true, readBack: readBack };
   return { success: false, status: "NOT_FOUND", code: "IDENTITY_NOT_FOUND", transactionId: transactionId || null, nonce: nonce || null, writeOccurred: false, readBack: readBack };
@@ -911,10 +962,21 @@ function addTransaction(body) {
         const priorRead = readBackTransactionByIdentity_({ transactionId: transactionId, nonce: nonce }, sheetName);
         if (priorRead.matched) {
           ledgerRecord = updateIdempotencyRecord_(ledgerRecord, { status: "APPLIED", dataRow: priorRead.row, writeOccurred: true, errorCode: "" });
-          return { success: true, status: "APPLIED", code: "IDEMPOTENT_REPLAY", requestId: request.requestId, transactionId: transactionId, nonce: nonce, sheet: sheetName, row: priorRead.row, kode: kode, qty: priorRead.qty, originalQty: numericQty, readBack: priorRead, replayed: true };
+          const replayIsHold = priorRead.shortage === true;
+          return {
+            success: true, status: "APPLIED", code: "IDEMPOTENT_REPLAY",
+            requestId: request.requestId, transactionId: transactionId, nonce: nonce,
+            sheet: sheetName, row: priorRead.row, kode: kode, qty: priorRead.qty,
+            originalQty: priorRead.originalQty != null ? priorRead.originalQty : numericQty,
+            shortage: replayIsHold, stockPolicy: priorRead.stockPolicy || (replayIsHold ? "STOCK_KURANG_HOLD_QTY_0" : "NORMAL"),
+            flags: replayIsHold ? ["STOCK_KURANG", "STOCK_KURANG_HOLD", "QTY_HOLD_0"] : [],
+            readBack: priorRead, replayed: true
+          };
         }
-        if (ledgerRecord.status === "UNKNOWN" || ledgerRecord.writeOccurred === "unknown") {
-          return { success: false, status: "UNKNOWN", code: "READBACK_REQUIRED", requestId: request.requestId, transactionId: transactionId, nonce: nonce, writeOccurred: "unknown", error: "Identity memiliki percobaan ambigu; gunakan getTransactionStatus sebelum retry." };
+        // Never repeat a write when a prior attempt may already have committed.
+        // Only an explicitly FAILED + writeOccurred=false record is safe to retry automatically.
+        if (ledgerRecord.status !== "FAILED" || String(ledgerRecord.writeOccurred) !== "false") {
+          return { success: false, status: "UNKNOWN", code: "READBACK_REQUIRED", requestId: request.requestId, transactionId: transactionId, nonce: nonce, writeOccurred: ledgerRecord.writeOccurred || "unknown", retryable: false, error: "Percobaan sebelumnya belum dapat dipastikan dari read-back. Jangan mengulang penulisan; gunakan getTransactionStatus untuk rekonsiliasi." };
         }
         ledgerRecord = updateIdempotencyRecord_(ledgerRecord, { status: "IN_PROGRESS", requestId: request.requestId, deviceId: deviceId, errorCode: "", writeOccurred: false });
       } else {
@@ -930,8 +992,9 @@ function addTransaction(body) {
         if (kekurangan > 0) {
           shortageMode = true;
           finalQty = 0;
-          const structured = "Input pending " + numericQty + " > sisa stock " + sisa + " > kurang " + kekurangan;
-          keterangan = keterangan ? (keterangan + " | " + structured) : structured;
+          const structured = formatStockShortageHold_(numericQty, sisa, kekurangan, stockInfo.satuan || "pack");
+          // HOLD replaces stale user/queue text; keep only current verified shortage facts.
+          keterangan = structured;
           flags.push("STOCK_KURANG", "STOCK_KURANG_HOLD", "QTY_HOLD_0");
           try {
             MailApp.sendEmail(ADMIN_EMAIL, "[GudangAI][STOCK KURANG] " + kode + " " + (stockInfo.nama || ""),
@@ -1080,22 +1143,47 @@ function bulkTransaction(body) {
 
   // Load stok 1x (untuk shortage HOLD pada keluar)
   var stockMap = {};
+  var stockLoadOk = false;
+  var stockLoadError = "";
   try {
     var allStock = getAllStock(entitas);
-    if (allStock && allStock.success && allStock.items) {
+    if (allStock && allStock.success === true && Array.isArray(allStock.items)) {
       allStock.items.forEach(function(it) {
-        stockMap[String(it.kode || "").trim()] = {
+        var stockCode = String(it.kode || "").trim();
+        if (!stockCode) return;
+        stockMap[stockCode] = {
           stockAkhir: clampStockToZero_(it.stockAkhir),
           nama: it.nama || "",
+          satuan: it.satuan || it.unit || "",
           entitas: it.entitas || entitas
         };
       });
+      stockLoadOk = true;
+    } else {
+      stockLoadError = String(allStock && (allStock.error || allStock.code) || "getAllStock tidak mengembalikan data stok yang valid");
     }
   } catch (eStock) {
-    console.error("bulkTransaction stock load: " + eStock.message);
+    stockLoadError = String(eStock && eStock.message || eStock);
+    console.error("bulkTransaction stock load: " + stockLoadError);
   }
 
   var isKeluar = sheetName === "Barang keluar";
+  // FAIL CLOSED: jika stok tidak dapat dibaca, jangan menganggap semua stok = 0
+  // lalu membuat HOLD palsu. Tolak sebelum ledger claim atau penulisan transaksi.
+  if (isKeluar && !stockLoadOk) {
+    return { success: false, status: "REJECTED", code: "STOCK_READ_FAILED", batchId: batchId,
+      writeOccurred: false, retryable: true,
+      error: "Stok tidak berhasil dibaca. Transaksi keluar dibatalkan tanpa penulisan agar tidak membuat HOLD palsu. " + stockLoadError };
+  }
+  if (isKeluar) {
+    var missingStockCodes = prepared.filter(function(tx) { return !Object.prototype.hasOwnProperty.call(stockMap, String(tx.kodeBarang || "").trim()); })
+      .map(function(tx) { return String(tx.kodeBarang || "").trim(); });
+    if (missingStockCodes.length) {
+      return { success: false, status: "REJECTED", code: "STOCK_CODE_NOT_FOUND", batchId: batchId,
+        writeOccurred: false, retryable: false, missingCodes: missingStockCodes,
+        error: "Kode transaksi keluar tidak ditemukan dalam snapshot stok. Tidak ada transaksi yang ditulis." };
+    }
+  }
   var lock = LockService.getScriptLock();
   if (!lock.tryLock(30000)) {
     return { success: false, status: "UNKNOWN", code: "LOCK_TIMEOUT", batchId: batchId, writeOccurred: "unknown", error: "Lock backend tidak tersedia; lakukan read-back sebelum retry." };
@@ -1118,7 +1206,16 @@ function bulkTransaction(body) {
           var priorReadBack = readBackTransactionByIdentity_({ transactionId: item.transactionId, nonce: item.nonce }, sheetName);
           if (priorReadBack && priorReadBack.matched) {
             updateIdempotencyRecord_(prior, { status: "APPLIED", dataRow: priorReadBack.row, writeOccurred: true, errorCode: "" });
-            results.push({ success: true, status: "APPLIED", code: "READBACK_CONFIRMED", batchId: batchId, batchIndex: p + 1, transactionId: item.transactionId, nonce: item.nonce, requestId: item.requestId || "", clientItemId: item.clientItemId || item.requestId || "", sheet: sheetName, row: priorReadBack.row, kode: priorReadBack.kodeBarang, qty: priorReadBack.qty, replayed: true, writeOccurred: true });
+            var priorIsHold = priorReadBack.shortage === true;
+            results.push({
+              success: true, status: "APPLIED", code: "READBACK_CONFIRMED",
+              batchId: batchId, batchIndex: p + 1, transactionId: item.transactionId, nonce: item.nonce,
+              requestId: item.requestId || "", clientItemId: item.clientItemId || item.requestId || "",
+              sheet: sheetName, row: priorReadBack.row, kode: priorReadBack.kodeBarang,
+              qty: priorReadBack.qty, originalQty: priorReadBack.originalQty != null ? priorReadBack.originalQty : item.qty,
+              shortage: priorIsHold, stockPolicy: priorReadBack.stockPolicy || (priorIsHold ? "STOCK_KURANG_HOLD_QTY_0" : "NORMAL"),
+              readBack: priorReadBack, replayed: true, writeOccurred: true
+            });
             successCount++;
             continue;
           }
@@ -1127,14 +1224,36 @@ function bulkTransaction(body) {
         }
       }
       if (prior && prior.status === "APPLIED") {
+        // Never declare a ledger APPLIED row successful without verifying the actual row.
+        // For HOLD, the requested qty is positive but the written qty must be 0.
+        var appliedReadBack = readBackTransactionByIdentity_({ transactionId: item.transactionId, nonce: item.nonce }, sheetName);
+        if (!appliedReadBack || appliedReadBack.matched !== true) {
+          results.push({
+            success: false, status: "UNKNOWN", code: "READBACK_REQUIRED",
+            batchId: batchId, batchIndex: p + 1,
+            transactionId: item.transactionId, nonce: item.nonce,
+            requestId: item.requestId || "",
+            clientItemId: item.clientItemId || item.requestId || "",
+            sheet: sheetName, kode: item.kodeBarang,
+            writeOccurred: true, retryable: false,
+            error: "Ledger APPLIED tetapi read-back belum cocok; jangan membuat transaksi baru."
+          });
+          failCount++;
+          continue;
+        }
+        var appliedIsHold = appliedReadBack.shortage === true;
         results.push({
           success: true, status: "APPLIED", code: "IDEMPOTENT_REPLAY",
           batchId: batchId, batchIndex: p + 1,
           transactionId: item.transactionId, nonce: item.nonce,
           requestId: item.requestId || "",
           clientItemId: item.clientItemId || item.requestId || "",
-          sheet: sheetName, kode: item.kodeBarang,
-          qty: prior.qty != null ? prior.qty : item.qty, replayed: true
+          sheet: sheetName, row: appliedReadBack.row, kode: item.kodeBarang,
+          qty: appliedReadBack.qty,
+          originalQty: appliedReadBack.originalQty != null ? appliedReadBack.originalQty : item.qty,
+          shortage: appliedIsHold,
+          stockPolicy: appliedReadBack.stockPolicy || (appliedIsHold ? "STOCK_KURANG_HOLD_QTY_0" : "NORMAL"),
+          readBack: appliedReadBack, replayed: true, writeOccurred: true
         });
         successCount++;
         continue;
@@ -1162,8 +1281,9 @@ function bulkTransaction(body) {
         if (kekurangan > 0) {
           shortageMode = true;
           finalQty = 0;
-          var structured = "HOLD; orderQty: " + numericQty + "; availableQty: " + sisa + "; shortageQty: " + kekurangan + "; followUp: verifikasi pembelian manual";
-          keterangan = keterangan ? (keterangan + " | " + structured) : structured;
+          var structured = formatStockShortageHold_(numericQty, sisa, kekurangan, (st && st.satuan) || "pack");
+          // HOLD replaces stale user/queue text; keep only current verified shortage facts.
+          keterangan = structured;
         }
         if (st) st.stockAkhir = Math.max(0, sisa - (shortageMode ? 0 : finalQty));
       }
@@ -2567,6 +2687,17 @@ function getDashboardData() {
 function getDashboard() { return getDashboardData(); }
 
 function toNumber_(v) { const n = Number(String(v).replace(/[^0-9,.-]/g, "").replace(/,/g, ".")); return isNaN(n) ? 0 : n; }
+function formatStockShortageHold_(orderQty, availableQty, shortageQty, unit) {
+  function fmt(value) {
+    const n = Number(value);
+    return Number.isFinite(n) ? String(n) : "0";
+  }
+  const normalizedUnit = String(unit || "").trim().toLowerCase();
+  return "pending ❌ PO " + fmt(orderQty) +
+    " sisa stock " + fmt(availableQty) +
+    " kekurangan " + fmt(shortageQty) +
+    (normalizedUnit ? " " + normalizedUnit : "");
+}
 function percent_(n, d) { return d ? Math.round((n / d) * 1000) / 10 : 0; }
 function normalizeDivision_(v) { return String(v || "LAINNYA").trim().toUpperCase().replace(/DAPUR1/g, "DAPUR 1").replace(/DAPUR2/g, "DAPUR 2") || "LAINNYA"; }
 
@@ -2787,10 +2918,11 @@ function refreshDashboardLive_() {
     });
 
     // Tabel sumber chart divisi tetap di A13:F; chart tersembunyi membaca P13:S.
-    const divRows = (data.statusPerDivisi || []).map(function(d) {
+    const divRows = (data.statusPerDivisi || []).slice(0, 15).map(function(d) {
       return [d.divisi, d.total, d.aman, d.waspada, d.kritis, percent_(d.kritis, d.total) / 100];
     });
-    sh.getRange(13, 1, 80, 6).clearContent();
+    // Area tabel divisi dibatasi ke baris 13–27. Baris 28–45 milik tabel kritis dan tidak boleh dibersihkan.
+    sh.getRange(13, 1, 15, 6).clearContent();
     sh.getRange(12, 1, 1, 6).setValues([["DIVISI", "TOTAL ITEM", "AMAN", "WASPADA", "KRITIS", "% KRITIS"]]);
     if (divRows.length) {
       sh.getRange(13, 1, divRows.length, 6).setValues(divRows);
@@ -2805,7 +2937,7 @@ function refreshDashboardLive_() {
     sh.getRange(13, 16, hiddenDiv.length, 4).setValues(hiddenDiv);
 
     // Donut PO membaca range P12:Q15; cukup update datanya, chart tidak perlu dibuat ulang.
-    const poNow = getStatusPO();
+    const poNow = getCurrentWeekPOStatus_();
     if (poNow && poNow.success) {
       // Donut memakai U12:V15. Jangan gunakan P:Q karena P:S adalah
       // sumber data grafik status stok per divisi.
@@ -2838,81 +2970,14 @@ function refreshDashboardLive_() {
 }
 
 function refreshDashboard(force) {
-  if (isDashboardSyncPatchEnabled_()) {
-    if (force !== true) return { success: true, skippedHeavyRebuild: true, patch: true, lastUpdate: getLastUpdateTimestamp() };
-    return dashboardSyncPatchRefresh_({ reason: "manual-refreshDashboard", force: true });
-  }
-  // Dashboard sheet adalah tampilan sekunder. Jangan rebuild setiap transaksi/onEdit.
-  // force=true hanya untuk admin/manual refresh.
-  if (force !== true) {
-    return { success: true, skippedHeavyRebuild: true, reason: "Dashboard rebuild dinonaktifkan pada jalur otomatis.", lastUpdate: getLastUpdateTimestamp(), dirty: isDataDirty_() };
-  }
-  const lock = LockService.getDocumentLock();
-  if (!lock.tryLock(15000)) return { success: false, error: "Dashboard sedang diperbarui proses lain." };
-  try {
-    const ss = getSS();
-    let sh = ss.getSheetByName("Dashboard");
-    if (!sh) sh = ss.insertSheet("Dashboard", 0);
-    const data = getDashboardData();
-    if (!data.success) return data;
-    if (sh.getMaxRows() < 55) sh.insertRowsAfter(sh.getMaxRows(), 55 - sh.getMaxRows());
-    if (sh.getMaxColumns() < 14) sh.insertColumnsAfter(sh.getMaxColumns(), 14 - sh.getMaxColumns());
-    // Force rebuild hanya atas permintaan admin. Ini bukan jalur transaksi/onEdit.
-    try { clearDashboardCharts_(sh); } catch (e) {}
-    sh.getRange(1, 1, Math.min(sh.getMaxRows(), 30), 14).breakApart();
-    sh.getRange(1, 1, Math.min(sh.getMaxRows(), 30), 14).clearContent();
-    sh.setFrozenRows(3);
-    sh.getRange("A1:N1").merge().setValue("DASHBOARD GUDANG NASGOR 69").setFontSize(20).setFontWeight("bold");
-    sh.getRange("A2:N2").merge().setValue("Pantauan Stok & Aktivitas — Real Time | Update: " + (data.lastUpdate || data.generatedAt));
-    sh.getRange("A4:N4").merge().setValue("RINGKASAN EKSEKUTIF").setFontWeight("bold");
-    const cards = [["TOTAL ITEM AKTIF", data.totalItemAktif, "item"], ["KRITIS", data.kritis, percent_(data.kritis, data.totalItemAktif) + "%"], ["WASPADA", data.waspada, percent_(data.waspada, data.totalItemAktif) + "%"], ["AMAN", data.aman, percent_(data.aman, data.totalItemAktif) + "%"]];
-    [["A6:C9"],["D6:F9"],["G6:I9"],["J6:L9"]].forEach(function(x, i) { const r = sh.getRange(x[0]); r.merge(); r.setValue(cards[i][0] + "\n\n" + cards[i][1] + " " + cards[i][2]).setFontSize(16).setFontWeight("bold").setHorizontalAlignment("center").setVerticalAlignment("middle"); });
-    sh.getRange("A11:F11").merge().setValue("1 GRAFIK STATUS PER DIVISI").setFontWeight("bold");
-    sh.getRange("A12:F12").setValues([["DIVISI", "TOTAL ITEM", "AMAN", "WASPADA", "KRITIS", "% KRITIS"]]).setFontWeight("bold");
-    const divRows = data.statusPerDivisi.map(function(d) { return [d.divisi, d.total, d.aman, d.waspada, d.kritis, percent_(d.kritis, d.total) / 100]; });
-    if (divRows.length) {
-      sh.getRange(13, 1, divRows.length, 6).setValues(divRows);
-      sh.getRange(13, 2, divRows.length, 4).setNumberFormat("#,##0").setHorizontalAlignment("center");
-      sh.getRange(13, 6, divRows.length, 1).setNumberFormat("0.0%").setHorizontalAlignment("center");
-    }
-    // Grafik batang mendatar (horizontal) status stok per divisi — AMAN / WASPADA / KRITIS.
-    let divisionChart = null;
-    try { divisionChart = renderDivisionBarChart_(sh, 13, data); } catch (chartDivErr) {
-      console.error("renderDivisionBarChart_ gagal: " + chartDivErr.message);
-      divisionChart = { error: String(chartDivErr.message || chartDivErr) };
-    }
-    // Section 2: grafik donat status PO minggu ini. Tidak memakai data dummy.
-    const poNow = getStatusPO();
-    sh.getRange("H11:N11").merge().setValue("2 GRAFIK DONAT STATUS PO MINGGU INI").setFontWeight("bold");
-    if (poNow && poNow.success) {
-      try {
-        renderPODonutChart_(sh, 12, "Status PO — Minggu Ini", poNow.summary || {}, "Status PO — Minggu Ini");
-      } catch (donutErr) {
-        console.error("renderPODonutChart_ gagal: " + donutErr.message);
-      }
-    }
-    // Section 3: volume transaksi minggu berjalan.
-    const vol = getVolumeSummaryThisWeek_();
-    sh.getRange("A22:N22").merge().setValue("3 VOLUME MINGGU INI — " + (vol.minggu || "-")).setFontWeight("bold");
-    sh.getRange("A23:H23").setValues([["BARANG MASUK", "BARANG KELUAR", "BARANG RUSAK", "TOTAL VOLUME", "", "", "", ""]]).setFontWeight("bold");
-    sh.getRange("A24:D24").setValues([[vol.masuk || 0, vol.keluar || 0, vol.rusak || 0, vol.total || 0]]).setNumberFormat("#,##0").setHorizontalAlignment("center");
-    let poSection = null;
-    try { poSection = refreshDashboardPOSection_({ renderCharts: false, force: true }); }
-    catch (poErr) { poSection = { success: false, error: String(poErr && poErr.message || poErr) }; }
-    updateLastUpdateTimestamp();
-    clearDataDirty_();
-    return {
-      success: true, sheet: "Dashboard", updatedAt: getLastUpdateTimestamp(),
-      poSection: poSection, divisionChart: divisionChart,
-      summary: { total: data.totalItemAktif, aman: data.aman, waspada: data.waspada, kritis: data.kritis }
-    };
-  } finally { if (lock.hasLock()) lock.releaseLock(); }
+  // Rebuild lama dinonaktifkan permanen: semua refresh melewati renderer aman
+  // yang tidak membersihkan atau menulis zona tabel kritis A28:F45.
+  return dashboardSyncPatchRefresh_({
+    reason: force === true ? "manual-refreshDashboard-safe" : "refreshDashboard-safe",
+    force: force === true
+  });
 }
 
-
-// ============================================================
-// 15. PO RECOMMENDATIONS [V6.2 formal format]
-// ============================================================
 function getPOTableConstants_() {
   return { headerRow: PO_HEADER_ROW, dataStartRow: PO_DATA_START_ROW, startCol: PO_DATA_START_COL, numCols: PO_DATA_NUM_COLS };
 }
@@ -2946,6 +3011,8 @@ function writePORecommendations() {
   const sheet = ss.getSheetByName("purchase order");
   if (!sheet) return { success: false, error: "Sheet 'purchase order' tidak ditemukan" };
 
+  // Preserve a dated prior-week PO before recommendations clear or replace B6:I.
+  rolloverPOWeekIfNeeded_();
   const recommendations = generatePORecommendations();
   const existingEnd = findPODataEndRow(sheet, PO_DATA_START_ROW);
   const neededEnd = Math.max(existingEnd, PO_DATA_START_ROW + Math.max(0, recommendations.length) - 1);
@@ -2954,6 +3021,7 @@ function writePORecommendations() {
 
   ensurePOHeader(sheet, PO_HEADER_ROW);
   updatePODateRow4(sheet);
+  writePONumberRow5_(sheet, "PO-" + getWeekKey_(new Date()));
   ensurePORowsCapacity_(sheet, Math.max(PO_DATA_START_ROW, neededEnd));
   clearPOTableData(sheet);
 
@@ -2981,9 +3049,9 @@ function writePORecommendations() {
 
 function normalizePOItem_(item, index) {
   const source = (item && typeof item === "object") ? item : {};
-  const poCV = Math.max(0, Math.floor(toNumber_(source.poCV != null ? source.poCV : source.cv)));
-  const poPT = Math.max(0, Math.floor(toNumber_(source.poPT != null ? source.poPT : source.pt)));
-  const totalCandidate = toNumber_(source.totalQty != null ? source.totalQty : source.total);
+  const poCV = Math.max(0, Math.floor(parsePOQty_(source.poCV != null ? source.poCV : source.cv)));
+  const poPT = Math.max(0, Math.floor(parsePOQty_(source.poPT != null ? source.poPT : source.pt)));
+  const totalCandidate = parsePOQty_(source.totalQty != null ? source.totalQty : source.total);
   const total = Math.max(0, Math.floor(totalCandidate || (poCV + poPT)));
   const finalTotal = Math.max(total, poCV + poPT);
   return {
@@ -3029,7 +3097,7 @@ function poSheetMatchesItems_(sheet, items) {
         const a = String(actual[i][j] == null ? "" : actual[i][j]).trim();
         const e = String(expected[i][j] == null ? "" : expected[i][j]).trim();
         if (j >= 4 && j <= 6) {
-          if (toNumber_(a) !== toNumber_(e)) return false;
+          if (parsePOQty_(a) !== parsePOQty_(e)) return false;
         } else if (a !== e) {
           return false;
         }
@@ -3041,17 +3109,35 @@ function poSheetMatchesItems_(sheet, items) {
   }
 }
 
+
 function writePONumberRow5_(sheet, noPO) {
   const value = String(noPO || "").trim();
   if (!value) return;
-  const row = sheet.getRange(5, 1, 1, Math.max(9, sheet.getLastColumn())).getValues()[0];
-  for (let i = 0; i < row.length; i++) {
-    if (/no\s*(po|:)/i.test(String(row[i] || ""))) {
-      sheet.getRange(5, i + 1).setValue("NO PO : " + value);
+  const label = "NO PO : " + value;
+  const width = Math.max(10, sheet.getLastColumn());
+
+  // Reuse metadata cells when present, but never overwrite B5:I5—the eight PO
+  // table headers are the source of truth for reading rows 6 onward.
+  const row4 = sheet.getRange(4, 1, 1, width).getDisplayValues()[0];
+  for (let i = 0; i < row4.length; i++) {
+    if (/no\s*po\s*[:#-]?/i.test(String(row4[i] || ""))) {
+      sheet.getRange(4, i + 1).setValue(label);
       return;
     }
   }
-  sheet.getRange(5, 2).setValue("NO PO : " + value);
+  const row5 = sheet.getRange(5, 1, 1, width).getDisplayValues()[0];
+  if (/no\s*po\s*[:#-]?/i.test(String(row5[0] || ""))) {
+    sheet.getRange(5, 1).setValue(label);
+    return;
+  }
+  for (let i = 9; i < row5.length; i++) {
+    if (/no\s*po\s*[:#-]?/i.test(String(row5[i] || ""))) {
+      sheet.getRange(5, i + 1).setValue(label);
+      return;
+    }
+  }
+  // A5 is outside B:I, so the PO number remains readable without replacing "NO".
+  sheet.getRange(5, 1).setValue(label);
 }
 
 function writePurchaseOrder_(body) {
@@ -3060,6 +3146,10 @@ function writePurchaseOrder_(body) {
   const deviceId = String(body.deviceId || "").trim();
   const items = normalizePOItems_(body);
   if (!items.length) return { success: false, status: "REJECTED", code: "PO_ITEMS_REQUIRED", requestId: requestId, writeOccurred: false, error: "Final PO tidak berisi item yang valid." };
+
+  const suppliedNoPO = String(body.noPO || body.nomorPO || body.poNumber || "").trim();
+  const resolvedNoPO = suppliedNoPO || ("PO-" + getWeekKey_(new Date()) + "-" +
+    requestId.replace(/[^A-Za-z0-9]/g, "").slice(-6).toUpperCase());
 
   const digest = poPayloadDigest_(body, items);
   const prior = findIdempotencyRecord_(requestId, requestId);
@@ -3078,7 +3168,7 @@ function writePurchaseOrder_(body) {
       try {
         const sheet = getSS().getSheetByName("purchase order");
         if (sheet && poSheetMatchesItems_(sheet, items)) {
-          const reconciledResult = { success: true, status: "APPLIED", code: "READBACK_CONFIRMED", requestId: requestId, transactionId: requestId, operation: "writePurchaseOrder", sheet: "purchase order", dataStartRow: PO_DATA_START_ROW, headerRow: PO_HEADER_ROW, count: items.length, noPO: String(body.noPO || body.nomorPO || body.poNumber || "").trim() || null, totalQty: items.reduce(function(a, x) { return a + Number(x.total || 0); }, 0), writeOccurred: true, replayed: true, message: "PO sebelumnya sudah tersimpan; retry tidak menulis ulang." };
+          const reconciledResult = { success: true, status: "APPLIED", code: "READBACK_CONFIRMED", requestId: requestId, transactionId: requestId, operation: "writePurchaseOrder", sheet: "purchase order", dataStartRow: PO_DATA_START_ROW, headerRow: PO_HEADER_ROW, count: items.length, noPO: resolvedNoPO, totalQty: items.reduce(function(a, x) { return a + Number(x.total || 0); }, 0), writeOccurred: true, replayed: true, message: "PO sebelumnya sudah tersimpan; retry tidak menulis ulang." };
           updateIdempotencyRecord_(prior, { status: "APPLIED", writeOccurred: true, dataRow: PO_DATA_START_ROW, errorCode: "", details: JSON.stringify(Object.assign({}, reconciledResult, { digest: digest })) });
           return reconciledResult;
         }
@@ -3116,9 +3206,11 @@ function writePurchaseOrder_(body) {
       qty: items.reduce(function(a, x) { return a + x.total; }, 0), tanggal: body.tanggal || "", status: "IN_PROGRESS", writeOccurred: false,
       details: JSON.stringify({ digest: digest, itemCount: items.length }) });
 
+    // Preserve a dated prior-week status before new date/data replace the active PO.
+    rolloverPOWeekIfNeeded_();
     ensurePOHeader(sheet, PO_HEADER_ROW);
     updatePODateRow4(sheet);
-    if (body.noPO || body.nomorPO || body.poNumber) writePONumberRow5_(sheet, body.noPO || body.nomorPO || body.poNumber);
+    writePONumberRow5_(sheet, resolvedNoPO);
     // Siapkan data baru sebelum membersihkan sisa tabel lama. Jika setValues gagal,
     // PO yang sedang aktif tetap utuh dan tidak hilang akibat clearContent lebih dahulu.
     const rows = items.map(function(x) {
@@ -3137,7 +3229,7 @@ function writePurchaseOrder_(body) {
 
     const result = { success: true, status: "APPLIED", code: "PO_WRITE_APPLIED", requestId: requestId,
       transactionId: requestId, operation: "writePurchaseOrder", sheet: "purchase order", dataStartRow: PO_DATA_START_ROW,
-      headerRow: PO_HEADER_ROW, count: rows.length, noPO: String(body.noPO || body.nomorPO || body.poNumber || "").trim() || null,
+      headerRow: PO_HEADER_ROW, count: rows.length, noPO: resolvedNoPO,
       totalQty: rows.reduce(function(a, x) { return a + Number(x[6] || 0); }, 0),
       formatting: formatting, writeOccurred: true, retries: 0, execMs: Date.now() - started,
       message: "Final PO berhasil ditulis ke purchase order B6:I." };
@@ -3357,24 +3449,42 @@ function getWeekKey_(date) {
   return target.getUTCFullYear() + "-W" + String(weekNo).padStart(2, "0");
 }
 
+
 function rolloverPOWeekIfNeeded_() {
   const props = PropertiesService.getScriptProperties();
   const currentKey = getWeekKey_(new Date());
-  const previousKey = props.getProperty("GUDANGAI_PO_WEEK_KEY") || "";
-  if (!previousKey) {
-    props.setProperty("GUDANGAI_PO_WEEK_KEY", currentKey);
-    return { changed: false, currentKey: currentKey, previousKey: null };
-  }
-  if (previousKey === currentKey) return { changed: false, currentKey: currentKey, previousKey: previousKey };
-
+  const storedKey = props.getProperty("GUDANGAI_PO_WEEK_KEY") || "";
   let status = null;
   try { status = getStatusPO(); } catch (e) { status = null; }
-  const previousItems = status && status.success ? (status.items || []) : [];
-  const snapshot = { weekKey: previousKey, capturedAt: new Date().toISOString(), noPO: status && status.noPO || null,
-    summary: status && status.summary || null, items: previousItems };
-  props.setProperty("GUDANGAI_PO_LAST_WEEK_STATUS", JSON.stringify(snapshot));
-  props.setProperty("GUDANGAI_PO_WEEK_KEY", currentKey);
-  return { changed: true, currentKey: currentKey, previousKey: previousKey, count: previousItems.length };
+
+  // The active PO's own date is the source of truth, including the first rollover
+  // after redeployment when GUDANGAI_PO_WEEK_KEY has not yet been initialized.
+  const activeKey = status && status.success ? String(status.weekKey || "") : "";
+  const activeItems = status && status.success ? (status.items || []) : [];
+  let archivedWeekKey = null;
+  let archivedCount = 0;
+  if (activeItems.length > 0 && activeKey && activeKey !== currentKey) {
+    const existingArchive = getPreviousPOStatus_() || {};
+    if (String(existingArchive.weekKey || "") !== activeKey) {
+      props.setProperty("GUDANGAI_PO_LAST_WEEK_STATUS", JSON.stringify({
+        weekKey: activeKey,
+        capturedAt: new Date().toISOString(),
+        noPO: status.noPO || null,
+        summary: status.summary || null,
+        items: activeItems
+      }));
+      archivedWeekKey = activeKey;
+      archivedCount = activeItems.length;
+    }
+  }
+  if (storedKey !== currentKey) props.setProperty("GUDANGAI_PO_WEEK_KEY", currentKey);
+  return {
+    changed: storedKey !== currentKey || archivedWeekKey !== null,
+    currentKey: currentKey,
+    previousKey: storedKey || activeKey || null,
+    archivedWeekKey: archivedWeekKey,
+    count: archivedCount
+  };
 }
 
 function getPreviousPOStatus_() {
@@ -3506,15 +3616,17 @@ function onEdit(e) {
     if (sheetName === "Stock CV" || sheetName === "Stock PT" || sheetName === "Stock Bahan Baku" || sheetName === "Stock awal") {
       try { syncDivisionStockLightweight_(); } catch (divErr) { console.error("onEdit sync divisi: " + divErr.message); }
     }
-    if (sheetName === "Barang masuk" || sheetName === "purchase order") {
-      try { refreshDashboardPOSection_({ renderCharts: false, lightweight: true }); } catch (poErr) { console.error("Dashboard PO ringan gagal: " + poErr.message); }
-    }
-    // Setiap perubahan sumber Dashboard juga memperbarui ringkasan/chart-data tanpa
-    // membuat ulang chart. Penulisan transaksi API tetap aman; interval 5 menit
-    // menjadi jalur sinkronisasi kedua untuk perubahan yang dibuat oleh PWA/API. 
-    if (!isDashboardSyncPatchEnabled_() &&
-        ["Stock CV", "Stock PT", "Stock Bahan Baku", "Stock awal", "Barang masuk", "purchase order", "Barang keluar", "Barang Rusak"].indexOf(sheetName) >= 0) {
-      try { refreshDashboardLive_(); } catch (dashErr) { console.error("Dashboard live gagal: " + dashErr.message); }
+    // Tepat satu jalur refresh per edit. Patch aktif memakai renderer terkunci;
+    // patch nonaktif memakai renderer ringan lama. Tidak ada pemanggilan PO kedua.
+    const dashboardSources = ["Stock CV", "Stock PT", "Stock Bahan Baku", "Stock awal", "Barang masuk", "purchase order", "Barang keluar", "Barang Rusak"];
+    if (dashboardSources.indexOf(sheetName) >= 0) {
+      try {
+        if (isDashboardSyncPatchEnabled_()) {
+          dashboardSyncPatchRefresh_({ reason: "onEdit-" + sheetName });
+        } else {
+          refreshDashboardLive_();
+        }
+      } catch (dashErr) { console.error("Dashboard live gagal: " + dashErr.message); }
     }
   } catch (err) { console.error("onEdit ringan gagal: " + err.message); }
 }
@@ -3790,6 +3902,28 @@ function getPOInfoFromHeader_(sheet) {
   };
 }
 
+function parsePOQty_(value) {
+  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+  const raw = String(value == null ? "" : value).trim().replace(/\s+/g, "");
+  if (!raw) return 0;
+  let n = raw.replace(/[^0-9,.-]/g, "");
+  const comma = n.lastIndexOf(",");
+  const dot = n.lastIndexOf(".");
+  if (comma >= 0 && dot >= 0) {
+    // Separator paling kanan dianggap desimal; separator lainnya adalah ribuan.
+    if (comma > dot) n = n.replace(/\./g, "").replace(",", ".");
+    else n = n.replace(/,/g, "");
+  } else if (comma >= 0) {
+    const decimals = n.length - comma - 1;
+    n = decimals > 0 && decimals <= 2 ? n.replace(",", ".") : n.replace(/,/g, "");
+  } else if (dot >= 0) {
+    const decimals = n.length - dot - 1;
+    if (decimals === 3) n = n.replace(/\./g, "");
+  }
+  const parsed = Number(n);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
 function normalizePONameKey_(value) {
   return String(value == null ? '' : value).toLowerCase().replace(/[“”‘’]/g, '').replace(/\s+/g, ' ').trim();
 }
@@ -3811,7 +3945,7 @@ function recordPOArrival(body) {
   body = body || {};
   const requestId = String(body.requestId || "").trim();
   const transactionId = String(body.transactionId || (requestId ? "POARR-" + requestId : "")).trim();
-  const qty = Number(body.qtyDatangBaru != null ? body.qtyDatangBaru : body.qtyDatang);
+  const qty = parsePOQty_(body.qtyDatangBaru != null ? body.qtyDatangBaru : body.qtyDatang);
   if (!requestId) return { success: false, status: "REJECTED", code: "REQUEST_ID_REQUIRED", error: "requestId wajib untuk kedatangan PO." };
   if (!Number.isFinite(qty) || qty <= 0 || qty > MAX_QTY) return { success: false, status: "REJECTED", code: "INVALID_QTY", error: "Qty kedatangan harus lebih dari 0 dan <= " + MAX_QTY + "." };
 
@@ -3831,7 +3965,10 @@ function recordPOArrival(body) {
     const nama = String(r[1] || "").trim();
     if (!nama) return;
     if ((wantedNo && no === wantedNo) || (wantedName && normalizePONameKey_(nama) === wantedName)) {
-      found = { row: idx + PO_DATA_START_ROW, no: no || String(idx + 1), nama: nama, poCV: toNumber_(r[4]), poPT: toNumber_(r[5]), total: Math.max(0, toNumber_(r[6]) || toNumber_(r[4]) + toNumber_(r[5])) };
+      const poCV = parsePOQty_(r[4]);
+      const poPT = parsePOQty_(r[5]);
+      const totalH = parsePOQty_(r[6]);
+      found = { row: idx + PO_DATA_START_ROW, no: no || String(idx + 1), nama: nama, poCV: poCV, poPT: poPT, total: Math.max(0, totalH > 0 ? totalH : poCV + poPT) };
     }
   });
   if (!found) return { success: false, status: "REJECTED", code: "PO_ITEM_NOT_FOUND", error: "Item PO tidak ditemukan." };
@@ -3859,7 +3996,7 @@ function recordPOArrival(body) {
   const tx = addTransaction({
     action: "addTransaction", operation: "addTransaction", sheet: "Barang masuk", entitas: entitas, kodeBarang: kode, qty: qty,
     tanggal: body.tanggal || Utilities.formatDate(new Date(), TIMEZONE, DATE_FORMAT),
-    keterangan: "DATANG PO " + (getPOInfoFromHeader_(po).noPO || "-") + " [ITEM : " + String(found.no).padStart(2, "0") + "]",
+    keterangan: "No : " + (getPOInfoFromHeader_(po).noPO || "-") + " [ITEM : " + String(found.no).padStart(2, "0") + " ]",
     requestId: requestId, transactionId: transactionId, nonce: String(body.nonce || transactionId), queueApproved: true, client: body.client || {}
   });
   if (!tx || tx.success !== true || tx.writeOccurred !== true) return Object.assign({}, tx || { success: false }, { code: (tx && tx.code) || "PO_ARRIVAL_WRITE_FAILED" });
@@ -3877,9 +4014,26 @@ function getStatusPO() {
   const info = getPOInfoFromHeader_(po);
   const noPO = info.noPO;
   const last = po.getLastRow();
+  const headerValues = po.getRange(PO_HEADER_ROW, PO_DATA_START_COL, 1, PO_DATA_NUM_COLS).getDisplayValues()[0];
+  const headerKey = function(v) { return String(v || "").toUpperCase().replace(/[^A-Z0-9]+/g, " ").trim(); };
+  const findHeader = function(re, fallback) {
+    const idx = headerValues.findIndex(function(v) { return re.test(headerKey(v)); });
+    return idx >= 0 ? idx : fallback;
+  };
+  // Kolom mengikuti header aktual B:I; fallback mempertahankan format baku NO,NAMA,SIZE,SATUAN,PO CV,PO PT,TOTAL,TGL.
+  const poCols = {
+    no: findHeader(/^(?:NO|NOMOR)$/, 0),
+    nama: findHeader(/NAMA/, 1),
+    poCV: findHeader(/PO\s*CV/, 4),
+    poPT: findHeader(/PO\s*PT/, 5),
+    total: findHeader(/TOTAL/, 6),
+    size: findHeader(/SIZE|UKURAN/, 2),
+    satuan: findHeader(/SATUAN|UNIT/, 3),
+    tanggal: findHeader(/TGL|TANGGAL|KEDATANGAN/, 7)
+  };
   const rows = last >= PO_DATA_START_ROW
-    ? po.getRange(PO_DATA_START_ROW, PO_DATA_START_COL, last - PO_DATA_START_ROW + 1, PO_DATA_NUM_COLS).getDisplayValues()
-    : [];
+    ? po.getRange(PO_DATA_START_ROW, PO_DATA_START_COL, last - PO_DATA_START_ROW + 1, PO_DATA_NUM_COLS).getValues()
+    : []; // Kolom TOTAL (default H) dibaca dari nilai formula, dengan fallback PO CV + PO PT.
   const allStockForPO_ = getAllStock("ALL").items || [];
 
   // Peta kedatangan:
@@ -3894,7 +4048,7 @@ function getStatusPO() {
       ? new RegExp('No\\s*:?\\s*' + safeNoPO + '\\s*\\[\\s*ITEM\\s*:\\s*([0-9]+)\\s*\\]', 'i')
       : null;
     a.forEach(function(r) {
-      const qty = Math.max(0, toNumber_(r[4]));
+      const qty = Math.max(0, parsePOQty_(r[4]));
       const ket = String(r[5] || '').trim();
       const namaMasuk = String(r[2] || '').trim(); // kolom Nama di sheet transaksi (display)
       if (!ket || qty <= 0) return;
@@ -3908,8 +4062,9 @@ function getStatusPO() {
           }
         }
       }
-      // Cadangan: No PO ada di keterangan (atau NoPO kosong) + nama barang cocok.
-      if (noPO && ket.toLowerCase().indexOf(String(noPO).toLowerCase()) < 0) return;
+      // Fallback nama hanya aman bila nomor PO aktif tersedia dan cocok.
+      // Tanpa No PO, jangan mengimpor penerimaan lama yang kebetulan memiliki nama barang sama.
+      if (!noPO || ket.toLowerCase().indexOf(String(noPO).toLowerCase()) < 0) return;
       if (namaMasuk) {
         const key = normalizePONameKey_(namaMasuk);
         if (key) arrivalsByName[key] = (arrivalsByName[key] || 0) + qty;
@@ -3922,12 +4077,16 @@ function getStatusPO() {
   let totalKonfirmasiQty = 0, totalPOQty = 0;
   rows.forEach(function(r, idx) {
     if (!String(r.join('')).trim()) return;
-    const no = Number(r[0]) || idx + 1;
-    const nama = String(r[1] || '').trim();
-    const poCV = toNumber_(r[4]);
-    const poPT = toNumber_(r[5]);
-    const total = Math.max(0, toNumber_(r[6]) || poCV + poPT);
-    if (!nama || total <= 0) return;
+    const rawNo = String(r[poCols.no] == null ? "" : r[poCols.no]).trim();
+    const no = Number(rawNo) || idx + 1;
+    const nama = String(r[poCols.nama] || '').trim();
+    const poCV = parsePOQty_(r[poCols.poCV]);
+    const poPT = parsePOQty_(r[poCols.poPT]);
+    const totalFromColumnH = parsePOQty_(r[poCols.total]); // Kolom TOTAL/H menjadi sumber utama; format baku B:I.
+    const total = Math.max(0, totalFromColumnH > 0 ? totalFromColumnH : (poCV + poPT));
+    // Jangan hilangkan nomor/nama barang hanya karena sel TOTAL formula kosong/berformat teks.
+    // Item bernama tetap tampil dengan qty 0 agar masalah sumber data terlihat, bukan menjadi tabel kosong.
+    if (!nama) return;
     const byIndex = arrivalsByIndex[no] || 0;
     const byName = arrivalsByName[normalizePONameKey_(nama)] || 0;
     // Utamakan index; jika 0, pakai cadangan nama (lebih sederhana, tetap dibatasi No PO).
@@ -3942,7 +4101,9 @@ function getStatusPO() {
     const cvCandidates = allStockForPO_.filter(function(it) { return it.entitas === "CV" && normalizePONameKey_(it.nama) === normalizePONameKey_(nama); });
     const ptCandidates = allStockForPO_.filter(function(it) { return it.entitas === "PT" && normalizePONameKey_(it.nama) === normalizePONameKey_(nama); });
     items.push({
-      no: no, nama: nama, totalPO: total, poCV: poCV, poPT: poPT, kodeCV: cvCandidates.length === 1 ? cvCandidates[0].kode : null, kodePT: ptCandidates.length === 1 ? ptCandidates[0].kode : null,
+      no: no, nama: nama, size: String(r[poCols.size] || "").trim(), satuan: String(r[poCols.satuan] || "").trim(),
+      tanggalKedatangan: r[poCols.tanggal] instanceof Date ? Utilities.formatDate(r[poCols.tanggal], TIMEZONE, DATE_FORMAT) : String(r[poCols.tanggal] || "").trim(),
+      totalPO: total, poCV: poCV, poPT: poPT, kodeCV: cvCandidates.length === 1 ? cvCandidates[0].kode : null, kodePT: ptCandidates.length === 1 ? ptCandidates[0].kode : null,
       qtyDatang: datang, qtyBelumDatang: belumDatang, status: status,
       // kodeUnik tetap disediakan untuk label, tetapi pembacaan tanggal tidak bergantung padanya.
       kodeUnik: noPO ? ('No : ' + noPO + '[ ITEM : ' + String(no).padStart(2, '0') + ' ]') : null,
@@ -3960,7 +4121,8 @@ function getStatusPO() {
       totalPOQty: totalPOQty, totalKonfirmasiQty: totalKonfirmasiQty,
       totalSisaQty: Math.max(0, totalPOQty - totalKonfirmasiQty)
     },
-    items: items
+    items: items,
+    previousWeek: getPreviousPOStatus_()
   };
 }
 
@@ -3981,7 +4143,7 @@ function renderPOStatusBlock_(sheet, topRow, title, subtitle, data, items, start
     .setFontWeight('bold').setFontSize(9).setFontColor('#FFFFFF').setBackground(UI_PRIMARY).setHorizontalAlignment('center').setVerticalAlignment('middle').setWrap(true)
     .setBorder(true, true, true, true, true, true, UI_BORDER, SpreadsheetApp.BorderStyle.SOLID);
   const visible = (items || []).slice(0, PO_DASHBOARD_MAX_VISIBLE_ROWS);
-  const rows = visible.map(function(x) { return [x.no, x.nama, x.totalPO || 0, x.qtyDatang || 0, x.qtyBelumDatang != null ? x.qtyBelumDatang : Math.max(0, (x.totalPO || 0) - (x.qtyDatang || 0)), x.status || 'MENUNGGU']; });
+  const rows = visible.map(function(x) { const total = Number(x.totalPO) || 0; const datang = Number(x.qtyDatang) || 0; return [x.no, x.nama, total, datang, x.qtyBelumDatang != null ? Number(x.qtyBelumDatang) || 0 : Math.max(0, total - datang), x.status || 'MENUNGGU']; });
   if (rows.length) {
     sheet.getRange(topRow + 4, col, rows.length, cols).setValues(rows);
     const bodyRange = sheet.getRange(topRow + 4, col, rows.length, cols);
@@ -4012,6 +4174,32 @@ function renderPODonutChart_(sheet, chartStartRow, title, summary, chartTitle) {
   sheet.insertChart(chart);
 }
 
+
+function getCurrentWeekPOStatus_() {
+  // Read-only facade: callers on GET routes must not mutate script properties or sheets.
+  const live = getStatusPO();
+  if (!live || live.success !== true) return live;
+  const currentWeekKey = getWeekKey_(new Date());
+  if (String(live.weekKey || "") === currentWeekKey) return live;
+
+  // Old-dated items belong to the previous-week archive, not the current-week table.
+  const emptySummary = {
+    totalAktif: 0, totalKonfirmasi: 0, itemMenunggu: 0, itemSebagian: 0,
+    itemSelesai: 0, totalItem: 0, totalPOQty: 0,
+    totalKonfirmasiQty: 0, totalSisaQty: 0
+  };
+  return Object.assign({}, live, {
+    noPO: null,
+    tanggalPO: null,
+    weekKey: currentWeekKey,
+    summary: emptySummary,
+    items: [],
+    previousWeek: getPreviousPOStatus_(),
+    isCurrentWeekEmpty: true,
+    activeSourceWeekKey: live.weekKey || null
+  });
+}
+
 function refreshDashboardPOSection_(options) {
   options = options || {};
   const ss = getSS();
@@ -4020,11 +4208,14 @@ function refreshDashboardPOSection_(options) {
 
   // Layout terkunci: dua tabel sejajar, keduanya mulai baris 46.
   // Fungsi ini tidak mendelegasikan penulisan PO ke penulis dashboard lama.
-  const data = getStatusPO();
+  // Refresh is a write-capable Dashboard operation: archive old-week PO here,
+  // then render the read-only current-week facade at rows 46–99.
+  rolloverPOWeekIfNeeded_();
+  const data = getCurrentWeekPOStatus_();
   if (!data || !data.success) return data || { success: false, code: 'PO_STATUS_EMPTY', error: 'Data Status PO tidak tersedia' };
   const previous = getPreviousPOStatus_() || {};
-  const currentTop = 46;
-  const previousTop = 46;
+  const currentTop = PO_START_ROW;
+  const previousTop = PO_START_ROW;
   const currentItems = data.items || [];
   const previousItems = previous.items || [];
   const currentCount = Math.min(PO_DASHBOARD_MAX_VISIBLE_ROWS, currentItems.length);
@@ -4061,16 +4252,75 @@ function refreshDashboardPOSection_(options) {
   return {
     success: true,
     status: 'OK',
-    sectionCurrent: 4,
-    sectionPrevious: 5,
+    sectionCurrent: PO_START_ROW,
+    sectionPrevious: PO_START_ROW,
     currentTop: currentTop,
     previousTop: previousTop,
     currentCount: currentCount,
     previousCount: previousCount,
     sheet: 'Dashboard',
-    purchaseOrderWriteEnabled: true,
+    purchaseOrderWriteEnabled: false,
     updatedAt: new Date().toISOString()
   };
+}
+
+function auditPOStatusReadOnly_() {
+  // AUDIT READ-ONLY: tidak menulis, membersihkan, atau memformat sheet apa pun.
+  const ss = getSS();
+  const po = ss.getSheetByName("purchase order");
+  const dash = ss.getSheetByName("Dashboard");
+  const result = {
+    success: true,
+    mode: "READ_ONLY",
+    checkedAt: new Date().toISOString(),
+    spreadsheet: ss.getName(),
+    poSheetExists: !!po,
+    dashboardExists: !!dash
+  };
+  if (po) {
+    const lastRow = po.getLastRow();
+    const lastCol = Math.max(9, po.getLastColumn());
+    result.po = {
+      lastRow: lastRow,
+      headerRow: PO_HEADER_ROW,
+      dataStartRow: PO_DATA_START_ROW,
+      header: po.getRange(PO_HEADER_ROW, 1, 1, lastCol).getDisplayValues()[0],
+      firstDataRows: lastRow >= PO_DATA_START_ROW
+        ? po.getRange(PO_DATA_START_ROW, 1, Math.min(10, lastRow - PO_DATA_START_ROW + 1), lastCol).getDisplayValues()
+        : [],
+      headerInfo: getPOInfoFromHeader_(po)
+    };
+  }
+  try {
+    const status = getStatusPO();
+    result.statusPO = status && status.success ? {
+      success: true, noPO: status.noPO || null, weekKey: status.weekKey || null,
+      itemCount: (status.items || []).length, summary: status.summary || null,
+      firstItems: (status.items || []).slice(0, 10).map(function(x) {
+        return { no: x.no, nama: x.nama, totalPO: x.totalPO, qtyDatang: x.qtyDatang,
+          qtyBelumDatang: x.qtyBelumDatang, status: x.status };
+      })
+    } : { success: false, error: status && status.error || "getStatusPO tidak mengembalikan data" };
+  } catch (e) {
+    result.statusPO = { success: false, error: String(e && e.message || e) };
+  }
+  try {
+    const previous = getPreviousPOStatus_() || {};
+    result.previousWeek = { weekKey: previous.weekKey || null, noPO: previous.noPO || null,
+      itemCount: (previous.items || []).length, summary: previous.summary || null };
+  } catch (e) {
+    result.previousWeek = { error: String(e && e.message || e) };
+  }
+  if (dash) {
+    result.dashboard = {
+      criticalRows28to30: dash.getRange(28, 1, 3, 6).getDisplayValues(),
+      currentPOHeaderRow49: dash.getRange(49, 1, 1, 6).getDisplayValues()[0],
+      currentPOFirstRows50to52: dash.getRange(50, 1, 3, 6).getDisplayValues(),
+      previousPOHeaderRow49: dash.getRange(49, 8, 1, 6).getDisplayValues()[0],
+      previousPOFirstRows50to52: dash.getRange(50, 8, 3, 6).getDisplayValues()
+    };
+  }
+  return result;
 }
 
 function getCurrentSyncVersions_() {
@@ -4129,14 +4379,23 @@ function dashboardSyncPatchDisableConflictingTriggers_() {
   // Nonaktifkan trigger lama yang berpotensi menjalankan rebuild Dashboard
   // dan menulis ulang blok lama. Jangan menghapus weeklyPOAutomation karena
   // fungsi itu membuat PO; penulisan Status PO-nya sudah dipusatkan ke baris 46.
-  const conflicting = ["refreshAllData", "refreshDashboard"];
+  const conflicting = [
+    // Legacy refresh/test handlers found in the archived V6.6.5 source.
+    // refreshDashboardPODataOnly_ clears A28:F45 despite claiming it writes row 46+;
+    // the V7 data-only refresh can target the old row-42 layout.
+    "refreshAllData", "refreshDashboard", "refreshDashboardV7",
+    "refreshDashboardDataOnly_", "refreshDashboardAfterWrite_",
+    "refreshDashboardPODataOnly_", "refreshDashboardOperationalV68_",
+    "setupDashboardLayoutClean",
+    "testDashboardV7", "dashboardV7", "ujiDashboardV7",
+    "testDashboard", "refreshDashboardLegacy"
+  ];
   let removed = 0;
   ScriptApp.getProjectTriggers().forEach(function(t) {
     const handler = t.getHandlerFunction();
     if (conflicting.indexOf(handler) >= 0) {
       ScriptApp.deleteTrigger(t);
       removed++;
-    }
     }
   });
   return removed;
@@ -4224,8 +4483,8 @@ function dashboardApplyProfessionalLayoutOnce_() {
   sh.getRange("H47:M47").merge().setBackground("#D9EAF7").setWrap(true).setFontSize(9);
 
   const header = [["NO", "NAMA BARANG", "TOTAL QTY", "DATANG", "BELUM DATANG", "STATUS PO"]];
-  sh.getRange(49, 1, 1, 6).setValues(header).setBackground("#1F4E79").setFontColor("#FFFFFF").setFontWeight("bold").setHorizontalAlignment("center").setWrap(true);
-  sh.getRange(49, 8, 1, 6).setValues(header).setBackground("#1F4E79").setFontColor("#FFFFFF").setFontWeight("bold").setHorizontalAlignment("center").setWrap(true);
+  sh.getRange(PO_DASHBOARD_HEADER_ROW, 1, 1, 6).setValues(header).setBackground("#1F4E79").setFontColor("#FFFFFF").setFontWeight("bold").setHorizontalAlignment("center").setWrap(true);
+  sh.getRange(PO_DASHBOARD_HEADER_ROW, 8, 1, 6).setValues(header).setBackground("#1F4E79").setFontColor("#FFFFFF").setFontWeight("bold").setHorizontalAlignment("center").setWrap(true);
   sh.getRange(50, 1, 50, 6).setBorder(true, true, true, true, true, true, "#B7C9D6", SpreadsheetApp.BorderStyle.SOLID);
   sh.getRange(50, 8, 50, 6).setBorder(true, true, true, true, true, true, "#B7C9D6", SpreadsheetApp.BorderStyle.SOLID);
   sh.getRange(50, 3, 50, 3).setHorizontalAlignment("center").setNumberFormat("#,##0");
@@ -4237,12 +4496,29 @@ function dashboardApplyProfessionalLayoutOnce_() {
   }
   [55, 290, 100, 90, 120, 125].forEach(function(w, i) { sh.setColumnWidth(i + 1, w); });
   [24, 55, 290, 100, 90, 120, 125].forEach(function(w, i) { sh.setColumnWidth(i + 7, w); });
-  sh.setRowHeight(46, 28); sh.setRowHeight(47, 28); sh.setRowHeight(49, 30);
+  sh.setRowHeight(46, 28); sh.setRowHeight(47, 28); sh.setRowHeight(PO_DASHBOARD_HEADER_ROW, 30);
   sh.setFrozenRows(3);
   sh.getRange("A1").setNote("Tata letak Dashboard GudangAI dikunci. Tabel Status PO mulai baris 46; refresh rutin hanya memperbarui data.");
   PropertiesService.getScriptProperties().setProperty(DASHBOARD_LAYOUT_LOCK_KEY, "1");
   return { success: true, layout: "LOCKED_ROW46", currentPO: "A46:F99", previousPO: "H46:M99" };
 }
+function forceLockPOLayoutRow46() {
+  // Compatibility entry point for administrators: explicitly install the row-46 layout,
+  // disable known legacy Dashboard refresh triggers, and perform one safe refresh.
+  const installed = dashboardSyncPatchInstall();
+  if (!installed || installed.success !== true) return installed || { success: false, error: "Layout lock gagal dipasang." };
+  const refreshed = dashboardSyncPatchRefresh_({ reason: "forceLockPOLayoutRow46" });
+  return {
+    success: refreshed && refreshed.success === true,
+    layout: "LOCKED_ROW46",
+    currentPO: "A46:F99",
+    previousPO: "H46:M99",
+    protectedCriticalRows: "A28:F45",
+    install: installed,
+    refresh: refreshed
+  };
+}
+
 function dashboardRefreshPOSectionLight_() {
   // Satu-satunya penulis tabel Status PO Dashboard.
   // Zona baris 28–45 adalah milik tabel kritis dan tidak boleh disentuh.
@@ -4274,14 +4550,15 @@ function dashboardSyncPatchRefresh_(options) {
       sh.getRange(x[0]).setValue(cards[i][0] + "\n\n" + cards[i][1] + " " + cards[i][2]);
     });
 
-    const divRows = (data.statusPerDivisi || []).map(function(d) {
+    const divRows = (data.statusPerDivisi || []).slice(0, 15).map(function(d) {
       return [d.divisi, Number(d.total)||0, Number(d.aman)||0, Number(d.waspada)||0, Number(d.kritis)||0, percent_(d.kritis||0,d.total||0)/100];
     });
-    sh.getRange(12,1,80,6).clearContent();
+    // Jangan menyapu A28:F45: area itu milik tabel item kritis. Data divisi hanya memakai baris 13–27.
+    sh.getRange(13,1,15,6).clearContent();
     sh.getRange(12,1,1,6).setValues([["DIVISI","TOTAL ITEM","AMAN","WASPADA","KRITIS","% KRITIS"]]).setFontWeight("bold");
     if (divRows.length) sh.getRange(13,1,divRows.length,6).setValues(divRows);
-    sh.getRange(13,2,80,4).setNumberFormat("#,##0").setHorizontalAlignment("center");
-    sh.getRange(13,6,80,1).setNumberFormat("0.0%").setHorizontalAlignment("center");
+    sh.getRange(13,2,15,4).setNumberFormat("#,##0").setHorizontalAlignment("center");
+    sh.getRange(13,6,15,1).setNumberFormat("0.0%").setHorizontalAlignment("center");
 
     const hiddenDiv = [["DIVISI","AMAN","WASPADA","KRITIS"]].concat((data.statusPerDivisi || []).map(function(d) {
       return [d.divisi,Number(d.aman)||0,Number(d.waspada)||0,Number(d.kritis)||0];
@@ -4297,7 +4574,7 @@ function dashboardSyncPatchRefresh_(options) {
       try { renderDivisionBarChart_(sh,13,data); } catch(e) { console.error("PATCH chart divisi: "+e.message); }
     }
 
-    const poNow = getStatusPO();
+    const poNow = getCurrentWeekPOStatus_();
     if (poNow && poNow.success) {
       sh.getRange(12,21,4,2).setValues([
         ["STATUS PO","QTY"],
@@ -4338,11 +4615,90 @@ function dashboardSyncPatchRefresh_(options) {
 }
 
 function dashboardSyncPatchVerify() {
-  const ss=getSS(), sh=ss.getSheetByName("Dashboard"), all=getAllStock("ALL"), po=getStatusPO();
-  const triggers=ScriptApp.getProjectTriggers().map(function(t){return t.getHandlerFunction();});
-  return {success:true,patch:DASHBOARD_SYNC_PATCH_VERSION,enabled:isDashboardSyncPatchEnabled_(),dashboardExists:!!sh,
-    totalMaster:all&&all.success?all.count:null,expectedMaster:191,poApi:!!(po&&po.success),
-    conflictingTriggersStillPresent:triggers.filter(function(x){return x==="refreshAllData"||x==="refreshDashboard";}),
-    patchTriggers:triggers.filter(function(x){return x==="dashboardSyncPatchTick_";}),
-    lastSync:PropertiesService.getScriptProperties().getProperty(DASHBOARD_SYNC_PATCH_LAST),checkedAt:new Date().toISOString()};
+  // Read-only live audit. Do not call install/setup/refresh from this function.
+  const ss = getSS();
+  const sh = ss.getSheetByName("Dashboard");
+  const all = getAllStock("ALL");
+  const po = getStatusPO();
+  const previous = getPreviousPOStatus_() || {};
+  const triggers = ScriptApp.getProjectTriggers().map(function(t) { return t.getHandlerFunction(); });
+  const conflictingNames = [
+    "refreshAllData", "refreshDashboard", "refreshDashboardV7",
+    "refreshDashboardDataOnly_", "refreshDashboardAfterWrite_",
+    "refreshDashboardPODataOnly_", "refreshDashboardOperationalV68_",
+    "setupDashboardLayoutClean",
+    "testDashboardV7", "dashboardV7", "ujiDashboardV7",
+    "testDashboard", "refreshDashboardLegacy"
+  ];
+  const conflictingTriggersStillPresent = triggers.filter(function(x) { return conflictingNames.indexOf(x) >= 0; });
+  // If an old code file remains in the Apps Script project, a duplicate declaration
+  // may still override this candidate even when the trigger was removed.
+  const legacyFunctionsPresent = {
+    refreshDashboardDataOnly_: typeof refreshDashboardDataOnly_ === "function",
+    refreshDashboardAfterWrite_: typeof refreshDashboardAfterWrite_ === "function",
+    refreshDashboardPODataOnly_: typeof refreshDashboardPODataOnly_ === "function",
+    refreshDashboardOperationalV68_: typeof refreshDashboardOperationalV68_ === "function",
+    setupDashboardLayoutClean: typeof setupDashboardLayoutClean === "function",
+    testDashboardV7: typeof testDashboardV7 === "function",
+    ujiDashboardV7: typeof ujiDashboardV7 === "function",
+    refreshDashboardV7: typeof refreshDashboardV7 === "function"
+  };
+  const dashboardProbe = sh ? {
+    criticalRows28to45Left: sh.getRange(28, 1, 18, 6).getDisplayValues(),
+    criticalRows28to45Right: sh.getRange(28, 8, 18, 6).getDisplayValues(),
+    currentPOHeaderRow49: sh.getRange(49, 1, 1, 6).getDisplayValues()[0],
+    currentPOFirstRows50to52: sh.getRange(50, 1, 3, 6).getDisplayValues(),
+    previousPOHeaderRow49: sh.getRange(49, 8, 1, 6).getDisplayValues()[0],
+    previousPOFirstRows50to52: sh.getRange(50, 8, 3, 6).getDisplayValues()
+  } : null;
+  const poSummary = po && po.success ? {
+    noPO: po.noPO || null,
+    weekKey: po.weekKey || null,
+    itemCount: (po.items || []).length,
+    firstItems: (po.items || []).slice(0, 5).map(function(x) {
+      return { no: x.no, nama: x.nama, totalPO: x.totalPO, qtyDatang: x.qtyDatang, qtyBelumDatang: x.qtyBelumDatang, status: x.status };
+    }),
+    totalPOQty: po.summary && po.summary.totalPOQty || 0,
+    totalKonfirmasiQty: po.summary && po.summary.totalKonfirmasiQty || 0
+  } : { error: po && po.error || "Status PO tidak tersedia" };
+  const expectedHeader = ["NO", "NAMA BARANG", "TOTAL QTY", "DATANG", "BELUM DATANG", "STATUS PO"];
+  const headerCurrentOk = !!(dashboardProbe && dashboardProbe.currentPOHeaderRow49 &&
+    dashboardProbe.currentPOHeaderRow49.every(function(v, i) {
+      return String(v || "").trim().toUpperCase() === expectedHeader[i];
+    }));
+  const headerPreviousOk = !!(dashboardProbe && dashboardProbe.previousPOHeaderRow49 &&
+    dashboardProbe.previousPOHeaderRow49.every(function(v, i) {
+      return String(v || "").trim().toUpperCase() === expectedHeader[i];
+    }));
+  const noLegacyFunctions = Object.keys(legacyFunctionsPresent).every(function(k) { return legacyFunctionsPresent[k] === false; });
+  const safeToRelease = !!(
+    isDashboardSyncPatchEnabled_() &&
+    sh &&
+    all && all.success && Number(all.count) === 191 &&
+    po && po.success &&
+    headerCurrentOk && headerPreviousOk &&
+    conflictingTriggersStillPresent.length === 0 &&
+    noLegacyFunctions
+  );
+  return {
+    success: true,
+    readOnly: true,
+    safeToRelease: safeToRelease,
+    patch: DASHBOARD_SYNC_PATCH_VERSION,
+    enabled: isDashboardSyncPatchEnabled_(),
+    dashboardExists: !!sh,
+    totalMaster: all && all.success ? all.count : null,
+    expectedMaster: 191,
+    poApi: !!(po && po.success),
+    poSummary: poSummary,
+    previousWeek: { weekKey: previous.weekKey || null, itemCount: (previous.items || []).length, hasArchive: !!previous.weekKey },
+    conflictingTriggersStillPresent: conflictingTriggersStillPresent,
+    legacyFunctionsPresent: legacyFunctionsPresent,
+    dashboardHeaders: { currentOk: headerCurrentOk, previousOk: headerPreviousOk },
+    patchTriggers: triggers.filter(function(x) { return x === "dashboardSyncPatchTick_"; }),
+    dashboardProbe: dashboardProbe,
+    lastSync: PropertiesService.getScriptProperties().getProperty(DASHBOARD_SYNC_PATCH_LAST),
+    checkedAt: new Date().toISOString()
+  };
 }
+

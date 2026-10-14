@@ -13,7 +13,7 @@ import {
   saveToHistory,
   pushNotification, getNotifications, markNotificationsRead, unreadNotificationCount,
 } from '../data/api';
-import { searchMaster } from '../data/master';
+import { searchMaster, getMasterByEntity } from '../data/master';
 import { useBootstrapRevision } from '../hooks/useBootstrapRevision';
 import { searchLiveStock } from '../data/liveSearch';
 
@@ -177,8 +177,47 @@ export default function InputPage() {
       // Teks paste/PDF/foto tidak boleh mengubah CV menjadi PT hanya karena
       // nama supplier/header di dalam dokumen mengandung "PT".
       const validationEntity = entity;
-      const rows = parseLinesFromText(text, lines);
+      let rows = parseLinesFromText(text, lines);
       if (!rows.length) { setStatusBanner('Tidak ada baris barang terdeteksi dari ' + sourceLabel + '.'); return; }
+
+      // PDF CV maupun PT tidak boleh memasukkan bahan baku BBCV/BBPT
+      // ke keranjang transaksi barang jadi. Filter nama exact mencegah bahan baku
+      // lolos sebagai alias/fuzzy ke kode lain; varian nama barang jadi tetap dipertahankan.
+      let skippedRawMaterialCount = 0;
+      if (validationEntity === 'CV' || validationEntity === 'PT') {
+        const normalizeRawMaterialName = (value) => String(value || '')
+          .normalize('NFKC').toLowerCase()
+          .replace(/\([^)]*\)/g, ' ')
+          .replace(/\b\d+(?:[.,]\d+)?\s*(?:kg|gram|gr|pcs|pack|pail|liter|ml|ekor)\b/g, ' ')
+          .replace(/\b(?:kg|gram|gr|pcs|pack|pail|liter|ml|ekor)\b/g, ' ')
+          .replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
+        const rawMaterialNames = [
+          ...getMasterByEntity('CV')
+            .filter((m) => /^BBCV-/i.test(String(m.kode || '')) || String(m.divisi || '').trim().toUpperCase() === 'BAHAN BAKU')
+            .map((m) => normalizeRawMaterialName(m.nama)),
+          ...getMasterByEntity('PT')
+            .filter((m) => /^BBPT-/i.test(String(m.kode || '')) || String(m.divisi || '').trim().toUpperCase() === 'BAHAN BAKU')
+            .map((m) => normalizeRawMaterialName(m.nama)),
+        ].filter(Boolean);
+        const isRawMaterial = (row) => {
+          const code = String(row.kode || row.kodeBarang || '').trim().toUpperCase();
+          const division = String(row.divisi || row.division || '').trim().toUpperCase();
+          if (/^(?:BBCV|BBPT)-/.test(code) || division === 'BAHAN BAKU') return true;
+          const name = normalizeRawMaterialName(row.rawName || row.nameFromPdf || row.name || '');
+          // Cocok exact saja agar "Ayam Negeri 2 Dada + 2 Paha" tidak terhapus
+          // ketika master bahan baku hanya bernama "Ayam Negeri".
+          return !!name && rawMaterialNames.includes(name);
+        };
+        const before = rows.length;
+        rows = rows.filter((row) => !isRawMaterial(row));
+        skippedRawMaterialCount = before - rows.length;
+      }
+      if (!rows.length) {
+        setStatusBanner(skippedRawMaterialCount
+          ? 'PDF ' + validationEntity + ': ' + skippedRawMaterialCount + ' baris bahan baku BBCV/BBPT dilewati; keranjang hanya menerima barang yang sesuai entitas.'
+          : 'Tidak ada baris barang yang sesuai untuk divalidasi dari ' + sourceLabel + '.');
+        return;
+      }
       const validation = validateItems(rows, validationEntity);
       let stock = null;
       try { stock = await fetchStock(validationEntity, { allowDemo: false }); } catch (_) { stock = null; }
@@ -197,7 +236,7 @@ export default function InputPage() {
       }));
       const total = matched.length + amb.length + un.length;
       const acc = total ? Math.round((matched.length / total) * 100) : 0;
-      setAccuracy({ pct: acc, matched: matched.length, skipped: 0, needPick: review.length, total });
+      setAccuracy({ pct: acc, matched: matched.length, skipped: skippedRawMaterialCount, needPick: review.length, total: total + skippedRawMaterialCount });
       // Only confirmed master matches enter the transaction cart.
       // Unmatched/ambiguous rows are retained for manual mapping; nothing is silently dropped.
       mergePdfIntoCart(matched, review);
@@ -205,6 +244,7 @@ export default function InputPage() {
       const parts = [];
       if (matched.length) parts.push(matched.length + ' cocok');
       if (review.length) parts.push(review.length + ' perlu validasi');
+      if (skippedRawMaterialCount) parts.push(skippedRawMaterialCount + ' baris bahan baku BBCV/BBPT dilewati');
       setStatusBanner(sourceLabel + ' ' + total + ' baris · ' + parts.join(' · '));
     } catch (err) {
       setStatusBanner(err.message || 'Gagal memvalidasi ' + sourceLabel);
@@ -518,63 +558,105 @@ export default function InputPage() {
         if (!items.length) { setStatusBanner('Isi minimal 1 jumlah barang sebelum dikirim.'); return; }
       const fn = txType === 'masuk' ? submitBarangMasuk : txType === 'rusak' ? submitBarangRusak : submitBarangKeluar;
       const res = await fn({ entity, tanggal, items });
-      if (res?.success !== false) {
+      // Partial/queued results still need per-item reconciliation and one consolidated notice.
+      // Only treat the request as a hard failure when the backend confirms no success and no queue.
+      const hasPartialOutcome = Number(res?.queuedCount || 0) > 0 ||
+        (Array.isArray(res?.results) && res.results.some((r) => r?.success === true || r?.queued === true || r?.skipped === true));
+      if (res && (res.success !== false || hasPartialOutcome)) {
         const okCount = Number(res.count || 0);
         const queuedCount = Number(res.queuedCount || 0);
         const failCount = Number(res.failed || 0);
         const resultMap = new Map((res.results || [])
           .filter(r => r?.clientItemId)
           .map(r => [r.clientItemId, r]));
+        const isHoldResult = (result, item) => {
+          if (!result) return false;
+          if (result.shortage === true || result.stockPolicy === 'STOCK_KURANG_HOLD_QTY_0' ||
+              (Array.isArray(result.flags) && result.flags.includes('STOCK_KURANG_HOLD'))) return true;
+          const note = String(result?.readBack?.keterangan || result?.keterangan || '');
+          if (/(?:Input pending|pending\s*❌\s*PO)/i.test(note) && Number(result.qty) === 0) return true;
+          // Older backend responses may omit the shortage flag; for an outbound
+          // write, qty=0 with a positive requested qty is never a completed stock movement.
+          return txType === 'keluar' && Number(result.qty) === 0 &&
+            Number(result.originalQty != null ? result.originalQty : item.qty) > 0;
+        };
+        const heldItems = cart.filter((item) => isHoldResult(resultMap.get(item.clientItemId), item));
+        const heldIds = new Set(heldItems.map((item) => item.clientItemId));
         const confirmedItems = cart.filter((item) => {
-          const r = resultMap.get(item.clientItemId);
-          return r?.success === true || r?.skipped === true;
+          const result = resultMap.get(item.clientItemId);
+          return (result?.success === true || result?.skipped === true) && !heldIds.has(item.clientItemId);
         });
+        const notificationKey = 'tx:' + String(res.requestId || res.transactionId || orderedCart.map((item) => item.clientItemId).join('|')) + ':' + txType + ':' + entity;
+        const unaccountedCount = Math.max(0, cart.length - confirmedItems.length - heldItems.length - queuedCount);
 
-        // Riwayat hanya boleh dibuat dari konfirmasi per-item backend.
-        // Item yang hanya masuk antrian tidak boleh tampil sebagai "berhasil".
-        if (confirmedItems.length > 0) {
+        // HOLD is a recorded zero-qty hold, not a successful stock movement.
+        // Keep one consolidated history entry with explicit per-item outcomes.
+        const reconciledItems = [...confirmedItems, ...heldItems].map((item) => {
+          const result = resultMap.get(item.clientItemId);
+          const isHold = heldIds.has(item.clientItemId);
+          return isHold
+            ? { ...item, qty: 0, requestedQty: Number(result?.originalQty != null ? result.originalQty : item.qty) || 0,
+                transactionStatus: 'hold', keterangan: result?.readBack?.keterangan || result?.keterangan || item.keterangan || 'pending ❌ PO' }
+            : { ...item, transactionStatus: 'sukses' };
+        });
+        if (reconciledItems.length > 0) {
           saveToHistory({
             type: txType,
             entity,
-            items: confirmedItems,
+            items: reconciledItems,
             tanggal,
             at: Date.now(),
-            status: 'sukses',
-            source: 'backend-confirmed',
+            status: heldItems.length ? (confirmedItems.length ? 'sebagian' : 'hold') : 'sukses',
+            source: 'backend-reconciled',
             syncSummary: {
               total: cart.length,
               success: confirmedItems.length,
+              held: heldItems.length,
               queued: queuedCount,
-              failed: Math.max(0, cart.length - confirmedItems.length - queuedCount)
+              failed: unaccountedCount
             }
           });
         }
 
         if (queuedCount > 0) {
+          const parts = [];
+          if (confirmedItems.length) parts.push(confirmedItems.length + ' sukses');
+          if (heldItems.length) parts.push(heldItems.length + ' HOLD (qty keluar 0)');
+          parts.push(queuedCount + ' antrian');
+          if (unaccountedCount) parts.push(unaccountedCount + ' belum teridentifikasi');
           pushNotification({
+            dedupeKey: notificationKey,
             type: 'warning',
-            title: confirmedItems.length > 0 ? 'Transaksi sebagian selesai' : 'Transaksi masuk Antrian Sinkronisasi',
-            body: confirmedItems.length + ' sukses · ' + queuedCount + ' antrian' +
-              (Math.max(0, cart.length - confirmedItems.length - queuedCount) ? ' · ' + Math.max(0, cart.length - confirmedItems.length - queuedCount) + ' belum teridentifikasi' : '') +
-              '. Tidak ada item dibuang.'
+            title: confirmedItems.length > 0 || heldItems.length > 0 ? 'Transaksi sebagian selesai' : 'Transaksi masuk Antrian Sinkronisasi',
+            body: parts.join(' · ') + '. Item HOLD tidak mengurangi stok; item antrian tetap diamankan.'
           });
-          setStatusBanner(
-            confirmedItems.length + ' sukses · ' + queuedCount + ' antrian' +
-            (failCount ? ' · ' + failCount + ' gagal konfirmasi' : '') +
-            ' — lanjutkan dari Antrian bila perlu.'
-          );
+          setStatusBanner(parts.join(' · ') + (failCount ? ' · ' + failCount + ' gagal konfirmasi' : '') + ' — periksa Antrian untuk item yang belum tersinkron.');
+        } else if (heldItems.length > 0) {
+          const holdMessage = heldItems.length + ' item ' + entity + ' ditahan (HOLD); qty keluar ditulis 0 dan stok tidak dikurangi.';
+          const successMessage = confirmedItems.length ? confirmedItems.length + ' item stok berhasil ditulis · ' : '';
+          pushNotification({
+            dedupeKey: notificationKey,
+            type: 'warning',
+            title: confirmedItems.length ? 'Transaksi sebagian selesai — ada HOLD' : 'Stok kurang — HOLD',
+            body: successMessage + holdMessage + ' Tanpa antrian.'
+          });
+          setStatusBanner(successMessage + holdMessage + ' Tanpa antrian.');
         } else if (confirmedItems.length === cart.length) {
-          pushNotification({ type: 'success', title: 'Transaksi selesai', body: confirmedItems.length + ' item ' + txType + ' ' + entity + ' terkonfirmasi ditulis backend.' });
+          pushNotification({ dedupeKey: notificationKey, type: 'success', title: 'Transaksi selesai', body: confirmedItems.length + ' item ' + entity + ' sukses terkonfirmasi ditulis backend. Tanpa antrian.' });
           setStatusBanner('Berhasil dikonfirmasi · ' + confirmedItems.length + ' item');
+        } else if (confirmedItems.length > 0) {
+          const partialMessage = confirmedItems.length + ' sukses · ' + unaccountedCount + ' belum terkonfirmasi.';
+          pushNotification({ dedupeKey: notificationKey, type: 'warning', title: 'Transaksi sebagian terkonfirmasi', body: partialMessage + ' Periksa antrian sebelum mencoba ulang.' });
+          setStatusBanner(partialMessage);
         } else {
-          pushNotification({ type: 'error', title: 'Belum ada konfirmasi penulisan', body: 'Tidak ada item yang dinyatakan tertulis per-item oleh backend.' });
+          pushNotification({ dedupeKey: notificationKey, type: 'error', title: 'Belum ada konfirmasi penulisan', body: 'Backend belum mengonfirmasi item tertulis. Periksa antrian sebelum mengulang.' });
           setStatusBanner('Belum terkonfirmasi — item tetap diamankan di antrian');
         }
 
         setCart([]); setAccuracy(null); setPdfReview([]);
         window.dispatchEvent(new Event('gudangai-stock-refresh'));
       } else {
-        pushNotification({ type: 'error', title: 'Transaksi belum dikirim', body: res?.error || 'Tidak ada data yang dinyatakan berhasil.' });
+        pushNotification({ dedupeKey: 'tx:' + String(res?.requestId || orderedCart.map((item) => item.clientItemId).join('|')) + ':' + txType + ':' + entity, type: 'error', title: 'Transaksi belum dikirim', body: res?.error || 'Tidak ada data yang dinyatakan berhasil.' });
         setStatusBanner(res?.error || 'Gagal kirim');
       }
     } catch (err) { setStatusBanner(err.message || 'Gagal kirim'); }
@@ -891,10 +973,18 @@ function PdfReviewRow({ row, entity, stockCatalog = [], onPick, onIgnore }) {
     if (!term) return [];
     const live = searchLiveStock(stockCatalog, term);
     const stat = searchMaster(entity, term);
+    const rawCodeInput = term.match(/^(BBCV|BBPT)[\s-]?(\d{3,4})$/i);
+    const requestedRawCode = rawCodeInput
+      ? rawCodeInput[1].toUpperCase() + '-' + rawCodeInput[2].padStart(4, '0')
+      : '';
+    const expectedRawPrefix = entity === 'CV' ? 'BBCV' : 'BBPT';
     const seen = new Set();
     return [...live, ...stat].filter((h) => {
-      const k = String(h?.kode || h?.kodeBarang || '').trim();
+      const k = String(h?.kode || h?.kodeBarang || '').trim().toUpperCase();
       if (!k || seen.has(k)) return false;
+      const divisi = String(h?.divisi || h?.division || '').trim().toUpperCase().replace(/\s+/g, ' ');
+      const rawMaterial = /^(?:BBCV|BBPT)-/.test(k) || divisi === 'BAHAN BAKU';
+      if (rawMaterial && (!rawCodeInput || rawCodeInput[1].toUpperCase() !== expectedRawPrefix || k !== requestedRawCode)) return false;
       seen.add(k);
       return true;
     }).slice(0, 5);

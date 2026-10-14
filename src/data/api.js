@@ -403,9 +403,9 @@ async function submitItems(action, entity, items, tanggal, options = {}) {
   if (!list.length) return { success: false, error: 'Tidak ada item' };
   if (!navigator.onLine || !getApiUrl()) {
     if (!options.fromQueue) enqueue(action, entity, list, { tanggal });
-    const msg = list.length + ' item masuk Antrian Sinkronisasi (offline)';
-    pushNotification({ type: 'warning', title: 'Koneksi terputus', body: msg + '. Tidak ada item yang dibuang.' });
-    return { success: false, queued: true, count: 0, queuedCount: list.length, failed: list.length, results: list.map(it => ({ success: false, queued: true, clientItemId: it.clientItemId })) };
+    // InputPage owns one aggregate notification for this submit attempt.
+    return { success: false, queued: true, count: 0, queuedCount: list.length, failed: list.length, total: list.length,
+      results: list.map(it => ({ success: false, queued: true, clientItemId: it.clientItemId, error: 'offline' })) };
   }
   // Never silently queue a write while the API is reachable.
   // Verify the exact write-capable backend before attempting any transaction.
@@ -414,7 +414,7 @@ async function submitItems(action, entity, items, tanggal, options = {}) {
   } catch (err) {
     if (!options.fromQueue) enqueue(action, entity, list, { tanggal });
     const msg = err?.message || 'Backend write belum terverifikasi';
-    pushNotification({ type: 'error', title: 'Write ditahan', body: msg });
+    // Return the outcome; InputPage will show only one consolidated notification.
     return {
       success: false, count: 0, failed: list.length, queuedCount: list.length, total: list.length,
       results: list.map(it => ({ success: false, queued: true, clientItemId: it.clientItemId, error: msg }))
@@ -453,23 +453,11 @@ async function submitItems(action, entity, items, tanggal, options = {}) {
         error: msg,
       })));
       emitProgress(list.length, list.length, { successCount: totalSuccess, failCount: totalFail });
-      pushNotification({
-        type: 'warning',
-        title: totalSuccess > 0 ? 'Sebagian item perlu Antrian Sinkronisasi' : 'Item diamankan di Antrian Sinkronisasi',
-        body: totalSuccess + ' sukses · ' + remainingItems.length + ' antrian. Detail: ' + msg,
-      });
+      // Notification is emitted once by InputPage after aggregating backend results.
       break;
     }
   }
-  if (totalQueued > 0) {
-    pushNotification({
-      type: 'warning',
-      title: totalSuccess > 0 ? 'Transaksi sebagian selesai' : 'Transaksi masuk Antrian Sinkronisasi',
-      body: totalSuccess + ' sukses · ' + totalQueued + ' antrian' + (totalFail ? ' · ' + totalFail + ' gagal konfirmasi' : '') + '. Lanjutkan dari Antrian bila perlu.',
-    });
-  } else {
-    pushNotification({ type: 'success', title: 'Transaksi selesai', body: totalSuccess + ' item berhasil ditulis tanpa antrian.' });
-  }
+  // InputPage owns the single user-facing notification for this submit operation.
   return {
     success: totalSuccess === list.length,
     partial: totalSuccess > 0 && totalSuccess < list.length,
@@ -546,7 +534,11 @@ export async function fetchRemoteTransactionHistory(days = 7) {
 }
 export function pushNotification(n) {
   const list = getNotifications();
-  const item = { ...n, id: 'N-' + Date.now(), read: false, at: Date.now() };
+  const dedupeKey = String(n?.dedupeKey || '').trim();
+  const existingIndex = dedupeKey ? list.findIndex((item) => String(item?.dedupeKey || '') === dedupeKey) : -1;
+  const existing = existingIndex >= 0 ? list[existingIndex] : null;
+  const item = { ...n, id: existing?.id || ('N-' + Date.now()), read: false, at: Date.now() };
+  if (existingIndex >= 0) list.splice(existingIndex, 1);
   list.unshift(item);
   try { localStorage.setItem(NOTIF_KEY, JSON.stringify(list.slice(0, 50))); } catch (_) {}
   try { window.dispatchEvent(new CustomEvent('gudangai-notification', { detail: item })); } catch (_) {}
