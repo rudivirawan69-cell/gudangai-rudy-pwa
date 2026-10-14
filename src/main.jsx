@@ -1,6 +1,7 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
+import './css-theme-imports.css'
 import App from './App.jsx'
 
 createRoot(document.getElementById('root')).render(
@@ -56,8 +57,6 @@ if ('serviceWorker' in navigator) {
       }
 
       navigator.serviceWorker.addEventListener('controllerchange', () => {
-        // The new worker has taken control. LocalStorage/IndexedDB are untouched;
-        // pending transaction queue therefore survives the reload.
         reloadPending = true
         if (document.visibilityState === 'visible') {
           reloadTimer = window.setTimeout(safeReload, 900)
@@ -68,7 +67,6 @@ if ('serviceWorker' in navigator) {
         if (document.visibilityState === 'visible') safeReload()
       })
     } catch (_) {
-      // PWA remains usable even when service-worker registration/update fails.
     }
   })
 }
