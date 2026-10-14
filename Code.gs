@@ -646,6 +646,9 @@ function readBackTransactionByIdentity_(identity, preferredSheet) {
           matched: true, sheet: sheetName, row: rowNumber,
           tanggal: normalizeTransactionDateKey_(r[0]), kodeBarang: String(r[1] || "").trim(),
           namaBarang: r[2], satuan: r[3], qty: actualQty, keterangan: note,
+          originalQty: holdQtyMatches ? expectedQty : actualQty,
+          shortage: holdQtyMatches,
+          stockPolicy: holdQtyMatches ? "STOCK_KURANG_HOLD_QTY_0" : "NORMAL",
           transactionId: targetId || ledgerRecord.transactionId || null,
           nonce: targetNonce || ledgerRecord.nonce || null
         };
@@ -669,10 +672,17 @@ function readBackTransactionByIdentity_(identity, preferredSheet) {
       const txMatch = targetId && new RegExp("(?:^|[;|]\\s*)GUDANGAI_TX=" + targetId.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\$&") + "(?:;|$)").test(note);
       const nonceMatch = targetNonce && new RegExp("(?:^|[;|]\\s*)GUDANGAI_NONCE=" + targetNonce.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\$&") + "(?:;|$)").test(note);
       if (!txMatch && !nonceMatch) continue;
+      const actualQty = Number(r[4]) || 0;
+      const hold = actualQty === 0 && /(?:Input pending|pending\s*❌\s*PO)/i.test(note);
+      const holdQtyMatch = note.match(/pending\s*❌\s*PO\s*([0-9]+(?:[.,][0-9]+)?)/i) ||
+        note.match(/Input pending\s*([0-9]+(?:[.,][0-9]+)?)/i);
+      const originalQty = holdQtyMatch ? parsePOQty_(holdQtyMatch[1]) : actualQty;
       return {
         matched: true, sheet: sheetName, row: config.headerRow + 1 + i,
         tanggal: normalizeTransactionDateKey_(r[0]), kodeBarang: String(r[1] || "").trim(),
-        namaBarang: r[2], satuan: r[3], qty: Number(r[4]) || 0, keterangan: note,
+        namaBarang: r[2], satuan: r[3], qty: actualQty, keterangan: note,
+        originalQty: hold ? originalQty : actualQty, shortage: hold,
+        stockPolicy: hold ? "STOCK_KURANG_HOLD_QTY_0" : "NORMAL",
         transactionId: targetId || null, nonce: targetNonce || null
       };
     }
@@ -952,7 +962,16 @@ function addTransaction(body) {
         const priorRead = readBackTransactionByIdentity_({ transactionId: transactionId, nonce: nonce }, sheetName);
         if (priorRead.matched) {
           ledgerRecord = updateIdempotencyRecord_(ledgerRecord, { status: "APPLIED", dataRow: priorRead.row, writeOccurred: true, errorCode: "" });
-          return { success: true, status: "APPLIED", code: "IDEMPOTENT_REPLAY", requestId: request.requestId, transactionId: transactionId, nonce: nonce, sheet: sheetName, row: priorRead.row, kode: kode, qty: priorRead.qty, originalQty: numericQty, readBack: priorRead, replayed: true };
+          const replayIsHold = priorRead.shortage === true;
+          return {
+            success: true, status: "APPLIED", code: "IDEMPOTENT_REPLAY",
+            requestId: request.requestId, transactionId: transactionId, nonce: nonce,
+            sheet: sheetName, row: priorRead.row, kode: kode, qty: priorRead.qty,
+            originalQty: priorRead.originalQty != null ? priorRead.originalQty : numericQty,
+            shortage: replayIsHold, stockPolicy: priorRead.stockPolicy || (replayIsHold ? "STOCK_KURANG_HOLD_QTY_0" : "NORMAL"),
+            flags: replayIsHold ? ["STOCK_KURANG", "STOCK_KURANG_HOLD", "QTY_HOLD_0"] : [],
+            readBack: priorRead, replayed: true
+          };
         }
         // Never repeat a write when a prior attempt may already have committed.
         // Only an explicitly FAILED + writeOccurred=false record is safe to retry automatically.
@@ -1186,7 +1205,16 @@ function bulkTransaction(body) {
           var priorReadBack = readBackTransactionByIdentity_({ transactionId: item.transactionId, nonce: item.nonce }, sheetName);
           if (priorReadBack && priorReadBack.matched) {
             updateIdempotencyRecord_(prior, { status: "APPLIED", dataRow: priorReadBack.row, writeOccurred: true, errorCode: "" });
-            results.push({ success: true, status: "APPLIED", code: "READBACK_CONFIRMED", batchId: batchId, batchIndex: p + 1, transactionId: item.transactionId, nonce: item.nonce, requestId: item.requestId || "", clientItemId: item.clientItemId || item.requestId || "", sheet: sheetName, row: priorReadBack.row, kode: priorReadBack.kodeBarang, qty: priorReadBack.qty, replayed: true, writeOccurred: true });
+            var priorIsHold = priorReadBack.shortage === true;
+            results.push({
+              success: true, status: "APPLIED", code: "READBACK_CONFIRMED",
+              batchId: batchId, batchIndex: p + 1, transactionId: item.transactionId, nonce: item.nonce,
+              requestId: item.requestId || "", clientItemId: item.clientItemId || item.requestId || "",
+              sheet: sheetName, row: priorReadBack.row, kode: priorReadBack.kodeBarang,
+              qty: priorReadBack.qty, originalQty: priorReadBack.originalQty != null ? priorReadBack.originalQty : item.qty,
+              shortage: priorIsHold, stockPolicy: priorReadBack.stockPolicy || (priorIsHold ? "STOCK_KURANG_HOLD_QTY_0" : "NORMAL"),
+              readBack: priorReadBack, replayed: true, writeOccurred: true
+            });
             successCount++;
             continue;
           }
@@ -1195,14 +1223,36 @@ function bulkTransaction(body) {
         }
       }
       if (prior && prior.status === "APPLIED") {
+        // Never declare a ledger APPLIED row successful without verifying the actual row.
+        // For HOLD, the requested qty is positive but the written qty must be 0.
+        var appliedReadBack = readBackTransactionByIdentity_({ transactionId: item.transactionId, nonce: item.nonce }, sheetName);
+        if (!appliedReadBack || appliedReadBack.matched !== true) {
+          results.push({
+            success: false, status: "UNKNOWN", code: "READBACK_REQUIRED",
+            batchId: batchId, batchIndex: p + 1,
+            transactionId: item.transactionId, nonce: item.nonce,
+            requestId: item.requestId || "",
+            clientItemId: item.clientItemId || item.requestId || "",
+            sheet: sheetName, kode: item.kodeBarang,
+            writeOccurred: true, retryable: false,
+            error: "Ledger APPLIED tetapi read-back belum cocok; jangan membuat transaksi baru."
+          });
+          failCount++;
+          continue;
+        }
+        var appliedIsHold = appliedReadBack.shortage === true;
         results.push({
           success: true, status: "APPLIED", code: "IDEMPOTENT_REPLAY",
           batchId: batchId, batchIndex: p + 1,
           transactionId: item.transactionId, nonce: item.nonce,
           requestId: item.requestId || "",
           clientItemId: item.clientItemId || item.requestId || "",
-          sheet: sheetName, kode: item.kodeBarang,
-          qty: prior.qty != null ? prior.qty : item.qty, replayed: true
+          sheet: sheetName, row: appliedReadBack.row, kode: item.kodeBarang,
+          qty: appliedReadBack.qty,
+          originalQty: appliedReadBack.originalQty != null ? appliedReadBack.originalQty : item.qty,
+          shortage: appliedIsHold,
+          stockPolicy: appliedReadBack.stockPolicy || (appliedIsHold ? "STOCK_KURANG_HOLD_QTY_0" : "NORMAL"),
+          readBack: appliedReadBack, replayed: true, writeOccurred: true
         });
         successCount++;
         continue;
