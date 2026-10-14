@@ -119,10 +119,10 @@ const readBack = functionBody('readBackTransactionByIdentity_');
 assert.match(readBack, /shortage: holdQtyMatches/);
 assert.match(readBack, /stockPolicy: holdQtyMatches/);
 assert.match(functionBody('addTransaction'), /const replayIsHold = priorRead\.shortage === true/);
-const bulk = functionBody('bulkTransaction');
-assert.match(bulk, /var appliedReadBack = readBackTransactionByIdentity_\(\{ transactionId: item\.transactionId, nonce: item\.nonce \}, sheetName\)/);
-assert.match(bulk, /shortage: appliedIsHold/);
-assert.match(bulk, /stockPolicy: appliedReadBack\.stockPolicy/);
+const bulkReplay = functionBody('bulkTransaction');
+assert.match(bulkReplay, /var appliedReadBack = readBackTransactionByIdentity_\(\{ transactionId: item\.transactionId, nonce: item\.nonce \}, sheetName\)/);
+assert.match(bulkReplay, /shortage: appliedIsHold/);
+assert.match(bulkReplay, /stockPolicy: appliedReadBack\.stockPolicy/);
 
 // Contract 10: InputPage must not count a zero-qty HOLD as a successful stock movement.
 assert.match(input, /const isHoldResult =/);
