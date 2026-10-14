@@ -92,6 +92,12 @@ for (const legacyHandler of [
 const triggerVerification = functionBody('dashboardSyncPatchVerify');
 assert.match(triggerVerification, /refreshDashboardPODataOnly_/);
 assert.match(triggerVerification, /setupDashboardLayoutClean/);
+assert.match(triggerVerification, /criticalRows28to45Left/);
+assert.match(triggerVerification, /criticalRows28to45Right/);
+assert.match(triggerVerification, /legacyFunctionsPresent/);
+assert.match(triggerVerification, /safeToRelease/);
+assert.doesNotMatch(triggerVerification, /\.setValue\(|\.setValues\(|\.clearContent\(|insertRowsAfter\(/,
+  'dashboardSyncPatchVerify must remain read-only');
 
 // Contract 8: status reader must parse formatted qty values and keep named PO rows
 // visible for diagnosis if TOTAL is blank instead of silently hiding the item.
