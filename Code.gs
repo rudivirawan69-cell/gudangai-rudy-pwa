@@ -2787,9 +2787,12 @@ function refreshDashboardLive_() {
     });
 
     // Tabel sumber chart divisi tetap di A13:F; chart tersembunyi membaca P13:S.
-    const divRows = (data.statusPerDivisi || []).map(function(d) {
+    const allDivRows = (data.statusPerDivisi || []).map(function(d) {
       return [d.divisi, d.total, d.aman, d.waspada, d.kritis, percent_(d.kritis, d.total) / 100];
     });
+    // Area A13:F27 hanya menyediakan 15 baris; jangan pernah menulis ke baris 28–45.
+    const divRows = allDivRows.slice(0, 15);
+    if (allDivRows.length > 15) console.error("Dashboard: divisi melebihi 15; baris tambahan ditahan agar tabel kritis tidak tertimpa.");
     sh.getRange(13, 1, 15, 6).clearContent();
     sh.getRange(12, 1, 1, 6).setValues([["DIVISI", "TOTAL ITEM", "AMAN", "WASPADA", "KRITIS", "% KRITIS"]]);
     if (divRows.length) {
@@ -3965,6 +3968,8 @@ function getStatusPO() {
 }
 
 function dashboardClearPOArea_(sheet, startRow, endRow) {
+  // HARD GUARD: Status PO tidak boleh membersihkan area tabel kritis (baris 28–45).
+  if (Number(startRow) < 46) throw new Error("DASHBOARD_PO_WRITE_BLOCKED: area Status PO wajib mulai baris 46.");
   const rows = Math.max(0, endRow - startRow + 1);
   if (!rows) return;
   const cols = 13;
@@ -3973,6 +3978,8 @@ function dashboardClearPOArea_(sheet, startRow, endRow) {
 }
 
 function renderPOStatusBlock_(sheet, topRow, title, subtitle, data, items, startCol) {
+  // HARD GUARD: blokir penulis tabel PO lama yang mencoba menulis di baris 28–45.
+  if (Number(topRow) < 46) throw new Error("DASHBOARD_PO_WRITE_BLOCKED: renderPOStatusBlock_ hanya boleh mulai baris 46 atau lebih.");
   const cols = 6;
   const col = Number(startCol || 1);
   sheet.getRange(topRow, col, 1, cols).merge().setValue(title).setFontWeight('bold').setFontSize(12).setFontColor('#FFFFFF').setBackground(UI_PRIMARY).setHorizontalAlignment('left');
@@ -4273,9 +4280,12 @@ function dashboardSyncPatchRefresh_(options) {
       sh.getRange(x[0]).setValue(cards[i][0] + "\n\n" + cards[i][1] + " " + cards[i][2]);
     });
 
-    const divRows = (data.statusPerDivisi || []).map(function(d) {
+    const allDivRows = (data.statusPerDivisi || []).map(function(d) {
       return [d.divisi, Number(d.total)||0, Number(d.aman)||0, Number(d.waspada)||0, Number(d.kritis)||0, percent_(d.kritis||0,d.total||0)/100];
     });
+    // Area A13:F27 hanya menyediakan 15 baris; jangan pernah menulis ke baris 28–45.
+    const divRows = allDivRows.slice(0, 15);
+    if (allDivRows.length > 15) console.error("Dashboard: divisi melebihi 15; baris tambahan ditahan agar tabel kritis tidak tertimpa.");
     sh.getRange(12,1,16,6).clearContent();
     sh.getRange(12,1,1,6).setValues([["DIVISI","TOTAL ITEM","AMAN","WASPADA","KRITIS","% KRITIS"]]).setFontWeight("bold");
     if (divRows.length) sh.getRange(13,1,divRows.length,6).setValues(divRows);
