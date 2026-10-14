@@ -292,7 +292,7 @@ export default function SettingsPage({ onNavigate }) {
           <p className="font-semibold text-slate-700">GudangAI RUDY</p>
           <p>Cold Storage Nasi Goreng 69 · CV & PT</p>
           <p>Frontend PWA · Backend Google Apps Script V6.6.5+BULK-STABLE</p>
-          <p>3 mode tampilan: Soft Light · Deep Ocean · Warm Productive</p>
+          <p>3 mode tampilan: Soft Light · Deep Ocean · Blue Pro</p>
         </div>
       )}
 
