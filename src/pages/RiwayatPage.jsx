@@ -35,6 +35,7 @@ export default function RiwayatPage({ onNavigate }) {
   const [filterType, setFilterType] = useState('all');
   const [filterEntity, setFilterEntity] = useState('all');
   const [dense, setDense] = useState(true);
+  const [expandedId, setExpandedId] = useState(null);
   const history = getLocalHistory();
 
   const filtered = useMemo(() => {
@@ -176,20 +177,36 @@ export default function RiwayatPage({ onNavigate }) {
                 {g.items.map((h, idx) => {
                   const m = typeMeta(h.type);
                   const d = entryDate(h);
+                  const rowKey = String(h.id || `${g.label}-${idx}-${h.type}-${h.entity}`);
+                  const expanded = expandedId === rowKey;
                   return (
-                    <div key={h.id || idx} className={`rounded-xl border border-slate-200 bg-white px-3 py-2.5 flex items-center gap-2.5 shadow-sm`}>
-                      <div className={`w-8 h-8 rounded-lg ${m.bg} flex items-center justify-center shrink-0`}>
-                        <TypeIcon type={h.type} className="w-4 h-4" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[13px] font-bold text-slate-900 truncate">
-                          {h.items?.[0]?.nama || h.type} {h.items?.length > 1 ? `+${h.items.length - 1}` : ''}
-                        </p>
-                        <p className="text-[10px] text-slate-500 tabular-nums">
-                          {h.entity} · {qtyOf(h)} unit · {d.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
-                        </p>
-                      </div>
-                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${m.chip}`}>{m.label}</span>
+                    <div key={rowKey} className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+                      <button type="button" onClick={() => setExpandedId(expanded ? null : rowKey)}
+                        aria-expanded={expanded}
+                        className="w-full px-3 py-2.5 flex items-center gap-2.5 text-left">
+                        <div className={`w-8 h-8 rounded-lg ${m.bg} flex items-center justify-center shrink-0`}>
+                          <TypeIcon type={h.type} className="w-4 h-4" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[13px] font-bold text-slate-900 truncate">
+                            {h.items?.[0]?.nama || h.type} {h.items?.length > 1 ? `+${h.items.length - 1}` : ''}
+                          </p>
+                          <p className="text-[10px] text-slate-500 tabular-nums">
+                            {h.entity} · {qtyOf(h)} unit · {d.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+                          </p>
+                        </div>
+                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${m.chip}`}>{m.label}</span>
+                      </button>
+                      {expanded && (
+                        <div className="px-3 pb-3 pt-1 border-t border-slate-100 space-y-1">
+                          {(h.items || []).map((it, j) => (
+                            <p key={j} className="text-[11px] text-slate-600 break-words">
+                              <span className="font-mono text-slate-400">{it.kode || '—'}</span> {it.nama || 'Barang'} × <span className="font-bold tabular-nums">{it.qty}</span>
+                              {it.keterangan ? <span className="block pl-1 text-[10px] text-slate-400">{it.keterangan}</span> : null}
+                            </p>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -206,28 +223,32 @@ export default function RiwayatPage({ onNavigate }) {
                 {g.items.map((h, idx) => {
                   const m = typeMeta(h.type);
                   const d = entryDate(h);
+                  const rowKey = String(h.id || `${g.label}-${idx}-${h.type}-${h.entity}`);
+                  const expanded = expandedId === rowKey;
                   return (
-                    <div key={h.id || idx} className="rounded-2xl border border-slate-200 bg-white p-3.5 shadow-sm">
-                      <div className="flex items-center gap-2 mb-2">
-                        <div className={`w-9 h-9 rounded-xl ${m.bg} flex items-center justify-center`}>
+                    <div key={rowKey} className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+                      <button type="button" onClick={() => setExpandedId(expanded ? null : rowKey)}
+                        aria-expanded={expanded}
+                        className="w-full p-3.5 flex items-center gap-2 text-left">
+                        <div className={`w-9 h-9 rounded-xl ${m.bg} flex items-center justify-center shrink-0`}>
                           <TypeIcon type={h.type} />
                         </div>
-                        <div className="flex-1">
-                          <p className="text-sm font-bold text-slate-900">{m.label} · {h.entity}</p>
-                          <p className="text-[10px] text-slate-400">{d.toLocaleString('id-ID')}</p>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-bold text-slate-900 truncate">{m.label} · {h.entity}</p>
+                          <p className="text-[10px] text-slate-400">{d.toLocaleString('id-ID')} · ketuk untuk rincian</p>
                         </div>
                         <span className="text-sm font-extrabold text-slate-900 tabular-nums">{qtyOf(h)}</span>
-                      </div>
-                      <div className="space-y-1">
-                        {(h.items || []).slice(0, 5).map((it, j) => (
-                          <p key={j} className="text-[11px] text-slate-600 truncate">
-                            <span className="font-mono text-slate-400">{it.kode}</span> {it.nama} × {it.qty}
-                          </p>
-                        ))}
-                        {(h.items || []).length > 5 && (
-                          <p className="text-[10px] text-slate-400">+{(h.items || []).length - 5} item lainnya</p>
-                        )}
-                      </div>
+                      </button>
+                      {expanded && (
+                        <div className="px-3.5 pb-3.5 pt-1 border-t border-slate-100 space-y-1">
+                          {(h.items || []).map((it, j) => (
+                            <p key={j} className="text-[11px] text-slate-600 break-words">
+                              <span className="font-mono text-slate-400">{it.kode || '—'}</span> {it.nama || 'Barang'} × <span className="font-bold tabular-nums">{it.qty}</span>
+                              {it.keterangan ? <span className="block pl-1 text-[10px] text-slate-400">{it.keterangan}</span> : null}
+                            </p>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   );
                 })}

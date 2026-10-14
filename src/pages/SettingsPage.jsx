@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   User, Link2, KeyRound, Settings as SettingsIcon, LogOut, Shield,
-  CheckCircle2, XCircle, ChevronRight, Cloud, Palette, Sun, Moon, Flame,
+  CheckCircle2, XCircle, ChevronRight, Cloud, Palette, Sun, Moon, Droplet,
 } from 'lucide-react';
 import { useAuth, DEFAULT_PROFILE_PHOTO } from '../hooks/useAuth';
 import { useBootstrapRevision } from '../hooks/useBootstrapRevision';
@@ -14,7 +14,7 @@ import {
 const THEME_ICONS = {
   soft_light: Sun,
   deep_ocean: Moon,
-  warm_productive: Flame,
+  warm_productive: Droplet,
 };
 
 const AVATAR_SRC = DEFAULT_PROFILE_PHOTO;
@@ -199,13 +199,13 @@ export default function SettingsPage({ onNavigate }) {
                 onClick={() => setTheme(t.id)}
                 className={`flex flex-col items-center gap-1.5 rounded-xl px-2 py-3 border transition-all active:scale-[0.97] ${
                   active
-                    ? 'border-cyan-500 bg-cyan-50 shadow-sm ring-2 ring-cyan-400/40'
+                    ? 'border-blue-600 bg-blue-50 shadow-sm ring-2 ring-blue-500/30'
                     : 'border-slate-200 bg-slate-50/80 hover:border-slate-300'
                 }`}
                 aria-pressed={active}
               >
-                <Icon className={`w-5 h-5 ${active ? 'text-cyan-700' : 'text-slate-500'}`} />
-                <span className={`text-[10px] font-bold leading-tight text-center ${active ? 'text-cyan-800' : 'text-slate-600'}`}>
+                <Icon className={`w-5 h-5 ${active ? 'text-blue-700' : 'text-slate-500'}`} />
+                <span className={`text-[10px] font-bold leading-tight text-center ${active ? 'text-blue-800' : 'text-slate-600'}`}>
                   {t.short}
                 </span>
               </button>
@@ -213,7 +213,7 @@ export default function SettingsPage({ onNavigate }) {
           })}
         </div>
         <p className="text-[10px] text-slate-400 leading-relaxed">
-          Soft Light · Deep Ocean · Warm Productive — tersimpan di perangkat.
+          Soft Light · Deep Ocean · Blue Pro — tersimpan di perangkat.
         </p>
       </div>
 
