@@ -394,29 +394,51 @@ export function validatePdfItems(entity, textOrItems, masterOverride) {
         note = 'kode bahan baku tidak sesuai entitas atau tidak ada di master';
       }
     } else {
-      const deterministic = resolvePdfNameDeterministic(selectedEntity, rawNameOriginal, master);
-      if (deterministic) {
-        match = deterministic.item || deterministic;
-        note = deterministic.matchType || 'deterministic';
-      }
+      // Prevent a short raw-material name (e.g. "Ayam Negeri" or "Bebek")
+      // from being substring/fuzzy-matched to a different finished-goods SKU.
+      const cleanNameForRawCheck = normalizeMatchText(rawNameOriginal)
+        .replace(/\b(?:bahan\s+baku|raw\s+material)\b/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+      const exactRawName = sourceMaster.find((item) => {
+        const kode = String(item?.kode || item?.kodeBarang || '').trim().toUpperCase();
+        const divisi = String(item?.divisi || item?.division || '').trim().toUpperCase().replace(/\s+/g, ' ');
+        const isRawMaterial = /^(?:BBCV|BBPT)-/.test(kode) || divisi === 'BAHAN BAKU';
+        const masterName = normalizeMatchText(item?.nama || item?.namaBarang || '')
+          .replace(/\b(?:bahan\s+baku|raw\s+material)\b/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim();
+        return isRawMaterial && masterName && masterName === cleanNameForRawCheck;
+      });
 
-      if (!match) {
-        const aliasResult = matchByAlias(selectedEntity, sanitizePdfProductName(rawNameOriginal));
-        if (aliasResult) {
-          const aliasItem = aliasResult.item || aliasResult;
-          const aliasKode = String(aliasItem?.kode || aliasItem?.kodeBarang || '').trim().toUpperCase();
-          if (aliasKode && allowedCodes.has(aliasKode)) {
-            match = aliasResult;
-            note = aliasResult.matchType || 'alias';
+      if (exactRawName) {
+        status = 'unmatched';
+        note = 'nama bahan baku hanya valid melalui kode BBCV/BBPT eksplisit';
+      } else {
+        const deterministic = resolvePdfNameDeterministic(selectedEntity, rawNameOriginal, master);
+        if (deterministic) {
+          match = deterministic.item || deterministic;
+          note = deterministic.matchType || 'deterministic';
+        }
+
+        if (!match) {
+          const aliasResult = matchByAlias(selectedEntity, sanitizePdfProductName(rawNameOriginal));
+          if (aliasResult) {
+            const aliasItem = aliasResult.item || aliasResult;
+            const aliasKode = String(aliasItem?.kode || aliasItem?.kodeBarang || '').trim().toUpperCase();
+            if (aliasKode && allowedCodes.has(aliasKode)) {
+              match = aliasResult;
+              note = aliasResult.matchType || 'alias';
+            }
           }
         }
-      }
 
-      if (!match) {
-        const fuzzy = findFuzzyMasterMatch(selectedEntity, rawNameOriginal, master);
-        if (fuzzy) {
-          match = fuzzy;
-          note = fuzzy.matchType;
+        if (!match) {
+          const fuzzy = findFuzzyMasterMatch(selectedEntity, rawNameOriginal, master);
+          if (fuzzy) {
+            match = fuzzy;
+            note = fuzzy.matchType;
+          }
         }
       }
     }
