@@ -764,3 +764,47 @@ button{min-height:40px}
 .dashboard-header-card{box-shadow:0 10px 22px rgba(16,55,64,.075),0 2px 5px rgba(16,55,64,.035),inset 0 1px 0 rgba(255,255,255,.98)}
 @media(max-width:360px){.po-shortcut{min-height:136px;padding:.68rem}.po-shortcut-title{font-size:.7rem}.po-shortcut-subtitle{font-size:.6rem}}
 @media(prefers-reduced-motion:reduce){.po-shortcut,.division-status-card{transition:none}.po-shortcut:hover,.division-status-card:hover{transform:none}}
+
+
+/* Audit UI 2026-10: consistent compact cards, aligned metrics, theme-aware surfaces */
+html[data-theme] {
+  --card-gap: 0.75rem;
+  --card-pad: 0.875rem;
+}
+html[data-theme] .page-content {
+  padding-bottom: calc(6.25rem + env(safe-area-inset-bottom, 0px));
+}
+html[data-theme] .page-content .card,
+html[data-theme] .page-content .surface,
+html[data-theme] .page-content .section-card,
+html[data-theme] .page-content .stat-tile,
+html[data-theme] .page-content .stock-card,
+html[data-theme] .page-content .dashboard-panel,
+html[data-theme] .page-content .po-hub-card,
+html[data-theme] .page-content .po-item-card {
+  box-sizing: border-box;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+html[data-theme] .page-content :is(.metric-value, .hub-value, [data-metric]) {
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+}
+html[data-theme] .page-content :is(.card, .surface, .section-card, .stat-tile, .stock-card) {
+  transition: background-color .22s ease, border-color .22s ease, box-shadow .22s ease, transform .18s var(--ease-out);
+}
+html[data-theme="warm_productive"] .page-content :is(.page-header, .section-card-header, .menu-group, .page-content .card) {
+  color: var(--text-main);
+}
+@media (max-width: 420px) {
+  html[data-theme] .page-content { padding-left: .75rem; padding-right: .75rem; }
+  html[data-theme] .page-content :is(.card, .surface, .section-card, .stat-tile, .stock-card) {
+    border-radius: 1rem !important;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  html[data-theme] .page-content :is(.card, .surface, .section-card, .stat-tile, .stock-card, button, a) {
+    transition: none !important;
+    animation: none !important;
+  }
+}
