@@ -4122,16 +4122,15 @@ function renderPODonutChart_(sheet, chartStartRow, title, summary, chartTitle) {
   sheet.insertChart(chart);
 }
 
+
 function getCurrentWeekPOStatus_() {
-  // Snapshot a dated previous-week PO before presenting the current-week block.
-  rolloverPOWeekIfNeeded_();
+  // Read-only facade: callers on GET routes must not mutate script properties or sheets.
   const live = getStatusPO();
   if (!live || live.success !== true) return live;
   const currentWeekKey = getWeekKey_(new Date());
   if (String(live.weekKey || "") === currentWeekKey) return live;
 
-  // Keep last week's PO in the archive rather than mislabelling it as current.
-  // This wrapper is read-only against the "purchase order" sheet.
+  // Old-dated items belong to the previous-week archive, not the current-week table.
   const emptySummary = {
     totalAktif: 0, totalKonfirmasi: 0, itemMenunggu: 0, itemSebagian: 0,
     itemSelesai: 0, totalItem: 0, totalPOQty: 0,
@@ -4157,6 +4156,9 @@ function refreshDashboardPOSection_(options) {
 
   // Layout terkunci: dua tabel sejajar, keduanya mulai baris 46.
   // Fungsi ini tidak mendelegasikan penulisan PO ke penulis dashboard lama.
+  // Refresh is a write-capable Dashboard operation: archive old-week PO here,
+  // then render the read-only current-week facade at rows 46–99.
+  rolloverPOWeekIfNeeded_();
   const data = getCurrentWeekPOStatus_();
   if (!data || !data.success) return data || { success: false, code: 'PO_STATUS_EMPTY', error: 'Data Status PO tidak tersedia' };
   const previous = getPreviousPOStatus_() || {};
