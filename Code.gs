@@ -4563,6 +4563,7 @@ function dashboardSyncPatchRefresh_(options) {
 }
 
 function dashboardSyncPatchVerify() {
+  // Read-only live audit. Do not call install/setup/refresh from this function.
   const ss = getSS();
   const sh = ss.getSheetByName("Dashboard");
   const all = getAllStock("ALL");
@@ -4577,8 +4578,22 @@ function dashboardSyncPatchVerify() {
     "testDashboardV7", "dashboardV7", "ujiDashboardV7",
     "testDashboard", "refreshDashboardLegacy"
   ];
+  const conflictingTriggersStillPresent = triggers.filter(function(x) { return conflictingNames.indexOf(x) >= 0; });
+  // If an old code file remains in the Apps Script project, a duplicate declaration
+  // may still override this candidate even when the trigger was removed.
+  const legacyFunctionsPresent = {
+    refreshDashboardDataOnly_: typeof refreshDashboardDataOnly_ === "function",
+    refreshDashboardAfterWrite_: typeof refreshDashboardAfterWrite_ === "function",
+    refreshDashboardPODataOnly_: typeof refreshDashboardPODataOnly_ === "function",
+    refreshDashboardOperationalV68_: typeof refreshDashboardOperationalV68_ === "function",
+    setupDashboardLayoutClean: typeof setupDashboardLayoutClean === "function",
+    testDashboardV7: typeof testDashboardV7 === "function",
+    ujiDashboardV7: typeof ujiDashboardV7 === "function",
+    refreshDashboardV7: typeof refreshDashboardV7 === "function"
+  };
   const dashboardProbe = sh ? {
-    criticalRows28to30: sh.getRange(28, 1, 3, 6).getDisplayValues(),
+    criticalRows28to45Left: sh.getRange(28, 1, 18, 6).getDisplayValues(),
+    criticalRows28to45Right: sh.getRange(28, 8, 18, 6).getDisplayValues(),
     currentPOHeaderRow49: sh.getRange(49, 1, 1, 6).getDisplayValues()[0],
     currentPOFirstRows50to52: sh.getRange(50, 1, 3, 6).getDisplayValues(),
     previousPOHeaderRow49: sh.getRange(49, 8, 1, 6).getDisplayValues()[0],
@@ -4594,8 +4609,29 @@ function dashboardSyncPatchVerify() {
     totalPOQty: po.summary && po.summary.totalPOQty || 0,
     totalKonfirmasiQty: po.summary && po.summary.totalKonfirmasiQty || 0
   } : { error: po && po.error || "Status PO tidak tersedia" };
+  const expectedHeader = ["NO", "NAMA BARANG", "TOTAL QTY", "DATANG", "BELUM DATANG", "STATUS PO"];
+  const headerCurrentOk = !!(dashboardProbe && dashboardProbe.currentPOHeaderRow49 &&
+    dashboardProbe.currentPOHeaderRow49.every(function(v, i) {
+      return String(v || "").trim().toUpperCase() === expectedHeader[i];
+    }));
+  const headerPreviousOk = !!(dashboardProbe && dashboardProbe.previousPOHeaderRow49 &&
+    dashboardProbe.previousPOHeaderRow49.every(function(v, i) {
+      return String(v || "").trim().toUpperCase() === expectedHeader[i];
+    }));
+  const noLegacyFunctions = Object.keys(legacyFunctionsPresent).every(function(k) { return legacyFunctionsPresent[k] === false; });
+  const safeToRelease = !!(
+    isDashboardSyncPatchEnabled_() &&
+    sh &&
+    all && all.success && Number(all.count) === 191 &&
+    po && po.success &&
+    headerCurrentOk && headerPreviousOk &&
+    conflictingTriggersStillPresent.length === 0 &&
+    noLegacyFunctions
+  );
   return {
     success: true,
+    readOnly: true,
+    safeToRelease: safeToRelease,
     patch: DASHBOARD_SYNC_PATCH_VERSION,
     enabled: isDashboardSyncPatchEnabled_(),
     dashboardExists: !!sh,
@@ -4604,10 +4640,13 @@ function dashboardSyncPatchVerify() {
     poApi: !!(po && po.success),
     poSummary: poSummary,
     previousWeek: { weekKey: previous.weekKey || null, itemCount: (previous.items || []).length, hasArchive: !!previous.weekKey },
-    conflictingTriggersStillPresent: triggers.filter(function(x) { return conflictingNames.indexOf(x) >= 0; }),
+    conflictingTriggersStillPresent: conflictingTriggersStillPresent,
+    legacyFunctionsPresent: legacyFunctionsPresent,
+    dashboardHeaders: { currentOk: headerCurrentOk, previousOk: headerPreviousOk },
     patchTriggers: triggers.filter(function(x) { return x === "dashboardSyncPatchTick_"; }),
     dashboardProbe: dashboardProbe,
     lastSync: PropertiesService.getScriptProperties().getProperty(DASHBOARD_SYNC_PATCH_LAST),
     checkedAt: new Date().toISOString()
   };
 }
+
