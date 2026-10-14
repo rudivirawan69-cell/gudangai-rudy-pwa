@@ -891,10 +891,18 @@ function PdfReviewRow({ row, entity, stockCatalog = [], onPick, onIgnore }) {
     if (!term) return [];
     const live = searchLiveStock(stockCatalog, term);
     const stat = searchMaster(entity, term);
+    const rawCodeInput = term.match(/^(BBCV|BBPT)[\s-]?(\d{3,4})$/i);
+    const requestedRawCode = rawCodeInput
+      ? rawCodeInput[1].toUpperCase() + '-' + rawCodeInput[2].padStart(4, '0')
+      : '';
+    const expectedRawPrefix = entity === 'CV' ? 'BBCV' : 'BBPT';
     const seen = new Set();
     return [...live, ...stat].filter((h) => {
-      const k = String(h?.kode || h?.kodeBarang || '').trim();
+      const k = String(h?.kode || h?.kodeBarang || '').trim().toUpperCase();
       if (!k || seen.has(k)) return false;
+      const divisi = String(h?.divisi || h?.division || '').trim().toUpperCase().replace(/\s+/g, ' ');
+      const rawMaterial = /^(?:BBCV|BBPT)-/.test(k) || divisi === 'BAHAN BAKU';
+      if (rawMaterial && (!rawCodeInput || rawCodeInput[1].toUpperCase() !== expectedRawPrefix || k !== requestedRawCode)) return false;
       seen.add(k);
       return true;
     }).slice(0, 5);
