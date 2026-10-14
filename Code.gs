@@ -930,8 +930,9 @@ function addTransaction(body) {
         if (kekurangan > 0) {
           shortageMode = true;
           finalQty = 0;
-          const structured = "Input pending " + numericQty + " > sisa stock " + sisa + " > kurang " + kekurangan;
-          keterangan = keterangan ? (keterangan + " | " + structured) : structured;
+          const structured = "HOLD; orderQty: " + numericQty + "; availableQty: " + sisa + "; shortageQty: " + kekurangan + "; followUp: verifikasi pembelian manual";
+          // HOLD replaces stale user/queue Keterangan with verified shortage facts.
+          keterangan = structured;
           flags.push("STOCK_KURANG", "STOCK_KURANG_HOLD", "QTY_HOLD_0");
           try {
             MailApp.sendEmail(ADMIN_EMAIL, "[GudangAI][STOCK KURANG] " + kode + " " + (stockInfo.nama || ""),
@@ -1163,7 +1164,8 @@ function bulkTransaction(body) {
           shortageMode = true;
           finalQty = 0;
           var structured = "HOLD; orderQty: " + numericQty + "; availableQty: " + sisa + "; shortageQty: " + kekurangan + "; followUp: verifikasi pembelian manual";
-          keterangan = keterangan ? (keterangan + " | " + structured) : structured;
+          // HOLD replaces stale user/queue Keterangan with verified shortage facts.
+          keterangan = structured;
         }
         if (st) st.stockAkhir = Math.max(0, sisa - (shortageMode ? 0 : finalQty));
       }
