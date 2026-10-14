@@ -1,5 +1,5 @@
-Cloudflare production trigger — 2026-10-14
+Cloudflare production trigger — 2026-10-14 18:35 WIB
 Production URL: https://gudangai-rudy-pwa69.rudivirawan69.workers.dev/
 Worker: gudangai-rudy-pwa69
-Trigger reason: Dashboard safe-write guards + HOLD note fix + PDF validation safeguards and item mappings.
-Force rebuild so production Worker serves the latest main commit after merge.
+Branch: audit/ui-sync-isolated-20261014
+Change: Service Worker network-first for /assets/; theme labels Soft Light / Deep Ocean / Blue Pro in Atur only.
