@@ -419,7 +419,7 @@ function doPost(e) {
       case "ping": return jsonResponse(getHealthStatus_(body));
       case "healthCheck": return jsonResponse(getHealthStatus_(body));
       case "getStockDelta": return jsonResponse(getStockDelta(body));
-      case "getStatusPO": return jsonResponse(getStatusPO());
+      case "getStatusPO": return jsonResponse(getCurrentWeekPOStatus_());
       case "recordPOArrival": return jsonResponse(recordPOArrival(body));
       case "getPORequestStatus": return jsonResponse(getPORequestStatus(body));
       case "refreshDashboardPO": return jsonResponse(refreshDashboardPOSection_());
@@ -473,7 +473,7 @@ function doGet(e) {
     case "maintenanceCleanup": return jsonResponse(maintenanceCleanup(false));
     case "bootstrap": return jsonResponse(getPwaBootstrap({ entitas: e.parameter.entitas || "ALL" }));
     case "getStockDelta": return jsonResponse(getStockDelta({ sinceTimestamp: e.parameter.sinceTimestamp, entitas: e.parameter.entitas || "ALL" }));
-    case "getStatusPO": return jsonResponse(getStatusPO());
+    case "getStatusPO": return jsonResponse(getCurrentWeekPOStatus_());
     case "getPORequestStatus": return jsonResponse(getPORequestStatus({ requestId: e.parameter.requestId, transactionId: e.parameter.transactionId }));
     case "getSyncMetrics": return jsonResponse(getSyncMetrics());
     default: return jsonResponse({ success: false, status: "REJECTED", code: "UNKNOWN_ACTION", error: "Action tidak dikenali: " + action });
