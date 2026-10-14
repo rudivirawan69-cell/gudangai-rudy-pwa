@@ -79,6 +79,20 @@ assert.match(currentWeekPO, /items: \[\]/);
 assert.match(functionBody('refreshDashboardPOSection_'),
   /rolloverPOWeekIfNeeded_\(\);[\s\S]*?const data = getCurrentWeekPOStatus_\(\);/);
 
+// Contract 11: explicitly disable archived V6.6.5 writer/test handlers that can
+// clear protected rows 28–45 or write PO tables to the obsolete row-42/48 layout.
+const triggerGuard = functionBody('dashboardSyncPatchDisableConflictingTriggers_');
+for (const legacyHandler of [
+  'refreshDashboardPODataOnly_', 'refreshDashboardOperationalV68_',
+  'refreshDashboardDataOnly_', 'refreshDashboardAfterWrite_', 'setupDashboardLayoutClean',
+  'testDashboardV7', 'ujiDashboardV7'
+]) {
+  assert.ok(triggerGuard.includes('"' + legacyHandler + '"'), 'Missing legacy handler guard: ' + legacyHandler);
+}
+const triggerVerification = functionBody('dashboardSyncPatchVerify');
+assert.match(triggerVerification, /refreshDashboardPODataOnly_/);
+assert.match(triggerVerification, /setupDashboardLayoutClean/);
+
 // Contract 8: status reader must parse formatted qty values and keep named PO rows
 // visible for diagnosis if TOTAL is blank instead of silently hiding the item.
 const statusPO = functionBody('getStatusPO');
