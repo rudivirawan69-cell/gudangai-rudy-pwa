@@ -2790,7 +2790,7 @@ function refreshDashboardLive_() {
     const divRows = (data.statusPerDivisi || []).map(function(d) {
       return [d.divisi, d.total, d.aman, d.waspada, d.kritis, percent_(d.kritis, d.total) / 100];
     });
-    sh.getRange(13, 1, 80, 6).clearContent();
+    sh.getRange(13, 1, 15, 6).clearContent();
     sh.getRange(12, 1, 1, 6).setValues([["DIVISI", "TOTAL ITEM", "AMAN", "WASPADA", "KRITIS", "% KRITIS"]]);
     if (divRows.length) {
       sh.getRange(13, 1, divRows.length, 6).setValues(divRows);
@@ -2859,8 +2859,8 @@ function refreshDashboard(force) {
     if (sh.getMaxColumns() < 14) sh.insertColumnsAfter(sh.getMaxColumns(), 14 - sh.getMaxColumns());
     // Force rebuild hanya atas permintaan admin. Ini bukan jalur transaksi/onEdit.
     try { clearDashboardCharts_(sh); } catch (e) {}
-    sh.getRange(1, 1, Math.min(sh.getMaxRows(), 30), 14).breakApart();
-    sh.getRange(1, 1, Math.min(sh.getMaxRows(), 30), 14).clearContent();
+    sh.getRange(1, 1, Math.min(sh.getMaxRows(), 27), 14).breakApart();
+    sh.getRange(1, 1, Math.min(sh.getMaxRows(), 27), 14).clearContent();
     sh.setFrozenRows(3);
     sh.getRange("A1:N1").merge().setValue("DASHBOARD GUDANG NASGOR 69").setFontSize(20).setFontWeight("bold");
     sh.getRange("A2:N2").merge().setValue("Pantauan Stok & Aktivitas — Real Time | Update: " + (data.lastUpdate || data.generatedAt));
@@ -4277,7 +4277,7 @@ function dashboardSyncPatchRefresh_(options) {
     const divRows = (data.statusPerDivisi || []).map(function(d) {
       return [d.divisi, Number(d.total)||0, Number(d.aman)||0, Number(d.waspada)||0, Number(d.kritis)||0, percent_(d.kritis||0,d.total||0)/100];
     });
-    sh.getRange(12,1,80,6).clearContent();
+    sh.getRange(12,1,16,6).clearContent();
     sh.getRange(12,1,1,6).setValues([["DIVISI","TOTAL ITEM","AMAN","WASPADA","KRITIS","% KRITIS"]]).setFontWeight("bold");
     if (divRows.length) sh.getRange(13,1,divRows.length,6).setValues(divRows);
     sh.getRange(13,2,80,4).setNumberFormat("#,##0").setHorizontalAlignment("center");
