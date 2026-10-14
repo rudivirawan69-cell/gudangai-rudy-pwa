@@ -1,0 +1,55 @@
+name: Deploy GudangAI UI Audit to Cloudflare
+
+on:
+  push:
+    branches:
+      - audit/ui-sync-isolated-20261014
+    paths:
+      - "src/**"
+      - "public/**"
+      - "scripts/**"
+      - "index.html"
+      - "vite.config.js"
+      - "package.json"
+      - "package-lock.json"
+      - "wrangler.audit.jsonc"
+      - ".github/workflows/cloudflare-audit.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cloudflare-audit-ui
+  cancel-in-progress: true
+
+jobs:
+  deploy-audit-preview:
+    name: Build and deploy isolated UI preview
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout audit branch
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build isolated preview (writes disabled)
+        run: npm run build
+        env:
+          CLOUDFLARE_WORKERS: "true"
+          VITE_AUDIT_PREVIEW: "true"
+
+      - name: Deploy to dedicated Cloudflare audit Worker
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy --config wrangler.audit.jsonc
