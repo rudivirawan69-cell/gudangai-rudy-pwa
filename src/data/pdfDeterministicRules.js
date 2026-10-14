@@ -28,6 +28,31 @@ export function resolvePdfNameDeterministic(entity, rawName, masterList) {
   }
 
   // --- Specific rules (CV vs PT codes differ) ---
+  // Deterministic mappings for items reported missing in PDF import.
+  if (/tulang.*ceker/.test(norm)) {
+    const hit = pick(ent === 'PT' ? 'PT-0010' : 'CV-0038', 'det-tulang-ceker');
+    if (hit) return hit;
+  }
+  if (/saos?\s+bakaran/.test(norm)) {
+    const hit = pick(ent === 'PT' ? 'WK-0008' : 'CV-0076', 'det-saos-bakaran');
+    if (hit) return hit;
+  }
+  if (/ayam\s+agm(?:\s*\(?\s*promo\s*\)?)?/.test(norm)) {
+    const hit = pick(ent === 'PT' ? 'WK-0031' : 'CV-0061', 'det-ayam-agm');
+    if (hit) return hit;
+  }
+  if (/saos?\s+agm(?:\s+promo)?/.test(norm)) {
+    const hit = pick(ent === 'PT' ? 'WK-0028' : 'CV-0058', 'det-saos-agm');
+    if (hit) return hit;
+  }
+  if (/saos?\s+rica(?:[-\s]*rica)?(?:\s+promo)?/.test(norm)) {
+    const hit = pick(ent === 'PT' ? 'WK-0029' : 'CV-0059', 'det-saos-rica');
+    if (hit) return hit;
+  }
+  if (ent === 'PT' && /(?:paket\s+siomay|siomay\s+paket|^siomay$)/.test(norm)) {
+    const hit = pick('MM-0015', 'det-paket-siomay');
+    if (hit) return hit;
+  }
   // Bakso ikan CIDEA / GOOD EAT (with brand)
   if (/bakso\s*ikan/.test(norm) && /(cidea|good\s*eat)/.test(norm)) {
     const hit = pick(ent === 'PT' ? 'PT-0007' : 'CV-0004', 'det-bakso-cidea');
