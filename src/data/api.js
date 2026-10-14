@@ -402,9 +402,9 @@ async function submitItems(action, entity, items, tanggal, options = {}) {
   if (!list.length) return { success: false, error: 'Tidak ada item' };
   if (!navigator.onLine || !getApiUrl()) {
     if (!options.fromQueue) enqueue(action, entity, list, { tanggal });
-    const msg = list.length + ' item masuk Antrian Sinkronisasi (offline)';
-    pushNotification({ type: 'warning', title: 'Koneksi terputus', body: msg + '. Tidak ada item yang dibuang.' });
-    return { success: false, queued: true, count: 0, queuedCount: list.length, failed: list.length, results: list.map(it => ({ success: false, queued: true, clientItemId: it.clientItemId })) };
+    // InputPage owns one aggregate notification for this submit attempt.
+    return { success: false, queued: true, count: 0, queuedCount: list.length, failed: list.length, total: list.length,
+      results: list.map(it => ({ success: false, queued: true, clientItemId: it.clientItemId, error: 'offline' })) };
   }
   // Never silently queue a write while the API is reachable.
   // Verify the exact write-capable backend before attempting any transaction.
@@ -413,7 +413,7 @@ async function submitItems(action, entity, items, tanggal, options = {}) {
   } catch (err) {
     if (!options.fromQueue) enqueue(action, entity, list, { tanggal });
     const msg = err?.message || 'Backend write belum terverifikasi';
-    pushNotification({ type: 'error', title: 'Write ditahan', body: msg });
+    // Return the outcome; InputPage will show only one consolidated notification.
     return {
       success: false, count: 0, failed: list.length, queuedCount: list.length, total: list.length,
       results: list.map(it => ({ success: false, queued: true, clientItemId: it.clientItemId, error: msg }))
