@@ -7,9 +7,8 @@ import { useConnection } from './hooks/useConnection';
 import { useBootstrap } from './hooks/useBootstrap';
 import {
   LayoutDashboard, Package, PackagePlus, Clock, Settings, ClipboardList,
-  WifiOff, AlertTriangle, Loader2, Palette,
+  WifiOff, AlertTriangle, Loader2,
 } from 'lucide-react';
-import { useTheme } from './hooks/useTheme';
 
 const DashboardPage = lazy(() => import('./pages/DashboardPage'));
 const StokPage = lazy(() => import('./pages/StokPage'));
@@ -89,7 +88,6 @@ function ConnBanner({ online, hasUrl, status, message, syncing }) {
 
 function AppShell() {
   const [installPrompt, setInstallPrompt] = useState(null);
-  const { cycleTheme, meta } = useTheme();
 
   useEffect(() => {
     const onBeforeInstall = (event) => {
@@ -159,15 +157,6 @@ function AppShell() {
     <div className="app-shell min-h-screen text-slate-100">
       <div className="app-bg" aria-hidden="true" />
       <ConnBanner online={online} hasUrl={hasUrl} status={status} message={message} syncing={syncing} />
-      <button
-        type="button"
-        onClick={cycleTheme}
-        title={`Mode: ${meta?.label || 'Soft Light'} — ketuk untuk ganti`}
-        className="fixed top-3 left-3 z-[60] rounded-full bg-white/90 text-slate-700 px-3 py-2 text-[11px] font-extrabold shadow-lg border border-slate-200/80 flex items-center gap-1.5 backdrop-blur-sm"
-      >
-        <Palette className="w-3.5 h-3.5 text-violet-600" />
-        <span className="max-w-[5.5rem] truncate">{meta?.short || 'Light'}</span>
-      </button>
       {installPrompt && (
         <button type="button" onClick={installApp} className="fixed top-3 right-3 z-[60] rounded-full bg-[#0f9f9a] px-4 py-2 text-xs font-extrabold text-white shadow-lg border border-white/30">
           Pasang Aplikasi
