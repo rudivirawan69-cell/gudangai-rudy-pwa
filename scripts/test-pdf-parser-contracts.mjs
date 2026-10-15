@@ -17,18 +17,20 @@ const rows = parse([
   '1 Ayam Fillet Paha (1 kg) 18 pcs',
   '2 Daging Slice Lowfat 2 3 12',
   '3 Ayam Fillet 5 + Daging Slice 7',
+  '4 Sosis Ayam 6 pcs Supplier CV 69 2025',
   'Total 32',
   'Halaman 1 dari 1',
   'Tanggal 14/10/2026',
 ].join('\n'));
 
-assert.equal(rows.length, 4, 'Headers, totals, dates and page footers must not become items');
+assert.equal(rows.length, 5, 'Headers, totals, dates and page footers must not become items');
 assert.equal(rows[0].rawName, 'Ayam Fillet Paha', 'Leading row number and unit metadata must not pollute item name');
 assert.equal(rows[0].qty, 18, 'Use the rightmost total quantity');
 assert.equal(rows[1].rawName, 'Daging Slice Lowfat', 'Preserve product identity and remove intermediate numeric columns');
 assert.equal(rows[1].qty, 12, 'Take the rightmost numeric quantity as total');
 assert.ok(rows.some((x) => x.rawName === 'Ayam Fillet' && x.qty === 5), 'Split concatenated product rows and keep the first total quantity');
 assert.ok(rows.some((x) => x.rawName === 'Daging Slice' && x.qty === 7), 'Split concatenated product rows and keep the second total quantity');
+assert.ok(rows.some((x) => x.rawName === 'Sosis Ayam' && x.qty === 6), 'Ignore numeric supplier metadata after the quantity column');
 assert.doesNotMatch(source, /rawName:\s*['"](?:Unknown|undefined)['"]/i, 'Never synthesize Unknown/undefined product names');
 
 const filterStart = source.indexOf('function filterPdfMasterForEntity(');
