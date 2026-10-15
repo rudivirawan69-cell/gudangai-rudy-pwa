@@ -4291,8 +4291,8 @@ function dashboardSyncPatchRefresh_(options) {
     sh.getRange(12,1,16,6).clearContent();
     sh.getRange(12,1,1,6).setValues([["DIVISI","TOTAL ITEM","AMAN","WASPADA","KRITIS","% KRITIS"]]).setFontWeight("bold");
     if (divRows.length) sh.getRange(13,1,divRows.length,6).setValues(divRows);
-    sh.getRange(13,2,80,4).setNumberFormat("#,##0").setHorizontalAlignment("center");
-    sh.getRange(13,6,80,1).setNumberFormat("0.0%").setHorizontalAlignment("center");
+    sh.getRange(13,2,15,4).setNumberFormat("#,##0").setHorizontalAlignment("center");
+    sh.getRange(13,6,15,1).setNumberFormat("0.0%").setHorizontalAlignment("center");
 
     const hiddenDiv = [["DIVISI","AMAN","WASPADA","KRITIS"]].concat((data.statusPerDivisi || []).map(function(d) {
       return [d.divisi,Number(d.aman)||0,Number(d.waspada)||0,Number(d.kritis)||0];
