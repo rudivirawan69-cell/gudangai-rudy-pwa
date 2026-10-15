@@ -3,14 +3,15 @@
 html[data-theme="soft_light"],
 html[data-theme="light"] {
   color-scheme: light;
-  --bg-app: #f3f1ec;
-  --bg-app-grad: linear-gradient(180deg, #faf9f6 0%, #f3f1ec 48%, #ebe8e1 100%);
-  --bg-elevated: #f7f5f1;
-  --bg-muted: #e8e4db;
+  /* App darker than cards → 3D pop */
+  --bg-app: #e6e1d8;
+  --bg-app-grad: linear-gradient(180deg, #efebe3 0%, #e6e1d8 48%, #ddd7cc 100%);
+  --bg-elevated: #faf8f4;
+  --bg-muted: #ddd6cb;
   --text-main: #1a1f2e;
   --text-muted: #5c6578;
   --text-on-accent: #ffffff;
-  --border: rgba(255, 255, 255, 0.92);
+  --border: rgba(255, 255, 255, 0.88);
   --accent: #f59e0b;
   --accent-strong: #d97706;
   --accent-soft: rgba(245, 158, 11, 0.16);
@@ -24,11 +25,12 @@ html[data-theme="light"] {
   --po-sebagian: #f59e0b;
   --po-belum: #94a3b8;
   --card-radius: 1.4rem;
-  --shadow-1: 10px 10px 20px #d4cfc4, -8px -8px 18px #ffffff;
-  --shadow-2: 14px 14px 28px #c9c3b6, -10px -10px 22px #ffffff;
-  --shadow-press: inset 5px 5px 10px #d4cfc4, inset -4px -4px 10px #ffffff;
-  --shadow-inset: inset 4px 4px 9px #d9d3c8, inset -4px -4px 9px #ffffff;
-  --nav-bg: rgba(247, 245, 241, 0.96);
+  /* Stronger dual-tone shadows against darker app */
+  --shadow-1: 10px 10px 22px #c5bdb0, -8px -8px 18px #ffffff;
+  --shadow-2: 14px 14px 30px #b8b0a2, -10px -10px 24px #ffffff;
+  --shadow-press: inset 5px 5px 12px #c5bdb0, inset -4px -4px 12px #ffffff;
+  --shadow-inset: inset 4px 4px 10px #cfc7ba, inset -4px -4px 10px #ffffff;
+  --nav-bg: rgba(250, 248, 244, 0.96);
   --nav-blur: blur(18px) saturate(1.15);
   --focus-ring: 0 0 0 3px rgba(245, 158, 11, 0.32);
   --surface: var(--bg-elevated);
@@ -80,14 +82,15 @@ html[data-theme="dark"] {
 
 html[data-theme="warm_productive"] {
   color-scheme: light;
-  --bg-app: #e8f0ff;
-  --bg-app-grad: linear-gradient(160deg, #f5f8ff 0%, #e4edff 45%, #d9e6ff 100%);
-  --bg-elevated: #eef4ff;
-  --bg-muted: #d9e6fc;
+  /* App deeper blue-grey; cards near-white → 3D pop */
+  --bg-app: #d4e0f5;
+  --bg-app-grad: linear-gradient(160deg, #e2ebfb 0%, #d4e0f5 45%, #c5d4ef 100%);
+  --bg-elevated: #f7f9ff;
+  --bg-muted: #c5d4ef;
   --text-main: #0f2747;
   --text-muted: #4a6285;
   --text-on-accent: #ffffff;
-  --border: rgba(255, 255, 255, 0.95);
+  --border: rgba(255, 255, 255, 0.92);
   --accent: #3b82f6;
   --accent-strong: #2563eb;
   --accent-soft: rgba(59, 130, 246, 0.16);
@@ -101,11 +104,12 @@ html[data-theme="warm_productive"] {
   --po-sebagian: #f59e0b;
   --po-belum: #7c93b3;
   --card-radius: 1.45rem;
-  --shadow-1: 10px 12px 24px #c5d4ef, -8px -8px 20px #ffffff;
-  --shadow-2: 14px 16px 32px #b6c9ea, -10px -10px 24px #ffffff;
-  --shadow-press: inset 5px 5px 11px #c5d4ef, inset -4px -4px 11px #ffffff;
-  --shadow-inset: inset 4px 4px 10px #cddaf1, inset -4px -4px 10px #ffffff;
-  --nav-bg: rgba(238, 244, 255, 0.96);
+  /* Strong dual-tone against blue-grey app */
+  --shadow-1: 10px 12px 24px #a8bddc, -8px -8px 20px #ffffff;
+  --shadow-2: 14px 16px 32px #96b0d4, -10px -10px 24px #ffffff;
+  --shadow-press: inset 5px 5px 12px #a8bddc, inset -4px -4px 12px #ffffff;
+  --shadow-inset: inset 4px 4px 10px #b6c9ea, inset -4px -4px 10px #ffffff;
+  --nav-bg: rgba(247, 249, 255, 0.96);
   --nav-blur: blur(18px) saturate(1.2);
   --focus-ring: 0 0 0 3px rgba(59, 130, 246, 0.32);
   --surface: var(--bg-elevated);
