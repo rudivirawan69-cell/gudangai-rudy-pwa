@@ -3,43 +3,15 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 
 const source = readFileSync(new URL('../src/data/pdfValidate.js', import.meta.url), 'utf8');
-
-function extractFunction(name) {
-  const start = source.indexOf('function ' + name + '(');
-  assert.notEqual(start, -1, 'Missing parser helper: ' + name);
-  const open = source.indexOf('{', start);
-  let depth = 0;
-  let quote = null;
-  let escaped = false;
-  for (let i = open; i < source.length; i++) {
-    const c = source[i];
-    if (quote) {
-      if (escaped) escaped = false;
-      else if (c === '\\') escaped = true;
-      else if (c === quote) quote = null;
-      continue;
-    }
-    if (c === "'" || c === '"' || c === '`') { quote = c; continue; }
-    if (c === '{') depth++;
-    if (c === '}') {
-      depth--;
-      if (depth === 0) return source.slice(start, i + 1);
-    }
-  }
-  throw new Error('Unclosed parser helper: ' + name);
-}
-
-const parserFunctions = [
-  'stripLeadingNo',
-  'sanitizePdfProductName',
-  'isPdfNonItemLine',
-  'parsePdfLinesToItems',
-].map(extractFunction).join('\n');
+const executableSource = source
+  .replace(/^import .*;\s*$/gm, '')
+  .replace(/\bexport\s+/g, '');
 const sandbox = {};
 vm.createContext(sandbox);
-vm.runInContext(parserFunctions + '\nglobalThis.parsePdfLinesToItems = parsePdfLinesToItems;', sandbox);
+vm.runInContext(executableSource, sandbox);
 const parse = sandbox.parsePdfLinesToItems;
 
+assert.equal(typeof parse, 'function', 'PDF parser must be available');
 const rows = parse([
   'No Nama Barang Qty Satuan',
   '1 Ayam Fillet Paha (1 kg) 18 pcs',
