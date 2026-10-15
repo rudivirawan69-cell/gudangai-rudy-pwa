@@ -3872,6 +3872,13 @@ function recordPOArrival(body) {
     requestId: requestId, transactionId: transactionId, nonce: String(body.nonce || transactionId), queueApproved: true, client: body.client || {}
   });
   if (!tx || tx.success !== true || tx.writeOccurred !== true) return Object.assign({}, tx || { success: false }, { code: (tx && tx.code) || "PO_ARRIVAL_WRITE_FAILED" });
+  // Refresh only the locked PO area (row 46+) and its donut source/chart.
+  try {
+    const freshPO = getStatusPO("current", "");
+    const dash = ss.getSheetByName("Dashboard");
+    if (dash && freshPO && freshPO.success) renderPODonutChart_(dash, 12, "Status PO — Minggu Ini", freshPO.summary || {}, "Status PO — Minggu Ini");
+    dashboardRefreshPOSectionLight_();
+  } catch (refreshErr) { console.error("PO arrival dashboard refresh failed: " + (refreshErr && refreshErr.message)); }
   return { success: true, status: "APPLIED", code: "PO_ARRIVAL_APPLIED", itemNo: found.no, nama: found.nama, kode: kode, entitas: entitas, qtyDatangBaru: qty, transactionId: tx.transactionId, readBack: tx.readBack || null, message: "Kedatangan PO tercatat sebagai Barang masuk." };
 }
 
