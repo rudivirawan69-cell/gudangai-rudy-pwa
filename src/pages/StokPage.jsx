@@ -48,6 +48,13 @@ function StockCard({ item }) {
   );
 }
 
+const FILTER_LABEL = {
+  all: 'Semua',
+  kritis: 'Kritis',
+  menipis: 'Waspada',
+  aman: 'Aman',
+};
+
 export default function StokPage() {
   const [entity, setEntity] = useState('CV');
   const { items, loading, error, refresh } = useStock(entity);
@@ -143,21 +150,28 @@ export default function StokPage() {
       </div>
 
       <div className="grid grid-cols-2 gap-2.5 w-full">
-        {topStats.map((s) => (
-          <button
-            key={s.key}
-            type="button"
-            onClick={() => setFilterStatus(s.filter)}
-            className={`stock-metric-surface rounded-2xl bg-white border border-slate-100 shadow-sm px-3 py-3 text-left transition ${
-              filterStatus === s.filter ? `ring-2 ${s.ring} is-selected` : ''
-            }`}
-          >
-            <div className="flex items-center justify-between"><span className={`stock-metric-icon ${s.iconClass}`}><s.icon className="w-5 h-5" /></span><span className="text-[9px] font-extrabold text-slate-400">STATUS</span></div>
-            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wide mt-3">{s.label}</p>
-            <p className={`text-2xl font-extrabold tabular-nums leading-none mt-1 ${s.color}`}>{s.value}</p>
-            <p className="text-[11px] text-slate-400 mt-1 font-medium">{s.sub}</p>
-          </button>
-        ))}
+        {topStats.map((s) => {
+          const selected = filterStatus === s.filter;
+          return (
+            <button
+              key={s.key}
+              type="button"
+              onClick={() => setFilterStatus(s.filter)}
+              aria-pressed={selected}
+              className={`stock-metric-surface rounded-2xl bg-white border border-slate-100 shadow-sm px-3 py-3 text-left transition ${
+                selected ? `ring-2 ${s.ring} is-selected` : ''
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className={`stock-metric-icon ${s.iconClass}`}><s.icon className="w-5 h-5" /></span>
+                <span className="text-[9px] font-extrabold text-slate-400">STATUS</span>
+              </div>
+              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wide mt-3">{s.label}</p>
+              <p className={`text-2xl font-extrabold tabular-nums leading-none mt-1 ${s.color}`}>{s.value}</p>
+              <p className="text-[11px] text-slate-400 mt-1 font-medium">{s.sub}</p>
+            </button>
+          );
+        })}
       </div>
 
       <div className="relative w-full">
@@ -187,10 +201,16 @@ export default function StokPage() {
         ))}
       </div>
 
-      <p className="text-[12px] text-slate-600 font-medium px-0.5">
-        {filtered.length} item · {entity}
-        {filterStatus !== 'all' ? ` · filter ${filterStatus}` : ''}
-      </p>
+      <div className="flex items-center gap-2 flex-wrap px-0.5">
+        <p className="text-[12px] text-slate-600 font-medium">
+          {filtered.length} item · {entity}
+        </p>
+        {filterStatus !== 'all' && (
+          <span className="stok-filter-badge">
+            Filter: {FILTER_LABEL[filterStatus] || filterStatus}
+          </span>
+        )}
+      </div>
 
       {error && (
         <div className="rounded-2xl bg-red-50 border border-red-200 px-3 py-2.5 text-xs text-red-700">{error}</div>
