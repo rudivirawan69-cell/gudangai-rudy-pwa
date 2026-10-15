@@ -210,12 +210,12 @@ export async function fetchStock(entity, options = {}) {
   const raw = (data && (data.items || data.stock || data.data)) || [];
   return (Array.isArray(raw) ? raw : []).map((it) => mapStockItem(it, entity));
 }
-export async function getStatusPO() {
+export async function getStatusPO(mode = 'current', subMode = '') {
   try {
     let data = null;
-    try { data = await getJson('getStatusPO'); } catch (_) {}
+    try { data = await getJson('getStatusPO', { mode, subMode }); } catch (_) {}
     if (!data || data.code === 'UNAUTHORIZED') {
-      try { data = await postJson({ action: 'getStatusPO', requestId: newIds().requestId }); } catch (e2) {
+      try { data = await postJson({ action: 'getStatusPO', mode, subMode, requestId: newIds().requestId }); } catch (e2) {
         return data || { success: false, error: e2?.message || 'Gagal status PO' };
       }
     }
