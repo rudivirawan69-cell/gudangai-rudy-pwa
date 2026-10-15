@@ -3816,7 +3816,8 @@ function recordPOArrival(body) {
   body = body || {};
   const requestId = String(body.requestId || "").trim();
   const transactionId = String(body.transactionId || (requestId ? "POARR-" + requestId : "")).trim();
-  const qty = Number(body.qtyDatangBaru != null ? body.qtyDatangBaru : body.qtyDatang);
+  const qtyRaw = body.qtyDatangBaru != null ? body.qtyDatangBaru : (body.qtyDatang != null ? body.qtyDatang : body.qtyInput);
+  const qty = Number(qtyRaw);
   if (!requestId) return { success: false, status: "REJECTED", code: "REQUEST_ID_REQUIRED", error: "requestId wajib untuk kedatangan PO." };
   if (!Number.isFinite(qty) || qty <= 0 || qty > MAX_QTY) return { success: false, status: "REJECTED", code: "INVALID_QTY", error: "Qty kedatangan harus lebih dari 0 dan <= " + MAX_QTY + "." };
 
