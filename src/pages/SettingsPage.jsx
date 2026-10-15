@@ -28,17 +28,17 @@ function formatConnLabel(data) {
 function MenuRow({ icon: Icon, iconBg, title, subtitle, onClick, right, danger }) {
   return (
     <button type="button" onClick={onClick}
-      className={`menu-row w-full flex items-center gap-3 px-4 py-3.5 text-left active:bg-slate-50 ${
-        danger ? 'text-red-600' : ''
+      className={`menu-row settings-menu-row w-full flex items-center gap-3 px-4 py-3.5 text-left ${
+        danger ? 'is-danger' : ''
       }`}>
-      <span className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${iconBg}`}>
+      <span className={`settings-menu-icon w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${iconBg}`}>
         <Icon className="w-4.5 h-4.5" />
       </span>
       <span className="flex-1 min-w-0">
-        <span className={`block text-sm font-semibold ${danger ? 'text-red-600' : 'text-slate-800'}`}>{title}</span>
-        {subtitle && <span className="block text-[11px] text-slate-400 truncate mt-0.5">{subtitle}</span>}
+        <span className={`block text-sm font-semibold settings-menu-title ${danger ? 'is-danger' : ''}`}>{title}</span>
+        {subtitle && <span className="block text-[11px] settings-menu-sub truncate mt-0.5">{subtitle}</span>}
       </span>
-      {right || <ChevronRight className="w-4 h-4 text-slate-300 shrink-0" />}
+      {right || <ChevronRight className="w-4 h-4 settings-menu-chevron shrink-0" />}
     </button>
   );
 }
