@@ -114,11 +114,13 @@ function StatusPOHubPanel({ mode }) {
   const [error, setError] = useState('');
   const [confirmingId, setConfirmingId] = useState(null);
   const [msg, setMsg] = useState('');
+  const [confirmPeriod, setConfirmPeriod] = useState('current');
+  const [statusFilter, setStatusFilter] = useState('all');
 
   const load = async () => {
     setLoading(true); setError(''); setMsg('');
     try {
-      const raw = await getStatusPO();
+      const raw = await getStatusPO(mode, mode === 'confirm' ? confirmPeriod : '');
       const norm = normalizeStatusPO(raw);
       if (!norm || norm.success === false) {
         setError(norm?.error || 'Belum ada data Status PO. Cek API Secret di Atur.');
@@ -134,23 +136,24 @@ function StatusPOHubPanel({ mode }) {
     }
   };
 
-  useEffect(() => { load(); }, [mode]);
+  useEffect(() => { load(); }, [mode, confirmPeriod]);
 
-  const items = mode === 'previous'
-    ? (data?.previousWeek?.items || [])
-    : mode === 'confirm'
-      ? (data?.items || []).filter((it) => it.status !== 'Selesai')
-      : (data?.items || []);
+  const baseItems = mode === 'previous'
+    ? (data?.items || data?.previousWeek?.items || [])
+    : (data?.items || []);
+  const items = mode === 'confirm' || mode === 'current'
+    ? baseItems.filter((it) => statusFilter === 'all' || (statusFilter === 'wait' && it.status === 'Menunggu') || (statusFilter === 'part' && it.status === 'Sebagian') || (statusFilter === 'done' && it.status === 'Selesai'))
+    : baseItems;
   const title = mode === 'current' ? 'Status PO Aktif' : mode === 'previous' ? 'Status PO Minggu Lalu' : 'Konfirmasi PO';
   const summary = mode === 'previous'
-    ? (data?.previousWeek?.summary || {})
+    ? (data?.summary || data?.previousWeek?.summary || {})
     : (data?.summary || {});
-  const noPO = mode === 'previous' ? (data?.previousWeek?.noPO || '') : (data?.noPO || '');
-  const canConfirm = mode === 'confirm' || mode === 'current';
+  const noPO = mode === 'previous' ? (data?.noPO || data?.previousWeek?.noPO || '') : (data?.noPO || '');
+  const canConfirm = (mode === 'confirm' && confirmPeriod === 'current') || mode === 'current';
 
   const handleConfirm = async (it) => {
     if (!canConfirm) {
-      setMsg(mode === 'previous' ? 'Mode minggu lalu hanya arsip (tidak bisa dikonfirmasi).' : 'Mode ini tidak mendukung konfirmasi.');
+      setMsg((mode === 'previous' || confirmPeriod === 'previous') ? 'Arsip PO minggu lalu bersifat baca-saja; backend menolak konfirmasi agar tidak salah mencatat ke PO aktif.' : 'Mode ini tidak mendukung konfirmasi.');
       return;
     }
     if (!noPO) {
@@ -176,6 +179,9 @@ function StatusPOHubPanel({ mode }) {
         itemNo: it.itemNo,
         itemId: it.id,
         nama: it.nama,
+        namaItem: it.nama,
+        tglMasuk: new Date().toISOString().slice(0, 10),
+        isPreviousWeek: mode === 'confirm' && confirmPeriod === 'previous',
         qtyDatang: sisa,
         qtyDatangBaru: sisa,
         qtyPO: Number(it.qtyPO) || 0,
@@ -212,7 +218,18 @@ function StatusPOHubPanel({ mode }) {
       </div>
 
       {!loading && data?.success && (
-        <div className="grid grid-cols-3 gap-2">
+        {mode === 'confirm' && (
+        <div className="grid grid-cols-2 gap-2">
+          <button type="button" onClick={() => { setConfirmPeriod('current'); setStatusFilter('all'); }} className={`rounded-xl border px-3 py-2 text-[11px] font-extrabold ${confirmPeriod === 'current' ? 'border-cyan-300 bg-cyan-50 text-cyan-800 shadow-sm' : 'border-slate-200 bg-white text-slate-600'}`}>Konfirmasi PO Minggu Ini</button>
+          <button type="button" onClick={() => { setConfirmPeriod('previous'); setStatusFilter('all'); }} className={`rounded-xl border px-3 py-2 text-[11px] font-extrabold ${confirmPeriod === 'previous' ? 'border-cyan-300 bg-cyan-50 text-cyan-800 shadow-sm' : 'border-slate-200 bg-white text-slate-600'}`}>Konfirmasi PO Minggu Lalu</button>
+        </div>
+      )}
+      {(mode === 'current' || mode === 'confirm') && (
+        <div className="grid grid-cols-4 gap-1.5">
+          {[['all','Semua'],['wait','Menunggu'],['part','Sebagian'],['done','Datang']].map(([key,label]) => <button key={key} type="button" onClick={() => setStatusFilter(key)} className={`rounded-lg border px-1.5 py-2 text-[10px] font-bold ${statusFilter === key ? 'border-slate-700 bg-slate-800 text-white' : 'border-slate-200 bg-white text-slate-600'}`}>{label}</button>)}
+        </div>
+      )}
+      <div className="grid grid-cols-3 gap-2">
           <div className="rounded-xl bg-slate-50 border border-slate-100 px-2 py-2 text-center po-stat-box">
             <p className="text-[10px] font-bold text-slate-500 uppercase">Menunggu</p>
             <p className="text-lg font-extrabold tabular-nums text-slate-800">{summary.itemMenunggu ?? 0}</p>
