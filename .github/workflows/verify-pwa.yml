@@ -29,6 +29,8 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci
+      - name: Validate production Code.gs syntax
+        run: cp Code.gs /tmp/Code_GudangAI_production.js && node --check /tmp/Code_GudangAI_production.js
       - name: Validate Apps Script candidate syntax
         run: cp audit-apps-script/Code_GudangAI_V6.6.5_RELEASE_CANDIDATE.gs /tmp/Code_GudangAI_candidate.js && node --check /tmp/Code_GudangAI_candidate.js
       - name: Validate combined production-fix Code.gs syntax
