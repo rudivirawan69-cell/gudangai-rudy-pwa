@@ -225,6 +225,9 @@ function StatusPOHubPanel({ mode }) {
           <button type="button" onClick={() => { setConfirmPeriod('previous'); setStatusFilter('all'); }} className={`rounded-xl border px-3 py-2 text-[11px] font-extrabold ${confirmPeriod === 'previous' ? 'border-cyan-300 bg-cyan-50 text-cyan-800 shadow-sm' : 'border-slate-200 bg-white text-slate-600'}`}>Konfirmasi PO Minggu Lalu</button>
         </div>
       )}
+      {mode === 'confirm' && confirmPeriod === 'previous' && (
+        <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] leading-relaxed text-amber-800">Arsip minggu lalu ditampilkan untuk pemeriksaan. Konfirmasi tulis dinonaktifkan sementara karena sumber baris PO historis belum tersedia untuk validasi aman.</p>
+      )}
       {(mode === 'current' || mode === 'confirm') && (
         <div className="grid grid-cols-4 gap-1.5">
           {[['all','Semua'],['wait','Menunggu'],['part','Sebagian'],['done','Datang']].map(([key,label]) => <button key={key} type="button" onClick={() => setStatusFilter(key)} className={`rounded-lg border px-1.5 py-2 text-[10px] font-bold ${statusFilter === key ? 'border-slate-700 bg-slate-800 text-white' : 'border-slate-200 bg-white text-slate-600'}`}>{label}</button>)}
