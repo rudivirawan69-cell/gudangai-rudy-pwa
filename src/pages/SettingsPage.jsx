@@ -197,9 +197,9 @@ export default function SettingsPage({ onNavigate }) {
                 key={t.id}
                 type="button"
                 onClick={() => setTheme(t.id)}
-                className={`flex flex-col items-center gap-1.5 rounded-xl px-2 py-3 border transition-all active:scale-[0.97] ${
+                className={`theme-picker-btn flex flex-col items-center gap-1.5 rounded-xl px-2 py-3 border transition-all active:scale-[0.97] ${
                   active
-                    ? 'border-blue-600 bg-blue-50 shadow-sm ring-2 ring-blue-500/30'
+                    ? 'is-active border-blue-600 bg-blue-50 shadow-sm ring-2 ring-blue-500/30'
                     : 'border-slate-200 bg-slate-50/80 hover:border-slate-300'
                 }`}
                 aria-pressed={active}

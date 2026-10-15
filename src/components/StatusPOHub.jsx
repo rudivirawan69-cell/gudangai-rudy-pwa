@@ -113,7 +113,7 @@ function StatusPOHubPanel({ mode }) {
     : mode === 'confirm'
       ? (data?.items || []).filter((it) => it.status !== 'Selesai')
       : (data?.items || []);
-  const title = mode === 'current' ? 'Status PO Minggu Ini' : mode === 'previous' ? 'Status PO Minggu Lalu' : 'Konfirmasi PO';
+  const title = mode === 'current' ? 'Status PO Aktif' : mode === 'previous' ? 'Status PO Minggu Lalu' : 'Konfirmasi PO';
   const summary = mode === 'previous'
     ? (data?.previousWeek?.summary || {})
     : (data?.summary || {});
@@ -163,15 +163,15 @@ function StatusPOHubPanel({ mode }) {
 
       {!loading && data?.success && (
         <div className="grid grid-cols-3 gap-2">
-          <div className="rounded-xl bg-slate-50 border border-slate-100 px-2 py-2 text-center">
+          <div className="rounded-xl bg-slate-50 border border-slate-100 px-2 py-2 text-center po-stat-box">
             <p className="text-[10px] font-bold text-slate-500 uppercase">Menunggu</p>
             <p className="text-lg font-extrabold tabular-nums text-slate-800">{summary.itemMenunggu ?? 0}</p>
           </div>
-          <div className="rounded-xl bg-amber-50 border border-amber-100 px-2 py-2 text-center">
+          <div className="rounded-xl bg-amber-50 border border-amber-100 px-2 py-2 text-center po-stat-box">
             <p className="text-[10px] font-bold text-amber-700 uppercase">Sebagian</p>
             <p className="text-lg font-extrabold tabular-nums text-amber-800">{summary.itemSebagian ?? 0}</p>
           </div>
-          <div className="rounded-xl bg-emerald-50 border border-emerald-100 px-2 py-2 text-center">
+          <div className="rounded-xl bg-emerald-50 border border-emerald-100 px-2 py-2 text-center po-stat-box">
             <p className="text-[10px] font-bold text-emerald-700 uppercase">Datang</p>
             <p className="text-lg font-extrabold tabular-nums text-emerald-800">{summary.itemSelesai ?? 0}</p>
           </div>
