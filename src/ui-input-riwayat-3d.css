@@ -1,0 +1,160 @@
+/* =========================================================
+   INPUT + RIWAYAT — 3D neumorphic (all themes, clean)
+   Only visual elevation; no layout / logic change
+   ========================================================= */
+
+/* Shared elevated surface for common white cards */
+html[data-theme] .rounded-xl.bg-white.border.border-slate-200,
+html[data-theme] .rounded-2xl.bg-white.border.border-slate-200,
+html[data-theme] .rounded-xl.border.border-slate-200.bg-white,
+html[data-theme] .rounded-2xl.border.border-slate-200.bg-white,
+html[data-theme] .rounded-xl.bg-white.shadow-sm,
+html[data-theme] .rounded-2xl.bg-white.shadow-sm,
+html[data-theme] .rounded-lg.bg-white.border.border-slate-200 {
+  background: var(--bg-elevated) !important;
+  border: 1px solid var(--border) !important;
+  box-shadow: var(--shadow-1) !important;
+  color: var(--text-main) !important;
+  border-radius: var(--card-radius, 1.25rem) !important;
+}
+
+/* Soft lift on interactive rows */
+html[data-theme] .rounded-xl.border.border-slate-200.bg-white.shadow-sm:not(button):hover,
+html[data-theme] .rounded-2xl.border.border-slate-200.bg-white.shadow-sm:not(button):hover {
+  box-shadow: var(--shadow-2) !important;
+  transform: translateY(-1px);
+  transition: box-shadow .22s ease, transform .18s ease;
+}
+
+/* Pressed feel for buttons that look like cards */
+html[data-theme] button.rounded-2xl.bg-white.border,
+html[data-theme] button.rounded-xl.bg-white.border,
+html[data-theme] button.rounded-2xl.border.shadow-sm,
+html[data-theme] button.rounded-xl.border.shadow-sm {
+  background: var(--bg-elevated) !important;
+  border: 1px solid var(--border) !important;
+  box-shadow: var(--shadow-1) !important;
+  color: var(--text-main) !important;
+  transition: box-shadow .2s ease, transform .15s ease;
+}
+html[data-theme] button.rounded-2xl.bg-white.border:active,
+html[data-theme] button.rounded-xl.bg-white.border:active,
+html[data-theme] button.rounded-2xl.border.shadow-sm:active,
+html[data-theme] button.rounded-xl.border.shadow-sm:active {
+  box-shadow: var(--shadow-press) !important;
+  transform: scale(0.985);
+}
+
+/* Input: action tiles (PDF / Kamera / Suara / Tempel / QR) */
+html[data-theme] .rounded-2xl.bg-white.border.border-slate-200.shadow-sm.py-3,
+html[data-theme] .rounded-2xl.bg-white.border.shadow-sm.py-3 {
+  background: var(--bg-elevated) !important;
+  border: 1px solid var(--border) !important;
+  box-shadow: var(--shadow-1) !important;
+}
+html[data-theme] .rounded-2xl.bg-white.border.border-slate-200.shadow-sm.py-3:active,
+html[data-theme] .rounded-2xl.bg-white.border.shadow-sm.py-3:active {
+  box-shadow: var(--shadow-press) !important;
+  transform: scale(0.97);
+}
+
+/* Input: cart item cards */
+html[data-theme] .rounded-xl.bg-white.border.shadow-sm.p-3,
+html[data-theme] .rounded-xl.border.shadow-sm.p-3,
+html[data-theme] .rounded-2xl.bg-white.border.border-amber-200.shadow-sm {
+  background: var(--bg-elevated) !important;
+  border-color: var(--border) !important;
+  box-shadow: var(--shadow-1) !important;
+}
+
+/* Input: search hits panel */
+html[data-theme] .rounded-xl.border.border-slate-200.bg-white.shadow-sm.max-h-64,
+html[data-theme] .rounded-xl.border.border-slate-200.bg-white.shadow-sm.max-h-60 {
+  background: var(--bg-elevated) !important;
+  border: 1px solid var(--border) !important;
+  box-shadow: var(--shadow-1) !important;
+}
+
+/* Input: form fields — inset 3D */
+html[data-theme] input.rounded-xl.border.border-slate-200.bg-white,
+html[data-theme] input.rounded-xl.bg-white.border.border-slate-200,
+html[data-theme] input.rounded-lg.border.border-slate-300.bg-white,
+html[data-theme] textarea.rounded-2xl.bg-white {
+  background: var(--bg-muted) !important;
+  border: none !important;
+  box-shadow: var(--shadow-inset) !important;
+  color: var(--text-main) !important;
+}
+
+/* Riwayat: stats pills — soft raised */
+html[data-theme] .grid.grid-cols-3 > .rounded-lg.bg-emerald-50,
+html[data-theme] .grid.grid-cols-3 > .rounded-lg.bg-amber-50,
+html[data-theme] .grid.grid-cols-3 > .rounded-lg.bg-red-50 {
+  box-shadow: var(--shadow-1) !important;
+  border: 1px solid var(--border) !important;
+}
+
+/* Riwayat: history row cards */
+html[data-theme] .rounded-xl.border.border-slate-200.bg-white.shadow-sm.overflow-hidden,
+html[data-theme] .rounded-2xl.border.border-slate-200.bg-white.shadow-sm.overflow-hidden {
+  background: var(--bg-elevated) !important;
+  border: 1px solid var(--border) !important;
+  box-shadow: var(--shadow-1) !important;
+  border-radius: 1.1rem !important;
+}
+html[data-theme] .rounded-xl.border.border-slate-200.bg-white.shadow-sm.overflow-hidden:hover,
+html[data-theme] .rounded-2xl.border.border-slate-200.bg-white.shadow-sm.overflow-hidden:hover {
+  box-shadow: var(--shadow-2) !important;
+}
+
+/* Riwayat: empty state */
+html[data-theme] .rounded-2xl.bg-white.border.border-slate-200.p-8 {
+  background: var(--bg-elevated) !important;
+  border: 1px solid var(--border) !important;
+  box-shadow: var(--shadow-1) !important;
+}
+
+/* Riwayat: filter chips inactive — raised */
+html[data-theme] button.rounded-full.bg-white.border.border-slate-200 {
+  background: var(--bg-elevated) !important;
+  border: 1px solid var(--border) !important;
+  box-shadow: var(--shadow-1) !important;
+  color: var(--text-muted) !important;
+}
+html[data-theme] button.rounded-full.bg-white.border.border-slate-200:active {
+  box-shadow: var(--shadow-press) !important;
+}
+
+/* Icon wells inside cards — subtle inset */
+html[data-theme] .w-8.h-8.rounded-lg.bg-emerald-50,
+html[data-theme] .w-8.h-8.rounded-lg.bg-orange-50,
+html[data-theme] .w-8.h-8.rounded-lg.bg-red-50,
+html[data-theme] .w-9.h-9.rounded-xl.bg-emerald-50,
+html[data-theme] .w-9.h-9.rounded-xl.bg-orange-50,
+html[data-theme] .w-9.h-9.rounded-xl.bg-red-50,
+html[data-theme] .rounded-xl.bg-violet-50,
+html[data-theme] .rounded-xl.bg-amber-50,
+html[data-theme] .rounded-xl.bg-cyan-50,
+html[data-theme] .rounded-xl.bg-rose-50,
+html[data-theme] .rounded-xl.bg-indigo-50 {
+  box-shadow: var(--shadow-inset) !important;
+}
+
+/* Qty ± buttons — small raised */
+html[data-theme] button.w-7.h-7.rounded-lg.bg-slate-100,
+html[data-theme] button.rounded-lg.bg-slate-200 {
+  background: var(--bg-elevated) !important;
+  box-shadow: var(--shadow-1) !important;
+  border: 1px solid var(--border) !important;
+  color: var(--text-main) !important;
+}
+html[data-theme] button.w-7.h-7.rounded-lg.bg-slate-100:active,
+html[data-theme] button.rounded-lg.bg-slate-200:active {
+  box-shadow: var(--shadow-press) !important;
+}
+
+/* Keep transitions smooth, not flashy */
+html[data-theme] .rounded-xl,
+html[data-theme] .rounded-2xl {
+  transition: box-shadow .22s ease, transform .18s ease, background-color .2s ease, border-color .2s ease;
+}
