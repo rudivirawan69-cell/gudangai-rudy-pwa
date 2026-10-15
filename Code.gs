@@ -3876,7 +3876,17 @@ function recordPOArrival(body) {
   try {
     const freshPO = getStatusPO("current", "");
     const dash = ss.getSheetByName("Dashboard");
-    if (dash && freshPO && freshPO.success) renderPODonutChart_(dash, 12, "Status PO — Minggu Ini", freshPO.summary || {}, "Status PO — Minggu Ini");
+    if (dash && freshPO && freshPO.success) {
+      if (dash.getMaxColumns() < 22) dash.insertColumnsAfter(dash.getMaxColumns(), 22 - dash.getMaxColumns());
+      // Update existing donut source U:V only; do not delete/rebuild charts.
+      dash.getRange(12, 21, 4, 2).setValues([
+        ["STATUS PO", "QTY"],
+        ["SELESAI", Number(freshPO.summary && freshPO.summary.itemSelesai || 0)],
+        ["SEBAGIAN", Number(freshPO.summary && freshPO.summary.itemSebagian || 0)],
+        ["MENUNGGU", Number(freshPO.summary && freshPO.summary.itemMenunggu || 0)]
+      ]);
+      try { dash.hideColumns(21, 2); } catch (hideErr) {}
+    }
     dashboardRefreshPOSectionLight_();
   } catch (refreshErr) { console.error("PO arrival dashboard refresh failed: " + (refreshErr && refreshErr.message)); }
   return { success: true, status: "APPLIED", code: "PO_ARRIVAL_APPLIED", itemNo: found.no, nama: found.nama, kode: kode, entitas: entitas, qtyDatangBaru: qty, transactionId: tx.transactionId, readBack: tx.readBack || null, message: "Kedatangan PO tercatat sebagai Barang masuk." };
