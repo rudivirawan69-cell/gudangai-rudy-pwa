@@ -3823,12 +3823,15 @@ function recordPOArrival(body) {
   const ss = getSS();
   const po = ss.getSheetByName("purchase order");
   if (!po) return { success: false, status: "REJECTED", code: "PO_SHEET_NOT_FOUND", error: "Sheet purchase order tidak ditemukan." };
+  const poHeaderInfo = getPOInfoFromHeader_(po);
+  if (!poHeaderInfo || !poHeaderInfo.noPO) return { success: false, status: "REJECTED", code: "PO_NUMBER_NOT_READ", error: "No PO tidak terbaca dari spreadsheet. Periksa header sheet purchase order." };
+  if (body.isPreviousWeek === true || String(body.isPreviousWeek).toLowerCase() === "true") return { success: false, status: "REJECTED", code: "PREVIOUS_PO_ARCHIVE_READ_ONLY", error: "Arsip PO minggu lalu bersifat baca-saja karena baris PO sumber tidak lagi tersedia untuk validasi aman." };
   const last = po.getLastRow();
   if (last < PO_DATA_START_ROW) return { success: false, status: "REJECTED", code: "PO_EMPTY", error: "Tabel purchase order kosong." };
 
   const rows = po.getRange(PO_DATA_START_ROW, PO_DATA_START_COL, last - PO_DATA_START_ROW + 1, PO_DATA_NUM_COLS).getDisplayValues();
   const wantedNo = body.itemNo == null ? "" : String(body.itemNo).trim();
-  const wantedName = normalizePONameKey_(body.nama || "");
+  const wantedName = normalizePONameKey_(body.nama || body.namaItem || "");
   let found = null;
   rows.forEach(function(r, idx) {
     if (found) return;
@@ -3863,7 +3866,7 @@ function recordPOArrival(body) {
 
   const tx = addTransaction({
     action: "addTransaction", operation: "addTransaction", sheet: "Barang masuk", entitas: entitas, kodeBarang: kode, qty: qty,
-    tanggal: body.tanggal || Utilities.formatDate(new Date(), TIMEZONE, DATE_FORMAT),
+    tanggal: body.tanggal || body.tglMasuk || Utilities.formatDate(new Date(), TIMEZONE, DATE_FORMAT),
     keterangan: "DATANG PO " + (getPOInfoFromHeader_(po).noPO || "-") + " [ITEM : " + String(found.no).padStart(2, "0") + "]",
     requestId: requestId, transactionId: transactionId, nonce: String(body.nonce || transactionId), queueApproved: true, client: body.client || {}
   });
