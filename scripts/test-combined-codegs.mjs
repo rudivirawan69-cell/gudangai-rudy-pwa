@@ -4,6 +4,8 @@ import vm from 'node:vm';
 
 const path = new URL('../audit-apps-script/Code_GudangAI_V6.6.5_COMBINED_PRODUCTION_FIXES.gs', import.meta.url);
 const gs = readFileSync(path, 'utf8');
+const productionPath = new URL('../Code.gs', import.meta.url);
+const productionGs = readFileSync(productionPath, 'utf8');
 
 // Parse the entire Apps Script file without executing its top-level code.
 assert.doesNotThrow(() => new vm.Script(gs), 'Combined Code.gs must parse as JavaScript');
@@ -23,6 +25,13 @@ assert.match(body('renderPOStatusBlock_'), /Number\(topRow\) < 46/);
 assert.match(body('refreshDashboardPOSection_'), /const currentTop = PO_START_ROW;/);
 assert.match(body('refreshDashboardPOSection_'), /dashboardClearPOArea_\(sh, currentTop, clearEnd\);/);
 assert.doesNotMatch(body('refreshDashboardPOSection_'), /getRange\(\s*(?:2[89]|3\d|4[0-5])\s*,[\s\S]{0,100}(?:clearContent|setValues|setValue)\(/);
+
+// Production Code.gs visible dashboard ranges must stop at row 27; rows 28–45 are protected.
+const productionRefresh = productionGs.slice(productionGs.indexOf('function dashboardSyncPatchRefresh_'));
+assert.match(productionRefresh, /getRange\\(13,2,15,4\\)\\.setNumberFormat/);
+assert.match(productionRefresh, /getRange\\(13,6,15,1\\)\\.setNumberFormat/);
+assert.doesNotMatch(productionRefresh, /getRange\\(13,\\s*[26],\\s*80,\\s*[14]\\)\\.setNumberFormat/,
+  'Visible dashboard formatting must not extend into critical rows 28–45');
 
 // Stock-shortage message must be human-readable and shared by single/bulk paths.
 const holdStart = gs.indexOf('function formatStockShortageHold_(');
