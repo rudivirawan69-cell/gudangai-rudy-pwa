@@ -149,7 +149,7 @@ export default function StokPage() {
             type="button"
             onClick={() => setFilterStatus(s.filter)}
             className={`stock-metric-surface rounded-2xl bg-white border border-slate-100 shadow-sm px-3 py-3 text-left transition ${
-              filterStatus === s.filter ? `ring-2 ${s.ring}` : ''
+              filterStatus === s.filter ? `ring-2 ${s.ring} is-selected` : ''
             }`}
           >
             <div className="flex items-center justify-between"><span className={`stock-metric-icon ${s.iconClass}`}><s.icon className="w-5 h-5" /></span><span className="text-[9px] font-extrabold text-slate-400">STATUS</span></div>
