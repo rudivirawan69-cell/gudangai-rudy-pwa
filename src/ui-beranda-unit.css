@@ -1,0 +1,15 @@
+/* Perbandingan Stok — unit text larger all modes */
+.bg-cyan-50 p.text-\[10px\].tabular-nums,
+.bg-orange-50 p.text-\[10px\].tabular-nums,
+.stock-compare-unit {
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  opacity: 1 !important;
+  margin-top: 2px !important;
+}
+html[data-theme="deep_ocean"] .bg-cyan-50 p.text-\[10px\].tabular-nums,
+html[data-theme="deep_ocean"] .bg-orange-50 p.text-\[10px\].tabular-nums,
+html[data-theme="deep_ocean"] .stock-compare-unit {
+  color: #c5d4e8 !important;
+  -webkit-text-fill-color: #c5d4e8 !important;
+}
