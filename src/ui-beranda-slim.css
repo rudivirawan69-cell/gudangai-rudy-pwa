@@ -1,0 +1,5 @@
+/* Beranda ringkas: sembunyikan 4 kotak PO + detail list; donat tetap */
+.po-shortcuts-grid,
+#po-detail-list {
+  display: none !important;
+}
