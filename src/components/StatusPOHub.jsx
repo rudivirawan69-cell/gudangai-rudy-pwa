@@ -218,6 +218,7 @@ function StatusPOHubPanel({ mode }) {
       </div>
 
       {!loading && data?.success && (
+        <div className="space-y-3">
         {mode === 'confirm' && (
         <div className="grid grid-cols-2 gap-2">
           <button type="button" onClick={() => { setConfirmPeriod('current'); setStatusFilter('all'); }} className={`rounded-xl border px-3 py-2 text-[11px] font-extrabold ${confirmPeriod === 'current' ? 'border-cyan-300 bg-cyan-50 text-cyan-800 shadow-sm' : 'border-slate-200 bg-white text-slate-600'}`}>Konfirmasi PO Minggu Ini</button>
@@ -242,6 +243,7 @@ function StatusPOHubPanel({ mode }) {
             <p className="text-[10px] font-bold text-emerald-700 uppercase">Datang</p>
             <p className="text-lg font-extrabold tabular-nums text-emerald-800">{summary.itemSelesai ?? 0}</p>
           </div>
+        </div>
         </div>
       )}
 
