@@ -416,7 +416,7 @@ function doPost(e) {
       case "ping": return jsonResponse(getHealthStatus_(body));
       case "healthCheck": return jsonResponse(getHealthStatus_(body));
       case "getStockDelta": return jsonResponse(getStockDelta(body));
-      case "getStatusPO": return jsonResponse(getStatusPO());
+      case "getStatusPO": return jsonResponse(getStatusPO(body.mode, body.subMode));
       case "recordPOArrival": return jsonResponse(recordPOArrival(body));
       case "getPORequestStatus": return jsonResponse(getPORequestStatus(body));
       case "refreshDashboardPO": return jsonResponse(refreshDashboardPOSection_());
@@ -470,7 +470,7 @@ function doGet(e) {
     case "maintenanceCleanup": return jsonResponse(maintenanceCleanup(false));
     case "bootstrap": return jsonResponse(getPwaBootstrap({ entitas: e.parameter.entitas || "ALL" }));
     case "getStockDelta": return jsonResponse(getStockDelta({ sinceTimestamp: e.parameter.sinceTimestamp, entitas: e.parameter.entitas || "ALL" }));
-    case "getStatusPO": return jsonResponse(getStatusPO());
+    case "getStatusPO": return jsonResponse(getStatusPO(e.parameter.mode, e.parameter.subMode));
     case "getPORequestStatus": return jsonResponse(getPORequestStatus({ requestId: e.parameter.requestId, transactionId: e.parameter.transactionId }));
     case "getSyncMetrics": return jsonResponse(getSyncMetrics());
     default: return jsonResponse({ success: false, status: "REJECTED", code: "UNKNOWN_ACTION", error: "Action tidak dikenali: " + action });
@@ -3816,19 +3816,23 @@ function recordPOArrival(body) {
   body = body || {};
   const requestId = String(body.requestId || "").trim();
   const transactionId = String(body.transactionId || (requestId ? "POARR-" + requestId : "")).trim();
-  const qty = Number(body.qtyDatangBaru != null ? body.qtyDatangBaru : body.qtyDatang);
+  const qtyRaw = body.qtyDatangBaru != null ? body.qtyDatangBaru : (body.qtyDatang != null ? body.qtyDatang : body.qtyInput);
+  const qty = Number(qtyRaw);
   if (!requestId) return { success: false, status: "REJECTED", code: "REQUEST_ID_REQUIRED", error: "requestId wajib untuk kedatangan PO." };
   if (!Number.isFinite(qty) || qty <= 0 || qty > MAX_QTY) return { success: false, status: "REJECTED", code: "INVALID_QTY", error: "Qty kedatangan harus lebih dari 0 dan <= " + MAX_QTY + "." };
 
   const ss = getSS();
   const po = ss.getSheetByName("purchase order");
   if (!po) return { success: false, status: "REJECTED", code: "PO_SHEET_NOT_FOUND", error: "Sheet purchase order tidak ditemukan." };
+  const poHeaderInfo = getPOInfoFromHeader_(po);
+  if (!poHeaderInfo || !poHeaderInfo.noPO) return { success: false, status: "REJECTED", code: "PO_NUMBER_NOT_READ", error: "No PO tidak terbaca dari spreadsheet. Periksa header sheet purchase order." };
+  if (body.isPreviousWeek === true || String(body.isPreviousWeek).toLowerCase() === "true") return { success: false, status: "REJECTED", code: "PREVIOUS_PO_ARCHIVE_READ_ONLY", error: "Arsip PO minggu lalu bersifat baca-saja karena baris PO sumber tidak lagi tersedia untuk validasi aman." };
   const last = po.getLastRow();
   if (last < PO_DATA_START_ROW) return { success: false, status: "REJECTED", code: "PO_EMPTY", error: "Tabel purchase order kosong." };
 
   const rows = po.getRange(PO_DATA_START_ROW, PO_DATA_START_COL, last - PO_DATA_START_ROW + 1, PO_DATA_NUM_COLS).getDisplayValues();
   const wantedNo = body.itemNo == null ? "" : String(body.itemNo).trim();
-  const wantedName = normalizePONameKey_(body.nama || "");
+  const wantedName = normalizePONameKey_(body.nama || body.namaItem || "");
   let found = null;
   rows.forEach(function(r, idx) {
     if (found) return;
@@ -3863,15 +3867,40 @@ function recordPOArrival(body) {
 
   const tx = addTransaction({
     action: "addTransaction", operation: "addTransaction", sheet: "Barang masuk", entitas: entitas, kodeBarang: kode, qty: qty,
-    tanggal: body.tanggal || Utilities.formatDate(new Date(), TIMEZONE, DATE_FORMAT),
-    keterangan: "DATANG PO " + (getPOInfoFromHeader_(po).noPO || "-") + " [ITEM : " + String(found.no).padStart(2, "0") + "]",
+    tanggal: body.tanggal || body.tglMasuk || Utilities.formatDate(new Date(), TIMEZONE, DATE_FORMAT),
+    keterangan: "", // RULE EMAS: wajib kosong agar dihitung sebagai kedatangan PO.
     requestId: requestId, transactionId: transactionId, nonce: String(body.nonce || transactionId), queueApproved: true, client: body.client || {}
   });
   if (!tx || tx.success !== true || tx.writeOccurred !== true) return Object.assign({}, tx || { success: false }, { code: (tx && tx.code) || "PO_ARRIVAL_WRITE_FAILED" });
+  // Refresh only the locked PO area (row 46+) and its donut source/chart.
+  try {
+    const freshPO = getStatusPO("current", "");
+    const dash = ss.getSheetByName("Dashboard");
+    if (dash && freshPO && freshPO.success) {
+      if (dash.getMaxColumns() < 22) dash.insertColumnsAfter(dash.getMaxColumns(), 22 - dash.getMaxColumns());
+      // Update existing donut source U:V only; do not delete/rebuild charts.
+      dash.getRange(12, 21, 4, 2).setValues([
+        ["STATUS PO", "QTY"],
+        ["SELESAI", Number(freshPO.summary && freshPO.summary.itemSelesai || 0)],
+        ["SEBAGIAN", Number(freshPO.summary && freshPO.summary.itemSebagian || 0)],
+        ["MENUNGGU", Number(freshPO.summary && freshPO.summary.itemMenunggu || 0)]
+      ]);
+      try { dash.hideColumns(21, 2); } catch (hideErr) {}
+    }
+    dashboardRefreshPOSectionLight_();
+  } catch (refreshErr) { console.error("PO arrival dashboard refresh failed: " + (refreshErr && refreshErr.message)); }
   return { success: true, status: "APPLIED", code: "PO_ARRIVAL_APPLIED", itemNo: found.no, nama: found.nama, kode: kode, entitas: entitas, qtyDatangBaru: qty, transactionId: tx.transactionId, readBack: tx.readBack || null, message: "Kedatangan PO tercatat sebagai Barang masuk." };
 }
 
-function getStatusPO() {
+function getStatusPO(mode, subMode) {
+  mode = String(mode || 'current').toLowerCase();
+  subMode = String(subMode || '').toLowerCase();
+  if (mode === 'previous' || (mode === 'confirm' && subMode === 'previous')) {
+    const archived = getPreviousPOStatus_() || {};
+    const archivedItems = Array.isArray(archived.items) ? archived.items : [];
+    const items = mode === 'confirm' ? archivedItems.filter(function(x) { return String(x.status || '').toUpperCase() !== 'SELESAI' && String(x.status || '').toUpperCase() !== 'DATANG'; }) : archivedItems;
+    return { success: true, status: 'OK', mode: mode, subMode: subMode || null, noPO: archived.noPO || null, weekKey: archived.weekKey || null, summary: archived.summary || { totalItem: archivedItems.length, itemMenunggu: 0, itemSebagian: 0, itemSelesai: 0 }, items: items, previousWeek: archived, readOnlyArchive: true };
+  }
   const ss = getSS();
   const po = ss.getSheetByName('purchase order');
   const masuk = ss.getSheetByName('Barang masuk');
@@ -3893,28 +3922,21 @@ function getStatusPO() {
   const arrivalsByIndex = {};
   const arrivalsByName = {};
   if (masuk.getLastRow() >= 4) {
-    const a = masuk.getRange(4, 2, masuk.getLastRow() - 3, 6).getDisplayValues();
+    const a = masuk.getRange(4, 1, masuk.getLastRow() - 3, 7).getDisplayValues();
+    const poDate = info.tanggal instanceof Date ? new Date(info.tanggal) : (info.tanggal ? parseTransactionDate_(info.tanggal) : new Date());
+    const periodStart = new Date(poDate); periodStart.setHours(0,0,0,0); periodStart.setDate(periodStart.getDate() - ((periodStart.getDay() + 6) % 7));
+    const periodEnd = new Date(periodStart); periodEnd.setDate(periodEnd.getDate() + 7);
     const safeNoPO = noPO ? String(noPO).replace(/[.*+?^${}()|[\]\\]/g, '\\$&') : '';
     const reIndex = safeNoPO
       ? new RegExp('No\\s*:?\\s*' + safeNoPO + '\\s*\\[\\s*ITEM\\s*:\\s*([0-9]+)\\s*\\]', 'i')
       : null;
     a.forEach(function(r) {
-      const qty = Math.max(0, toNumber_(r[4]));
-      const ket = String(r[5] || '').trim();
-      const namaMasuk = String(r[2] || '').trim(); // kolom Nama di sheet transaksi (display)
-      if (!ket || qty <= 0) return;
-      if (reIndex) {
-        const m = ket.match(reIndex);
-        if (m) {
-          const idx = Number(m[1]);
-          if (idx > 0) {
-            arrivalsByIndex[idx] = (arrivalsByIndex[idx] || 0) + qty;
-            return;
-          }
-        }
-      }
-      // Cadangan: No PO ada di keterangan (atau NoPO kosong) + nama barang cocok.
-      if (noPO && ket.toLowerCase().indexOf(String(noPO).toLowerCase()) < 0) return;
+      const tglMasuk = parseTransactionDate_(r[0]);
+      const qty = Math.max(0, toNumber_(r[5]));
+      const ket = String(r[6] || '').trim();
+      const namaMasuk = String(r[3] || '').trim(); // kolom Nama di sheet transaksi (display)
+      // RULE EMAS: hanya keterangan benar-benar kosong dihitung sebagai kedatangan PO.
+      if (ket !== '' || qty <= 0 || !tglMasuk || tglMasuk < periodStart || tglMasuk >= periodEnd) return;
       if (namaMasuk) {
         const key = normalizePONameKey_(namaMasuk);
         if (key) arrivalsByName[key] = (arrivalsByName[key] || 0) + qty;
@@ -3936,7 +3958,7 @@ function getStatusPO() {
     const byIndex = arrivalsByIndex[no] || 0;
     const byName = arrivalsByName[normalizePONameKey_(nama)] || 0;
     // Utamakan index; jika 0, pakai cadangan nama (lebih sederhana, tetap dibatasi No PO).
-    const datang = Math.min(total, Math.max(0, byIndex > 0 ? byIndex : byName));
+    const datang = Math.min(total, Math.max(0, byName));
     const belumDatang = Math.max(0, total - datang);
     const status = datang <= 0 ? 'MENUNGGU' : (datang < total ? 'SEBAGIAN' : 'SELESAI');
     totalPOQty += total;
@@ -3965,7 +3987,8 @@ function getStatusPO() {
       totalPOQty: totalPOQty, totalKonfirmasiQty: totalKonfirmasiQty,
       totalSisaQty: Math.max(0, totalPOQty - totalKonfirmasiQty)
     },
-    items: items
+    items: mode === 'confirm' ? items.filter(function(x) { return x.status !== 'SELESAI'; }) : items,
+    mode: mode, subMode: subMode || null
   };
 }
 
