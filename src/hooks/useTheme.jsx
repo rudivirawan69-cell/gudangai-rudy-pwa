@@ -8,21 +8,21 @@ export const THEME_IDS = ['soft_light', 'deep_ocean', 'warm_productive'];
 export const THEME_META = {
   soft_light: {
     id: 'soft_light',
-    label: 'Soft Light',
-    short: 'Light',
-    description: '3D soft · latar biru-abu',
+    label: 'Soft Productive',
+    short: 'Soft',
+    description: 'Cream · aksen oranye · jadwal produktif',
   },
   deep_ocean: {
     id: 'deep_ocean',
     label: 'Deep Ocean',
     short: 'Ocean',
-    description: '3D gelap · console malam',
+    description: 'Navy glass · statistik gelap · kontras tinggi',
   },
   warm_productive: {
     id: 'warm_productive',
-    label: 'Blue Pro',
-    short: 'Blue',
-    description: '3D biru profesional · kontras jelas',
+    label: 'Blue Glass',
+    short: 'Glass',
+    description: 'Biru-ungu soft · kartu kaca 3D',
   },
 };
 
