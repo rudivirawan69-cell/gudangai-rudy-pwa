@@ -211,10 +211,7 @@ function StatusPOHubPanel({ mode }) {
 
   const handleKirim = async () => {
     if (!selectedItem) return;
-    if (!periodNoPO) {
-      setMsg('No PO tidak terbaca dari spreadsheet.');
-      return;
-    }
+    // noPO opsional di klien: backend baca ulang dari header purchase order
     const qty = Number(formQty);
     if (!Number.isFinite(qty) || qty <= 0) {
       setMsg('Qty kedatangan harus lebih dari 0.');
@@ -232,7 +229,7 @@ function StatusPOHubPanel({ mode }) {
     setMsg('Mengirim ke Spreadsheet…');
     try {
       const payload = {
-        noPO: periodNoPO,
+        noPO: periodNoPO || undefined,
         itemNo: selectedItem.itemNo,
         itemId: selectedItem.id,
         nama: selectedItem.nama,
