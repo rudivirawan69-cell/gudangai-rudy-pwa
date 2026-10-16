@@ -201,8 +201,12 @@ function StatusPOHubPanel({ mode }) {
     const sisa = Math.max(0, (Number(it.qtyPO) || 0) - (Number(it.qtyDatang) || 0));
     const cv = Number(it.poCV) || 0;
     const pt = Number(it.poPT) || 0;
-    const inferred = cv > 0 && pt <= 0 ? 'CV' : pt > 0 && cv <= 0 ? 'PT' : '';
-    setSelectedItem({ ...it, sisa, cv, pt });
+    let inferred = '';
+    if (cv > 0 && pt <= 0) inferred = 'CV';
+    else if (pt > 0 && cv <= 0) inferred = 'PT';
+    else if (cv > 0 && pt > 0) inferred = 'CV';
+    else inferred = 'CV';
+    setSelectedItem({ ...it, sisa, cv, pt, needEntityPick: cv > 0 && pt > 0 });
     setFormQty(String(sisa));
     setFormTanggal(todayISO());
     setFormEntitas(inferred);
@@ -211,7 +215,6 @@ function StatusPOHubPanel({ mode }) {
 
   const handleKirim = async () => {
     if (!selectedItem) return;
-    // noPO opsional di klien: backend baca ulang dari header purchase order
     const qty = Number(formQty);
     if (!Number.isFinite(qty) || qty <= 0) {
       setMsg('Qty kedatangan harus lebih dari 0.');
@@ -221,8 +224,8 @@ function StatusPOHubPanel({ mode }) {
       setMsg(`Qty tidak boleh melebihi sisa ${selectedItem.sisa}.`);
       return;
     }
-    if (selectedItem.cv > 0 && selectedItem.pt > 0 && !formEntitas) {
-      setMsg('Pilih entitas CV atau PT.');
+    if (!formEntitas || (formEntitas !== 'CV' && formEntitas !== 'PT')) {
+      setMsg('Pilih entitas CV atau PT sebelum kirim.');
       return;
     }
     setSubmitting(true);
@@ -240,8 +243,8 @@ function StatusPOHubPanel({ mode }) {
         isPreviousWeek: confirmPeriod === 'previous',
         poCV: selectedItem.cv,
         poPT: selectedItem.pt,
+        entitas: formEntitas,
       };
-      if (formEntitas === 'CV' || formEntitas === 'PT') payload.entitas = formEntitas;
       if (selectedItem.kode) payload.kode = selectedItem.kode;
 
       const res = await confirmPOStatus(payload);
@@ -375,18 +378,37 @@ function StatusPOHubPanel({ mode }) {
             <input type="number" min="1" max={selectedItem.sisa} step="any" value={formQty} onChange={(e) => setFormQty(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm font-semibold text-slate-900" />
           </label>
           <p className="text-[11px] text-slate-500">Maksimal sisa {selectedItem.sisa}. Item yang qty-nya terpenuhi akan hilang dari daftar konfirmasi.</p>
-          {(selectedItem.cv > 0 && selectedItem.pt > 0) && (
-            <div>
-              <p className="text-xs font-bold text-slate-700 mb-1.5">Entitas CV / PT</p>
-              <div className="grid grid-cols-2 gap-2">
-                {['CV', 'PT'].map((e) => (
-                  <button key={e} type="button" onClick={() => setFormEntitas(e)} className={`rounded-lg border px-3 py-2.5 text-xs font-extrabold ${formEntitas === e ? 'border-cyan-400 bg-cyan-50 text-cyan-900' : 'border-slate-200 bg-white text-slate-700'}`}>{e}</button>
-                ))}
-              </div>
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 space-y-2">
+            <p className="text-xs font-extrabold text-amber-900">Pilih entitas (wajib)</p>
+            <p className="text-[11px] text-amber-800">
+              {selectedItem.cv > 0 && selectedItem.pt > 0
+                ? `Item ini ada di CV (${selectedItem.cv}) dan PT (${selectedItem.pt}). Pilih ke mana stok masuk.`
+                : selectedItem.cv > 0
+                  ? `Default CV (PO CV: ${selectedItem.cv})`
+                  : selectedItem.pt > 0
+                    ? `Default PT (PO PT: ${selectedItem.pt})`
+                    : 'Pilih CV atau PT sesuai master stok.'}
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              {['CV', 'PT'].map((e) => (
+                <button
+                  key={e}
+                  type="button"
+                  onClick={() => { setFormEntitas(e); setMsg(''); }}
+                  className={`rounded-xl border-2 px-3 py-3 text-sm font-extrabold ${formEntitas === e ? 'border-cyan-500 bg-cyan-100 text-cyan-900' : 'border-slate-200 bg-white text-slate-700'}`}
+                >
+                  {e}
+                  {e === 'CV' && selectedItem.cv > 0 ? ` · ${selectedItem.cv}` : ''}
+                  {e === 'PT' && selectedItem.pt > 0 ? ` · ${selectedItem.pt}` : ''}
+                </button>
+              ))}
             </div>
-          )}
+            {!formEntitas && (
+              <p className="text-[11px] font-bold text-red-600">Ketuk CV atau PT sebelum Kirim.</p>
+            )}
+          </div>
           {msg && <p className="text-[11px] font-semibold text-center text-cyan-700">{msg}</p>}
-          <button type="button" disabled={submitting} onClick={handleKirim} className="w-full rounded-xl bg-emerald-700 px-3 py-3.5 text-sm font-extrabold text-white disabled:opacity-50 shadow-md">
+          <button type="button" disabled={submitting || !formEntitas} onClick={handleKirim} className="w-full rounded-xl bg-emerald-700 px-3 py-3.5 text-sm font-extrabold text-white disabled:opacity-50 shadow-md">
             {submitting ? 'Mengirim…' : 'Kirim ke Spreadsheet utama'}
           </button>
         </div>
