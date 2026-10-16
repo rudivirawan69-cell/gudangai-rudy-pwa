@@ -28,9 +28,9 @@ assert.doesNotMatch(body('refreshDashboardPOSection_'), /getRange\(\s*(?:2[89]|3
 
 // Production Code.gs visible dashboard ranges must stop at row 27; rows 28–45 are protected.
 const productionRefresh = productionGs.slice(productionGs.indexOf('function dashboardSyncPatchRefresh_'));
-assert.match(productionRefresh, /getRange\\(13,2,15,4\\)\\.setNumberFormat/);
-assert.match(productionRefresh, /getRange\\(13,6,15,1\\)\\.setNumberFormat/);
-assert.doesNotMatch(productionRefresh, /getRange\\(13,\\s*[26],\\s*80,\\s*[14]\\)\\.setNumberFormat/,
+assert.match(productionRefresh, /getRange\(13,2,15,4\)\.setNumberFormat/);
+assert.match(productionRefresh, /getRange\(13,6,15,1\)\.setNumberFormat/);
+assert.doesNotMatch(productionRefresh, /getRange\(13,\s*[26],\s*80,\s*[14]\)\.setNumberFormat/,
   'Visible dashboard formatting must not extend into critical rows 28–45');
 
 // Stock-shortage message must be human-readable and shared by single/bulk paths.
