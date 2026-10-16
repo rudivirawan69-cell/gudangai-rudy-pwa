@@ -114,6 +114,11 @@ function StatusPOHubPanel({ mode }) {
   const [error, setError] = useState('');
   const [confirmingId, setConfirmingId] = useState(null);
   const [msg, setMsg] = useState('');
+  const [confirmStep, setConfirmStep] = useState(0);
+  const [pendingConfirm, setPendingConfirm] = useState(null);
+  const [arrivalQty, setArrivalQty] = useState('');
+  const [arrivalStatus, setArrivalStatus] = useState('penuh');
+  const [arrivalEntitas, setArrivalEntitas] = useState('');
 
   const load = async () => {
     setLoading(true); setError(''); setMsg('');
@@ -148,7 +153,7 @@ function StatusPOHubPanel({ mode }) {
   const noPO = mode === 'previous' ? (data?.previousWeek?.noPO || '') : (data?.noPO || '');
   const canConfirm = mode === 'confirm' || mode === 'current';
 
-  const handleConfirm = async (it) => {
+  const handleConfirm = (it) => {
     if (!canConfirm) {
       setMsg(mode === 'previous' ? 'Mode minggu lalu hanya arsip (tidak bisa dikonfirmasi).' : 'Mode ini tidak mendukung konfirmasi.');
       return;
@@ -162,12 +167,30 @@ function StatusPOHubPanel({ mode }) {
       setMsg('Item sudah terpenuhi (tidak ada sisa qty).');
       return;
     }
-    let entitas = '';
     const cv = Number(it.poCV) || 0;
     const pt = Number(it.poPT) || 0;
-    if (cv > 0 && pt <= 0) entitas = 'CV';
-    else if (pt > 0 && cv <= 0) entitas = 'PT';
+    const inferredEntity = cv > 0 && pt <= 0 ? 'CV' : pt > 0 && cv <= 0 ? 'PT' : '';
+    setPendingConfirm({ ...it, sisa, cv, pt });
+    setArrivalQty(String(sisa));
+    setArrivalStatus('penuh');
+    setArrivalEntitas(inferredEntity);
+    setConfirmStep(1);
+    setMsg('');
+  };
 
+  const executeConfirm = async () => {
+    const it = pendingConfirm;
+    if (!it) return;
+    const qty = Number(arrivalQty);
+    if (!Number.isFinite(qty) || qty <= 0 || qty > it.sisa) {
+      setMsg(`Qty datang harus lebih dari 0 dan tidak melebihi sisa ${it.sisa}.`);
+      return;
+    }
+    if ((it.cv > 0 && it.pt > 0) && !arrivalEntitas) {
+      setMsg('Pilih entitas CV atau PT sebelum menyimpan.');
+      setConfirmStep(2);
+      return;
+    }
     setConfirmingId(it.id);
     setMsg('Mengonfirmasi kedatangan…');
     try {
@@ -176,16 +199,18 @@ function StatusPOHubPanel({ mode }) {
         itemNo: it.itemNo,
         itemId: it.id,
         nama: it.nama,
-        qtyDatang: sisa,
-        qtyDatangBaru: sisa,
+        qtyDatang: qty,
+        qtyDatangBaru: qty,
         qtyPO: Number(it.qtyPO) || 0,
-        poCV: cv,
-        poPT: pt,
+        poCV: it.cv,
+        poPT: it.pt,
       };
-      if (entitas) payload.entitas = entitas;
+      if (arrivalEntitas) payload.entitas = arrivalEntitas;
       const res = await confirmPOStatus(payload);
       if (res?.success || res?.status === 'OK' || res?.status === 'APPLIED') {
         setMsg(res?.message || 'Konfirmasi tersimpan. Status PO diperbarui.');
+        setConfirmStep(0);
+        setPendingConfirm(null);
         await load();
       } else {
         setMsg(res?.error || res?.message || res?.code || 'Konfirmasi belum terkonfirmasi backend.');
@@ -238,6 +263,71 @@ function StatusPOHubPanel({ mode }) {
           {mode === 'previous' ? 'Belum ada data PO minggu lalu.' : mode === 'confirm' ? 'Semua item sudah dikonfirmasi datang.' : 'Belum ada item PO aktif.'}
         </p>
       )}
+      {confirmStep > 0 && pendingConfirm && (
+        <div className="rounded-xl border border-slate-200 bg-white p-3 space-y-3" role="dialog" aria-modal="true" aria-label="Konfirmasi kedatangan PO">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-sm font-extrabold text-slate-900">Konfirmasi Kedatangan PO</p>
+            <button type="button" onClick={() => { setConfirmStep(0); setPendingConfirm(null); setMsg(''); }} className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-bold text-slate-600">Batal</button>
+          </div>
+          <div className="grid grid-cols-3 gap-1.5">
+            {[1,2,3].map((step) => (
+              <div key={step} className={`rounded-lg px-2 py-2 text-center text-[10px] font-bold ${confirmStep === step ? 'bg-cyan-100 text-cyan-800 border border-cyan-200' : confirmStep > step ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-slate-50 text-slate-500 border border-slate-100'}`}>
+                {step === 1 ? '1. Status' : step === 2 ? '2. Qty & entitas' : '3. Periksa'}
+              </div>
+            ))}
+          </div>
+          <div className="rounded-lg bg-slate-50 p-3">
+            <p className="text-xs font-extrabold text-slate-800">{pendingConfirm.nama}</p>
+            <p className="mt-1 text-[11px] text-slate-500">PO: {pendingConfirm.qtyPO} · Sudah datang: {pendingConfirm.qtyDatang} · Sisa: {pendingConfirm.sisa}</p>
+          </div>
+          {confirmStep === 1 && (
+            <div className="space-y-2">
+              <p className="text-xs font-bold text-slate-700">Pilih status kedatangan</p>
+              <div className="grid grid-cols-3 gap-2">
+                {[{id:'belum',label:'Belum',desc:'0 datang'},{id:'sebagian',label:'Sebagian',desc:'Qty parsial'},{id:'penuh',label:'Datang penuh',desc:'Sisa terpenuhi'}].map((opt) => (
+                  <button key={opt.id} type="button" onClick={() => { setArrivalStatus(opt.id); setArrivalQty(opt.id === 'belum' ? '0' : String(opt.id === 'penuh' ? pendingConfirm.sisa : Math.max(1, Math.floor(pendingConfirm.sisa / 2))); }} className={`rounded-lg border px-2 py-3 text-center ${arrivalStatus === opt.id ? 'border-cyan-400 bg-cyan-50 text-cyan-900' : 'border-slate-200 bg-white text-slate-700'}`}>
+                    <span className="block text-[11px] font-extrabold">{opt.label}</span><span className="mt-1 block text-[9px]">{opt.desc}</span>
+                  </button>
+                ))}
+              </div>
+              <button type="button" onClick={() => { if (arrivalStatus === 'belum') { setArrivalQty('0'); setMsg('Status Belum tidak mencatat kedatangan. Pilih Sebagian atau Datang penuh untuk menyimpan kedatangan.'); } else { setConfirmStep(2); setMsg(''); } }} className="w-full rounded-lg bg-slate-900 px-3 py-2.5 text-xs font-bold text-white">Lanjut ke qty</button>
+            </div>
+          )}
+          {confirmStep === 2 && (
+            <div className="space-y-3">
+              <label className="block text-xs font-bold text-slate-700">Qty datang
+                <input type="number" min="1" max={pendingConfirm.sisa} step="any" value={arrivalQty} onChange={(e) => { setArrivalQty(e.target.value); setArrivalStatus(Number(e.target.value) >= pendingConfirm.sisa ? 'penuh' : 'sebagian'); }} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm font-semibold text-slate-900" />
+              </label>
+              <p className="text-[11px] text-slate-500">Maksimal {pendingConfirm.sisa}. Untuk PO gabungan CV dan PT, pilih entitas yang menerima barang.</p>
+              {(pendingConfirm.cv > 0 && pendingConfirm.pt > 0) && (
+                <div className="grid grid-cols-2 gap-2">
+                  {['CV','PT'].map((entitas) => <button key={entitas} type="button" onClick={() => setArrivalEntitas(entitas)} className={`rounded-lg border px-3 py-2 text-xs font-extrabold ${arrivalEntitas === entitas ? 'border-cyan-400 bg-cyan-50 text-cyan-900' : 'border-slate-200 bg-white text-slate-700'}`}>{entitas}</button>)}
+                </div>
+              )}
+              <div className="flex gap-2">
+                <button type="button" onClick={() => setConfirmStep(1)} className="flex-1 rounded-lg border border-slate-200 px-3 py-2.5 text-xs font-bold text-slate-700">Kembali</button>
+                <button type="button" onClick={() => { const qty = Number(arrivalQty); if (!Number.isFinite(qty) || qty <= 0 || qty > pendingConfirm.sisa) setMsg(`Qty harus 1 sampai ${pendingConfirm.sisa}.`); else if (pendingConfirm.cv > 0 && pendingConfirm.pt > 0 && !arrivalEntitas) setMsg('Pilih entitas CV atau PT.'); else { setConfirmStep(3); setMsg(''); } }} className="flex-1 rounded-lg bg-slate-900 px-3 py-2.5 text-xs font-bold text-white">Periksa konfirmasi</button>
+              </div>
+            </div>
+          )}
+          {confirmStep === 3 && (
+            <div className="space-y-3">
+              <div className="rounded-lg border border-emerald-100 bg-emerald-50 p-3 text-xs text-emerald-900 space-y-1">
+                <p><strong>Barang:</strong> {pendingConfirm.nama}</p>
+                <p><strong>Status:</strong> {Number(arrivalQty) >= pendingConfirm.sisa ? 'Datang penuh' : 'Datang sebagian'}</p>
+                <p><strong>Qty akan dicatat:</strong> {arrivalQty}</p>
+                <p><strong>Entitas:</strong> {arrivalEntitas || (pendingConfirm.cv > 0 ? 'CV' : pendingConfirm.pt > 0 ? 'PT' : 'Mengikuti PO')}</p>
+                <p><strong>No PO:</strong> {noPO}</p>
+              </div>
+              <div className="flex gap-2">
+                <button type="button" onClick={() => setConfirmStep(2)} className="flex-1 rounded-lg border border-slate-200 px-3 py-2.5 text-xs font-bold text-slate-700">Ubah</button>
+                <button type="button" disabled={!!confirmingId} onClick={executeConfirm} className="flex-1 rounded-lg bg-emerald-700 px-3 py-2.5 text-xs font-bold text-white disabled:opacity-50">{confirmingId ? 'Menyimpan…' : 'Konfirmasi & simpan'}</button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {!loading && items.length > 0 && (
         <div className="space-y-0 divide-y divide-slate-100">
           {items.map((it, idx) => {
