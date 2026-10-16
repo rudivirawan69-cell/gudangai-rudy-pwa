@@ -2,7 +2,7 @@ import { useMemo, useState, useEffect, useCallback, useRef } from 'react';
 import { useStock } from '../hooks/useStock';
 import { useAuth } from '../hooks/useAuth';
 import {
-  getPendingQueue, getStatusPO, getDashboardData, confirmPOStatus, getLocalHistory, fetchRemoteTransactionHistory,
+  getPendingQueue, getStatusPO, getDashboardData, confirmPOStatus, getLocalHistory, getApiUrl, getApiSecret,
 } from '../data/api';
 import { DIVISIONS } from '../data/master';
 import {
@@ -411,6 +411,104 @@ function getPODataSignature(data) {
     items: canonicalItems,
     previousWeek: previous,
   });
+}
+
+
+async function fetchDashboardTransactionHistory(days = 7) {
+  const apiUrl = getApiUrl();
+  if (!apiUrl) throw new Error('URL API belum diatur');
+  const secret = getApiSecret();
+  const sheetNames = ['Barang masuk', 'Barang keluar', 'Barang Rusak'];
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const keyOf = (date) => [date.getFullYear(), String(date.getMonth() + 1).padStart(2, '0'), String(date.getDate()).padStart(2, '0')].join('-');
+  const endKey = keyOf(today);
+  const start = new Date(today);
+  start.setDate(start.getDate() - Math.max(1, Math.min(31, Number(days) || 7)) + 1);
+  const startKey = keyOf(start);
+
+  const dateKeyOf = (value) => {
+    if (value === undefined || value === null || value === '') return '';
+    const raw = String(value).trim();
+    const iso = raw.match(/^(\d{4}-\d{2}-\d{2})/);
+    if (iso) return iso[1];
+    const dmy = raw.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})$/);
+    if (dmy) return dmy[3] + '-' + dmy[2].padStart(2, '0') + '-' + dmy[1].padStart(2, '0');
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? '' : keyOf(parsed);
+  };
+
+  const readSheet = async (sheetName) => {
+    const query = new URLSearchParams({ action: 'getTransactionHistory', sheet: sheetName, limit: '500' });
+    if (secret) query.set('secret', secret);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
+    let response;
+    try {
+      response = await fetch(apiUrl + '?' + query.toString(), {
+        method: 'GET', cache: 'no-store', redirect: 'follow', signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timeoutId);
+    }
+    if (!response.ok) throw new Error('HTTP ' + response.status + ' saat membaca ' + sheetName);
+    const text = await response.text();
+    let payload;
+    try { payload = JSON.parse(text); } catch (_) { throw new Error('Respons bukan JSON untuk ' + sheetName); }
+    if (!payload || payload.success === false || payload.code === 'UNAUTHORIZED') {
+      throw new Error(payload?.error || 'Gagal membaca ' + sheetName);
+    }
+    const raw = payload.items || payload.history || payload.transactions ||
+      payload.data?.items || payload.data?.history || payload.data?.transactions || payload.rows || payload.data || [];
+    if (!Array.isArray(raw)) return [];
+    return raw.map((entry) => {
+      const dateKey = dateKeyOf(entry?.tanggal ?? entry?.date ?? entry?.at ?? entry?.timestamp ?? entry?.time ?? entry?.createdAt ?? entry?.created_at);
+      const qty = Math.abs(Number(entry?.qty ?? entry?.quantity ?? entry?.jumlah ?? 0) || 0);
+      return {
+        ...entry,
+        at: dateKey,
+        timestamp: dateKey,
+        tanggal: dateKey,
+        type: sheetName,
+        sheet: sheetName,
+        qty,
+        items: [{ qty, kode: entry?.kode || entry?.kodeBarang || '', nama: entry?.nama || entry?.name || '' }],
+        _dateKey: dateKey,
+      };
+    }).filter((entry) => entry._dateKey && entry._dateKey >= startKey && entry._dateKey <= endKey);
+  };
+
+  const results = await Promise.allSettled(sheetNames.map(readSheet));
+  const successful = results.filter((result) => result.status === 'fulfilled');
+  if (successful.length !== sheetNames.length) {
+    const failed = results.find((result) => result.status === 'rejected');
+    throw new Error(failed?.reason?.message || 'Riwayat transaksi dari salah satu sheet tidak lengkap');
+  }
+
+  const grouped = new Map();
+  const singles = [];
+  successful.forEach((result) => {
+    const sheetName = sheetNames[results.indexOf(result)];
+    (result.value || []).forEach((entry) => {
+      const transactionId = String(entry?.transactionId ?? entry?.transaction_id ?? '').trim();
+      if (!transactionId) {
+        const { _dateKey, ...clean } = entry;
+        singles.push(clean);
+        return;
+      }
+      const key = sheetName + '|' + entry._dateKey + '|' + transactionId;
+      const existing = grouped.get(key);
+      const item = (entry.items || [])[0];
+      if (existing) {
+        existing.qty += entry.qty;
+        existing.items.push(item);
+      } else {
+        const { _dateKey, ...clean } = entry;
+        grouped.set(key, { ...clean, id: key, transactionId, qty: entry.qty, items: item ? [item] : [] });
+      }
+    });
+  });
+  return [...grouped.values(), ...singles].sort((a, b) => String(a.at).localeCompare(String(b.at)));
 }
 
 function Movement7Days({ history }) {
@@ -936,22 +1034,10 @@ export default function DashboardPage({ onNavigate }) {
     setHistory(local);
     if (!navigator.onLine) return;
     try {
-      const remote = await fetchRemoteTransactionHistory(7);
-      const merged = [...remote, ...local];
-      const seen = new Set();
-      const unique = merged.filter((entry) => {
-        const itemsQty = Array.isArray(entry?.items)
-          ? entry.items.reduce((sum, it) => sum + (Number(it?.qty ?? it?.quantity ?? it?.jumlah ?? 0) || 0), 0)
-          : (Number(entry?.qty ?? entry?.quantity ?? entry?.jumlah ?? 0) || 0);
-        const id = entry?.transactionId || entry?.requestId;
-        const time = entry?.at || entry?.timestamp || entry?.time || entry?.createdAt || '';
-        const type = String(entry?.type || entry?.jenis || entry?.action || '').toLowerCase();
-        const key = id ? String(id) : String(time) + '|' + type + '|' + itemsQty;
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      });
-      setHistory(unique);
+      const remote = await fetchDashboardTransactionHistory(7);
+      // Riwayat Spreadsheet menjadi sumber utama agar transaksi tidak terhitung
+      // ganda dengan cache lokal. Cache lokal tetap menjadi fallback bila sumber kosong.
+      setHistory(remote.length ? remote : local);
     } catch (_) {
       // Backend analytics is read-only; keep local history if it is unavailable.
     }

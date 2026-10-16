@@ -33,6 +33,8 @@ jobs:
         run: cp audit-apps-script/Code_GudangAI_V6.6.5_RELEASE_CANDIDATE.gs /tmp/Code_GudangAI_candidate.js && node --check /tmp/Code_GudangAI_candidate.js
       - name: Validate combined production-fix Code.gs syntax
         run: cp audit-apps-script/Code_GudangAI_V6.6.5_COMBINED_PRODUCTION_FIXES.gs /tmp/Code_GudangAI_combined.js && node --check /tmp/Code_GudangAI_combined.js
+      - name: Validate root Apps Script backend syntax
+        run: node --check < Code.gs
       - name: Test combined Code.gs production contracts
         run: node scripts/test-combined-codegs.mjs
       - name: Lint

@@ -2747,6 +2747,7 @@ function renderDivisionBarChart_(sheet, dataStartRow, data) {
   const chart = sheet.newChart()
     .setChartType(Charts.ChartType.BAR)
     .addRange(sheet.getRange(dataStartRow, col, block.length, 4))
+    .setHiddenDimensionStrategy(Charts.ChartHiddenDimensionStrategy.SHOW_BOTH)
     .setOption("title", "Status Stok per Divisi")
     .setOption("legend", { position: "bottom" })
     .setOption("isStacked", true)
@@ -2880,21 +2881,14 @@ function refreshDashboard(force) {
       sh.getRange(13, 2, divRows.length, 4).setNumberFormat("#,##0").setHorizontalAlignment("center");
       sh.getRange(13, 6, divRows.length, 1).setNumberFormat("0.0%").setHorizontalAlignment("center");
     }
-    // Grafik batang mendatar (horizontal) status stok per divisi — AMAN / WASPADA / KRITIS.
-    let divisionChart = null;
-    try { divisionChart = renderDivisionBarChart_(sh, 13, data); } catch (chartDivErr) {
-      console.error("renderDivisionBarChart_ gagal: " + chartDivErr.message);
-      divisionChart = { error: String(chartDivErr.message || chartDivErr) };
-    }
-    // Section 2: grafik donat status PO minggu ini. Tidak memakai data dummy.
+    // Pemulihan manual: bangun ulang seluruh grafik dari sumber helper tervalidasi.
     const poNow = getStatusPO();
     sh.getRange("H11:N11").merge().setValue("2 GRAFIK DONAT STATUS PO MINGGU INI").setFontWeight("bold");
-    if (poNow && poNow.success) {
-      try {
-        renderPODonutChart_(sh, 12, "Status PO — Minggu Ini", poNow.summary || {}, "Status PO — Minggu Ini");
-      } catch (donutErr) {
-        console.error("renderPODonutChart_ gagal: " + donutErr.message);
-      }
+    let chartRepair = null;
+    try { chartRepair = dashboardRebuildAllCharts_(sh,data,poNow); }
+    catch(chartErr) {
+      console.error("Pemulihan seluruh grafik Dashboard gagal: " + chartErr.message);
+      chartRepair = {success:false,error:String(chartErr.message || chartErr)};
     }
     // Section 3: volume transaksi minggu berjalan.
     const vol = getVolumeSummaryThisWeek_();
@@ -2908,7 +2902,7 @@ function refreshDashboard(force) {
     clearDataDirty_();
     return {
       success: true, sheet: "Dashboard", updatedAt: getLastUpdateTimestamp(),
-      poSection: poSection, divisionChart: divisionChart,
+      poSection: poSection, chartRepair: chartRepair,
       summary: { total: data.totalItemAktif, aman: data.aman, waspada: data.waspada, kritis: data.kritis }
     };
   } finally { if (lock.hasLock()) lock.releaseLock(); }
@@ -4016,9 +4010,81 @@ function renderPODonutChart_(sheet, chartStartRow, title, summary, chartTitle) {
   try { sheet.hideColumns(col, 2); } catch (e) {}
   removeChartByTitle_(sheet, chartTitle);
   const chart = sheet.newChart().setChartType(Charts.ChartType.PIE).addRange(sheet.getRange(chartStartRow, col, 4, 2))
+    .setHiddenDimensionStrategy(Charts.ChartHiddenDimensionStrategy.SHOW_BOTH)
     .setOption('title', title).setOption('pieHole', 0.55).setOption('legend', {position:'right'})
     .setOption('width', 420).setOption('height', 240).setPosition(10, 8, 0, 0).build();
   sheet.insertChart(chart);
+}
+
+
+const DASHBOARD_CHART_REPAIR_VERSION = "DASHBOARD_CHARTS_V2_20261017";
+const DASHBOARD_CHART_REPAIR_PROP = "GUDANGAI_DASHBOARD_CHART_REPAIR_VERSION";
+
+function dashboardWriteAuxChartSources_(sheet, data) {
+  if (!sheet || !data) throw new Error("Sumber grafik Dashboard tidak tersedia.");
+  if (sheet.getMaxColumns() < 28) sheet.insertColumnsAfter(sheet.getMaxColumns(), 28 - sheet.getMaxColumns());
+  const critical = (Array.isArray(data.top10Kritis) ? data.top10Kritis : [])
+    .filter(function(x) { return x && x.nama !== undefined; })
+    .slice().sort(function(a,b) { return (Number(a.sisa)||0) - (Number(b.sisa)||0); })
+    .slice(0,10).map(function(x) { return [String(x.nama||x.kode||"-"), Number(x.sisa)||0]; });
+  if (!critical.length) critical.push(["Tidak ada item kritis", 0]);
+  const criticalRows = [["NAMA BARANG","SISA STOK"]].concat(critical);
+  while (criticalRows.length < 11) criticalRows.push(["",""]);
+  sheet.getRange(13,24,11,2).clearContent().setValues(criticalRows);
+  sheet.getRange(14,25,10,1).setNumberFormat("#,##0");
+  const a = data.aktivitasHariIni || {};
+  const activityRows = [["AKTIVITAS","QTY"],["BARANG MASUK",Number(a.masuk)||0],["BARANG KELUAR",Number(a.keluar)||0],["BARANG RUSAK",Number(a.rusak)||0]];
+  sheet.getRange(13,27,4,2).clearContent().setValues(activityRows);
+  sheet.getRange(14,28,3,1).setNumberFormat("#,##0");
+  [ [16,4], [21,2], [24,2], [27,2] ].forEach(function(x) { try { sheet.hideColumns(x[0],x[1]); } catch(e) {} });
+  return { criticalRows: critical.length, activity: activityRows.slice(1) };
+}
+
+function dashboardRebuildAllCharts_(sheet, data, poNow) {
+  if (!sheet || !data || !data.success) return { success:false, error:"Data Dashboard tidak valid." };
+  ["Status Stok per Divisi","Status PO — Minggu Ini","Top 10 Item Kritis","Aktivitas Hari Ini"]
+    .forEach(function(title) { removeChartByTitle_(sheet,title); });
+  const aux = dashboardWriteAuxChartSources_(sheet,data);
+  const division = renderDivisionBarChart_(sheet,13,data);
+  renderPODonutChart_(sheet,12,"Status PO — Minggu Ini",poNow && poNow.summary || {},"Status PO — Minggu Ini");
+  const criticalChart = sheet.newChart()
+    .setChartType(Charts.ChartType.BAR)
+    .addRange(sheet.getRange(13,24,11,2))
+    .setHiddenDimensionStrategy(Charts.ChartHiddenDimensionStrategy.SHOW_BOTH)
+    .setNumHeaders(1)
+    .setOption("title","Top 10 Item Kritis (Sisa Stok)")
+    .setOption("legend",{position:"none"})
+    .setOption("colors",["#C62828"])
+    .setOption("width",420).setOption("height",210)
+    .setOption("hAxis",{title:"Sisa Stok",minValue:0})
+    .setOption("vAxis",{title:"Nama Barang"})
+    .setPosition(28,1,0,0).build();
+  sheet.insertChart(criticalChart);
+  const activityChart = sheet.newChart()
+    .setChartType(Charts.ChartType.COLUMN)
+    .addRange(sheet.getRange(13,27,4,2))
+    .setHiddenDimensionStrategy(Charts.ChartHiddenDimensionStrategy.SHOW_BOTH)
+    .setNumHeaders(1)
+    .setOption("title","Aktivitas Hari Ini")
+    .setOption("legend",{position:"none"})
+    .setOption("colors",["#1565C0"])
+    .setOption("width",420).setOption("height",210)
+    .setOption("vAxis",{title:"Qty",minValue:0})
+    .setPosition(28,8,0,0).build();
+  sheet.insertChart(activityChart);
+  PropertiesService.getScriptProperties().setProperty(DASHBOARD_CHART_REPAIR_PROP,DASHBOARD_CHART_REPAIR_VERSION);
+  return {success:true,version:DASHBOARD_CHART_REPAIR_VERSION,chartsRebuilt:4,division:division,auxiliary:aux};
+}
+
+function dashboardRepairAllChartsNow() {
+  const ss=getSS(), sheet=ss.getSheetByName("Dashboard");
+  if (!sheet) return {success:false,code:"DASHBOARD_NOT_FOUND",error:"Sheet Dashboard tidak ditemukan."};
+  const data=getDashboardData();
+  if (!data || !data.success) return data || {success:false,error:"Data Dashboard tidak tersedia."};
+  const poNow=getStatusPO();
+  const result=dashboardRebuildAllCharts_(sheet,data,poNow);
+  SpreadsheetApp.flush();
+  return Object.assign({},result,{sheet:"Dashboard",totalItem:data.totalItemAktif,checkedAt:new Date().toISOString()});
 }
 
 function refreshDashboardPOSection_(options) {
@@ -4300,14 +4366,6 @@ function dashboardSyncPatchRefresh_(options) {
     sh.getRange(13,16,80,4).clearContent();
     sh.getRange(13,16,hiddenDiv.length,4).setValues(hiddenDiv);
     try { sh.hideColumns(16,4); } catch(e) {}
-    // Tata letak terkunci: buat chart hanya jika belum ada. Refresh berkala
-    // cukup memperbarui range helper P:S; chart yang ada tidak dihapus/dibangun ulang.
-    let hasDivisionChart = false;
-    try { hasDivisionChart = sh.getCharts().some(function(c) { return String(c.getOptions().get("title") || "") === "Status Stok per Divisi"; }); } catch(e) {}
-    if (!hasDivisionChart) {
-      try { renderDivisionBarChart_(sh,13,data); } catch(e) { console.error("PATCH chart divisi: "+e.message); }
-    }
-
     const poNow = getStatusPO();
     if (poNow && poNow.success) {
       sh.getRange(12,21,4,2).setValues([
@@ -4317,12 +4375,17 @@ function dashboardSyncPatchRefresh_(options) {
         ["MENUNGGU",Number(poNow.summary && poNow.summary.itemMenunggu || 0)]
       ]);
       try { sh.hideColumns(21,2); } catch(e) {}
-      // Donut dibuat satu kali. Data helper U:V diperbarui setiap refresh,
-      // sehingga chart yang sudah ada tetap stabil dan tidak bergeser/bertumpuk.
-      let hasPODonut = false;
-      try { hasPODonut = sh.getCharts().some(function(c) { return String(c.getOptions().get("title") || "") === "Status PO — Minggu Ini"; }); } catch(e) {}
-      if (!hasPODonut) {
-        try { renderPODonutChart_(sh,12,"Status PO — Minggu Ini",poNow.summary||{},"Status PO — Minggu Ini"); } catch(e) { console.error("PATCH donut PO: "+e.message); }
+    }
+    // Sumber bantu selalu diperbarui; bangun ulang semua grafik sekali per versi patch,
+    // bukan hanya saat judul chart belum ada.
+    const auxChartData = dashboardWriteAuxChartSources_(sh,data);
+    let chartRepair = {success:true,skipped:true,version:DASHBOARD_CHART_REPAIR_VERSION};
+    const chartProps = PropertiesService.getScriptProperties();
+    if (chartProps.getProperty(DASHBOARD_CHART_REPAIR_PROP) !== DASHBOARD_CHART_REPAIR_VERSION) {
+      try { chartRepair = dashboardRebuildAllCharts_(sh,data,poNow); }
+      catch(chartErr) {
+        chartRepair = {success:false,error:String(chartErr && chartErr.message || chartErr)};
+        console.error("Dashboard chart repair gagal: " + chartRepair.error);
       }
     }
 
@@ -4342,7 +4405,7 @@ function dashboardSyncPatchRefresh_(options) {
     return {
       success:true, patch:DASHBOARD_SYNC_PATCH_VERSION, mode:"SINGLE_DASHBOARD_SOURCE",
       totalItem:total, expectedMaster:191, statusPerDivisi:data.statusPerDivisi||[],
-      poSection:poSection, updatedAt:stamp,
+      poSection:poSection, chartRepair:chartRepair, auxChartData:auxChartData, updatedAt:stamp,
       pwaApi:{getDashboard:true,getStatusPO:!!(poNow&&poNow.success),getAllStock:true,realtimeReadMode:"PWA polling reads current backend source"}
     };
   } finally { if(lock.hasLock()) lock.releaseLock(); }
