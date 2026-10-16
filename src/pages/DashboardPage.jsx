@@ -441,7 +441,16 @@ async function fetchDashboardTransactionHistory(days = 7) {
   const readSheet = async (sheetName) => {
     const query = new URLSearchParams({ action: 'getTransactionHistory', sheet: sheetName, limit: '500' });
     if (secret) query.set('secret', secret);
-    const response = await fetch(apiUrl + '?' + query.toString(), { method: 'GET', cache: 'no-store', redirect: 'follow' });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
+    let response;
+    try {
+      response = await fetch(apiUrl + '?' + query.toString(), {
+        method: 'GET', cache: 'no-store', redirect: 'follow', signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timeoutId);
+    }
     if (!response.ok) throw new Error('HTTP ' + response.status + ' saat membaca ' + sheetName);
     const text = await response.text();
     let payload;
@@ -471,9 +480,9 @@ async function fetchDashboardTransactionHistory(days = 7) {
 
   const results = await Promise.allSettled(sheetNames.map(readSheet));
   const successful = results.filter((result) => result.status === 'fulfilled');
-  if (!successful.length) {
+  if (successful.length !== sheetNames.length) {
     const failed = results.find((result) => result.status === 'rejected');
-    throw new Error(failed?.reason?.message || 'Riwayat transaksi tidak dapat dibaca');
+    throw new Error(failed?.reason?.message || 'Riwayat transaksi dari salah satu sheet tidak lengkap');
   }
 
   const grouped = new Map();
