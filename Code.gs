@@ -1757,76 +1757,63 @@ function getStockByCode(kode, requestedEntitas) {
 
 function getAllStock(entitas) {
   const ss = getSS();
-  const sheets = entitas === "CV" ? ["Stock CV"] : entitas === "PT" ? ["Stock PT"] : ["Stock CV", "Stock PT"];
-  const items = [];
-
-  sheets.forEach(function(name) {
+  const master = ss.getSheetByName("Stock Awal");
+  if (!master) return { success:false, error:"Sheet Stock Awal tidak ditemukan; sumber master wajib Stock Awal." };
+  const masterValues = master.getDataRange().getValues();
+  if (masterValues.length < 2) return { success:false, error:"Stock Awal kosong." };
+  const masterHeaders = masterValues[0].map(function(h){ return String(h || "").trim().toLowerCase(); });
+  const mKode = masterHeaders.findIndex(function(h){ return h.includes("kode"); });
+  const mNama = masterHeaders.findIndex(function(h){ return h.includes("nama"); });
+  const mSatuan = masterHeaders.findIndex(function(h){ return h.includes("satuan"); });
+  const mDivisi = masterHeaders.findIndex(function(h){ return h.includes("divisi"); });
+  if (mKode < 0) return { success:false, error:"Kolom kode tidak ditemukan di Stock Awal." };
+  const operational = {};
+  ["Stock CV","Stock PT"].forEach(function(name) {
     const sheet = ss.getSheetByName(name);
-    if (!sheet) return;
-    const headerRow = 3;
-    const last = sheet.getLastRow();
-    if (last <= headerRow) return;
-    const headers = sheet.getRange(headerRow, 1, 1, sheet.getLastColumn()).getValues()[0];
-    const data = sheet.getRange(headerRow + 1, 1, last - headerRow, sheet.getLastColumn()).getValues();
-    const label = name === "Stock CV" ? "CV" : "PT";
-
-    data.forEach(function(row) {
-      const kode = String(row[headers.findIndex(h => String(h).toLowerCase().includes("kode"))] || "").trim();
-      if (!kode || kode.startsWith("Total")) return;
-      const item = { kode: kode, entitas: label };
-      headers.forEach(function(h, idx) {
-        const key = String(h).toLowerCase().trim();
-        if (key.includes("nama")) item.nama = row[idx];
-        if (key.includes("satuan")) item.satuan = row[idx];
-        if (key.includes("stock akhir")) item.stockAkhir = clampStockToZero_(row[idx]);
-        if (key.includes("stock aman")) item.stockAman = row[idx];
-        if (key.includes("stock value") || key.includes("nilai stok") || key.includes("nilai stock") || key.includes("value")) item.stockValue = row[idx];
-        if (key.includes("divisi")) item.divisi = row[idx];
+    if (!sheet || sheet.getLastRow() < 4) return;
+    const headers = sheet.getRange(3,1,1,sheet.getLastColumn()).getValues()[0];
+    const idxKode = headers.findIndex(function(h){ return String(h || "").toLowerCase().includes("kode"); });
+    if (idxKode < 0) return;
+    sheet.getRange(4,1,sheet.getLastRow()-3,sheet.getLastColumn()).getValues().forEach(function(row) {
+      const kode=String(row[idxKode] || "").trim();
+      if (!kode || /^total\b/i.test(kode)) return;
+      const item={};
+      headers.forEach(function(h,idx) {
+        const key=String(h || "").toLowerCase().trim();
+        if (key.includes("nama")) item.nama=row[idx];
+        if (key.includes("satuan")) item.satuan=row[idx];
+        if (key.includes("stock akhir")) item.stockAkhir=clampStockToZero_(row[idx]);
+        if (key.includes("stock aman")) item.stockAman=toNumber_(row[idx]);
+        if (key.includes("stock value") || key.includes("nilai stok") || key.includes("nilai stock") || key.includes("value")) item.stockValue=row[idx];
+        if (key.includes("divisi")) item.divisi=row[idx];
       });
-      items.push(item);
+      operational[kode]=item;
     });
   });
-
-  // Dashboard/API master count includes the dedicated Bahan Baku source.
-  // CV/PT remain untouched; Stock Bahan Baku contributes its own unique items
-  // so the combined dashboard master returns to 191 items.
-  if (entitas === "ALL") {
-    const bb = typeof getBahanBakuStockMap_ === "function" ? getBahanBakuStockMap_() : null;
-    const shBB = ss.getSheetByName("Stock Bahan Baku");
-    if (bb && bb.success && shBB) {
-      const existing = {};
-      items.forEach(function(item) { existing[String(item.kode || "").trim()] = true; });
-      const lastRow = shBB.getLastRow();
-      const lastCol = shBB.getLastColumn();
-      const headerRow = Number(bb.headerRow || 0);
-      if (lastRow > headerRow && lastCol > 0) {
-        const hdr = shBB.getRange(headerRow, 1, 1, lastCol).getValues()[0];
-        const idxKode = hdr.findIndex(function(h) { return String(h || "").toLowerCase().includes("kode"); });
-        const idxNama = hdr.findIndex(function(h) { return String(h || "").toLowerCase().includes("nama"); });
-        const idxSatuan = hdr.findIndex(function(h) { return String(h || "").toLowerCase().includes("satuan"); });
-        const rowsBB = shBB.getRange(headerRow + 1, 1, lastRow - headerRow, lastCol).getValues();
-        rowsBB.forEach(function(row) {
-          const kode = String(idxKode >= 0 ? row[idxKode] : "").trim();
-          if (!kode || /^total\\b/i.test(kode) || existing[kode]) return;
-          items.push({
-            kode: kode,
-            entitas: "BAHAN BAKU",
-            nama: idxNama >= 0 ? row[idxNama] : "",
-            satuan: idxSatuan >= 0 ? row[idxSatuan] : "",
-            stockAkhir: bb.map[kode] !== undefined ? bb.map[kode] : 0,
-            stockAman: 0,
-            stockValue: 0,
-            divisi: "BAHAN BAKU"
-          });
-          existing[kode] = true;
-        });
-      }
-    }
-  }
-
-  return { success: true, count: items.length, items: items };
+  const bb=typeof getBahanBakuStockMap_==="function" ? getBahanBakuStockMap_() : null;
+  const seen={}, items=[];
+  masterValues.slice(1).forEach(function(row) {
+    const kode=String(row[mKode] || "").trim();
+    if (!kode || /^total\b/i.test(kode) || seen[kode]) return;
+    const upper=kode.toUpperCase();
+    const label=(upper.startsWith("CV") || upper.startsWith("BBCV")) ? "CV" :
+      ((upper.startsWith("PT") || upper.startsWith("WK") || upper.startsWith("MM") || upper.startsWith("BBPT")) ? "PT" : "");
+    if (!label || (entitas==="CV" && label!=="CV") || (entitas==="PT" && label!=="PT")) return;
+    const op=operational[kode] || {};
+    const isBB=upper.startsWith("BBCV") || upper.startsWith("BBPT");
+    const stockBB=bb && bb.success && bb.map && bb.map[kode]!==undefined ? bb.map[kode] : undefined;
+    items.push({
+      kode:kode, entitas:label,
+      nama:(mNama>=0 && row[mNama]) || op.nama || "",
+      satuan:(mSatuan>=0 && row[mSatuan]) || op.satuan || "",
+      stockAkhir:stockBB!==undefined ? clampStockToZero_(stockBB) : clampStockToZero_(op.stockAkhir || 0),
+      stockAman:toNumber_(op.stockAman || 0), stockValue:toNumber_(op.stockValue || 0),
+      divisi:isBB ? "BAHAN BAKU" : ((mDivisi>=0 && row[mDivisi]) || op.divisi || "LAINNYA")
+    });
+    seen[kode]=true;
+  });
+  return { success:true, count:items.length, items:items, source:"Stock Awal" };
 }
-
 function getLowStock() {
   const all = getAllStock("ALL");
   if (!all.success) return all;
@@ -4379,14 +4366,24 @@ function dashboardSyncPatchRefresh_(options) {
     // Sumber bantu selalu diperbarui; bangun ulang semua grafik sekali per versi patch,
     // bukan hanya saat judul chart belum ada.
     const auxChartData = dashboardWriteAuxChartSources_(sh,data);
-    let chartRepair = {success:true,skipped:true,version:DASHBOARD_CHART_REPAIR_VERSION};
-    const chartProps = PropertiesService.getScriptProperties();
-    if (chartProps.getProperty(DASHBOARD_CHART_REPAIR_PROP) !== DASHBOARD_CHART_REPAIR_VERSION) {
-      try { chartRepair = dashboardRebuildAllCharts_(sh,data,poNow); }
-      catch(chartErr) {
-        chartRepair = {success:false,error:String(chartErr && chartErr.message || chartErr)};
-        console.error("Dashboard chart repair gagal: " + chartRepair.error);
+    let chartRepair = {success:false,skipped:false,version:DASHBOARD_CHART_REPAIR_VERSION};
+    try {
+      const requiredTitles = ["Status Stok per Divisi","Status PO — Minggu Ini","Top 10 Item Kritis","Aktivitas Hari Ini"];
+      const existingTitles = sh.getCharts().map(function(chart) {
+        try { return String(chart.getOptions().get("title") || ""); } catch(e) { return ""; }
+      });
+      const missingTitles = requiredTitles.filter(function(title) { return existingTitles.indexOf(title) < 0; });
+      const chartProps = PropertiesService.getScriptProperties();
+      const versionMismatch = chartProps.getProperty(DASHBOARD_CHART_REPAIR_PROP) !== DASHBOARD_CHART_REPAIR_VERSION;
+      if (versionMismatch || missingTitles.length) {
+        chartRepair = dashboardRebuildAllCharts_(sh,data,poNow);
+        chartRepair.missingBeforeRepair = missingTitles;
+      } else {
+        chartRepair = {success:true,skipped:true,version:DASHBOARD_CHART_REPAIR_VERSION,chartCount:existingTitles.length};
       }
+    } catch(chartErr) {
+      chartRepair = {success:false,error:String(chartErr && chartErr.message || chartErr)};
+      console.error("Dashboard chart repair gagal: " + chartRepair.error);
     }
 
     let poSection;
@@ -4402,11 +4399,13 @@ function dashboardSyncPatchRefresh_(options) {
     SpreadsheetApp.flush();
     const stamp = new Date().toISOString();
     PropertiesService.getScriptProperties().setProperty(DASHBOARD_SYNC_PATCH_LAST,stamp);
+    const overallSuccess = !!(chartRepair && chartRepair.success && poSection && poSection.success && poNow && poNow.success);
     return {
-      success:true, patch:DASHBOARD_SYNC_PATCH_VERSION, mode:"SINGLE_DASHBOARD_SOURCE",
-      totalItem:total, expectedMaster:191, statusPerDivisi:data.statusPerDivisi||[],
+      success:overallSuccess, patch:DASHBOARD_SYNC_PATCH_VERSION, mode:"SINGLE_DASHBOARD_SOURCE",
+      totalItem:total, masterSource:"Stock Awal", expectedMaster:null, statusPerDivisi:data.statusPerDivisi||[],
       poSection:poSection, chartRepair:chartRepair, auxChartData:auxChartData, updatedAt:stamp,
-      pwaApi:{getDashboard:true,getStatusPO:!!(poNow&&poNow.success),getAllStock:true,realtimeReadMode:"PWA polling reads current backend source"}
+      pwaApi:{getDashboard:!!data.success,getStatusPO:!!(poNow&&poNow.success),getAllStock:!!(data&&data.success),realtimeReadMode:"PWA polling reads current backend source"},
+      error:overallSuccess ? "" : "Satu atau lebih komponen Dashboard gagal; periksa chartRepair, poSection, dan poApi."
     };
   } finally { if(lock.hasLock()) lock.releaseLock(); }
 }
@@ -4414,8 +4413,14 @@ function dashboardSyncPatchRefresh_(options) {
 function dashboardSyncPatchVerify() {
   const ss=getSS(), sh=ss.getSheetByName("Dashboard"), all=getAllStock("ALL"), po=getStatusPO();
   const triggers=ScriptApp.getProjectTriggers().map(function(t){return t.getHandlerFunction();});
-  return {success:true,patch:DASHBOARD_SYNC_PATCH_VERSION,enabled:isDashboardSyncPatchEnabled_(),dashboardExists:!!sh,
-    totalMaster:all&&all.success?all.count:null,expectedMaster:191,poApi:!!(po&&po.success),
+  const charts=sh ? sh.getCharts() : [];
+  const chartTitles=charts.map(function(chart){try{return String(chart.getOptions().get("title")||"");}catch(e){return "";}});
+  const requiredTitles=["Status Stok per Divisi","Status PO — Minggu Ini","Top 10 Item Kritis","Aktivitas Hari Ini"];
+  const missingCharts=requiredTitles.filter(function(title){return chartTitles.indexOf(title)<0;});
+  const success=!!(sh && all && all.success && po && po.success && missingCharts.length===0 && triggers.indexOf("dashboardSyncPatchTick_")>=0);
+  return {success:success,patch:DASHBOARD_SYNC_PATCH_VERSION,enabled:isDashboardSyncPatchEnabled_(),dashboardExists:!!sh,
+    totalMaster:all&&all.success?all.count:null,masterSource:"Stock Awal",poApi:!!(po&&po.success),
+    chartCount:charts.length,chartTitles:chartTitles,missingCharts:missingCharts,
     conflictingTriggersStillPresent:triggers.filter(function(x){return x==="refreshAllData"||x==="refreshDashboard";}),
     patchTriggers:triggers.filter(function(x){return x==="dashboardSyncPatchTick_";}),
     lastSync:PropertiesService.getScriptProperties().getProperty(DASHBOARD_SYNC_PATCH_LAST),checkedAt:new Date().toISOString()};
