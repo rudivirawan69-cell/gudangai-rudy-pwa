@@ -3495,27 +3495,29 @@ function installQueueTrigger() {
 function onEdit(e) {
   try {
     if (!e || !e.range) return;
+
     const sheetName = e.range.getSheet().getName();
-    const affected = ["Stock CV", "Stock PT", "Stock Bahan Baku", "Stock awal", "purchase order"].indexOf(sheetName) >= 0 || Object.keys(SHEET_CONFIG).indexOf(sheetName) >= 0;
+    const stockSources = ["Stock CV", "Stock PT", "Stock Bahan Baku", "Stock awal"];
+    const affected =
+      stockSources.indexOf(sheetName) >= 0 ||
+      ["Barang masuk", "Barang keluar", "Barang Rusak", "purchase order"].indexOf(sheetName) >= 0 ||
+      Object.prototype.hasOwnProperty.call(SHEET_CONFIG, sheetName);
+
     if (!affected) return;
-    // onEdit: invalidasi cache + dirty + stempel waktu. Sinkronisasi divisi real-time bila stok berubah.
-    clearMasterCache();
+
+    // Edit handler hanya invalidasi/menandai data berubah.
+    // Pembaruan tabel/grafik Dashboard dilakukan oleh satu jalur refresh terjadwal,
+    // bukan berulang untuk setiap edit pada sheet sumber.
+    if (stockSources.indexOf(sheetName) >= 0 ||
+        Object.prototype.hasOwnProperty.call(SHEET_CONFIG, sheetName)) {
+      clearMasterCache();
+    }
+
     markDataDirty_(sheetName);
     updateLastUpdateTimestamp();
-    if (sheetName === "Stock CV" || sheetName === "Stock PT" || sheetName === "Stock Bahan Baku" || sheetName === "Stock awal") {
-      try { syncDivisionStockLightweight_(); } catch (divErr) { console.error("onEdit sync divisi: " + divErr.message); }
-    }
-    if (sheetName === "Barang masuk" || sheetName === "purchase order") {
-      try { refreshDashboardPOSection_({ renderCharts: false, lightweight: true }); } catch (poErr) { console.error("Dashboard PO ringan gagal: " + poErr.message); }
-    }
-    // Setiap perubahan sumber Dashboard juga memperbarui ringkasan/chart-data tanpa
-    // membuat ulang chart. Penulisan transaksi API tetap aman; interval 5 menit
-    // menjadi jalur sinkronisasi kedua untuk perubahan yang dibuat oleh PWA/API. 
-    if (!isDashboardSyncPatchEnabled_() &&
-        ["Stock CV", "Stock PT", "Stock Bahan Baku", "Stock awal", "Barang masuk", "purchase order", "Barang keluar", "Barang Rusak"].indexOf(sheetName) >= 0) {
-      try { refreshDashboardLive_(); } catch (dashErr) { console.error("Dashboard live gagal: " + dashErr.message); }
-    }
-  } catch (err) { console.error("onEdit ringan gagal: " + err.message); }
+  } catch (err) {
+    console.error("onEdit invalidasi ringan gagal: " + (err && err.message || err));
+  }
 }
 
 
