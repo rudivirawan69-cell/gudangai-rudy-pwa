@@ -3910,3 +3910,80 @@ function noteConnectionFailure_() {
 function noteConnectionSuccess_() {
   try { PropertiesService.getScriptProperties().deleteProperty("GUDANGAI_CIRCUIT_STATE"); } catch(e) {}
 }
+
+/* DASHBOARD FINAL 6.9.3 — Opsi B: formatting stabil + refresh data ringan */
+var DASH693 = {
+  head:'#0e7490', sub:'#155e75', alt:'#f0f9ff', white:'#ffffff',
+  border:'#bae6fd', critical:'#fee2e2', warning:'#fef9c3', safe:'#dcfce7',
+  text:'#0f172a'
+};
+
+/**
+ * Format konsisten tanpa menghapus isi tabel dan tanpa menyentuh baris 28–45.
+ * Tabel Opsi B memakai area A4:G14, I4:N19, A24:F36, H24:L30.
+ */
+function formatDashboardLayout693_() {
+  var sh = getSS().getSheetByName('Dashboard');
+  if (!sh) return {success:false,error:'Sheet Dashboard tidak ditemukan'};
+  var specs = [
+    {title:'A4:G4',head:'A5:G5',body:'A6:G14'},
+    {title:'I4:N4',head:'I5:J5',body:'I6:J9'},
+    {title:'I11:N11',head:'I12:N12',body:'I13:N19'},
+    {title:'A24:F24',head:'A25:F25',body:'A26:F36'},
+    {title:'H24:L24',head:'H25:L25',body:'H26:L30'}
+  ];
+  specs.forEach(function(x) {
+    sh.getRange(x.title).setBackground(DASH693.head).setFontColor('#ffffff')
+      .setFontWeight('bold').setFontSize(10).setHorizontalAlignment('center')
+      .setVerticalAlignment('middle').setWrap(true);
+    sh.getRange(x.head).setBackground(DASH693.sub).setFontColor('#ffffff')
+      .setFontWeight('bold').setFontSize(9).setHorizontalAlignment('center')
+      .setVerticalAlignment('middle').setWrap(true);
+    var body=sh.getRange(x.body), n=body.getNumRows(), c=body.getNumColumns();
+    body.setFontSize(9).setFontColor(DASH693.text).setVerticalAlignment('middle')
+      .setWrap(true).setBorder(true,true,true,true,false,false,DASH693.border,SpreadsheetApp.BorderStyle.SOLID);
+    for (var i=0;i<n;i++) body.offset(i,0,1,c).setBackground(i%2===0?DASH693.alt:DASH693.white);
+  });
+  // Lebar kolom konsisten; hanya kolom tabel Opsi B yang disentuh.
+  [sh.setColumnWidth(1,48),sh.setColumnWidth(2,190),sh.setColumnWidth(3,90),
+   sh.setColumnWidth(4,85),sh.setColumnWidth(5,85),sh.setColumnWidth(6,90),
+   sh.setColumnWidth(7,85),sh.setColumnWidth(8,110),sh.setColumnWidth(9,145),
+   sh.setColumnWidth(10,85),sh.setColumnWidth(11,85),sh.setColumnWidth(12,85),
+   sh.setColumnWidth(13,85),sh.setColumnWidth(14,85)];
+  sh.getRange('A46:M99').setVerticalAlignment('middle').setWrap(true);
+  sh.getRange('A46:F46').setBackground(DASH693.head).setFontColor('#ffffff').setFontWeight('bold');
+  sh.getRange('H46:M46').setBackground(DASH693.head).setFontColor('#ffffff').setFontWeight('bold');
+  sh.getRange('A48:F48').setBackground(DASH693.sub).setFontColor('#ffffff').setFontWeight('bold');
+  sh.getRange('H48:M48').setBackground(DASH693.sub).setFontColor('#ffffff').setFontWeight('bold');
+  return {success:true,version:'6.9.3-OPSI-B',formatted:true,protectedRows:'28:45',poArea:'46:99'};
+}
+
+/**
+ * Refresh ringan: perbarui data PO mingguan yang sudah punya renderer aman.
+ * Tidak menjalankan setup layout, tidak menghapus chart, dan tidak menulis ke sheet purchase order.
+ */
+function refreshDashboardDataLight693_() {
+  var lock=LockService.getScriptLock();
+  if (!lock.tryLock(5000)) return {success:false,skipped:true,reason:'Dashboard refresh sedang berjalan'};
+  try {
+    var poResult = refreshDashboardPOSection_({renderCharts:false});
+    if (!poResult || !poResult.success) return poResult || {success:false,error:'Refresh PO gagal'};
+    var sh=getSS().getSheetByName('Dashboard');
+    if (sh) sh.getRange('A2').setValue('Pantauan Stok & Aktivitas — Real Time | Update terakhir: '+
+      Utilities.formatDate(new Date(),TIMEZONE,'yyyy-MM-dd HH:mm:ss'));
+    return {success:true,version:'6.9.3-OPSI-B',mode:'LIGHT_DATA_REFRESH',po:poResult.status||'OK',updatedAt:new Date().toISOString()};
+  } finally { lock.releaseLock(); }
+}
+
+/** Pasang trigger ringan 10 menit. Setup layout dijalankan terpisah satu kali. */
+function installDashboardLightTrigger693_() {
+  var handlers=['refreshDashboardDataLight693_','refreshDashboardFinal_','refreshDashboardOperationalV68_',
+    'refreshDashboardPODataOnly_','refreshWeeklyPODashboard'];
+  ScriptApp.getProjectTriggers().forEach(function(t) {
+    if (handlers.indexOf(t.getHandlerFunction())>=0) ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger('refreshDashboardDataLight693_').timeBased().everyMinutes(10).create();
+  formatDashboardLayout693_();
+  return {success:true,version:'6.9.3-OPSI-B',trigger:'refreshDashboardDataLight693_',intervalMinutes:10,
+    note:'Format satu kali; trigger berikutnya hanya refresh data PO dan timestamp.'};
+}
