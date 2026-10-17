@@ -191,6 +191,9 @@ function sanitizePdfProductName(name) {
     .replace(/\s*[/|]\s*(?:cv|pt)\.?\s*[^|/]+$/gi, ' ')
     .replace(/\s+supplier\b.*$/gi, ' ')
     .replace(/\s+vendor\b.*$/gi, ' ')
+    // Shipping/storage labels are not part of the SKU name and commonly
+    // appear on both CV and PT order PDFs.
+    .replace(/\b(?:frozen|beku|chilled|fresh)\b/gi, ' ')
     .replace(/\s+/g, ' '));
 }
 
