@@ -1059,10 +1059,18 @@ function bulkTransaction(body) {
     tx.transactionId = String(tx.transactionId || (batchId + "-" + String(i + 1).padStart(3, "0")));
     if (!tx.nonce) tx.nonce = tx.transactionId;
     var check = validateTransactionRequest_(tx, { requireDate: !!tx._syncMode || !!body._syncMode, requireEntity: true });
-    if (!check.valid) {
-      validationErrors.push({ index: i + 1, error: check.error });
-      continue;
-    }
+  if (!check.valid) {
+  validationErrors.push({
+  index: i + 1,
+  transactionId: tx.transactionId,
+  nonce: tx.nonce,
+  requestId: tx.requestId || "",
+  clientItemId: tx.clientItemId || tx.requestId || "",
+  error: check.error,
+  code: check.code || "ITEM_VALIDATION_FAILED"
+  });
+  continue;
+  }
     var normalizedKode = String(check.kode || tx.kodeBarang || tx.kode || "").trim();
     // Prevent duplicate transaction identities, not repeated SKU/quantity pairs.
     var duplicateKey = String(tx.transactionId) + "|" + String(tx.nonce);
@@ -1100,9 +1108,9 @@ function bulkTransaction(body) {
   }
 
   var results = validationErrors.map(function(v) {
-    return { success: false, status: "REJECTED", code: "ITEM_VALIDATION_FAILED", batchId: batchId,
-      batchIndex: v.index, transactionId: v.transactionId || "", requestId: v.requestId || "",
-      clientItemId: v.clientItemId || v.requestId || "", error: v.error, writeOccurred: false };
+  return { success: false, status: "REJECTED", code: v.code || "ITEM_VALIDATION_FAILED", batchId: batchId,
+  batchIndex: v.index, transactionId: v.transactionId || "", nonce: v.nonce || "", requestId: v.requestId || "",
+  clientItemId: v.clientItemId || v.requestId || "", error: v.error, writeOccurred: false };
   });
   var successCount = 0;
   var failCount = validationErrors.length;
@@ -1146,9 +1154,12 @@ function bulkTransaction(body) {
       var formattedDate = item.tanggal || Utilities.formatDate(new Date(), TIMEZONE, DATE_FORMAT);
       var finalDateCheck = validateTransactionDate(formattedDate);
       if (!finalDateCheck.valid) {
-        results.push({ success: false, status: "REJECTED", code: "INVALID_DATE", batchId: batchId, batchIndex: p + 1, error: finalDateCheck.error, kode: item.kodeBarang });
-        failCount++;
-        break;
+  results.push({ success: false, status: "REJECTED", code: "INVALID_DATE", batchId: batchId,
+  batchIndex: item._batchIndex || (p + 1), transactionId: item.transactionId, nonce: item.nonce,
+  requestId: item.requestId || "", clientItemId: item.clientItemId || item.requestId || "",
+  error: finalDateCheck.error, kode: item.kodeBarang, writeOccurred: false });
+  failCount++;
+  continue;
       }
 
       var finalQty = numericQty;
@@ -1340,7 +1351,7 @@ function validateTransactionRequest_(tx, options) {
   if (Object.prototype.hasOwnProperty.call(tx, "namaBarang") || Object.prototype.hasOwnProperty.call(tx, "nama") || Object.prototype.hasOwnProperty.call(tx, "satuan")) {
     return { valid: false, status: "REJECTED", code: "PROTECTED_FIELD", error: "Kolom Nama Barang/Satuan diproteksi; kirim hanya tanggal, kodeBarang, qty, dan keterangan." };
   }
-  const allowed = ["action", "operation", "schemaVersion", "sheet", "entitas", "kodeBarang", "qty", "tanggal", "keterangan", "transactionId", "nonce", "holdTransactionId", "realisasiHoldId", "holdId", "requestId", "queueApproved", "client", "offlineContext", "secret", "_syncMode", "batchId", "deviceId"];
+  const allowed = ["action", "operation", "schemaVersion", "sheet", "entitas", "entity", "kodeBarang", "kode", "qty", "tanggal", "keterangan", "transactionId", "nonce", "holdTransactionId", "realisasiHoldId", "holdId", "requestId", "clientItemId", "queueApproved", "client", "offlineContext", "secret", "_syncMode", "batchId", "deviceId"];
   const unknown = Object.keys(tx).filter(function(k) { return allowed.indexOf(k) < 0 && k !== "payload"; });
   if (unknown.length) return { valid: false, status: "REJECTED", code: "UNKNOWN_FIELD", error: "Field tidak diizinkan: " + unknown.join(", ") };
   const kode = String(tx.kodeBarang || "").trim();
