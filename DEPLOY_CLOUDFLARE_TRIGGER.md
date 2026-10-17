@@ -1,1 +1,1 @@
-deploy 2026-10-16-statuspo-three-step-47347e7ee17a0f90
+deploy 2026-10-17-cloudflare-status-api-check
