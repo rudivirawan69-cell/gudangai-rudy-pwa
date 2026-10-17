@@ -85,7 +85,7 @@ const PO_DATA_START_ROW = 6;
 const PO_DATA_START_COL = 2; // B
 const PO_DATA_NUM_COLS = 8; // B:I
 const PO_LOCK_TIMEOUT_MS = 20000;
-const PO_SECTION_CURRENT_ROW = 31;
+const PO_SECTION_CURRENT_ROW = 46; // Dashboard PO terkunci mulai row 46; row 28–45 tidak boleh ditulis.
 const PO_DASHBOARD_MAX_VISIBLE_ROWS = 50;
 const OPS_TITLE_ROWS = 2;
 const OPS_HEADER_ROW = 3;
@@ -2730,73 +2730,20 @@ function renderDivisionBarChart_(sheet, dataStartRow, data) {
 }
 
 function refreshDashboard(force) {
-  // Dashboard sheet adalah tampilan sekunder. Jangan rebuild setiap transaksi/onEdit.
-  // force=true hanya untuk admin/manual refresh.
-  if (force !== true) {
-    return { success: true, skippedHeavyRebuild: true, reason: "Dashboard rebuild dinonaktifkan pada jalur otomatis.", lastUpdate: getLastUpdateTimestamp(), dirty: isDataDirty_() };
-  }
-  const lock = LockService.getDocumentLock();
-  if (!lock.tryLock(15000)) return { success: false, error: "Dashboard sedang diperbarui proses lain." };
-  try {
-    const ss = getSS();
-    let sh = ss.getSheetByName("Dashboard");
-    if (!sh) sh = ss.insertSheet("Dashboard", 0);
-    const data = getDashboardData();
-    if (!data.success) return data;
-    if (sh.getMaxRows() < 55) sh.insertRowsAfter(sh.getMaxRows(), 55 - sh.getMaxRows());
-    if (sh.getMaxColumns() < 14) sh.insertColumnsAfter(sh.getMaxColumns(), 14 - sh.getMaxColumns());
-    // Force rebuild hanya atas permintaan admin. Ini bukan jalur transaksi/onEdit.
-    try { clearDashboardCharts_(sh); } catch (e) {}
-    sh.getRange(1, 1, Math.min(sh.getMaxRows(), 30), 14).breakApart();
-    sh.getRange(1, 1, Math.min(sh.getMaxRows(), 30), 14).clearContent();
-    sh.setFrozenRows(3);
-    sh.getRange("A1:N1").merge().setValue("DASHBOARD GUDANG NASGOR 69").setFontSize(20).setFontWeight("bold");
-    sh.getRange("A2:N2").merge().setValue("Pantauan Stok & Aktivitas — Real Time | Update: " + (data.lastUpdate || data.generatedAt));
-    sh.getRange("A4:N4").merge().setValue("RINGKASAN EKSEKUTIF").setFontWeight("bold");
-    const cards = [["TOTAL ITEM AKTIF", data.totalItemAktif, "item"], ["KRITIS", data.kritis, percent_(data.kritis, data.totalItemAktif) + "%"], ["WASPADA", data.waspada, percent_(data.waspada, data.totalItemAktif) + "%"], ["AMAN", data.aman, percent_(data.aman, data.totalItemAktif) + "%"]];
-    [["A6:C9"],["D6:F9"],["G6:I9"],["J6:L9"]].forEach(function(x, i) { const r = sh.getRange(x[0]); r.merge(); r.setValue(cards[i][0] + "\n\n" + cards[i][1] + " " + cards[i][2]).setFontSize(16).setFontWeight("bold").setHorizontalAlignment("center").setVerticalAlignment("middle"); });
-    sh.getRange("A11:F11").merge().setValue("1 GRAFIK STATUS PER DIVISI").setFontWeight("bold");
-    sh.getRange("A12:F12").setValues([["DIVISI", "TOTAL ITEM", "AMAN", "WASPADA", "KRITIS", "% KRITIS"]]).setFontWeight("bold");
-    const divRows = data.statusPerDivisi.map(function(d) { return [d.divisi, d.total, d.aman, d.waspada, d.kritis, percent_(d.kritis, d.total) / 100]; });
-    if (divRows.length) {
-      sh.getRange(13, 1, divRows.length, 6).setValues(divRows);
-      sh.getRange(13, 2, divRows.length, 4).setNumberFormat("#,##0").setHorizontalAlignment("center");
-      sh.getRange(13, 6, divRows.length, 1).setNumberFormat("0.0%").setHorizontalAlignment("center");
-    }
-    // Grafik batang mendatar (horizontal) status stok per divisi — AMAN / WASPADA / KRITIS.
-    let divisionChart = null;
-    try { divisionChart = renderDivisionBarChart_(sh, 13, data); } catch (chartDivErr) {
-      console.error("renderDivisionBarChart_ gagal: " + chartDivErr.message);
-      divisionChart = { error: String(chartDivErr.message || chartDivErr) };
-    }
-    // Section 2: grafik donat status PO minggu ini. Tidak memakai data dummy.
-    const poNow = getStatusPO();
-    sh.getRange("H11:N11").merge().setValue("2 GRAFIK DONAT STATUS PO MINGGU INI").setFontWeight("bold");
-    if (poNow && poNow.success) {
-      try {
-        renderPODonutChart_(sh, 12, "Status PO — Minggu Ini", poNow.summary || {}, "Status PO — Minggu Ini");
-      } catch (donutErr) {
-        console.error("renderPODonutChart_ gagal: " + donutErr.message);
-      }
-    }
-    // Section 3: volume transaksi minggu berjalan.
-    const vol = getVolumeSummaryThisWeek_();
-    sh.getRange("A22:N22").merge().setValue("3 VOLUME MINGGU INI — " + (vol.minggu || "-")).setFontWeight("bold");
-    sh.getRange("A23:H23").setValues([["BARANG MASUK", "BARANG KELUAR", "BARANG RUSAK", "TOTAL VOLUME", "", "", "", ""]]).setFontWeight("bold");
-    sh.getRange("A24:D24").setValues([[vol.masuk || 0, vol.keluar || 0, vol.rusak || 0, vol.total || 0]]).setNumberFormat("#,##0").setHorizontalAlignment("center");
-    let poSection = null;
-    try { poSection = refreshDashboardPOSection_({ renderCharts: false, force: true }); }
-    catch (poErr) { poSection = { success: false, error: String(poErr && poErr.message || poErr) }; }
-    updateLastUpdateTimestamp();
-    clearDataDirty_();
-    return {
-      success: true, sheet: "Dashboard", updatedAt: getLastUpdateTimestamp(),
-      poSection: poSection, divisionChart: divisionChart,
-      summary: { total: data.totalItemAktif, aman: data.aman, waspada: data.waspada, kritis: data.kritis }
-    };
-  } finally { if (lock.hasLock()) lock.releaseLock(); }
+  // LEGACY FULL REBUILD DISABLED:
+  // Versi lama menghapus seluruh chart lalu breakApart/clearContent A1:N30.
+  // Ini berisiko menimpa kartu/Top 10/aktivitas yang dikelola layout lain.
+  // Dashboard hanya boleh diperbarui oleh writer yang memiliki rentang terkunci.
+  return {
+    success: true,
+    skippedHeavyRebuild: true,
+    reason: "Legacy full-dashboard rebuild dinonaktifkan untuk mencegah bentrok layout. Bagian PO menggunakan refreshDashboardPOSection_ mulai row 46.",
+    protectedRows: "28:45",
+    poStartRow: PO_SECTION_CURRENT_ROW,
+    lastUpdate: getLastUpdateTimestamp(),
+    dirty: isDataDirty_()
+  };
 }
-
 
 // ============================================================
 // 15. PO RECOMMENDATIONS [V6.2 formal format]
@@ -3836,11 +3783,18 @@ function getStatusPO() {
 }
 
 function dashboardClearPOArea_(sheet, startRow, endRow) {
-  const rows = Math.max(0, endRow - startRow + 1);
-  if (!rows) return;
-  const cols = 13;
-  if (sheet.getMaxRows() < endRow) sheet.insertRowsAfter(sheet.getMaxRows(), endRow - sheet.getMaxRows());
-  sheet.getRange(startRow, 1, rows, cols).breakApart().clearContent();
+  // SAFETY BOUNDARY: PO dashboard is allowed only in A46:M99.
+  // Refuse any caller that attempts to clear rows 1–45 or extend beyond row 99.
+  const start = Number(startRow);
+  const requestedEnd = Number(endRow);
+  if (!Number.isInteger(start) || !Number.isInteger(requestedEnd) ||
+      start !== PO_SECTION_CURRENT_ROW || requestedEnd < start) {
+    throw new Error("PO dashboard clear ditolak: rentang harus dimulai tepat pada row 46.");
+  }
+  const safeEnd = Math.min(99, requestedEnd);
+  if (safeEnd < start) return;
+  if (sheet.getMaxRows() < safeEnd) sheet.insertRowsAfter(sheet.getMaxRows(), safeEnd - sheet.getMaxRows());
+  sheet.getRange(start, 1, safeEnd - start + 1, 13).breakApart().clearContent();
 }
 
 function renderPOStatusBlock_(sheet, topRow, title, subtitle, data, items, startCol) {
@@ -3897,8 +3851,9 @@ function refreshDashboardPOSection_(options) {
   const previousItems = previous.items || [];
   const previousCount = Math.min(PO_DASHBOARD_MAX_VISIBLE_ROWS, Math.max(1, previousItems.length));
   const previousEnd = previousTop + 4 + previousCount - 1;
-  const chartStart = previousEnd + 3;
-  const clearEnd = Math.max(chartStart + 20, Math.min(sh.getMaxRows(), chartStart + 80));
+  // Bersihkan hanya rentang PO tetap A46:M99; tidak menyentuh baris 1–45,
+  // termasuk area lama 28–44, maupun kolom sumber chart tersembunyi P:V.
+  const clearEnd = currentTop + 4 + PO_DASHBOARD_MAX_VISIBLE_ROWS - 1;
   dashboardClearPOArea_(sh, currentTop, clearEnd);
 
   const currentSubtitle = 'Periode: ' + (data.tanggalPO || data.weekKey || '-') + ' • No PO: ' + (data.noPO || '-') + ' • Total Qty: ' + (data.summary.totalPOQty || 0) + ' • Datang: ' + (data.summary.totalKonfirmasiQty || 0) + ' • Belum Datang: ' + (data.summary.totalSisaQty || 0);
