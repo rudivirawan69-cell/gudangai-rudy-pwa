@@ -1002,11 +1002,8 @@ function StatusPOCard({ data, loading, error, onRefresh, onConfirm, confirmingId
 export default function DashboardPage({ onNavigate }) {
   const { user } = useAuth();
 
-  // DASHBOARD MASTER SOURCE:
-  // CV + PT tetap menjadi sumber utama masing-masing entitas.
-  // ALL membaca agregat backend yang juga memasukkan 28 item Stock Bahan Baku,
-  // sehingga total dashboard kembali mengikuti 191 item.
-  // Tidak ada penulisan ke sheet stok dari halaman Dashboard.
+  // DASHBOARD MASTER SOURCE: backend returns the unique code list from Stock Awal.
+  // CV/BBCV => CV; PT/WK/MM/BBPT => PT. Dashboard is read-only.
   const stockAll = useStock('ALL');
   const stockCV = useStock('CV');
   const stockPT = useStock('PT');
@@ -1073,11 +1070,12 @@ export default function DashboardPage({ onNavigate }) {
       else kritis += 1;
       const unit = Number(it.stok ?? it.stockAkhir ?? 0) || 0;
       totalUnit += unit;
+      const code = String(it.kode || it.kodeBarang || '').trim().toUpperCase();
       const ent = String(it.entitas || it.entity || '').toUpperCase();
-      const bucket = ent === 'PT' ? pt : cv;
-      bucket.total += 1;
-      bucket.unit += unit;
-      bucket[cls] += 1;
+      const isCV = code.startsWith('CV') || code.startsWith('BBCV') || ent === 'CV';
+      const isPT = code.startsWith('PT') || code.startsWith('WK') || code.startsWith('MM') || code.startsWith('BBPT') || ent === 'PT';
+      if (isCV) { cv.total += 1; cv.unit += unit; cv[cls] += 1; }
+      else if (isPT) { pt.total += 1; pt.unit += unit; pt[cls] += 1; }
     });
     return {
       total: list.length,
