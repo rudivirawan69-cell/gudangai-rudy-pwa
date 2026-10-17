@@ -26,7 +26,7 @@ concurrency:
 jobs:
   deploy-audit-preview:
     name: Build and deploy isolated UI preview
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - name: Checkout audit branch

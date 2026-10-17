@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       artifact_id: ${{ steps.upload-pages-artifact.outputs.artifact-id }}
     steps:
@@ -49,7 +49,7 @@ jobs:
           path: ./dist
 
   deploy:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: build
     environment:
       name: github-pages
