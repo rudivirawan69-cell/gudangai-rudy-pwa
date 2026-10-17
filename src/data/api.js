@@ -381,7 +381,16 @@ async function submitBatchChunk(action, entity, chunkItems, tanggal) {
   }
   if (!results.length) {
     const detail = [data?.code, data?.status, data?.error, data?.message].filter(Boolean).join(' · ');
-    throw new Error(detail || 'Backend tidak mengonfirmasi seluruh batch');
+    const batchError = new Error(detail || 'Backend tidak mengonfirmasi seluruh batch');
+    batchError.code = String(data?.code || '');
+    batchError.status = String(data?.status || '');
+    batchError.validationErrors = Array.isArray(data?.validationErrors) ? data.validationErrors : [];
+    // Only a definitive backend preflight rejection can safely enter item-by-item fallback.
+    // Network timeout/HTML/unknown write outcome must NEVER be retried serially.
+    batchError.definitiveNoWrite = data?.writeOccurred === false ||
+      data?.status === 'PRECHECK_REJECTED' ||
+      (data?.status === 'REJECTED' && data?.writeOccurred !== 'unknown');
+    throw batchError;
   }
 
   for (const r of results) {
@@ -442,16 +451,41 @@ async function submitItems(action, entity, items, tanggal, options = {}) {
     } catch (err) {
       const msg = String(err?.message || 'Gagal menulis batch');
       const remainingItems = list.slice(i).filter((it) => !isApplied(it.clientItemId));
-      // HARD RULE: timeout/unknown tidak boleh diubah menjadi serial retry.
+
+      // Safe fallback ONLY when backend explicitly confirms no batch write occurred.
+      // Keep the same identity tuple so server idempotency protects retries.
+      if (err?.definitiveNoWrite && remainingItems.length) {
+        const fallbackResults = [];
+        for (const item of remainingItems) {
+          try {
+            const one = await submitOneItem(action, entity, item, tanggal);
+            fallbackResults.push({ ...one, clientItemId: item.clientItemId, fallback: true });
+            if (one.success || one.skipped) totalSuccess++;
+            else totalFail++;
+          } catch (singleErr) {
+            totalFail++;
+            fallbackResults.push({ success: false, clientItemId: item.clientItemId, fallback: true, error: String(singleErr?.message || 'Fallback item gagal') });
+          }
+        }
+        allResults.push(...fallbackResults);
+        const failedFallback = remainingItems.filter(item =>
+          !fallbackResults.some(result => result.clientItemId === item.clientItemId && (result.success || result.skipped))
+        );
+        if (failedFallback.length && !options.fromQueue) enqueue(action, entity, failedFallback, { tanggal });
+        totalQueued += failedFallback.length;
+        emitProgress(Math.min(i + chunk.length, list.length), list.length, { successCount: totalSuccess, failCount: totalFail });
+        if (failedFallback.length) pushNotification({
+          type: 'warning', title: 'Sebagian item menunggu sinkronisasi',
+          body: totalSuccess + ' sukses · ' + failedFallback.length + ' antrian. Penolakan batch: ' + msg,
+        });
+        continue;
+      }
+
+      // Timeout, network error, malformed response or UNKNOWN outcome stays queued.
+      // Never resend serially because the server may already have committed the batch.
       if (remainingItems.length && !options.fromQueue) enqueue(action, entity, remainingItems, { tanggal });
       totalQueued += remainingItems.length;
-      allResults.push(...remainingItems.map(it => ({
-        success: false,
-        queued: true,
-        uncertain: true,
-        clientItemId: it.clientItemId,
-        error: msg,
-      })));
+      allResults.push(...remainingItems.map(it => ({ success: false, queued: true, uncertain: true, clientItemId: it.clientItemId, error: msg })));
       emitProgress(list.length, list.length, { successCount: totalSuccess, failCount: totalFail });
       pushNotification({
         type: 'warning',
