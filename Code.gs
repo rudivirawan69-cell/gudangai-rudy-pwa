@@ -1757,7 +1757,7 @@ function getStockByCode(kode, requestedEntitas) {
 
 function getAllStock(entitas) {
   const ss = getSS();
-  const master = ss.getSheetByName("Stock Awal");
+  const master = ss.getSheetByName("Stock awal");
   if (!master) return { success:false, error:"Sheet Stock Awal tidak ditemukan; sumber master wajib Stock Awal." };
   const masterValues = master.getDataRange().getValues();
   if (masterValues.length < 2) return { success:false, error:"Stock Awal kosong." };
