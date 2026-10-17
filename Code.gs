@@ -1064,19 +1064,16 @@ function bulkTransaction(body) {
       continue;
     }
     var normalizedKode = String(check.kode || tx.kodeBarang || tx.kode || "").trim();
-    var duplicateKey = String(tx.sheet) + "|" + normalizedKode + "|" + String(tx.qty);
+    // Prevent duplicate transaction identities, not repeated SKU/quantity pairs.
+    var duplicateKey = String(tx.transactionId) + "|" + String(tx.nonce);
     if (seenKeys[duplicateKey]) {
-      validationErrors.push({ index: i + 1, error: "Duplikat item dalam batch: " + normalizedKode + " qty " + tx.qty });
+      validationErrors.push({ index: i + 1, transactionId: tx.transactionId, requestId: tx.requestId || "", clientItemId: tx.clientItemId || tx.requestId || "", error: "Identitas transaksi duplikat dalam batch: " + tx.transactionId });
       continue;
     }
     seenKeys[duplicateKey] = true;
     tx.kodeBarang = normalizedKode;
+    tx._batchIndex = i + 1;
     prepared.push(tx);
-  }
-  if (validationErrors.length > 0) {
-    var rejected = { success: false, status: "PRECHECK_REJECTED", batchId: batchId, total: list.length, validationErrors: validationErrors, results: [] };
-    batchCache.put("batchResult_" + batchId, JSON.stringify(rejected), DUP_CACHE_TTL_SEC);
-    return rejected;
   }
 
   // Load stok 1x (untuk shortage HOLD pada keluar)
@@ -1102,9 +1099,13 @@ function bulkTransaction(body) {
     return { success: false, status: "UNKNOWN", code: "LOCK_TIMEOUT", batchId: batchId, writeOccurred: "unknown", error: "Lock backend tidak tersedia; lakukan read-back sebelum retry." };
   }
 
-  var results = [];
+  var results = validationErrors.map(function(v) {
+    return { success: false, status: "REJECTED", code: "ITEM_VALIDATION_FAILED", batchId: batchId,
+      batchIndex: v.index, transactionId: v.transactionId || "", requestId: v.requestId || "",
+      clientItemId: v.clientItemId || v.requestId || "", error: v.error, writeOccurred: false };
+  });
   var successCount = 0;
-  var failCount = 0;
+  var failCount = validationErrors.length;
   var writeTouched = false;
   var rowsToWrite = [];
 
@@ -1119,7 +1120,7 @@ function bulkTransaction(body) {
           var priorReadBack = readBackTransactionByIdentity_({ transactionId: item.transactionId, nonce: item.nonce }, sheetName);
           if (priorReadBack && priorReadBack.matched) {
             updateIdempotencyRecord_(prior, { status: "APPLIED", dataRow: priorReadBack.row, writeOccurred: true, errorCode: "" });
-            results.push({ success: true, status: "APPLIED", code: "READBACK_CONFIRMED", batchId: batchId, batchIndex: p + 1, transactionId: item.transactionId, nonce: item.nonce, requestId: item.requestId || "", clientItemId: item.clientItemId || item.requestId || "", sheet: sheetName, row: priorReadBack.row, kode: priorReadBack.kodeBarang, qty: priorReadBack.qty, replayed: true, writeOccurred: true });
+            results.push({ success: true, status: "APPLIED", code: "READBACK_CONFIRMED", batchId: batchId, batchIndex: item._batchIndex || (p + 1), transactionId: item.transactionId, nonce: item.nonce, requestId: item.requestId || "", clientItemId: item.clientItemId || item.requestId || "", sheet: sheetName, row: priorReadBack.row, kode: priorReadBack.kodeBarang, qty: priorReadBack.qty, replayed: true, writeOccurred: true });
             successCount++;
             continue;
           }
@@ -1130,7 +1131,7 @@ function bulkTransaction(body) {
       if (prior && prior.status === "APPLIED") {
         results.push({
           success: true, status: "APPLIED", code: "IDEMPOTENT_REPLAY",
-          batchId: batchId, batchIndex: p + 1,
+          batchId: batchId, batchIndex: item._batchIndex || (p + 1),
           transactionId: item.transactionId, nonce: item.nonce,
           requestId: item.requestId || "",
           clientItemId: item.clientItemId || item.requestId || "",
@@ -1245,7 +1246,7 @@ function bulkTransaction(body) {
           } catch (uErr) {}
           results.push({
             success: true, status: "APPLIED", code: "TRANSACTION_APPLIED",
-            batchId: batchId, batchIndex: rw.index + 1,
+            batchId: batchId, batchIndex: (prepared[rw.index] && prepared[rw.index]._batchIndex) || (rw.index + 1),
             transactionId: rw.txId, nonce: rw.nonce,
             requestId: rw.requestId || "",
             clientItemId: rw.clientItemId || rw.requestId || "",
@@ -1269,14 +1270,15 @@ function bulkTransaction(body) {
           } catch (u2) {}
           results.push({
             success: false, status: "UNKNOWN", code: "VERIFY_FAILED",
-            batchId: batchId, batchIndex: rw.index + 1,
+            batchId: batchId, batchIndex: (prepared[rw.index] && prepared[rw.index]._batchIndex) || (rw.index + 1),
             transactionId: rw.txId, nonce: rw.nonce,
             requestId: rw.requestId || "",
             clientItemId: rw.clientItemId || rw.requestId || "",
             kode: rw.kode,
             writeOccurred: "unknown", error: "Verifikasi integritas gagal di baris " + rowNum
           });
-          break;
+          // Continue verifying later rows already written in this range.
+          continue;
         }
       }
     }
@@ -1293,13 +1295,13 @@ function bulkTransaction(body) {
   }
 
   var response = {
-    success: failCount === 0 && successCount === prepared.length,
-    status: failCount === 0 ? "COMMITTED" : (writeTouched ? "PARTIAL_FAILURE_REVIEW_REQUIRED" : "FAILED"),
+    success: failCount === 0 && successCount === list.length,
+    status: failCount === 0 ? "COMMITTED" : (successCount > 0 || writeTouched ? "PARTIAL_FAILURE_REVIEW_REQUIRED" : "FAILED"),
     batchId: batchId,
-    total: prepared.length,
+    total: list.length,
     successCount: successCount,
     failCount: failCount,
-    failedIndex: failCount ? (results.length ? results[results.length - 1].batchIndex : null) : null,
+    failedIndex: failCount ? ((results.find(function(r) { return r.success !== true; }) || {}).batchIndex || null) : null,
     resumable: failCount > 0,
     retryPolicy: failCount > 0 ? "READBACK_FIRST_FOR_UNKNOWN; RESUME_UNSENT_ITEMS_ONLY" : "NONE",
     results: results,
@@ -1309,7 +1311,7 @@ function bulkTransaction(body) {
   try { batchCache.put("batchResult_" + batchId, JSON.stringify(response), DUP_CACHE_TTL_SEC); } catch (cErr) {}
   try {
     writeAuditLogSecure("BULK_TRANSACTION", response.success ? "SUCCESS" : "PARTIAL_FAILURE", {
-      batchId: batchId, total: prepared.length, successCount: successCount, failCount: failCount, execMs: response.execMs
+      batchId: batchId, total: list.length, successCount: successCount, failCount: failCount, execMs: response.execMs
     }, response.success ? "" : "Jangan ulangi batch sebelum review.", batchId);
   } catch (logErr) {}
   return response;
