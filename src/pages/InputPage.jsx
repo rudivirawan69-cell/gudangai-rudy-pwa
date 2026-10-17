@@ -6,7 +6,8 @@ import {
   QrCode, Bell, X, CheckCircle2, Clipboard, Image, Camera,
 } from 'lucide-react';
 import {
-  extractTextFromPdf, extractTextFromImage, parseLinesFromText, validateItems, applyStockAwareFallback, scanBarcodeFromVideo,
+  extractTextFromPdf, extractTextFromImage, parseLinesFromText, validateItems, applyStockAwareFallback,
+  detectEntityFromText, scanBarcodeFromVideo,
 } from '../data/pdfValidate';
 import {
   submitBarangMasuk, submitBarangKeluar, submitBarangRusak, fetchStock,
@@ -73,13 +74,7 @@ export default function InputPage() {
   useEffect(() => {
     const handler = (e) => {
       const d = e.detail || {};
-      setSubmitProgress({
-        sent: Number(d.sent) || 0,
-        total: Number(d.total) || 0,
-        success: Number(d.success) || 0,
-        queued: Number(d.queued) || 0,
-        failed: Number(d.failed) || 0,
-      });
+      setSubmitProgress({ sent: d.sent || 0, total: d.total || 0, success: d.success || 0, failed: d.failed || 0 });
     };
     window.addEventListener('gudangai-submit-progress', handler);
     return () => window.removeEventListener('gudangai-submit-progress', handler);
@@ -173,16 +168,15 @@ export default function InputPage() {
     if (!text || !String(text).trim()) { setStatusBanner('Tidak ada teks untuk divalidasi.'); return; }
     setBusy(true); setStatusBanner(''); setAccuracy(null);
     try {
-      // Entitas yang dipilih pengguna adalah sumber kebenaran.
-      // Teks paste/PDF/foto tidak boleh mengubah CV menjadi PT hanya karena
-      // nama supplier/header di dalam dokumen mengandung "PT".
-      const validationEntity = entity;
+      const detected = detectEntityFromText(text);
+      const useEntity = detected || entity;
+      if (detected && detected !== entity) setEntity(detected);
       const rows = parseLinesFromText(text, lines);
       if (!rows.length) { setStatusBanner('Tidak ada baris barang terdeteksi dari ' + sourceLabel + '.'); return; }
-      const validation = validateItems(rows, validationEntity);
+      const validation = validateItems(rows, useEntity);
       let stock = null;
-      try { stock = await fetchStock(validationEntity, { allowDemo: false }); } catch (_) { stock = null; }
-      const matched = applyStockAwareFallback(validation.matched || [], validationEntity, stock)
+      try { stock = await fetchStock(useEntity, { allowDemo: false }); } catch (_) { stock = null; }
+      const matched = applyStockAwareFallback(validation.matched || [], useEntity, stock)
         .filter((m) => !/\b\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4}\b/.test(String(m?.nameFromPdf || m?.rawName || '')))
         .filter((m) => !/\b(?:periode|period|minggu)\b.*\d{4}/i.test(String(m?.nameFromPdf || m?.rawName || '')));
       const amb = validation.ambiguous || [];
@@ -553,15 +547,15 @@ export default function InputPage() {
         if (queuedCount > 0) {
           pushNotification({
             type: 'warning',
-            title: confirmedItems.length > 0 ? 'Transaksi sebagian selesai' : 'Transaksi masuk Antrian Sinkronisasi',
-            body: confirmedItems.length + ' sukses · ' + queuedCount + ' antrian' +
-              (Math.max(0, cart.length - confirmedItems.length - queuedCount) ? ' · ' + Math.max(0, cart.length - confirmedItems.length - queuedCount) + ' belum teridentifikasi' : '') +
-              '. Tidak ada item dibuang.'
+            title: confirmedItems.length > 0 ? 'Sebagian transaksi masuk Antrian Sinkronisasi' : 'Transaksi masuk Antrian Sinkronisasi',
+            body: confirmedItems.length + ' terkonfirmasi · ' + queuedCount + ' masuk antrian · ' +
+              Math.max(0, cart.length - confirmedItems.length - queuedCount) + ' belum teridentifikasi. Tidak ada item dibuang.'
           });
           setStatusBanner(
-            confirmedItems.length + ' sukses · ' + queuedCount + ' antrian' +
-            (failCount ? ' · ' + failCount + ' gagal konfirmasi' : '') +
-            ' — lanjutkan dari Antrian bila perlu.'
+            (confirmedItems.length > 0 ? 'TERKONFIRMASI ' + confirmedItems.length + ' · ' : '') +
+            'ANTRIAN ' + queuedCount +
+            (failCount ? ' · BELUM TERKONFIRMASI ' + failCount : '') +
+            ' — belum ditulis dianggap pending.'
           );
         } else if (confirmedItems.length === cart.length) {
           pushNotification({ type: 'success', title: 'Transaksi selesai', body: confirmedItems.length + ' item ' + txType + ' ' + entity + ' terkonfirmasi ditulis backend.' });
@@ -787,22 +781,13 @@ export default function InputPage() {
           <div className="fixed bottom-16 left-0 right-0 px-4 z-20">
             {submitProgress && (
               <p className="text-center text-xs text-cyan-700 mb-1 font-semibold">
-                {submitProgress.sent < submitProgress.total
-                  ? `Mengirim ${submitProgress.sent}/${submitProgress.total} · sukses ${submitProgress.success}` +
-                    (submitProgress.queued ? ` · antrian ${submitProgress.queued}` : '')
-                  : `Selesai kirim ${submitProgress.total} · sukses ${submitProgress.success}` +
-                    (submitProgress.queued ? ` · antrian ${submitProgress.queued}` : '') +
-                    (submitProgress.failed ? ` · gagal ${submitProgress.failed}` : '')}
+                Mengirim {submitProgress.sent}/{submitProgress.total} · ok {submitProgress.success} · antri {submitProgress.failed}
               </p>
             )}
             <button type="button" onClick={handleSubmit} disabled={submitting || !cart.length}
               className="w-full py-3 rounded-2xl bg-cyan-600 text-white font-bold shadow-lg flex items-center justify-center gap-2 disabled:opacity-50">
               {submitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
-              {submitting
-                ? (submitProgress
-                    ? `Mengirim ${submitProgress.sent}/${submitProgress.total}…`
-                    : 'Mengirim…')
-                : `Kirim ${cart.length} item`}
+              {submitting ? 'Mengirim…' : `Kirim ${cart.length} item`}
             </button>
           </div>
         </div>
@@ -891,18 +876,10 @@ function PdfReviewRow({ row, entity, stockCatalog = [], onPick, onIgnore }) {
     if (!term) return [];
     const live = searchLiveStock(stockCatalog, term);
     const stat = searchMaster(entity, term);
-    const rawCodeInput = term.match(/^(BBCV|BBPT)[\s-]?(\d{3,4})$/i);
-    const requestedRawCode = rawCodeInput
-      ? rawCodeInput[1].toUpperCase() + '-' + rawCodeInput[2].padStart(4, '0')
-      : '';
-    const expectedRawPrefix = entity === 'CV' ? 'BBCV' : 'BBPT';
     const seen = new Set();
     return [...live, ...stat].filter((h) => {
-      const k = String(h?.kode || h?.kodeBarang || '').trim().toUpperCase();
+      const k = String(h?.kode || h?.kodeBarang || '').trim();
       if (!k || seen.has(k)) return false;
-      const divisi = String(h?.divisi || h?.division || '').trim().toUpperCase().replace(/\s+/g, ' ');
-      const rawMaterial = /^(?:BBCV|BBPT)-/.test(k) || divisi === 'BAHAN BAKU';
-      if (rawMaterial && (!rawCodeInput || rawCodeInput[1].toUpperCase() !== expectedRawPrefix || k !== requestedRawCode)) return false;
       seen.add(k);
       return true;
     }).slice(0, 5);

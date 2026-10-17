@@ -1,11 +1,11 @@
-/** GudangAI RUDY — API layer V6.7.3 stable-chunk (BATCH=35) + queue serial fallback + tanggal YYYY-MM-DD */
-/** CHUNK-35-2026-10-07: 1 PDF (~70 item) ≈ 2 request; progress UI sukses/antrian akurat. */
+/** GudangAI RUDY — API layer V6.7.2 stable-chunk (BATCH=20) + queue serial fallback + tanggal YYYY-MM-DD */
+/** PRODUCTION-WRITE-RECOVERY-2026-10-05: canonical main build marker; preserve CV/PT write path and 20-item batching. */
 const RETRY_COUNT = 2;
 const RETRY_BASE_MS = 400;
 const REQUEST_TIMEOUT_MS = 15000;
-/** Chunk aman: 35 item/POST — PDF maks ~70 item = 2 request. */
-const BATCH_CHUNK_SIZE = 35;
-const BATCH_TIMEOUT_MS = 100000;
+/** Chunk aman agar Apps Script + spreadsheet selesai < timeout (anti-antrian). 20 item per POST. */
+const BATCH_CHUNK_SIZE = 20;
+const BATCH_TIMEOUT_MS = 90000;
 const SINGLE_TIMEOUT_MS = 60000;
 const SCHEMA_VERSION = '1.0';
 const SAFE_WRITE_BACKEND_RE = /STOCK-READONLY|STOCK-SOURCE-LOCKED|6\.6\.5\+?(?:BULK[-_]?STABLE|DEPLOY[-_]?READY)|6\.6\.[5-9]|V?6\.6\.[5-9]|BULK[-_]?STABLE|DEPLOY[-_]?READY/i;
@@ -88,7 +88,6 @@ async function fetchWithRetry(url, options = {}, retries = RETRY_COUNT, timeoutM
   throw lastError;
 }
 async function postJson(payload, { retries = RETRY_COUNT, timeoutMs = REQUEST_TIMEOUT_MS } = {}) {
-  if (import.meta.env.VITE_AUDIT_PREVIEW === 'true') throw new Error('Mode audit: transaksi dinonaktifkan agar tidak menulis ke spreadsheet produksi.');
   const url = getApiUrl();
   if (!url) throw new Error('URL API belum diatur');
   const body = JSON.stringify({ schemaVersion: SCHEMA_VERSION, secret: getApiSecret() || undefined, client: { app: 'gudangai-rudy-pwa', deviceId: deviceId() }, ...payload });
@@ -244,14 +243,9 @@ export async function getDashboardData() {
     throw new Error(data?.error || 'Dashboard aggregate kosong');
   } catch (err) {
     try {
-      const items = await fetchStock('ALL');
-      return {
-        success: true,
-        totalItem: items.length,
-        totalItemAktif: items.length,
-        statusPerDivisi: buildDashboardFallbackFromStock(items),
-        source: 'live-stock-all-cv-pt-bahan-baku'
-      };
+      const [cv, pt] = await Promise.all([fetchStock('CV'), fetchStock('PT')]);
+      const items = [...(cv || []), ...(pt || [])];
+      return { success: true, version: 'PWA-LIVE-STOCK-FALLBACK', statusPerDivisi: buildDashboardFallbackFromStock(items), source: 'live-stock-cv-pt' };
     } catch (fallbackErr) {
       return { success: false, error: fallbackErr?.message || err?.message || 'Gagal mengambil dashboard' };
     }
@@ -334,7 +328,6 @@ async function submitBatchChunk(action, entity, chunkItems, tanggal) {
     requestId: String(it.clientItemId),
     transactionId: 'TX-' + String(it.clientItemId),
     nonce: 'NC-' + String(it.clientItemId),
-    clientItemId: String(it.clientItemId),
   }));
   const batchId = newIds().requestId;
   const payload = {
@@ -350,7 +343,7 @@ async function submitBatchChunk(action, entity, chunkItems, tanggal) {
     requestId: batchId,
   };
 
-  const data = await postJson(payload, { retries: 2, timeoutMs: BATCH_TIMEOUT_MS });
+  const data = await postJson(payload, { retries: 2, timeoutMs: 90000 });
   const rawResults = data?.results || data?.data?.results || [];
   // Map identity → clientItemId from normalized (wire intentionally omits clientItemId).
   // Keys: transactionId (TX-CI-...), requestId (CI-...), and bare clientItemId.
@@ -382,16 +375,7 @@ async function submitBatchChunk(action, entity, chunkItems, tanggal) {
   }
   if (!results.length) {
     const detail = [data?.code, data?.status, data?.error, data?.message].filter(Boolean).join(' · ');
-    const batchError = new Error(detail || 'Backend tidak mengonfirmasi seluruh batch');
-    batchError.code = String(data?.code || '');
-    batchError.status = String(data?.status || '');
-    batchError.validationErrors = Array.isArray(data?.validationErrors) ? data.validationErrors : [];
-    // Only a definitive backend preflight rejection can safely enter item-by-item fallback.
-    // Network timeout/HTML/unknown write outcome must NEVER be retried serially.
-    batchError.definitiveNoWrite = data?.writeOccurred === false ||
-      (data?.status === 'PRECHECK_REJECTED' && data?.writeOccurred === false) ||
-      (data?.status === 'REJECTED' && data?.writeOccurred === false);
-    throw batchError;
+    throw new Error(detail || 'Backend tidak mengonfirmasi seluruh batch');
   }
 
   for (const r of results) {
@@ -402,11 +386,7 @@ async function submitBatchChunk(action, entity, chunkItems, tanggal) {
   return { success: successCount === normalized.length, successCount, failCount, results };
 }
 function emitProgress(sent, total, chunkResult) {
-  try {
-    window.dispatchEvent(new CustomEvent('gudangai-submit-progress', {
-      detail: { sent, total, success: chunkResult?.successCount || 0, queued: chunkResult?.queuedCount || 0, failed: chunkResult?.failCount || 0 },
-    }));
-  } catch (_) {}
+  try { window.dispatchEvent(new CustomEvent('gudangai-submit-progress', { detail: { sent, total, success: chunkResult?.successCount || 0, failed: chunkResult?.failCount || 0 } })); } catch (_) {}
 }
 async function submitItems(action, entity, items, tanggal, options = {}) {
   const list = (items || []).map(ensureClientItemId);
@@ -451,57 +431,31 @@ async function submitItems(action, entity, items, tanggal, options = {}) {
       continue;
     } catch (err) {
       const msg = String(err?.message || 'Gagal menulis batch');
-      const remainingItems = list.slice(i).filter((it) => !isApplied(it.clientItemId));
-
-      // Safe fallback ONLY when backend explicitly confirms no batch write occurred.
-      // Keep the same identity tuple so server idempotency protects retries.
-      if (err?.definitiveNoWrite && remainingItems.length) {
-        const fallbackResults = [];
-        for (const item of remainingItems) {
-          try {
-            const one = await submitOneItem(action, entity, item, tanggal);
-            fallbackResults.push({ ...one, clientItemId: item.clientItemId, fallback: true });
-            if (one.success || one.skipped) totalSuccess++;
-            else totalFail++;
-          } catch (singleErr) {
-            totalFail++;
-            fallbackResults.push({ success: false, clientItemId: item.clientItemId, fallback: true, error: String(singleErr?.message || 'Fallback item gagal') });
-          }
-        }
-        allResults.push(...fallbackResults);
-        const failedFallback = remainingItems.filter(item =>
-          !fallbackResults.some(result => result.clientItemId === item.clientItemId && (result.success || result.skipped))
-        );
-        if (failedFallback.length && !options.fromQueue) enqueue(action, entity, failedFallback, { tanggal });
-        totalQueued += failedFallback.length;
-        emitProgress(Math.min(i + chunk.length, list.length), list.length, { successCount: totalSuccess, failCount: totalFail });
-        if (failedFallback.length) pushNotification({
-          type: 'warning', title: 'Sebagian item menunggu sinkronisasi',
-          body: totalSuccess + ' sukses · ' + failedFallback.length + ' antrian. Penolakan batch: ' + msg,
-        });
-        continue;
-      }
-
-      // Timeout, network error, malformed response or UNKNOWN outcome stays queued.
-      // Never resend serially because the server may already have committed the batch.
-      if (remainingItems.length && !options.fromQueue) enqueue(action, entity, remainingItems, { tanggal });
+      const remainingItems = list.slice(i);
+      // HARD RULE: timeout/unknown tidak boleh diubah menjadi serial retry.
+      // Retry hanya boleh memakai identity/batch yang sama setelah read-back/status
+      // backend terverifikasi; jangan mengubah timeout menjadi write serial.
+      if (!options.fromQueue) enqueue(action, entity, remainingItems, { tanggal });
       totalQueued += remainingItems.length;
-      allResults.push(...remainingItems.map(it => ({ success: false, queued: true, uncertain: true, clientItemId: it.clientItemId, error: msg })));
+      totalFail += remainingItems.length;
+      allResults.push(...remainingItems.map(it => ({
+        success: false,
+        queued: true,
+        uncertain: true,
+        clientItemId: it.clientItemId,
+        error: msg,
+      })));
       emitProgress(list.length, list.length, { successCount: totalSuccess, failCount: totalFail });
       pushNotification({
         type: 'warning',
-        title: totalSuccess > 0 ? 'Sebagian item perlu Antrian Sinkronisasi' : 'Item diamankan di Antrian Sinkronisasi',
-        body: totalSuccess + ' sukses · ' + remainingItems.length + ' antrian. Detail: ' + msg,
+        title: 'Write belum terkonfirmasi',
+        body: remainingItems.length + ' item diamankan di Antrian Sinkronisasi. Detail backend: ' + msg + '. Jangan kirim ulang manual; verifikasi backend/read-back terlebih dahulu.',
       });
       break;
     }
   }
   if (totalQueued > 0) {
-    pushNotification({
-      type: 'warning',
-      title: totalSuccess > 0 ? 'Transaksi sebagian selesai' : 'Transaksi masuk Antrian Sinkronisasi',
-      body: totalSuccess + ' sukses · ' + totalQueued + ' antrian' + (totalFail ? ' · ' + totalFail + ' gagal konfirmasi' : '') + '. Lanjutkan dari Antrian bila perlu.',
-    });
+    pushNotification({ type: 'warning', title: 'Sinkronisasi perlu dilanjutkan', body: totalSuccess + ' sukses · ' + totalQueued + ' masuk antrian · ' + totalFail + ' belum terkonfirmasi. Antrian menyimpan ID unik untuk mencegah duplikasi.' });
   } else {
     pushNotification({ type: 'success', title: 'Transaksi selesai', body: totalSuccess + ' item berhasil ditulis tanpa antrian.' });
   }
