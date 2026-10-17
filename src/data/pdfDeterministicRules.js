@@ -2,8 +2,11 @@
 export function normalizeOcr(s) {
   return String(s || '')
     .toLowerCase()
+    .normalize('NFKC')
     .replace(/[\u2018\u2019]/g, "'")
     .replace(/[\u201c\u201d]/g, '"')
+    .replace(/\bsomay\b/g, 'siomay')
+    .replace(/\b(?:frozen|beku|chilled|fresh)\b/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -29,11 +32,17 @@ export function resolvePdfNameDeterministic(entity, rawName, masterList) {
 
   // --- Specific rules (CV vs PT codes differ) ---
   // Deterministic mappings for items reported missing in PDF import.
+  // PDFs often append a weight before the product variant and a storage label.
+  // Match only the distinctive 2-dada + 2-paha product; do not fuzzy-match generic "ayam negeri".
+  if (/ayam\s+negeri/.test(norm) && /2\s*dada/.test(norm) && /2\s*paha/.test(norm)) {
+    const hit = pick(ent === 'PT' ? 'WK-0039' : 'CV-0071', 'det-ayam-negeri-2dada-2paha');
+    if (hit) return hit;
+  }
   if (/tulang.*ceker/.test(norm)) {
     const hit = pick(ent === 'PT' ? 'PT-0010' : 'CV-0038', 'det-tulang-ceker');
     if (hit) return hit;
   }
-  if (/saos?\s+bakaran/.test(norm)) {
+  if (/saos?\s+bakaran?\b/.test(norm)) {
     const hit = pick(ent === 'PT' ? 'WK-0008' : 'CV-0076', 'det-saos-bakaran');
     if (hit) return hit;
   }
@@ -49,7 +58,7 @@ export function resolvePdfNameDeterministic(entity, rawName, masterList) {
     const hit = pick(ent === 'PT' ? 'WK-0029' : 'CV-0059', 'det-saos-rica');
     if (hit) return hit;
   }
-  if (ent === 'PT' && /(?:paket\s+siomay|siomay\s+paket|^siomay$)/.test(norm)) {
+  if (ent === 'PT' && /(?:paket\s+siomay|siomay\s+paket|paket\s+somay|somay\s+paket|^siomay$)/.test(norm)) {
     const hit = pick('MM-0015', 'det-paket-siomay');
     if (hit) return hit;
   }

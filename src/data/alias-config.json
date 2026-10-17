@@ -205,7 +205,9 @@
       ],
       "CV-0071": [
         "ayam negeri 2 dada + 2 paha",
-        "ayam negeri 2d+2p"
+        "ayam negeri 2d+2p",
+        "ayam negeri frozen 2 dada + 2 paha",
+        "ayam negeri 0.8 (2 dada + 2 paha) frozen"
       ],
       "CV-0073": [
         "bumbu mie nyemek promo"
@@ -218,7 +220,9 @@
         "mie bulat ( 500 gr )"
       ],
       "CV-0076": [
-        "saos bakaran"
+        "saos bakaran",
+        "saos bakar",
+        "saos bakar frozen"
       ],
       "CV-0077": [
         "bumbu urap urap",
@@ -592,7 +596,9 @@
         "iga sapi"
       ],
       "WK-0008": [
-        "saos bakaran"
+        "saos bakaran",
+        "saos bakar",
+        "saos bakar frozen"
       ],
       "WK-0009": [
         "bumbu urap urap",
@@ -680,7 +686,9 @@
       ],
       "WK-0039": [
         "ayam negeri 2 dada + 2 paha",
-        "ayam negeri 2d+2p"
+        "ayam negeri 2d+2p",
+        "ayam negeri frozen 2 dada + 2 paha",
+        "ayam negeri 0.8 (2 dada + 2 paha) frozen"
       ],
       "WK-0040": [
         "bebek penyet",
@@ -744,7 +752,11 @@
         "paket siomay",
         "siomay paket",
         "siomay 1 paket",
-        "1 pack siomay"
+        "1 pack siomay",
+        "paket somay",
+        "paket somay frozen",
+        "paket somay (10) frozen",
+        "somay"
       ],
       "MM-0016": [
         "kuah cuko",
