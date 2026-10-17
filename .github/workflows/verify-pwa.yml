@@ -37,6 +37,8 @@ jobs:
         run: node --check < Code.gs
       - name: Test combined Code.gs production contracts
         run: node scripts/test-combined-codegs.mjs
+      - name: Test PDF parser regression contracts
+        run: node scripts/test-pdf-parser-contracts.mjs
       - name: Lint
         run: npm run lint
       - name: Production build

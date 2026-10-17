@@ -210,13 +210,19 @@ export function parsePdfLinesToItems(text) {
   let sourceIndex = 0;
 
   function parseProductSegment(segment) {
-    const nums = [...String(segment || '').matchAll(/(\d+(?:[.,]\d+)?)/g)];
+    // Supplier/keterangan text may contain numbers after the quantity column.
+    // Remove that metadata first so the rightmost product quantity remains authoritative.
+    const cleanSegment = String(segment || '')
+      .replace(/\s+\b(?:supplier|vendor)\b.*$/i, '')
+      .replace(/\s*[|/]\s*(?:cv|pt)\.?\s*(?:pd3\s*chicken|rasyuka|selera|supplier|vendor)?[^\n]*$/i, '')
+      .trim();
+    const nums = [...cleanSegment.matchAll(/(\d+(?:[.,]\d+)?)/g)];
     if (!nums.length) return null;
     const last = nums[nums.length - 1];
     const qty = parseFloat(last[1].replace(',', '.'));
     if (!(qty > 0) || qty > 99999) return null;
 
-    let rawName = String(segment).slice(0, last.index).trim();
+    let rawName = cleanSegment.slice(0, last.index).trim();
     rawName = sanitizePdfProductName(rawName)
       .replace(/\s+(?:\d+(?:[.,]\d+)?\s+){1,3}\d+(?:[.,]\d+)?\s*$/, '')
       .replace(/\s*\([^)]*\b(?:\d+(?:[.,]\d+)?\s*(?:kg|gram|gr|pcs|pack|pail|liter|ml)|\d+\s*(?:pcs|pack|pail))[^)]*\)/gi, '')
