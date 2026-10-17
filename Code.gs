@@ -3942,6 +3942,8 @@ function getStatusPO() {
     const ptCandidates = allStockForPO_.filter(function(it) { return it.entitas === "PT" && normalizePONameKey_(it.nama) === normalizePONameKey_(nama); });
     items.push({
       no: no, nama: nama, totalPO: total, poCV: poCV, poPT: poPT, kodeCV: cvCandidates.length === 1 ? cvCandidates[0].kode : null, kodePT: ptCandidates.length === 1 ? ptCandidates[0].kode : null,
+      // Selaraskan kontrak tanggal dengan PWA agar filter minggu tidak membuang item PO.
+      tglRencana: r[7] || null, tglKedatangan: r[7] || null, tanggalPO: r[7] || null,
       qtyDatang: datang, qtyBelumDatang: belumDatang, status: status,
       // kodeUnik tetap disediakan untuk label, tetapi pembacaan tanggal tidak bergantung padanya.
       kodeUnik: noPO ? ('No : ' + noPO + '[ ITEM : ' + String(no).padStart(2, '0') + ' ]') : null,
