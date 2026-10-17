@@ -388,8 +388,8 @@ async function submitBatchChunk(action, entity, chunkItems, tanggal) {
     // Only a definitive backend preflight rejection can safely enter item-by-item fallback.
     // Network timeout/HTML/unknown write outcome must NEVER be retried serially.
     batchError.definitiveNoWrite = data?.writeOccurred === false ||
-      data?.status === 'PRECHECK_REJECTED' ||
-      (data?.status === 'REJECTED' && data?.writeOccurred !== 'unknown');
+      (data?.status === 'PRECHECK_REJECTED' && data?.writeOccurred === false) ||
+      (data?.status === 'REJECTED' && data?.writeOccurred === false);
     throw batchError;
   }
 
