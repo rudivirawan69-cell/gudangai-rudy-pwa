@@ -4008,20 +4008,29 @@ function formatDashboardLayout693_() {
  * Refresh ringan: perbarui data PO mingguan yang sudah punya renderer aman.
  * Tidak menjalankan setup layout, tidak menghapus chart, dan tidak menulis ke sheet purchase order.
  */
-function refreshDashboardDataLight693_() {
-  var lock=LockService.getScriptLock();
-  if (!lock.tryLock(5000)) return {success:false,skipped:true,reason:'Dashboard refresh sedang berjalan'};
-  try {
-    var poResult = refreshDashboardPOSection_({renderCharts:false});
-    if (!poResult || !poResult.success) return poResult || {success:false,error:'Refresh PO gagal'};
-    var sh=getSS().getSheetByName('Dashboard');
-    if (sh) sh.getRange('A2').setValue('Pantauan Stok & Aktivitas — Real Time | Update terakhir: '+
-      Utilities.formatDate(new Date(),TIMEZONE,'yyyy-MM-dd HH:mm:ss'));
-    return {success:true,version:'6.9.3-OPSI-B',mode:'LIGHT_DATA_REFRESH',po:poResult.status||'OK',updatedAt:new Date().toISOString()};
-  } finally { lock.releaseLock(); }
+function writeDashboardData693_(d) {
+  var s=getSS().getSheetByName('Dashboard'); if(!s||!d||!d.success)return {success:false,error:'Dashboard/data tidak valid'};
+  var k=(d.top10Kritis||[]).slice(0,10).map(function(x,i){return [i+1,x.kode||'',x.nama||'',x.divisi||'',+x.sisa||0,+x.aman||0,+x.kurang||0]});
+  while(k.length<10)k.push(['','','','','','','']);
+  s.getRange('A5:G5').setValues([['NO','KODE','NAMA BARANG','DIVISI','STOK AKHIR','STOK AMAN','KEKURANGAN']]);s.getRange('A6:G15').setValues(k);
+  s.getRange('I5:J5').setValues([['INDIKATOR','JUMLAH']]);s.getRange('I6:J10').setValues([['Total Item',+(d.totalItemAktif||d.totalItem)||0],['Total Sisa Stok',+d.totalStok||0],['Stok Aman',+d.aman||0],['Stok Waspada',+d.waspada||0],['Stok Kritis',+d.kritis||0]]);
+  var t=d.trend7Hari||{labels:[],values:[]},tr=[];for(var i=0;i<7;i++)tr.push([t.labels[i]||'',t.values[i]==null?'':+t.values[i]||0,'','','','']);
+  s.getRange('I12:N12').setValues([['TANGGAL','TOTAL ITEM','','','','']]);s.getRange('I13:N19').setValues(tr);
+  var v=(d.statusPerDivisi||[]).slice(0,11).map(function(x){var n=+x.total||0,q=+x.kritis||0;return [x.divisi||'',n,+x.aman||0,+x.waspada||0,q,n?Math.round(q/n*1000)/10:0]});while(v.length<11)v.push(['','','','','','']);
+  s.getRange('A25:F25').setValues([['DIVISI','TOTAL ITEM','AMAN','WASPADA','KRITIS','% KRITIS']]);s.getRange('A26:F36').setValues(v);
+  var a=d.aktivitasHariIni||{};s.getRange('H25:L25').setValues([['AKTIVITAS HARI INI','JUMLAH','','','']]);s.getRange('H26:L30').setValues([['Barang Masuk',+a.masuk||0,'','',''],['Barang Keluar',+a.keluar||0,'','',''],['Barang Rusak',+a.rusak||0,'','',''],['Total Aktivitas',+a.total||0,'','',''],['Update Terakhir',d.lastUpdate||'N/A','','','']]);
+  s.getRange('A2').setValue('Pantauan Stok & Aktivitas — Real Time | Update terakhir: '+Utilities.formatDate(new Date(),TIMEZONE,'yyyy-MM-dd HH:mm:ss'));
+  return {success:true,totalItem:d.totalItemAktif||d.totalItem};
 }
 
-/** Pasang trigger ringan 10 menit. Setup layout dijalankan terpisah satu kali. */
+function refreshDashboardDataLight693_() {
+  var l=LockService.getScriptLock();if(!l.tryLock(5000))return {success:false,skipped:true,reason:'Dashboard refresh sedang berjalan'};
+  try{var d=getDashboardData();if(!d||!d.success)return {success:false,error:(d&&d.error)||'Gagal membaca dashboard'};
+    var w=writeDashboardData693_(d);if(!w.success)return w;
+    var p=refreshDashboardPOSection_({renderCharts:false,lightweight:true});if(!p||!p.success)return p||{success:false,error:'Refresh PO gagal'};
+    return {success:true,version:'6.9.4-DASHBOARD-REPAIR',mode:'LIGHT_DATA_REFRESH',totalItem:d.totalItemAktif||d.totalItem,po:p.status||'OK',updatedAt:new Date().toISOString()};
+  }finally{l.releaseLock();}
+}
 function installDashboardLightTrigger693_() {
   var handlers=['refreshDashboardDataLight693_','refreshDashboardFinal_','refreshDashboardOperationalV68_',
     'refreshDashboardPODataOnly_','refreshWeeklyPODashboard'];
