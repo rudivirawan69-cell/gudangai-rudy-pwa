@@ -3320,18 +3320,16 @@ function onEdit(e) {
   try {
     if (!e || !e.range) return;
     const sheetName = e.range.getSheet().getName();
-    const affected = ["Stock CV", "Stock PT", "Stock awal", "purchase order"].indexOf(sheetName) >= 0 || Object.keys(SHEET_CONFIG).indexOf(sheetName) >= 0;
+    const stockSheets = ["Stock CV", "Stock PT", "Stock Awal", "Stock Bahan Baku"];
+    const affected = stockSheets.indexOf(sheetName) >= 0 || sheetName === "purchase order" || Object.keys(SHEET_CONFIG).indexOf(sheetName) >= 0;
     if (!affected) return;
-    // onEdit: invalidasi cache + dirty + stempel waktu. Sinkronisasi divisi real-time bila stok berubah.
     clearMasterCache();
     markDataDirty_(sheetName);
     updateLastUpdateTimestamp();
-    if (sheetName === "Stock CV" || sheetName === "Stock PT" || sheetName === "Stock awal") {
+    if (stockSheets.indexOf(sheetName) >= 0) {
       try { syncDivisionStockLightweight_(); } catch (divErr) { console.error("onEdit sync divisi: " + divErr.message); }
     }
-    if (sheetName === "Barang masuk" || sheetName === "purchase order") {
-      try { refreshDashboardPOSection_({ renderCharts: false, lightweight: true }); } catch (poErr) { console.error("Dashboard PO ringan gagal: " + poErr.message); }
-    }
+    try { refreshDashboardDataLight693_(); } catch (dashErr) { console.error("Dashboard refresh ringan gagal: " + dashErr.message); }
   } catch (err) { console.error("onEdit ringan gagal: " + err.message); }
 }
 
