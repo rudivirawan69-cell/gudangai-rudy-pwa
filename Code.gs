@@ -3989,6 +3989,9 @@ function formatDashboardLayout693_() {
     sh.insertChart(builder.build());
   });
 
+  // Hapus sisa sumber grafik tren 7 hari yang tidak lagi dipakai Dashboard.
+  sh.getRange("X1:Y8").clearContent();
+
   // Sumber data chart tersembunyi; PO row 46+ tetap utuh.
   try { sh.hideColumns(16, 16); } catch (hideErr) {
     console.warn("Kolom sumber grafik tidak dapat disembunyikan: " + String(hideErr.message || hideErr));
