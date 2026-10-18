@@ -2298,18 +2298,18 @@ function removeChartByTitle_(sheet, chartTitle) {
 function syncDivisionStock(options) {
   options = options || {};
   const ss = getSS();
-  const src = ss.getSheetByName("Stock awal");
+  const src = ss.getSheetByName("Stock Awal");
   const dest = ss.getSheetByName("Data Stok Per Divisi");
-  if (!src || !dest) return { success: false, error: "Sheet Stock awal / Data Stok Per Divisi tidak ditemukan" };
+  if (!src || !dest) return { success: false, error: "Sheet Stock Awal / Data Stok Per Divisi tidak ditemukan" };
 
   const data = src.getDataRange().getValues();
-  if (data.length < 2) return { success: false, error: "Stock awal kosong" };
+  if (data.length < 2) return { success: false, error: "Stock Awal kosong" };
   const header = data[0].map(h => String(h).toLowerCase().trim());
   const idxKode = header.findIndex(h => h.includes("kode"));
   const idxNama = header.findIndex(h => h.includes("nama"));
   const idxSatuan = header.findIndex(h => h.includes("satuan"));
   const idxDivisi = header.findIndex(h => h.includes("divisi"));
-  if (idxKode === -1 || idxDivisi === -1) return { success: false, error: "Header Stock awal tidak lengkap" };
+  if (idxKode === -1 || idxDivisi === -1) return { success: false, error: "Header Stock Awal tidak lengkap" };
 
   // Default source: Stock CV/PT. Hanya BAHAN BAKU dioverride oleh source baru.
   const stockMap = {};
