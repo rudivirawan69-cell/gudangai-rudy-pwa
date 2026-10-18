@@ -808,3 +808,27 @@ html[data-theme="warm_productive"] .page-content :is(.page-header, .section-card
     animation: none !important;
   }
 }
+
+/* Spreadsheet dashboard alignment: navy section bars, crisp KPI tiles, and compact grid. */
+.dashboard-shell { color: #172033; }
+.dashboard-shell::before { content: ''; display: block; height: 10px; margin: -1rem -0.75rem 0; background: #123b73; border-radius: 0 0 3px 3px; }
+.dashboard-header-card { border-top: 4px solid #123b73 !important; border-radius: 0 0 12px 12px !important; }
+.dashboard-header-card h1 { letter-spacing: .04em; color: #123b73 !important; }
+.dashboard-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.dashboard-kpi-grid .dashboard-total-card { min-height: 108px; border-radius: 9px; box-shadow: 0 1px 5px rgba(15, 35, 65, .1); }
+.dashboard-kpi-active { border-left: 5px solid #1e5da7 !important; }
+.dashboard-kpi-critical { border-left: 5px solid #df343a !important; background: linear-gradient(135deg, #fff, #fff7f7) !important; }
+.dashboard-icon-red { background: #fde4e5; color: #d52d36; border: 1px solid #f4bcc0; }
+.dashboard-panel, .dashboard-po-card { border-radius: 9px !important; box-shadow: 0 1px 5px rgba(15, 35, 65, .1) !important; }
+.dashboard-panel::before, .dashboard-total-card::before, .dashboard-po-card::before { display: none; }
+.dashboard-panel > div:first-child p:first-child, section[aria-label="Purchase Order"] h3 { color: #123b73 !important; }
+.dashboard-shell > section[aria-label="Purchase Order"]::before { content: 'STATUS PO MINGGU INI'; display: block; background: #123b73; color: white; font-size: 15px; font-weight: 800; letter-spacing: .08em; text-align: center; padding: 6px 10px; margin-bottom: 8px; border-radius: 4px; }
+@media (min-width: 1024px) {
+  .dashboard-shell { max-width: 1120px; }
+  .dashboard-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .dashboard-shell > section[aria-label="Ringkasan operasional"] { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 520px) {
+  .dashboard-shell::before { margin-left: -.75rem; margin-right: -.75rem; }
+  .dashboard-shell > section[aria-label="Purchase Order"]::before { font-size: 12px; }
+}

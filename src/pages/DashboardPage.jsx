@@ -624,21 +624,21 @@ function StockComparison({ cv, pt }) {
   );
 }
 
-function DashboardTotals({ totalItem }) {
+function DashboardTotals({ totalItem, critical = 0 }) {
   const itemCount = totalItem || 191;
   return (
-    <div className="grid grid-cols-2 gap-3">
-      <div className="dashboard-total-card border-cyan-100">
+    <div className="dashboard-kpi-grid grid grid-cols-2 gap-3">
+      <div className="dashboard-total-card dashboard-kpi-active border-cyan-100">
         <div className="flex items-start justify-between gap-2"><span className="dashboard-icon-badge dashboard-icon-cyan"><Package className="w-4 h-4" /></span><span className="text-[9px] font-extrabold text-slate-400">MASTER</span></div>
-        <p className="text-[10px] font-bold uppercase tracking-wider text-cyan-700 mt-2">Total Item</p>
+        <p className="text-[10px] font-bold uppercase tracking-wider text-cyan-700 mt-2">Total Item Aktif</p>
         <p className="text-2xl font-extrabold text-slate-900 tabular-nums mt-1">{itemCount}</p>
-        <p className="text-[10px] text-slate-500 mt-0.5">SKU aktif</p>
+        <p className="text-[10px] text-slate-500 mt-0.5">SKU aktif tersinkron</p>
       </div>
-      <div className="dashboard-total-card border-orange-100">
-        <div className="flex items-start justify-between gap-2"><span className="dashboard-icon-badge dashboard-icon-orange"><Users className="w-4 h-4" /></span><span className="text-[9px] font-extrabold text-slate-400">JARINGAN</span></div>
-        <p className="text-[10px] font-bold uppercase tracking-wider text-orange-700 mt-2">Total Outlet</p>
-        <p className="text-2xl font-extrabold text-slate-900 tabular-nums mt-1">45</p>
-        <p className="text-[10px] text-slate-500 mt-0.5">Outlet terlayani</p>
+      <div className="dashboard-total-card dashboard-kpi-critical border-red-100">
+        <div className="flex items-start justify-between gap-2"><span className="dashboard-icon-badge dashboard-icon-red"><AlertTriangle className="w-4 h-4" /></span><span className="text-[9px] font-extrabold text-red-400">PERHATIAN</span></div>
+        <p className="text-[10px] font-bold uppercase tracking-wider text-red-700 mt-2">Kritis</p>
+        <p className="text-2xl font-extrabold text-red-700 tabular-nums mt-1">{critical}</p>
+        <p className="text-[10px] text-slate-500 mt-0.5">Item di bawah stok aman</p>
       </div>
     </div>
   );
@@ -1226,7 +1226,7 @@ export default function DashboardPage({ onNavigate }) {
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
             <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-cyan-700">{greeting} · GUDANG PUSAT</p>
-            <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 truncate mt-1 leading-tight">Dashboard Operasional</h1>
+            <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 truncate mt-1 leading-tight">STATUS PO MINGGU INI</h1>
             <p className="text-[13px] text-slate-600 mt-1 leading-snug">{reminder} <span className="text-slate-400">· {name}</span></p>
             <div className="mt-2.5 grid gap-1.5 text-[10px] font-medium text-slate-600">
               <div className="flex min-w-0 items-center gap-1.5">
@@ -1260,7 +1260,7 @@ export default function DashboardPage({ onNavigate }) {
         <div className="dashboard-panel rounded-2xl bg-white border border-slate-200 shadow-sm p-4 min-w-0">
           <StockComparison cv={stats.cv} pt={stats.pt} />
         </div>
-        <div className="xl:col-span-2"><DashboardTotals totalItem={dashboardTotalItem} /></div>
+        <div className="xl:col-span-2"><DashboardTotals totalItem={dashboardTotalItem} critical={stats.kritis} /></div>
       </section>
 
       <div className="rounded-2xl bg-white border border-slate-200 shadow-sm p-4 sm:p-5">
