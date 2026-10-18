@@ -2698,14 +2698,6 @@ function diagnoseDashboard() {
   }
 }
 
-function refreshAllData(options) {
-  options = options || {};
-  const maintenance = maintenanceCleanup(false);
-  // Trigger 15-menit dipertahankan, tetapi tidak lagi rebuild dashboard/divisi.
-  // PWA membaca data stok langsung melalui API sehingga refresh sheet penuh tidak diperlukan.
-  return { success: true, maintenance: maintenance, skippedHeavyRebuild: true, dirty: isDataDirty_() };
-}
-
 function clearDashboardCharts_(sheet) {
   try {
     const charts = sheet.getCharts();
@@ -2719,35 +2711,6 @@ function clearDashboardCharts_(sheet) {
  * Grafik batang mendatar (horizontal bar) status stok per divisi.
  * Data sumber: statusPerDivisi dari getDashboardData().
  */
-function renderDivisionBarChart_(sheet, dataStartRow, data) {
-  const col = 16;
-  if (sheet.getMaxColumns() < col + 5) sheet.insertColumnsAfter(sheet.getMaxColumns(), col + 5 - sheet.getMaxColumns());
-  const header = [["DIVISI", "AMAN", "WASPADA", "KRITIS"]];
-  const rows = (data.statusPerDivisi || []).map(function(d) {
-    return [d.divisi, Number(d.aman) || 0, Number(d.waspada) || 0, Number(d.kritis) || 0];
-  });
-  if (!rows.length) rows.push(["-", 0, 0, 0]);
-  const block = header.concat(rows);
-  sheet.getRange(dataStartRow, col, block.length, 4).setValues(block);
-  try { sheet.hideColumns(col, 4); } catch (e) {}
-  removeChartByTitle_(sheet, "Status Stok per Divisi");
-  const chart = sheet.newChart()
-    .setChartType(Charts.ChartType.BAR)
-    .addRange(sheet.getRange(dataStartRow, col, block.length, 4))
-    .setOption("title", "Status Stok per Divisi")
-    .setOption("legend", { position: "bottom" })
-    .setOption("isStacked", true)
-    .setOption("colors", ["#2E7D32", "#F9A825", "#C62828"])
-    .setOption("width", 520)
-    .setOption("height", 280)
-    .setOption("hAxis", { title: "Jumlah Item", minValue: 0 })
-    .setOption("vAxis", { title: "Divisi" })
-    .setPosition(11, 8, 0, 0)
-    .build();
-  sheet.insertChart(chart);
-  return { rows: rows.length, chartTitle: "Status Stok per Divisi" };
-}
-
 function refreshDashboard(force) {
   // LEGACY FULL REBUILD DISABLED:
   // Versi lama menghapus seluruh chart lalu breakApart/clearContent A1:N30.
@@ -3840,19 +3803,6 @@ function renderPOStatusBlock_(sheet, topRow, title, subtitle, data, items, start
   }
   sheet.setRowHeight(topRow, 26); sheet.setRowHeight(topRow + 1, 23); sheet.setRowHeight(topRow + 3, 28);
   return topRow + 4 + Math.max(1, rows.length) - 1;
-}
-
-function renderPODonutChart_(sheet, chartStartRow, title, summary, chartTitle) {
-  const col = 16;
-  if (sheet.getMaxColumns() < col + 2) sheet.insertColumnsAfter(sheet.getMaxColumns(), col + 2 - sheet.getMaxColumns());
-  const rows = [['STATUS PO', 'QTY'], ['SELESAI', Number(summary.itemSelesai || 0)], ['SEBAGIAN', Number(summary.itemSebagian || 0)], ['MENUNGGU', Number(summary.itemMenunggu || 0)]];
-  sheet.getRange(chartStartRow, col, rows.length, 2).setValues(rows);
-  try { sheet.hideColumns(col, 2); } catch (e) {}
-  removeChartByTitle_(sheet, chartTitle);
-  const chart = sheet.newChart().setChartType(Charts.ChartType.PIE).addRange(sheet.getRange(chartStartRow, col, 4, 2))
-    .setOption('title', title).setOption('pieHole', 0.55).setOption('legend', {position:'right'})
-    .setOption('width', 420).setOption('height', 240).setPosition(chartStartRow, 8, 0, 0).build();
-  sheet.insertChart(chart);
 }
 
 function refreshDashboardPOSection_(options) {
