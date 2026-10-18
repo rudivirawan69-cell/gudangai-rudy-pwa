@@ -3910,9 +3910,9 @@ function formatDashboardLayout693_() {
   var specs = [
     {title:'A4:G4',label:'10 ITEM STOK KRITIS',head:'A5:G5',body:'A6:G15'},
     {title:'I4:N4',label:'RINGKASAN STOK',head:'I5:J5',body:'I6:J10'},
-    {title:'I11:N11',label:'TREN TOTAL ITEM 7 HARI',head:'I12:N12',body:'I13:N19'},
+    {title:'I11:N11',label:'TREN TOTAL ITEM 7 HARI',head:'I12:J12',body:'I13:J19'},
     {title:'A24:F24',label:'RINGKASAN STOK PER DIVISI',head:'A25:F25',body:'A26:F36'},
-    {title:'H24:L24',label:'AKTIVITAS HARI INI',head:'H25:L25',body:'H26:L30'}
+    {title:'H24:L24',label:'AKTIVITAS HARI INI',head:'H25:I25',body:'H26:I30'}
   ];
   specs.forEach(function(x) {
     var titleRange=sh.getRange(x.title);titleRange.breakApart().merge().setValue(x.label)
@@ -3960,10 +3960,10 @@ function writeDashboardData693_(d) {
   s.getRange('A5:G5').setValues([['NO','KODE','NAMA BARANG','DIVISI','STOK AKHIR','STOK AMAN','KEKURANGAN']]);s.getRange('A6:G15').setValues(k);
   s.getRange('I5:J5').setValues([['INDIKATOR','JUMLAH']]);s.getRange('I6:J10').setValues([['Total Item',+(d.totalItemAktif||d.totalItem)||0],['Total Sisa Stok',+d.totalStok||0],['Stok Aman',+d.aman||0],['Stok Waspada',+d.waspada||0],['Stok Kritis',+d.kritis||0]]);
   var t=d.trend7Hari||{labels:[],values:[]},tr=[];for(var i=0;i<7;i++)tr.push([t.labels[i]||'',t.values[i]==null?'':+t.values[i]||0,'','','','']);
-  s.getRange('I12:N12').setValues([['TANGGAL','TOTAL ITEM','','','','']]);s.getRange('I13:N19').setValues(tr);
+  s.getRange('I12:J12').setValues([['TANGGAL','TOTAL ITEM']]);s.getRange('I13:J19').setValues(tr.map(function(r){return [r[0],r[1]]}));
   var v=(d.statusPerDivisi||[]).slice(0,11).map(function(x){var n=+x.total||0,q=+x.kritis||0;return [x.divisi||'',n,+x.aman||0,+x.waspada||0,q,n?Math.round(q/n*1000)/10:0]});while(v.length<11)v.push(['','','','','','']);
   s.getRange('A25:F25').setValues([['DIVISI','TOTAL ITEM','AMAN','WASPADA','KRITIS','% KRITIS']]);s.getRange('A26:F36').setValues(v);
-  var a=d.aktivitasHariIni||{};s.getRange('H25:L25').setValues([['AKTIVITAS HARI INI','JUMLAH','','','']]);s.getRange('H26:L30').setValues([['Barang Masuk',+a.masuk||0,'','',''],['Barang Keluar',+a.keluar||0,'','',''],['Barang Rusak',+a.rusak||0,'','',''],['Total Aktivitas',+a.total||0,'','',''],['Update Terakhir',d.lastUpdate||'N/A','','','']]);
+  var a=d.aktivitasHariIni||{};s.getRange('H25:I25').setValues([['AKTIVITAS HARI INI','JUMLAH']]);s.getRange('H26:I30').setValues([['Barang Masuk',+a.masuk||0],['Barang Keluar',+a.keluar||0],['Barang Rusak',+a.rusak||0],['Total Aktivitas',+a.total||0],['Update Terakhir',d.lastUpdate||'N/A']]);
   var dv=(d.statusPerDivisi||[]).map(function(x){return [x.divisi||'',+x.aman||0,+x.waspada||0,+x.kritis||0]});if(!dv.length)dv=[['Tidak ada data',0,0,0]];
   s.getRange(1,16,Math.max(1,dv.length)+1,4).clearContent();s.getRange(1,16,1,4).setValues([['DIVISI','AMAN','WASPADA','KRITIS']]);s.getRange(2,16,dv.length,4).setValues(dv);
   s.getRange('U1:V4').setValues([['STATUS','JUMLAH'],['AMAN',+d.aman||0],['WASPADA',+d.waspada||0],['KRITIS',+d.kritis||0]]);
