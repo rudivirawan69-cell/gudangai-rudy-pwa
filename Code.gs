@@ -1674,6 +1674,18 @@ function getStockByCode(kode, requestedEntitas) {
   if (!normalizedKode) return { success: false, error: "Kode kosong" };
   if (requestedEntityInfo.valid === false && requestedEntityRaw) return { success: false, error: requestedEntityInfo.error };
 
+  const prefix = normalizedKode.toUpperCase().split("-")[0];
+  if (prefix === "BBCV" || prefix === "BBPT") {
+    const allBB = getAllStock("ALL");
+    if (!allBB.success) return { success: false, error: allBB.error || "Gagal membaca master bahan baku" };
+    const matchesBB = allBB.items.filter(function(item) {
+      return String(item.kode || "").trim() === normalizedKode &&
+        (!requestedEntity || String(item.entitas || "").toUpperCase() === requestedEntity);
+    });
+    if (matchesBB.length !== 1) return { success: false, error: matchesBB.length ? "Kode bahan baku ambigu: " + normalizedKode : "Kode bahan baku tidak ditemukan: " + normalizedKode };
+    return Object.assign({ success: true }, matchesBB[0]);
+  }
+
   const map = getMasterMap();
   const cacheKey = requestedEntity ? (requestedEntity + "|" + normalizedKode) : normalizedKode;
   const masterData = map[cacheKey] || (requestedEntity ? null : map[normalizedKode]);
@@ -3415,6 +3427,9 @@ function setupEnvironment() {
   // Setup tidak lagi memaksa rebuild Dashboard/Data Stok Per Divisi.
   // Format awal tetap tersedia melalui maintenance/refresh manual.
   try { maintenanceCleanup(true); } catch (maintenanceErr) { console.error("Maintenance awal gagal: " + maintenanceErr.message); }
+  // Repair Dashboard satu kali saat setup; trigger berkala berikutnya hanya refresh data ringan.
+  try { formatDashboardLayout693_(); } catch (dashboardFormatErr) { console.error("Format Dashboard gagal: " + dashboardFormatErr.message); }
+  try { refreshDashboardDataLight693_(); } catch (dashboardRefreshErr) { console.error("Refresh Dashboard awal gagal: " + dashboardRefreshErr.message); }
 
   const activeMonth = getActiveMonth();
   console.log("=== setupEnvironment BACKEND GudangAI-69 " + BACKEND_VERSION + " SELESAI ===");
@@ -3895,8 +3910,8 @@ function formatDashboardLayout693_() {
   var sh = getSS().getSheetByName('Dashboard');
   if (!sh) return {success:false,error:'Sheet Dashboard tidak ditemukan'};
   var specs = [
-    {title:'A4:G4',head:'A5:G5',body:'A6:G14'},
-    {title:'I4:N4',head:'I5:J5',body:'I6:J9'},
+    {title:'A4:G4',head:'A5:G5',body:'A6:G15'},
+    {title:'I4:N4',head:'I5:J5',body:'I6:J10'},
     {title:'I11:N11',head:'I12:N12',body:'I13:N19'},
     {title:'A24:F24',head:'A25:F25',body:'A26:F36'},
     {title:'H24:L24',head:'H25:L25',body:'H26:L30'}
@@ -3977,6 +3992,7 @@ function installDashboardLightTrigger693_() {
   });
   ScriptApp.newTrigger('refreshDashboardDataLight693_').timeBased().everyMinutes(10).create();
   formatDashboardLayout693_();
-  return {success:true,version:'6.9.3-OPSI-B',trigger:'refreshDashboardDataLight693_',intervalMinutes:10,
-    note:'Format satu kali; trigger berikutnya hanya refresh data PO dan timestamp.'};
+  var initialRefresh=refreshDashboardDataLight693_();
+  return {success:true,version:'6.9.4-DASHBOARD-REPAIR',trigger:'refreshDashboardDataLight693_',intervalMinutes:10,
+    initialRefresh:initialRefresh,note:'Format dan data awal disegarkan sekali; trigger berkala hanya memperbarui tabel dan sumber grafik.'};
 }
