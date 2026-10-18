@@ -3342,16 +3342,27 @@ function onEdit(e) {
     if (!e || !e.range) return;
     const sheetName = e.range.getSheet().getName();
     const stockSheets = ["Stock CV", "Stock PT", "Stock Awal", "Stock Bahan Baku"];
-    const affected = stockSheets.indexOf(sheetName) >= 0 || sheetName === "purchase order" || Object.keys(SHEET_CONFIG).indexOf(sheetName) >= 0;
+    const affected = stockSheets.indexOf(sheetName) >= 0 ||
+      sheetName === "purchase order" ||
+      Object.keys(SHEET_CONFIG).indexOf(sheetName) >= 0;
     if (!affected) return;
+
     clearMasterCache();
     markDataDirty_(sheetName);
     updateLastUpdateTimestamp();
+
+    // Sinkronisasi divisi hanya saat sumber stok berubah.
     if (stockSheets.indexOf(sheetName) >= 0) {
-      try { syncDivisionStockLightweight_(); } catch (divErr) { console.error("onEdit sync divisi: " + divErr.message); }
+      try { syncDivisionStockLightweight_(); }
+      catch (divErr) { console.error("onEdit sync divisi: " + String(divErr.message || divErr)); }
     }
-    try { refreshDashboardDataLight693_(); } catch (dashErr) { console.error("Dashboard refresh ringan gagal: " + dashErr.message); }
-  } catch (err) { console.error("onEdit ringan gagal: " + err.message); }
+
+    // Tidak menjalankan getDashboardData + penulisan PO setiap edit.
+    // Dashboard diperbarui oleh satu trigger ringan setiap 10 menit.
+    console.log("Dashboard ditandai perlu refresh; sumber berubah: " + sheetName);
+  } catch (err) {
+    console.error("onEdit ringan gagal: " + String(err.message || err));
+  }
 }
 
 
@@ -3415,54 +3426,63 @@ function setupEnvironment() {
   try { formatOperationalSheets_(); } catch (visualErr) { console.error("Format sheet operasional gagal: " + visualErr.message); }
 
   if (!props.getProperty("API_SECRET")) {
-    const secret = Utilities.getUuid().replace(/-/g,"") + Utilities.getUuid().replace(/-/g,"").substring(0,16);
+    const secret = Utilities.getUuid().replace(/-/g, "") + Utilities.getUuid().replace(/-/g, "").substring(0, 16);
     props.setProperty("API_SECRET", secret);
     console.log("API_SECRET baru dibuat dan disimpan; nilai secret tidak dicetak ke log.");
   } else {
     console.log("API_SECRET sudah ada.");
   }
 
-  // Hapus trigger lama
-  ScriptApp.getProjectTriggers().forEach(t => {
-    const fn = t.getHandlerFunction();
-    if (["sendDailyStockReport","weeklyPOAutomation","logDailySnapshot","processEmailQueue","sendWeeklyPOReport","refreshDashboard","refreshAllData","refreshDashboardDataLight693_","onEdit"].indexOf(fn) >= 0) {
-      ScriptApp.deleteTrigger(t);
-    }
+  // Hapus trigger lama/duplikat yang dikelola setup ini, termasuk semua
+  // handler Dashboard lama. Trigger laporan/snapshot/PO tetap dibuat kembali.
+  var managedHandlers = [
+    "sendDailyStockReport", "weeklyPOAutomation", "logDailySnapshot",
+    "processEmailQueue", "sendWeeklyPOReport", "refreshDashboard",
+    "refreshAllData", "refreshDashboardDataLight693_", "refreshDashboardFinal_",
+    "refreshDashboardOperationalV68_", "refreshDashboardPODataOnly_",
+    "refreshWeeklyPODashboard", "refreshStatusStockLight_", "writeDashboardStatusCardsLight_",
+    "onEdit"
+  ];
+  ScriptApp.getProjectTriggers().forEach(function(trigger) {
+    if (managedHandlers.indexOf(trigger.getHandlerFunction()) >= 0) ScriptApp.deleteTrigger(trigger);
   });
 
-  // Setup trigger baru
   ScriptApp.newTrigger("sendDailyStockReport").timeBased().everyDays(1).atHour(7).create();
   ScriptApp.newTrigger("weeklyPOAutomation").timeBased().onWeekDay(ScriptApp.WeekDay.MONDAY).atHour(8).create();
   ScriptApp.newTrigger("logDailySnapshot").timeBased().everyDays(1).atHour(23).create();
-  // Trigger dashboard ringan menggantikan maintenance no-op 15 menit.
   ScriptApp.newTrigger("refreshDashboardDataLight693_").timeBased().everyMinutes(10).create();
-  // Installable onEdit trigger agar perubahan manual pada semua sumber stok
-  // dapat menjalankan sinkronisasi yang membutuhkan otorisasi SpreadsheetApp.
   ScriptApp.newTrigger("onEdit").forSpreadsheet(ss).onEdit().create();
 
   _cachedSS = null;
   _resolvedSpreadsheetId = null;
   updateLastUpdateTimestamp();
-  // Setup tidak lagi memaksa rebuild Dashboard/Data Stok Per Divisi.
-  // Format awal tetap tersedia melalui maintenance/refresh manual.
   try { maintenanceCleanup(true); } catch (maintenanceErr) { console.error("Maintenance awal gagal: " + maintenanceErr.message); }
-  // Repair Dashboard satu kali saat setup; trigger berkala berikutnya hanya refresh data ringan.
-  try { formatDashboardLayout693_(); } catch (dashboardFormatErr) { console.error("Format Dashboard gagal: " + dashboardFormatErr.message); }
-  try { refreshDashboardDataLight693_(); } catch (dashboardRefreshErr) { console.error("Refresh Dashboard awal gagal: " + dashboardRefreshErr.message); }
+
+  // Layout empat grafik hanya dipasang saat setup manual, bukan saat trigger.
+  try {
+    var layoutResult = formatDashboardLayout693_();
+    console.log("Dashboard layout: " + JSON.stringify(layoutResult));
+  } catch (dashboardFormatErr) {
+    console.error("Format Dashboard gagal: " + String(dashboardFormatErr.message || dashboardFormatErr));
+  }
+  try { refreshDashboardDataLight693_(); }
+  catch (dashboardRefreshErr) { console.error("Refresh Dashboard awal gagal: " + String(dashboardRefreshErr.message || dashboardRefreshErr)); }
 
   const activeMonth = getActiveMonth();
   console.log("=== setupEnvironment BACKEND GudangAI-69 " + BACKEND_VERSION + " SELESAI ===");
   console.log("Spreadsheet: " + ss.getName());
   console.log("Bulan aktif: " + activeMonth.nama + " " + activeMonth.tahun);
-  console.log("Trigger: sendDailyStockReport(07:00), weeklyPOAutomation(Senin 08:00), logDailySnapshot(23:00), queue write disabled, dashboard refresh ringan (10min)");
+  console.log("Trigger: laporan harian, PO mingguan, snapshot harian, onEdit ringan, Dashboard 10 menit");
   try {
     const masterNow = getAllStock("ALL");
     console.log("Total master data aktual: " + (masterNow && masterNow.count != null ? masterNow.count : 0));
   } catch (countErr) { console.log("Total master data aktual: gagal dibaca — " + countErr.message); }
 
-  return { success: true, spreadsheetId: ss.getId(), spreadsheetName: ss.getName(), activeMonth: activeMonth,
-           title: APP_TITLE, configSheet: CONFIG_SHEET_NAME,
-           message: "Backend GudangAI-69 siap. Trigger refreshAllData berat dinonaktifkan; Dashboard memakai refresh ringan 10 menit." };
+  return {
+    success: true, spreadsheetId: ss.getId(), spreadsheetName: ss.getName(),
+    activeMonth: activeMonth, title: APP_TITLE, configSheet: CONFIG_SHEET_NAME,
+    message: "Setup selesai. Dashboard memakai empat grafik dan satu refresh ringan setiap 10 menit."
+  };
 }
 
 function generateRandomSecret() {
@@ -4077,7 +4097,7 @@ function refreshDashboardDataLight693_() {
   }
 }
 function installDashboardLightTrigger693_() {
-  // Hapus hanya trigger Dashboard lama/duplikat. Trigger operasional lain dipertahankan.
+  // Hapus trigger Dashboard lama/duplikat, bukan trigger laporan/snapshot/PO.
   var dashboardHandlers = [
     "refreshDashboardDataLight693_",
     "refreshDashboardFinal_",
@@ -4085,7 +4105,9 @@ function installDashboardLightTrigger693_() {
     "refreshDashboardPODataOnly_",
     "refreshWeeklyPODashboard",
     "refreshStatusStockLight_",
-    "writeDashboardStatusCardsLight_"
+    "writeDashboardStatusCardsLight_",
+    "refreshDashboard",
+    "refreshAllData"
   ];
   ScriptApp.getProjectTriggers().forEach(function(trigger) {
     if (dashboardHandlers.indexOf(trigger.getHandlerFunction()) >= 0) {
@@ -4101,7 +4123,7 @@ function installDashboardLightTrigger693_() {
     trigger: "refreshDashboardDataLight693_",
     intervalMinutes: 10,
     initialRefresh: initialRefresh,
-    note: "Trigger ringan tunggal terpasang; layout tidak dibangun ulang."
+    note: "Satu trigger Dashboard ringan terpasang; refresh tidak membangun ulang layout."
   };
 }
 // ============================================================
