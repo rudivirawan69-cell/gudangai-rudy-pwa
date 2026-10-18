@@ -38,19 +38,24 @@ export default function ValidasiPage() {
       ...(result.matched || []).map((r) => ({
         ...r,
         status: 'matched',
-        nama: r.nameFromPdf,
-        namaMaster: r.nama,
+        // Setelah cocok, nama yang ditampilkan harus selalu berasal dari master.
+        // Nama PDF hanya dipertahankan sebagai jejak sumber untuk review.
+        nama: r.nama || r.name,
+        namaMaster: r.nama || r.name,
+        namaPdf: r.nameFromPdf || r.rawName,
         item: r,
       })),
       ...(result.ambiguous || []).map((r) => ({
         ...r,
         status: 'ambiguous',
-        nama: r.nameFromPdf,
+        nama: r.nameFromPdf || r.rawName,
+        namaPdf: r.nameFromPdf || r.rawName,
       })),
       ...(result.unmatched || []).map((r) => ({
         ...r,
         status: 'unmatched',
-        nama: r.nameFromPdf,
+        nama: r.nameFromPdf || r.rawName,
+        namaPdf: r.nameFromPdf || r.rawName,
       })),
     ];
     setResults(flat);
@@ -299,8 +304,8 @@ export default function ValidasiPage() {
               {r.status === 'matched' ? <CheckCircle2 className="w-4 h-4 text-emerald-500 mt-0.5 shrink-0" /> : r.status === 'ambiguous' ? <AlertTriangle className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" /> : <XCircle className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />}
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-gray-800 truncate">{r.nama}</p>
-                <p className="text-[11px] text-gray-400">Qty {r.qty} · {r.raw || r.line || ''}</p>
-                {r.status === 'matched' && <p className="text-[11px] text-emerald-700 mt-0.5">→ {r.kode} · {r.namaMaster} ({r.satuan}) · {r.matchType}</p>}
+                <p className="text-[11px] text-gray-400">Qty {r.qty} · PDF: {r.namaPdf || r.rawName || '—'}</p>
+                {r.status === 'matched' && <p className="text-[11px] text-emerald-700 mt-0.5">Master: {r.kode} · {r.namaMaster} ({r.satuan}) · {r.matchType}</p>}
                 {r.status === 'ambiguous' && (
                   <div className="mt-1.5 space-y-1">
                     <p className="text-[10px] text-amber-700">Pilih yang benar (tidak menebak):</p>
