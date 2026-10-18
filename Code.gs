@@ -392,7 +392,7 @@ function doPost(e) {
       case "searchByName": return jsonResponse(searchByName(body.query || body.q || body.nama));
       case "getDashboard":
       case "getDashboardData": return jsonResponse(getDashboardData());
-      case "getDashboardLegacy": return jsonResponse(getDashboard());
+      case "getDashboardLegacy": return jsonResponse(getDashboardData());
       case "refreshDashboard": return jsonResponse(refreshDashboardDataLight693_());
       case "syncDivision":
       case "syncDivisionStock": return jsonResponse(syncDivisionStock());
@@ -599,13 +599,6 @@ function updateIdempotencyRecord_(record, patch) {
   ]];
   sheet.getRange(record.rowNumber, 1, 1, IDEMPOTENCY_HEADERS.length).setValues(values);
   return mapIdempotencyRow_(values[0], record.rowNumber);
-}
-
-function identityMarker_(transactionId, nonce) {
-  // Identity markers MUST NOT be written into kolom Keterangan sheet transaksi.
-  // ID unik (transactionId / nonce / requestId) disimpan di sheet Idempotency Ledger saja.
-  // Fungsi ini dipertahankan agar call-site lama tidak error, tetapi selalu mengembalikan string kosong.
-  return "";
 }
 
 function appendIdentityMarker_(keterangan, transactionId, nonce) {
@@ -1491,24 +1484,6 @@ function validateHoldReference_(holdId) {
   if (!foundHold) return { valid: false, error: "Transaction HOLD tidak valid atau tidak ditemukan: " + target };
   if (isHoldReferenceAlreadyRealized_(target)) return { valid: false, error: "HOLD sudah direalisasikan sebelumnya: " + target };
   return { valid: true, holdId: target };
-}
-
-function isDuplicate(kode, qty, keterangan, sheetName) {
-  const cache = CacheService.getScriptCache();
-  const scope = String(sheetName || "").trim();
-  const normalizedKode = String(kode || "").trim();
-  const normalizedQty = String(qty == null ? "" : qty).trim();
-  const normalizedKeterangan = String(keterangan || "").trim();
-  const rawKey = [scope, normalizedKode, normalizedQty, normalizedKeterangan].join("|");
-  let digestKey = rawKey.replace(/[^A-Za-z0-9_.:-]/g, "_").substring(0, 180);
-  try {
-    const digest = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, rawKey);
-    digestKey = Utilities.base64EncodeWebSafe(digest).substring(0, 180);
-  } catch (e) {}
-  const key = "fingerprint60_" + digestKey;
-  if (cache.get(key)) return true;
-  cache.put(key, "1", 60);
-  return false;
 }
 
 function isDuplicateTransaction(sheetName, kode, qty, nonce) {
@@ -2571,8 +2546,6 @@ function getDashboardData() {
     statusPO: po
   };
 }
-
-function getDashboard() { return getDashboardData(); }
 
 function toNumber_(v) { const n = Number(String(v).replace(/[^0-9,.-]/g, "").replace(/,/g, ".")); return isNaN(n) ? 0 : n; }
 function percent_(n, d) { return d ? Math.round((n / d) * 1000) / 10 : 0; }
@@ -3996,12 +3969,21 @@ function formatDashboardLayout693_() {
    sh.setColumnWidth(7,85),sh.setColumnWidth(8,110),sh.setColumnWidth(9,145),
    sh.setColumnWidth(10,85),sh.setColumnWidth(11,85),sh.setColumnWidth(12,85),
    sh.setColumnWidth(13,85),sh.setColumnWidth(14,85)];
+  clearDashboardCharts_(sh);
+  var specs=[
+    {t:'Status Stok per Divisi',type:Charts.ChartType.BAR,r:'P1:S20',y:102,x:1,o:{legend:{position:'bottom'},isStacked:true,hAxis:{title:'Jumlah Item',minValue:0},vAxis:{title:'Divisi'}}},
+    {t:'Distribusi Status Stok',type:Charts.ChartType.PIE,r:'U1:V4',y:102,x:8,o:{pieHole:0.45,legend:{position:'right'}}},
+    {t:'Tren Total Item 7 Hari',type:Charts.ChartType.LINE,r:'X1:Y8',y:119,x:1,o:{legend:{position:'none'},hAxis:{title:'Tanggal'},vAxis:{title:'Total Item',minValue:0}}},
+    {t:'Aktivitas Hari Ini',type:Charts.ChartType.COLUMN,r:'AA1:AB4',y:119,x:8,o:{legend:{position:'none'},vAxis:{title:'Qty',minValue:0}}},
+    {t:'Status PO',type:Charts.ChartType.PIE,r:'AD1:AE4',y:136,x:1,o:{pieHole:0.45,legend:{position:'right'}}}
+  ];
+  specs.forEach(function(z){var b=sh.newChart().setChartType(z.type).addRange(sh.getRange(z.r)).setOption('title',z.t).setOption('width',520).setOption('height',280).setPosition(z.y,z.x,0,0);Object.keys(z.o).forEach(function(k){b.setOption(k,z.o[k])});sh.insertChart(b.build())});
   sh.getRange('A46:M99').setVerticalAlignment('middle').setWrap(true);
   sh.getRange('A46:F46').setBackground(DASH693.head).setFontColor('#ffffff').setFontWeight('bold');
   sh.getRange('H46:M46').setBackground(DASH693.head).setFontColor('#ffffff').setFontWeight('bold');
   sh.getRange('A48:F48').setBackground(DASH693.sub).setFontColor('#ffffff').setFontWeight('bold');
   sh.getRange('H48:M48').setBackground(DASH693.sub).setFontColor('#ffffff').setFontWeight('bold');
-  return {success:true,version:'6.9.3-OPSI-B',formatted:true,protectedRows:'28:45',poArea:'46:99'};
+  return {success:true,version:'6.9.4-DASHBOARD-REPAIR',formatted:true,protectedRows:'28:45 by PO writer',poArea:'46:99',charts:5};
 }
 
 /**
@@ -4019,6 +4001,12 @@ function writeDashboardData693_(d) {
   var v=(d.statusPerDivisi||[]).slice(0,11).map(function(x){var n=+x.total||0,q=+x.kritis||0;return [x.divisi||'',n,+x.aman||0,+x.waspada||0,q,n?Math.round(q/n*1000)/10:0]});while(v.length<11)v.push(['','','','','','']);
   s.getRange('A25:F25').setValues([['DIVISI','TOTAL ITEM','AMAN','WASPADA','KRITIS','% KRITIS']]);s.getRange('A26:F36').setValues(v);
   var a=d.aktivitasHariIni||{};s.getRange('H25:L25').setValues([['AKTIVITAS HARI INI','JUMLAH','','','']]);s.getRange('H26:L30').setValues([['Barang Masuk',+a.masuk||0,'','',''],['Barang Keluar',+a.keluar||0,'','',''],['Barang Rusak',+a.rusak||0,'','',''],['Total Aktivitas',+a.total||0,'','',''],['Update Terakhir',d.lastUpdate||'N/A','','','']]);
+  var dv=(d.statusPerDivisi||[]).map(function(x){return [x.divisi||'',+x.aman||0,+x.waspada||0,+x.kritis||0]});if(!dv.length)dv=[['Tidak ada data',0,0,0]];
+  s.getRange(1,16,Math.max(1,dv.length)+1,4).clearContent();s.getRange(1,16,1,4).setValues([['DIVISI','AMAN','WASPADA','KRITIS']]);s.getRange(2,16,dv.length,4).setValues(dv);
+  s.getRange('U1:V4').setValues([['STATUS','JUMLAH'],['AMAN',+d.aman||0],['WASPADA',+d.waspada||0],['KRITIS',+d.kritis||0]]);
+  var ct=[['TANGGAL','TOTAL ITEM']],tt=d.trend7Hari||{labels:[],values:[]};for(var q=0;q<7;q++)ct.push([tt.labels[q]||'',tt.values[q]==null?'':+tt.values[q]||0]);s.getRange('X1:Y8').setValues(ct);
+  var ac=d.aktivitasHariIni||{};s.getRange('AA1:AB4').setValues([['AKTIVITAS','QTY'],['MASUK',+ac.masuk||0],['KELUAR',+ac.keluar||0],['RUSAK',+ac.rusak||0]]);
+  var ps=getStatusPO(),p=ps&&ps.summary||{};s.getRange('AD1:AE4').setValues([['STATUS PO','ITEM'],['SELESAI',+p.itemSelesai||0],['SEBAGIAN',+p.itemSebagian||0],['MENUNGGU',+p.itemMenunggu||0]]);try{s.hideColumns(16,16)}catch(e){}
   s.getRange('A2').setValue('Pantauan Stok & Aktivitas — Real Time | Update terakhir: '+Utilities.formatDate(new Date(),TIMEZONE,'yyyy-MM-dd HH:mm:ss'));
   return {success:true,totalItem:d.totalItemAktif||d.totalItem};
 }
