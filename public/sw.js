@@ -1,6 +1,6 @@
 /* GudangAI RUDY — Service Worker */
 /* BUILD_VERSION diganti otomatis oleh scripts/write-sw-version.mjs saat npm run build */
-const BUILD_VERSION = '2026-10-18T22:45:50.164Z';
+const BUILD_VERSION = '2026-10-18T23:05:19.625Z';
 const CACHE_NAME = `gudangai-${BUILD_VERSION}`;
 const PRECACHE = [
   '/',
