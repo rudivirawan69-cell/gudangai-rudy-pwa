@@ -245,3 +245,78 @@ html[data-theme="deep_ocean"] .text-red-500 {
 .theme-picker-btn.is-active {
   background: var(--bg-elevated); color: var(--text-main); box-shadow: var(--shadow-1);
 }
+
+/* Consistent soft 3D language across all three visual modes. */
+html[data-theme] .nav-bar {
+  padding: 0.45rem 0.65rem max(0.45rem, env(safe-area-inset-bottom));
+  border-top: 0 !important;
+  border-radius: 1.35rem 1.35rem 0 0;
+  box-shadow: var(--shadow-2) !important;
+}
+html[data-theme] .nav-bar > div {
+  gap: 0.3rem;
+}
+html[data-theme] .nav-btn {
+  min-height: 3.7rem;
+  border: 1px solid transparent;
+  border-radius: 1rem;
+  color: var(--text-muted) !important;
+  transition: box-shadow 0.2s ease, transform 0.2s ease, color 0.2s ease;
+}
+html[data-theme] .nav-btn:hover {
+  color: var(--text-main) !important;
+  transform: translateY(-1px);
+}
+html[data-theme] .nav-btn.is-active {
+  color: var(--accent-strong) !important;
+  background: var(--bg-muted) !important;
+  border-color: var(--border) !important;
+  box-shadow: var(--shadow-press) !important;
+}
+html[data-theme] .nav-btn:active {
+  transform: scale(0.96);
+  box-shadow: var(--shadow-press) !important;
+}
+html[data-theme] .nav-icon-wrap {
+  border-radius: 0.85rem !important;
+  background: transparent;
+}
+html[data-theme] .nav-btn.is-active .nav-icon-wrap {
+  background: var(--bg-elevated) !important;
+  box-shadow: var(--shadow-1);
+}
+html[data-theme] .nav-underline {
+  display: none;
+}
+html[data-theme] .card,
+html[data-theme] .surface,
+html[data-theme] .section-card,
+html[data-theme] .stat-tile,
+html[data-theme] .stock-card,
+html[data-theme] .dashboard-panel,
+html[data-theme] .dashboard-po-card,
+html[data-theme] .dashboard-header-card,
+html[data-theme] .menu-group,
+html[data-theme] .po-hub-card,
+html[data-theme] .po-item-card,
+html[data-theme] .stock-metric-surface {
+  box-shadow: var(--shadow-1) !important;
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+html[data-theme] .card:active,
+html[data-theme] .surface:active,
+html[data-theme] .section-card:active,
+html[data-theme] .stat-tile:active,
+html[data-theme] .stock-card:active,
+html[data-theme] .dashboard-panel:active,
+html[data-theme] .dashboard-po-card:active,
+html[data-theme] .po-hub-card:active,
+html[data-theme] .po-item-card:active {
+  box-shadow: var(--shadow-press) !important;
+  transform: scale(0.99);
+}
+@media (max-width: 420px) {
+  html[data-theme] .nav-bar { padding-left: 0.35rem; padding-right: 0.35rem; }
+  html[data-theme] .nav-btn { min-height: 3.45rem; border-radius: 0.85rem; }
+  html[data-theme] .nav-label { font-size: 8px !important; }
+}
