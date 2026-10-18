@@ -3908,16 +3908,16 @@ function formatDashboardLayout693_() {
   var sh = getSS().getSheetByName('Dashboard');
   if (!sh) return {success:false,error:'Sheet Dashboard tidak ditemukan'};
   var specs = [
-    {title:'A4:G4',head:'A5:G5',body:'A6:G15'},
-    {title:'I4:N4',head:'I5:J5',body:'I6:J10'},
-    {title:'I11:N11',head:'I12:N12',body:'I13:N19'},
-    {title:'A24:F24',head:'A25:F25',body:'A26:F36'},
-    {title:'H24:L24',head:'H25:L25',body:'H26:L30'}
+    {title:'A4:G4',label:'10 ITEM STOK KRITIS',head:'A5:G5',body:'A6:G15'},
+    {title:'I4:N4',label:'RINGKASAN STOK',head:'I5:J5',body:'I6:J10'},
+    {title:'I11:N11',label:'TREN TOTAL ITEM 7 HARI',head:'I12:N12',body:'I13:N19'},
+    {title:'A24:F24',label:'RINGKASAN STOK PER DIVISI',head:'A25:F25',body:'A26:F36'},
+    {title:'H24:L24',label:'AKTIVITAS HARI INI',head:'H25:L25',body:'H26:L30'}
   ];
   specs.forEach(function(x) {
-    sh.getRange(x.title).setBackground(DASH693.head).setFontColor('#ffffff')
-      .setFontWeight('bold').setFontSize(10).setHorizontalAlignment('center')
-      .setVerticalAlignment('middle').setWrap(true);
+    var titleRange=sh.getRange(x.title);titleRange.breakApart().merge().setValue(x.label)
+      .setBackground(DASH693.head).setFontColor('#ffffff').setFontWeight('bold').setFontSize(10)
+      .setHorizontalAlignment('center').setVerticalAlignment('middle').setWrap(true);
     sh.getRange(x.head).setBackground(DASH693.sub).setFontColor('#ffffff')
       .setFontWeight('bold').setFontSize(9).setHorizontalAlignment('center')
       .setVerticalAlignment('middle').setWrap(true);
