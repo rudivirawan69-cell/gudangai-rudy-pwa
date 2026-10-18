@@ -4000,24 +4000,78 @@ function writeDashboardData693_(d) {
 }
 
 function refreshDashboardDataLight693_() {
-  var l=LockService.getScriptLock();if(!l.tryLock(5000))return {success:false,skipped:true,reason:'Dashboard refresh sedang berjalan'};
-  try{var d=getDashboardData();if(!d||!d.success)return {success:false,error:(d&&d.error)||'Gagal membaca dashboard'};
-    var w=writeDashboardData693_(d);if(!w.success)return w;
-    var p=refreshDashboardPOSection_({renderCharts:false,lightweight:true});if(!p||!p.success)return p||{success:false,error:'Refresh PO gagal'};
-    return {success:true,version:'6.9.4-DASHBOARD-REPAIR',mode:'LIGHT_DATA_REFRESH',totalItem:d.totalItemAktif||d.totalItem,po:p.status||'OK',updatedAt:new Date().toISOString()};
-  }finally{l.releaseLock();}
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(8000)) {
+    return { success: false, skipped: true, reason: "Dashboard refresh sedang berjalan" };
+  }
+  try {
+    // Sinkronkan sumber stok per divisi sebelum membaca data dashboard.
+    try {
+      syncDivisionStockLightweight_();
+    } catch (syncErr) {
+      console.error("syncDivisionStockLightweight_: " + String(syncErr.message || syncErr));
+    }
+
+    var data = getDashboardData();
+    if (!data || !data.success) {
+      return { success: false, error: (data && data.error) || "Gagal membaca dashboard" };
+    }
+
+    // Satu-satunya writer untuk tabel utama dan sumber grafik.
+    var written = writeDashboardData693_(data);
+    if (!written || !written.success) return written || { success: false, error: "Penulisan Dashboard gagal" };
+
+    // Status PO hanya dirender pada area yang ditetapkan oleh renderer PO.
+    var po = refreshDashboardPOSection_({ renderCharts: false, lightweight: true });
+    if (!po || !po.success) return po || { success: false, error: "Refresh PO gagal" };
+
+    try { updateLastUpdateTimestamp(); } catch (timestampErr) {
+      console.warn("updateLastUpdateTimestamp: " + String(timestampErr.message || timestampErr));
+    }
+
+    return {
+      success: true,
+      version: "6.9.5-DASHBOARD-STABLE",
+      mode: "LIGHT_DATA_REFRESH",
+      totalItem: data.totalItemAktif || data.totalItem,
+      po: po.status || "OK",
+      updatedAt: new Date().toISOString()
+    };
+  } finally {
+    lock.releaseLock();
+  }
 }
 function installDashboardLightTrigger693_() {
-  var handlers=['refreshDashboardDataLight693_','refreshDashboardFinal_','refreshDashboardOperationalV68_',
-    'refreshDashboardPODataOnly_','refreshWeeklyPODashboard'];
-  ScriptApp.getProjectTriggers().forEach(function(t) {
-    if (handlers.indexOf(t.getHandlerFunction())>=0) ScriptApp.deleteTrigger(t);
+  // Hapus hanya trigger refresh Dashboard lama/duplikat; trigger laporan,
+  // snapshot, dan otomatisasi PO yang tidak terkait tetap dipertahankan.
+  var obsoleteHandlers = [
+    "refreshDashboardDataLight693_",
+    "refreshDashboardFinal_",
+    "refreshDashboardOperationalV68_",
+    "refreshDashboardPODataOnly_",
+    "refreshWeeklyPODashboard",
+    "refreshStatusStockLight_",
+    "writeDashboardStatusCardsLight_"
+  ];
+  ScriptApp.getProjectTriggers().forEach(function(trigger) {
+    if (obsoleteHandlers.indexOf(trigger.getHandlerFunction()) >= 0) {
+      ScriptApp.deleteTrigger(trigger);
+    }
   });
-  ScriptApp.newTrigger('refreshDashboardDataLight693_').timeBased().everyMinutes(10).create();
-  formatDashboardLayout693_();
-  var initialRefresh=refreshDashboardDataLight693_();
-  return {success:true,version:'6.9.4-DASHBOARD-REPAIR',trigger:'refreshDashboardDataLight693_',intervalMinutes:10,
-    initialRefresh:initialRefresh,note:'Format dan data awal disegarkan sekali; trigger berkala hanya memperbarui tabel dan sumber grafik.'};
+
+  ScriptApp.newTrigger("refreshDashboardDataLight693_").timeBased().everyMinutes(10).create();
+
+  // Sengaja tidak memanggil formatDashboardLayout693_() agar instalasi trigger
+  // tidak membangun ulang layout atau mengubah chart/format Dashboard.
+  var initialRefresh = refreshDashboardDataLight693_();
+  return {
+    success: true,
+    version: "6.9.5-DASHBOARD-STABLE",
+    trigger: "refreshDashboardDataLight693_",
+    intervalMinutes: 10,
+    initialRefresh: initialRefresh,
+    note: "Trigger tunggal dipasang; layout tidak dibangun ulang."
+  };
 }
 // ============================================================
 // V6.6.5+ LIGHT STATUS STOCK + DASHBOARD CARDS
@@ -4028,118 +4082,14 @@ var LIGHT_DASH_KRITIS_START = 8;
 var LIGHT_DASH_AKTIVITAS_START = 21;
 
 function writeDashboardStatusCardsLight_() {
-  var ss = getSS();
-  var sh = ss.getSheetByName("Dashboard");
-  if (!sh) return { success: false, error: "Sheet Dashboard tidak ditemukan" };
-
-  var data = getDashboardData();
-  if (!data || !data.success) return { success: false, error: (data && data.error) || "getDashboardData gagal" };
-
-  var stamp = Utilities.formatDate(new Date(), TIMEZONE, "dd-MMM-yyyy HH:mm:ss");
-  var po = data.statusPO || {};
-  var aktif = (po.aktif) || { itemCount: 0, total: 0, cv: 0, pt: 0 };
-
-  sh.getRange(LIGHT_DASH_STATUS_START, 1, 4, 2).setValues([
-    ["STATUS STOK", stamp],
-    ["Aman", Number(data.aman) || 0],
-    ["Waspada", Number(data.waspada) || 0],
-    ["Kritis", Number(data.kritis) || 0]
-  ]);
-
-  sh.getRange(LIGHT_DASH_STATUS_START, 4, 4, 3).setValues([
-    ["STATUS PO AKTIF", Number(aktif.itemCount) || 0, Number(aktif.total) || 0],
-    ["PO CV (qty)", Number(aktif.cv) || 0, ""],
-    ["PO PT (qty)", Number(aktif.pt) || 0, ""],
-    ["Update", stamp, ""]
-  ]);
-
-  var kritisHeader = [["No", "Kode", "Nama", "Divisi", "Sisa", "Aman", "Kurang"]];
-  var kritisRows = [];
-  var top10 = data.top10Kritis || [];
-  for (var i = 0; i < 10; i++) {
-    if (i < top10.length) {
-      var it = top10[i];
-      kritisRows.push([
-        i + 1,
-        String(it.kode || ""),
-        String(it.nama || "").substring(0, 40),
-        String(it.divisi || ""),
-        Number(it.sisa) || 0,
-        Number(it.aman) || 0,
-        Number(it.kurang) || 0
-      ]);
-    } else {
-      kritisRows.push(["", "", "", "", "", "", ""]);
-    }
-  }
-  sh.getRange(LIGHT_DASH_KRITIS_START - 1, 1).setValue("TOP 10 ITEM KRITIS");
-  sh.getRange(LIGHT_DASH_KRITIS_START, 1, 1, 7).setValues(kritisHeader);
-  sh.getRange(LIGHT_DASH_KRITIS_START + 1, 1, 10, 7).setValues(kritisRows);
-
-  var act = data.aktivitasHariIni || { masuk: 0, keluar: 0, rusak: 0, total: 0 };
-  sh.getRange(LIGHT_DASH_AKTIVITAS_START, 1, 5, 2).setValues([
-    ["AKTIVITAS HARI INI", stamp],
-    ["Masuk", Number(act.masuk) || 0],
-    ["Keluar", Number(act.keluar) || 0],
-    ["Rusak", Number(act.rusak) || 0],
-    ["Total", Number(act.total) || 0]
-  ]);
-
-  try {
-    sh.getRange("A2").setValue("Pantauan Stok & Aktivitas — Real Time | Update terakhir: " + stamp);
-  } catch (e) {}
-
-  return {
-    success: true,
-    mode: "LIGHT_CARDS",
-    kritisCount: top10.length,
-    poAktifItem: Number(aktif.itemCount) || 0,
-    aktivitasTotal: Number(act.total) || 0,
-    updatedAt: stamp
-  };
+  // DINONAKTIFKAN: writer lama menimpa layout resmi Dashboard Opsi B.
+  return { success: true, skipped: true, reason: "Writer kartu light dinonaktifkan agar tidak menimpa layout Dashboard Opsi B" };
 }
 
 function refreshStatusStockLight_() {
-  var lock = LockService.getScriptLock();
-  try {
-    lock.waitLock(15000);
-  } catch (lockErr) {
-    return { success: false, error: "Lock timeout: " + lockErr.message };
-  }
-
-  try {
-    var result = { success: true, version: "6.6.5-LIGHT-STATUS", steps: {} };
-
-    try {
-      result.steps.divisionStock = syncDivisionStockLightweight_();
-    } catch (divErr) {
-      result.steps.divisionStock = { success: false, error: String(divErr.message || divErr) };
-    }
-
-    try {
-      result.steps.dashboardCards = writeDashboardStatusCardsLight_();
-    } catch (cardErr) {
-      result.steps.dashboardCards = { success: false, error: String(cardErr.message || cardErr) };
-    }
-
-    try {
-      updateLastUpdateTimestamp();
-      result.steps.timestamp = { success: true };
-    } catch (tsErr) {
-      result.steps.timestamp = { success: false, error: String(tsErr.message || tsErr) };
-    }
-
-    try {
-      result.steps.poSection = refreshDashboardPOSection_({ renderCharts: false, lightweight: true });
-    } catch (poErr) {
-      result.steps.poSection = { success: false, error: String(poErr.message || poErr) };
-    }
-
-    result.updatedAt = new Date().toISOString();
-    return result;
-  } finally {
-    try { lock.releaseLock(); } catch (e) {}
-  }
+  // Gunakan satu jalur refresh resmi. Lock dikelola oleh refreshDashboardDataLight693_.
+  // Jangan mengambil ScriptLock di sini karena akan menyebabkan lock bertingkat.
+  return refreshDashboardDataLight693_();
 }
 
 function installStatusStockLightTrigger_() {
