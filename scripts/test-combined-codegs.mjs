@@ -27,11 +27,13 @@ assert.match(body('refreshDashboardPOSection_'), /dashboardClearPOArea_\(sh, cur
 assert.doesNotMatch(body('refreshDashboardPOSection_'), /getRange\(\s*(?:2[89]|3\d|4[0-5])\s*,[\s\S]{0,100}(?:clearContent|setValues|setValue)\(/);
 
 // Production Code.gs visible dashboard ranges must stop at row 27; rows 28–45 are protected.
-const productionRefresh = productionGs.slice(productionGs.indexOf('function dashboardSyncPatchRefresh_'));
-assert.match(productionRefresh, /getRange\(13,2,15,4\)\.setNumberFormat/);
-assert.match(productionRefresh, /getRange\(13,6,15,1\)\.setNumberFormat/);
-assert.doesNotMatch(productionRefresh, /getRange\(13,\s*[26],\s*80,\s*[14]\)\.setNumberFormat/,
-  'Visible dashboard formatting must not extend into critical rows 28–45');
+const productionWriterStart = productionGs.indexOf('function writeDashboardData693_');
+assert.notEqual(productionWriterStart, -1, 'Missing production dashboard writer');
+const productionWriterEnd = productionGs.indexOf('\nfunction ', productionWriterStart + 10);
+const productionWriter = productionGs.slice(productionWriterStart, productionWriterEnd > productionWriterStart ? productionWriterEnd : productionGs.length);
+assert.match(productionWriter, /getRange\('A26:F27'\)\.setValues/);
+assert.doesNotMatch(productionWriter, /getRange\('A(?:2[89]|3\d|4[0-5]):/,
+  'Visible dashboard writes must not extend into critical rows 28–45');
 
 // Stock-shortage message must be human-readable and shared by single/bulk paths.
 const holdStart = gs.indexOf('function formatStockShortageHold_(');

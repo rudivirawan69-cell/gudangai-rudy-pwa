@@ -3986,8 +3986,8 @@ function writeDashboardData693_(d) {
   s.getRange('I5:J5').setValues([['INDIKATOR','JUMLAH']]);s.getRange('I6:J10').setValues([['Total Item',+(d.totalItemAktif||d.totalItem)||0],['Total Sisa Stok',+d.totalStok||0],['Stok Aman',+d.aman||0],['Stok Waspada',+d.waspada||0],['Stok Kritis',+d.kritis||0]]);
   var t=d.trend7Hari||{labels:[],values:[]},tr=[];for(var i=0;i<7;i++)tr.push([t.labels[i]||'',t.values[i]==null?'':+t.values[i]||0,'','','','']);
   s.getRange('I12:J12').setValues([['TANGGAL','TOTAL ITEM']]);s.getRange('I13:J19').setValues(tr.map(function(r){return [r[0],r[1]]}));
-  var v=(d.statusPerDivisi||[]).slice(0,11).map(function(x){var n=+x.total||0,q=+x.kritis||0;return [x.divisi||'',n,+x.aman||0,+x.waspada||0,q,n?Math.round(q/n*1000)/10:0]});while(v.length<11)v.push(['','','','','','']);
-  s.getRange('A25:F25').setValues([['DIVISI','TOTAL ITEM','AMAN','WASPADA','KRITIS','% KRITIS']]);s.getRange('A26:F36').setValues(v);
+  var v=(d.statusPerDivisi||[]).slice(0,2).map(function(x){var n=+x.total||0,q=+x.kritis||0;return [x.divisi||'',n,+x.aman||0,+x.waspada||0,q,n?Math.round(q/n*1000)/10:0]});while(v.length<2)v.push(['','','','','','']);
+  s.getRange('A25:F25').setValues([['DIVISI','TOTAL ITEM','AMAN','WASPADA','KRITIS','% KRITIS']]);s.getRange('A26:F27').setValues(v);
   var a=d.aktivitasHariIni||{};s.getRange('H25:I25').setValues([['AKTIVITAS HARI INI','JUMLAH']]);s.getRange('H26:I30').setValues([['Barang Masuk',+a.masuk||0],['Barang Keluar',+a.keluar||0],['Barang Rusak',+a.rusak||0],['Total Aktivitas',+a.total||0],['Update Terakhir',d.lastUpdate||'N/A']]);
   var dv=(d.statusPerDivisi||[]).map(function(x){return [x.divisi||'',+x.aman||0,+x.waspada||0,+x.kritis||0]});if(!dv.length)dv=[['Tidak ada data',0,0,0]];
   s.getRange(1,16,Math.max(1,dv.length)+1,4).clearContent();s.getRange(1,16,1,4).setValues([['DIVISI','AMAN','WASPADA','KRITIS']]);s.getRange(2,16,dv.length,4).setValues(dv);
