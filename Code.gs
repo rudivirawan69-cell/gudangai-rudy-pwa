@@ -2712,12 +2712,29 @@ function diagnoseDashboard() {
 }
 
 function clearDashboardCharts_(sheet) {
-  try {
-    const charts = sheet.getCharts();
-    charts.forEach(function(chart) { sheet.removeChart(chart); });
-  } catch (err) {
-    console.error("Chart lama tidak dapat dihapus: " + err.message);
+  if (!sheet) {
+    console.error("Dashboard tidak ditemukan; penghapusan grafik dilewati.");
+    return { success: false, removed: 0, failed: 0 };
   }
+
+  var charts = sheet.getCharts();
+  var removed = 0;
+  var failed = 0;
+
+  charts.forEach(function(chart, index) {
+    try {
+      sheet.removeChart(chart);
+      removed++;
+    } catch (err) {
+      failed++;
+      console.error("Grafik lama ke-" + (index + 1) +
+        " gagal dihapus: " + String(err && err.message || err));
+    }
+  });
+
+  console.log("Pembersihan grafik Dashboard: " +
+    JSON.stringify({ removed: removed, failed: failed }));
+  return { success: failed === 0, removed: removed, failed: failed };
 }
 
 /**
@@ -3916,7 +3933,14 @@ function formatDashboardLayout693_() {
     {title:'H24:L24',label:'AKTIVITAS HARI INI',head:'H25:I25',body:'H26:I30'}
   ];
   specs.forEach(function(x) {
-    var titleRange=sh.getRange(x.title);titleRange.breakApart().merge().setValue(x.label)
+    var titleRange = sh.getRange(x.title);
+    // Lepaskan hanya rentang gabungan utuh yang beririsan dengan area judul.
+    // breakApart() langsung pada sebagian merged range dapat memicu exception.
+    var mergedTitleRanges = titleRange.getMergedRanges();
+    mergedTitleRanges.forEach(function(mergedRange) {
+      mergedRange.breakApart();
+    });
+    titleRange.merge().setValue(x.label)
       .setBackground(DASH693.head).setFontColor('#ffffff').setFontWeight('bold').setFontSize(10)
       .setHorizontalAlignment('center').setVerticalAlignment('middle').setWrap(true);
     sh.getRange(x.head).setBackground(DASH693.sub).setFontColor('#ffffff')
