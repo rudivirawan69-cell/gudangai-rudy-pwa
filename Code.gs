@@ -2512,7 +2512,8 @@ function classifyDashboardStock_(stockAkhir, stockAman) {
   return "aman";
 }
 
-function getDashboardData() {
+function getDashboardData(options) {
+  options = options || {};
   const all = getAllStock("ALL");
   if (!all.success) return { success: false, error: "Gagal membaca Stock CV/PT" };
   const status = { aman: 0, waspada: 0, kritis: 0 };
@@ -2542,7 +2543,9 @@ function getDashboardData() {
 
   kritisItems.sort(function(a, b) { return b.kurang - a.kurang; });
   const activity = getTodayActivity_();
-  const trend = getSevenDayTrend_();
+  // Refresh Dashboard ringan tidak menghitung tren historis. Endpoint/pemanggil
+  // lama tetap mendapat tren kecuali secara eksplisit memakai {skipTrend:true}.
+  const trend = options.skipTrend ? { labels: [], values: [] } : getSevenDayTrend_();
   const divisionRows = Object.keys(divisions).map(function(k) { return divisions[k]; });
   divisionRows.sort(function(a, b) { return b.total - a.total; });
   const po = getPOStatus_();
@@ -3339,16 +3342,27 @@ function onEdit(e) {
     if (!e || !e.range) return;
     const sheetName = e.range.getSheet().getName();
     const stockSheets = ["Stock CV", "Stock PT", "Stock Awal", "Stock Bahan Baku"];
-    const affected = stockSheets.indexOf(sheetName) >= 0 || sheetName === "purchase order" || Object.keys(SHEET_CONFIG).indexOf(sheetName) >= 0;
+    const affected = stockSheets.indexOf(sheetName) >= 0 ||
+      sheetName === "purchase order" ||
+      Object.keys(SHEET_CONFIG).indexOf(sheetName) >= 0;
     if (!affected) return;
+
     clearMasterCache();
     markDataDirty_(sheetName);
     updateLastUpdateTimestamp();
+
+    // Sinkronisasi divisi hanya saat sumber stok berubah.
     if (stockSheets.indexOf(sheetName) >= 0) {
-      try { syncDivisionStockLightweight_(); } catch (divErr) { console.error("onEdit sync divisi: " + divErr.message); }
+      try { syncDivisionStockLightweight_(); }
+      catch (divErr) { console.error("onEdit sync divisi: " + String(divErr.message || divErr)); }
     }
-    try { refreshDashboardDataLight693_(); } catch (dashErr) { console.error("Dashboard refresh ringan gagal: " + dashErr.message); }
-  } catch (err) { console.error("onEdit ringan gagal: " + err.message); }
+
+    // Tidak menjalankan getDashboardData + penulisan PO setiap edit.
+    // Dashboard diperbarui oleh satu trigger ringan setiap 10 menit.
+    console.log("Dashboard ditandai perlu refresh; sumber berubah: " + sheetName);
+  } catch (err) {
+    console.error("onEdit ringan gagal: " + String(err.message || err));
+  }
 }
 
 
@@ -3412,54 +3426,63 @@ function setupEnvironment() {
   try { formatOperationalSheets_(); } catch (visualErr) { console.error("Format sheet operasional gagal: " + visualErr.message); }
 
   if (!props.getProperty("API_SECRET")) {
-    const secret = Utilities.getUuid().replace(/-/g,"") + Utilities.getUuid().replace(/-/g,"").substring(0,16);
+    const secret = Utilities.getUuid().replace(/-/g, "") + Utilities.getUuid().replace(/-/g, "").substring(0, 16);
     props.setProperty("API_SECRET", secret);
     console.log("API_SECRET baru dibuat dan disimpan; nilai secret tidak dicetak ke log.");
   } else {
     console.log("API_SECRET sudah ada.");
   }
 
-  // Hapus trigger lama
-  ScriptApp.getProjectTriggers().forEach(t => {
-    const fn = t.getHandlerFunction();
-    if (["sendDailyStockReport","weeklyPOAutomation","logDailySnapshot","processEmailQueue","sendWeeklyPOReport","refreshDashboard","refreshAllData","refreshDashboardDataLight693_","onEdit"].indexOf(fn) >= 0) {
-      ScriptApp.deleteTrigger(t);
-    }
+  // Hapus trigger lama/duplikat yang dikelola setup ini, termasuk semua
+  // handler Dashboard lama. Trigger laporan/snapshot/PO tetap dibuat kembali.
+  var managedHandlers = [
+    "sendDailyStockReport", "weeklyPOAutomation", "logDailySnapshot",
+    "processEmailQueue", "sendWeeklyPOReport", "refreshDashboard",
+    "refreshAllData", "refreshDashboardDataLight693_", "refreshDashboardFinal_",
+    "refreshDashboardOperationalV68_", "refreshDashboardPODataOnly_",
+    "refreshWeeklyPODashboard", "refreshStatusStockLight_", "writeDashboardStatusCardsLight_",
+    "onEdit"
+  ];
+  ScriptApp.getProjectTriggers().forEach(function(trigger) {
+    if (managedHandlers.indexOf(trigger.getHandlerFunction()) >= 0) ScriptApp.deleteTrigger(trigger);
   });
 
-  // Setup trigger baru
   ScriptApp.newTrigger("sendDailyStockReport").timeBased().everyDays(1).atHour(7).create();
   ScriptApp.newTrigger("weeklyPOAutomation").timeBased().onWeekDay(ScriptApp.WeekDay.MONDAY).atHour(8).create();
   ScriptApp.newTrigger("logDailySnapshot").timeBased().everyDays(1).atHour(23).create();
-  // Trigger dashboard ringan menggantikan maintenance no-op 15 menit.
   ScriptApp.newTrigger("refreshDashboardDataLight693_").timeBased().everyMinutes(10).create();
-  // Installable onEdit trigger agar perubahan manual pada semua sumber stok
-  // dapat menjalankan sinkronisasi yang membutuhkan otorisasi SpreadsheetApp.
   ScriptApp.newTrigger("onEdit").forSpreadsheet(ss).onEdit().create();
 
   _cachedSS = null;
   _resolvedSpreadsheetId = null;
   updateLastUpdateTimestamp();
-  // Setup tidak lagi memaksa rebuild Dashboard/Data Stok Per Divisi.
-  // Format awal tetap tersedia melalui maintenance/refresh manual.
   try { maintenanceCleanup(true); } catch (maintenanceErr) { console.error("Maintenance awal gagal: " + maintenanceErr.message); }
-  // Repair Dashboard satu kali saat setup; trigger berkala berikutnya hanya refresh data ringan.
-  try { formatDashboardLayout693_(); } catch (dashboardFormatErr) { console.error("Format Dashboard gagal: " + dashboardFormatErr.message); }
-  try { refreshDashboardDataLight693_(); } catch (dashboardRefreshErr) { console.error("Refresh Dashboard awal gagal: " + dashboardRefreshErr.message); }
+
+  // Layout empat grafik hanya dipasang saat setup manual, bukan saat trigger.
+  try {
+    var layoutResult = formatDashboardLayout693_();
+    console.log("Dashboard layout: " + JSON.stringify(layoutResult));
+  } catch (dashboardFormatErr) {
+    console.error("Format Dashboard gagal: " + String(dashboardFormatErr.message || dashboardFormatErr));
+  }
+  try { refreshDashboardDataLight693_(); }
+  catch (dashboardRefreshErr) { console.error("Refresh Dashboard awal gagal: " + String(dashboardRefreshErr.message || dashboardRefreshErr)); }
 
   const activeMonth = getActiveMonth();
   console.log("=== setupEnvironment BACKEND GudangAI-69 " + BACKEND_VERSION + " SELESAI ===");
   console.log("Spreadsheet: " + ss.getName());
   console.log("Bulan aktif: " + activeMonth.nama + " " + activeMonth.tahun);
-  console.log("Trigger: sendDailyStockReport(07:00), weeklyPOAutomation(Senin 08:00), logDailySnapshot(23:00), queue write disabled, dashboard refresh ringan (10min)");
+  console.log("Trigger: laporan harian, PO mingguan, snapshot harian, onEdit ringan, Dashboard 10 menit");
   try {
     const masterNow = getAllStock("ALL");
     console.log("Total master data aktual: " + (masterNow && masterNow.count != null ? masterNow.count : 0));
   } catch (countErr) { console.log("Total master data aktual: gagal dibaca — " + countErr.message); }
 
-  return { success: true, spreadsheetId: ss.getId(), spreadsheetName: ss.getName(), activeMonth: activeMonth,
-           title: APP_TITLE, configSheet: CONFIG_SHEET_NAME,
-           message: "Backend GudangAI-69 siap. Trigger refreshAllData berat dinonaktifkan; Dashboard memakai refresh ringan 10 menit." };
+  return {
+    success: true, spreadsheetId: ss.getId(), spreadsheetName: ss.getName(),
+    activeMonth: activeMonth, title: APP_TITLE, configSheet: CONFIG_SHEET_NAME,
+    message: "Setup selesai. Dashboard memakai empat grafik dan satu refresh ringan setiap 10 menit."
+  };
 }
 
 function generateRandomSecret() {
@@ -3923,55 +3946,66 @@ var DASH693 = {
  * Tabel Opsi B memakai area A4:G14, I4:N19, A24:F36, H24:L30.
  */
 function formatDashboardLayout693_() {
-  var sh = getSS().getSheetByName('Dashboard');
-  if (!sh) return {success:false,error:'Sheet Dashboard tidak ditemukan'};
-  var specs = [
-    {title:'A4:G4',label:'10 ITEM STOK KRITIS',head:'A5:G5',body:'A6:G15'},
-    {title:'I4:N4',label:'RINGKASAN STOK',head:'I5:J5',body:'I6:J10'},
-    {title:'I11:N11',label:'TREN TOTAL ITEM 7 HARI',head:'I12:J12',body:'I13:J19'},
-    {title:'A24:F24',label:'RINGKASAN STOK PER DIVISI',head:'A25:F25',body:'A26:F36'},
-    {title:'H24:L24',label:'AKTIVITAS HARI INI',head:'H25:I25',body:'H26:I30'}
+  var sh = getSS().getSheetByName("Dashboard");
+  if (!sh) return { success: false, error: "Sheet Dashboard tidak ditemukan" };
+
+  // Layout dibangun hanya saat diminta manual, tidak pada refresh berkala.
+  // Bersihkan merged cells yang berada di area visual lama tanpa menyentuh PO row 46+.
+  sh.getRange("A4:N45").getMergedRanges().forEach(function(r) { r.breakApart(); });
+  sh.getRange("A4:N45").clear();
+
+  // Header atas tetap, dengan satu baris judul dan satu baris timestamp.
+  sh.getRange("A1:M2").getMergedRanges().forEach(function(r) { r.breakApart(); });
+  sh.getRange("A1:M1").merge().setValue("DASHBOARD GUDANG PUSAT 69")
+    .setBackground("#174B63").setFontColor("#ffffff").setFontWeight("bold")
+    .setFontSize(14).setHorizontalAlignment("left").setVerticalAlignment("middle");
+  sh.getRange("A2:M2").merge().setValue("Pantauan Stok & Aktivitas — Real Time")
+    .setBackground("#eaf3f7").setFontColor("#174B63").setFontSize(9)
+    .setHorizontalAlignment("left").setVerticalAlignment("middle");
+  sh.setRowHeight(1, 30);
+  sh.setRowHeight(2, 22);
+
+  var cleared = clearDashboardCharts_(sh);
+  if (!cleared.success) {
+    return { success: false, error: "Grafik lama tidak seluruhnya berhasil dihapus", details: cleared };
+  }
+
+  var chartSpecs = [
+    { title: "Status Stok per Divisi", type: Charts.ChartType.BAR, range: "P1:S20", row: 4, col: 1,
+      options: { legend: { position: "bottom" }, isStacked: true, hAxis: { title: "Jumlah Item", minValue: 0 }, vAxis: { title: "Divisi" } } },
+    { title: "Distribusi Status Stok", type: Charts.ChartType.PIE, range: "U1:V4", row: 4, col: 8,
+      options: { pieHole: 0.45, legend: { position: "right" } } },
+    { title: "Aktivitas Hari Ini", type: Charts.ChartType.COLUMN, range: "AA1:AB4", row: 24, col: 1,
+      options: { legend: { position: "none" }, vAxis: { title: "Jumlah", minValue: 0 } } },
+    { title: "Status PO", type: Charts.ChartType.PIE, range: "AD1:AE4", row: 24, col: 8,
+      options: { pieHole: 0.45, legend: { position: "right" } } }
   ];
-  specs.forEach(function(x) {
-    var titleRange = sh.getRange(x.title);
-    // Lepaskan hanya rentang gabungan utuh yang beririsan dengan area judul.
-    // breakApart() langsung pada sebagian merged range dapat memicu exception.
-    var mergedTitleRanges = titleRange.getMergedRanges();
-    mergedTitleRanges.forEach(function(mergedRange) {
-      mergedRange.breakApart();
-    });
-    titleRange.merge().setValue(x.label)
-      .setBackground(DASH693.head).setFontColor('#ffffff').setFontWeight('bold').setFontSize(10)
-      .setHorizontalAlignment('center').setVerticalAlignment('middle').setWrap(true);
-    sh.getRange(x.head).setBackground(DASH693.sub).setFontColor('#ffffff')
-      .setFontWeight('bold').setFontSize(9).setHorizontalAlignment('center')
-      .setVerticalAlignment('middle').setWrap(true);
-    var body=sh.getRange(x.body), n=body.getNumRows(), c=body.getNumColumns();
-    body.setFontSize(9).setFontColor(DASH693.text).setVerticalAlignment('middle')
-      .setWrap(true).setBorder(true,true,true,true,false,false,DASH693.border,SpreadsheetApp.BorderStyle.SOLID);
-    for (var i=0;i<n;i++) body.offset(i,0,1,c).setBackground(i%2===0?DASH693.alt:DASH693.white);
+
+  chartSpecs.forEach(function(z) {
+    var builder = sh.newChart().setChartType(z.type).addRange(sh.getRange(z.range))
+      .setOption("title", z.title).setOption("width", 500).setOption("height", 230)
+      .setPosition(z.row, z.col, 0, 0);
+    Object.keys(z.options).forEach(function(k) { builder.setOption(k, z.options[k]); });
+    sh.insertChart(builder.build());
   });
-  // Lebar kolom konsisten; hanya kolom tabel Opsi B yang disentuh.
-  [sh.setColumnWidth(1,48),sh.setColumnWidth(2,190),sh.setColumnWidth(3,90),
-   sh.setColumnWidth(4,85),sh.setColumnWidth(5,85),sh.setColumnWidth(6,90),
-   sh.setColumnWidth(7,85),sh.setColumnWidth(8,110),sh.setColumnWidth(9,145),
-   sh.setColumnWidth(10,85),sh.setColumnWidth(11,85),sh.setColumnWidth(12,85),
-   sh.setColumnWidth(13,85),sh.setColumnWidth(14,85)];
-  clearDashboardCharts_(sh);
-  var specs=[
-    {t:'Status Stok per Divisi',type:Charts.ChartType.BAR,r:'P1:S20',y:102,x:1,o:{legend:{position:'bottom'},isStacked:true,hAxis:{title:'Jumlah Item',minValue:0},vAxis:{title:'Divisi'}}},
-    {t:'Distribusi Status Stok',type:Charts.ChartType.PIE,r:'U1:V4',y:102,x:8,o:{pieHole:0.45,legend:{position:'right'}}},
-    {t:'Tren Total Item 7 Hari',type:Charts.ChartType.LINE,r:'X1:Y8',y:119,x:1,o:{legend:{position:'none'},hAxis:{title:'Tanggal'},vAxis:{title:'Total Item',minValue:0}}},
-    {t:'Aktivitas Hari Ini',type:Charts.ChartType.COLUMN,r:'AA1:AB4',y:119,x:8,o:{legend:{position:'none'},vAxis:{title:'Qty',minValue:0}}},
-    {t:'Status PO',type:Charts.ChartType.PIE,r:'AD1:AE4',y:136,x:1,o:{pieHole:0.45,legend:{position:'right'}}}
-  ];
-  specs.forEach(function(z){var b=sh.newChart().setChartType(z.type).addRange(sh.getRange(z.r)).setOption('title',z.t).setOption('width',520).setOption('height',280).setPosition(z.y,z.x,0,0);Object.keys(z.o).forEach(function(k){b.setOption(k,z.o[k])});sh.insertChart(b.build())});
-  sh.getRange('A46:M99').setVerticalAlignment('middle').setWrap(true);
-  sh.getRange('A46:F46').setBackground(DASH693.head).setFontColor('#ffffff').setFontWeight('bold');
-  sh.getRange('H46:M46').setBackground(DASH693.head).setFontColor('#ffffff').setFontWeight('bold');
-  sh.getRange('A48:F48').setBackground(DASH693.sub).setFontColor('#ffffff').setFontWeight('bold');
-  sh.getRange('H48:M48').setBackground(DASH693.sub).setFontColor('#ffffff').setFontWeight('bold');
-  return {success:true,version:'6.9.4-DASHBOARD-REPAIR',formatted:true,protectedRows:'28:45 by PO writer',poArea:'46:99',charts:5};
+
+  // Hapus sisa sumber grafik tren 7 hari yang tidak lagi dipakai Dashboard.
+  sh.getRange("X1:Y8").clearContent();
+
+  // Sumber data chart tersembunyi; PO row 46+ tetap utuh.
+  try { sh.hideColumns(16, 16); } catch (hideErr) {
+    console.warn("Kolom sumber grafik tidak dapat disembunyikan: " + String(hideErr.message || hideErr));
+  }
+  sh.getRange("A46:M99").setVerticalAlignment("middle").setWrap(true);
+  return {
+    success: true,
+    version: "6.9.6-DASHBOARD-4-CHARTS",
+    charts: 4,
+    trend7HariChartRemoved: true,
+    visibleTablesRemoved: true,
+    poAreaPreserved: "row 46+",
+    layoutBuilt: true
+  };
 }
 
 /**
@@ -3979,45 +4013,121 @@ function formatDashboardLayout693_() {
  * Tidak menjalankan setup layout, tidak menghapus chart, dan tidak menulis ke sheet purchase order.
  */
 function writeDashboardData693_(d) {
-  var s=getSS().getSheetByName('Dashboard'); if(!s||!d||!d.success)return {success:false,error:'Dashboard/data tidak valid'};
-  var k=(d.top10Kritis||[]).slice(0,10).map(function(x,i){return [i+1,x.kode||'',x.nama||'',x.divisi||'',+x.sisa||0,+x.aman||0,+x.kurang||0]});
-  while(k.length<10)k.push(['','','','','','','']);
-  s.getRange('A5:G5').setValues([['NO','KODE','NAMA BARANG','DIVISI','STOK AKHIR','STOK AMAN','KEKURANGAN']]);s.getRange('A6:G15').setValues(k);
-  s.getRange('I5:J5').setValues([['INDIKATOR','JUMLAH']]);s.getRange('I6:J10').setValues([['Total Item',+(d.totalItemAktif||d.totalItem)||0],['Total Sisa Stok',+d.totalStok||0],['Stok Aman',+d.aman||0],['Stok Waspada',+d.waspada||0],['Stok Kritis',+d.kritis||0]]);
-  var t=d.trend7Hari||{labels:[],values:[]},tr=[];for(var i=0;i<7;i++)tr.push([t.labels[i]||'',t.values[i]==null?'':+t.values[i]||0,'','','','']);
-  s.getRange('I12:J12').setValues([['TANGGAL','TOTAL ITEM']]);s.getRange('I13:J19').setValues(tr.map(function(r){return [r[0],r[1]]}));
-  var v=(d.statusPerDivisi||[]).slice(0,11).map(function(x){var n=+x.total||0,q=+x.kritis||0;return [x.divisi||'',n,+x.aman||0,+x.waspada||0,q,n?Math.round(q/n*1000)/10:0]});while(v.length<11)v.push(['','','','','','']);
-  s.getRange('A25:F25').setValues([['DIVISI','TOTAL ITEM','AMAN','WASPADA','KRITIS','% KRITIS']]);s.getRange('A26:F36').setValues(v);
-  var a=d.aktivitasHariIni||{};s.getRange('H25:I25').setValues([['AKTIVITAS HARI INI','JUMLAH']]);s.getRange('H26:I30').setValues([['Barang Masuk',+a.masuk||0],['Barang Keluar',+a.keluar||0],['Barang Rusak',+a.rusak||0],['Total Aktivitas',+a.total||0],['Update Terakhir',d.lastUpdate||'N/A']]);
-  var dv=(d.statusPerDivisi||[]).map(function(x){return [x.divisi||'',+x.aman||0,+x.waspada||0,+x.kritis||0]});if(!dv.length)dv=[['Tidak ada data',0,0,0]];
-  s.getRange(1,16,Math.max(1,dv.length)+1,4).clearContent();s.getRange(1,16,1,4).setValues([['DIVISI','AMAN','WASPADA','KRITIS']]);s.getRange(2,16,dv.length,4).setValues(dv);
-  s.getRange('U1:V4').setValues([['STATUS','JUMLAH'],['AMAN',+d.aman||0],['WASPADA',+d.waspada||0],['KRITIS',+d.kritis||0]]);
-  var ct=[['TANGGAL','TOTAL ITEM']],tt=d.trend7Hari||{labels:[],values:[]};for(var q=0;q<7;q++)ct.push([tt.labels[q]||'',tt.values[q]==null?'':+tt.values[q]||0]);s.getRange('X1:Y8').setValues(ct);
-  var ac=d.aktivitasHariIni||{};s.getRange('AA1:AB4').setValues([['AKTIVITAS','QTY'],['MASUK',+ac.masuk||0],['KELUAR',+ac.keluar||0],['RUSAK',+ac.rusak||0]]);
-  var ps=getStatusPO(),p=ps&&ps.summary||{};s.getRange('AD1:AE4').setValues([['STATUS PO','ITEM'],['SELESAI',+p.itemSelesai||0],['SEBAGIAN',+p.itemSebagian||0],['MENUNGGU',+p.itemMenunggu||0]]);try{s.hideColumns(16,16)}catch(e){}
-  s.getRange('A2').setValue('Pantauan Stok & Aktivitas — Real Time | Update terakhir: '+Utilities.formatDate(new Date(),TIMEZONE,'yyyy-MM-dd HH:mm:ss'));
-  return {success:true,totalItem:d.totalItemAktif||d.totalItem};
+  var sh = getSS().getSheetByName("Dashboard");
+  if (!sh || !d || !d.success) return { success: false, error: "Dashboard/data tidak valid" };
+
+  // Writer ini hanya memperbarui sumber empat grafik di kolom tersembunyi.
+  // Tidak menulis tabel ringkasan ke area visual A4:N45 dan tidak membangun ulang chart.
+  var divisions = (d.statusPerDivisi || []).slice(0, 19).map(function(x) {
+    return [x.divisi || "", +x.aman || 0, +x.waspada || 0, +x.kritis || 0];
+  });
+  while (divisions.length < 19) divisions.push(["", "", "", ""]);
+  sh.getRange("P1:S20").clearContent();
+  sh.getRange("P1:S1").setValues([["DIVISI", "AMAN", "WASPADA", "KRITIS"]]);
+  sh.getRange("P2:S20").setValues(divisions);
+
+  sh.getRange("U1:V4").setValues([
+    ["STATUS", "JUMLAH"],
+    ["AMAN", +d.aman || 0],
+    ["WASPADA", +d.waspada || 0],
+    ["KRITIS", +d.kritis || 0]
+  ]);
+
+  var activity = d.aktivitasHariIni || {};
+  sh.getRange("AA1:AB4").setValues([
+    ["AKTIVITAS", "JUMLAH"],
+    ["MASUK", +activity.masuk || 0],
+    ["KELUAR", +activity.keluar || 0],
+    ["RUSAK", +activity.rusak || 0]
+  ]);
+
+  var poResult = getStatusPO();
+  if (!poResult || !poResult.success) {
+    return { success: false, error: (poResult && poResult.error) || "Gagal membaca status PO untuk grafik" };
+  }
+  var summary = poResult.summary || {};
+  sh.getRange("AD1:AE4").setValues([
+    ["STATUS PO", "ITEM"],
+    ["SELESAI", +summary.itemSelesai || 0],
+    ["SEBAGIAN", +summary.itemSebagian || 0],
+    ["MENUNGGU", +summary.itemMenunggu || 0]
+  ]);
+
+  var formatted = Utilities.formatDate(new Date(), TIMEZONE, "yyyy-MM-dd HH:mm:ss");
+  sh.getRange("A2").setValue("Pantauan Stok & Aktivitas — Real Time | Update terakhir: " + formatted);
+  return { success: true, totalItem: d.totalItemAktif || d.totalItem, chartSources: 4, trendCalculationSkipped: true };
 }
 
 function refreshDashboardDataLight693_() {
-  var l=LockService.getScriptLock();if(!l.tryLock(5000))return {success:false,skipped:true,reason:'Dashboard refresh sedang berjalan'};
-  try{var d=getDashboardData();if(!d||!d.success)return {success:false,error:(d&&d.error)||'Gagal membaca dashboard'};
-    var w=writeDashboardData693_(d);if(!w.success)return w;
-    var p=refreshDashboardPOSection_({renderCharts:false,lightweight:true});if(!p||!p.success)return p||{success:false,error:'Refresh PO gagal'};
-    return {success:true,version:'6.9.4-DASHBOARD-REPAIR',mode:'LIGHT_DATA_REFRESH',totalItem:d.totalItemAktif||d.totalItem,po:p.status||'OK',updatedAt:new Date().toISOString()};
-  }finally{l.releaseLock();}
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(8000)) {
+    return { success: false, skipped: true, reason: "Dashboard refresh sedang berjalan" };
+  }
+  try {
+    // Sinkronisasi ringan sumber divisi; transaksi dan master stock tidak ditulis.
+    try { syncDivisionStockLightweight_(); } catch (syncErr) {
+      console.error("syncDivisionStockLightweight_: " + String(syncErr.message || syncErr));
+    }
+
+    // Skip perhitungan tren 7 hari khusus untuk jalur refresh Dashboard.
+    var data = getDashboardData({ skipTrend: true });
+    if (!data || !data.success) {
+      return { success: false, error: (data && data.error) || "Gagal membaca dashboard" };
+    }
+
+    var written = writeDashboardData693_(data);
+    if (!written || !written.success) return written || { success: false, error: "Penulisan sumber grafik gagal" };
+
+    var po = refreshDashboardPOSection_({ renderCharts: false, lightweight: true });
+    if (!po || !po.success) return po || { success: false, error: "Refresh PO gagal" };
+
+    try { updateLastUpdateTimestamp(); } catch (timestampErr) {
+      console.warn("updateLastUpdateTimestamp: " + String(timestampErr.message || timestampErr));
+    }
+
+    return {
+      success: true,
+      version: "6.9.6-DASHBOARD-4-CHARTS",
+      mode: "LIGHT_DATA_REFRESH",
+      chartSourcesUpdated: 4,
+      trendCalculationSkipped: true,
+      totalItem: data.totalItemAktif || data.totalItem,
+      po: po.status || "OK",
+      updatedAt: new Date().toISOString()
+    };
+  } finally {
+    lock.releaseLock();
+  }
 }
 function installDashboardLightTrigger693_() {
-  var handlers=['refreshDashboardDataLight693_','refreshDashboardFinal_','refreshDashboardOperationalV68_',
-    'refreshDashboardPODataOnly_','refreshWeeklyPODashboard'];
-  ScriptApp.getProjectTriggers().forEach(function(t) {
-    if (handlers.indexOf(t.getHandlerFunction())>=0) ScriptApp.deleteTrigger(t);
+  // Hapus trigger Dashboard lama/duplikat, bukan trigger laporan/snapshot/PO.
+  var dashboardHandlers = [
+    "refreshDashboardDataLight693_",
+    "refreshDashboardFinal_",
+    "refreshDashboardOperationalV68_",
+    "refreshDashboardPODataOnly_",
+    "refreshWeeklyPODashboard",
+    "refreshStatusStockLight_",
+    "writeDashboardStatusCardsLight_",
+    "refreshDashboard",
+    "refreshAllData"
+  ];
+  ScriptApp.getProjectTriggers().forEach(function(trigger) {
+    if (dashboardHandlers.indexOf(trigger.getHandlerFunction()) >= 0) {
+      ScriptApp.deleteTrigger(trigger);
+    }
   });
-  ScriptApp.newTrigger('refreshDashboardDataLight693_').timeBased().everyMinutes(10).create();
-  formatDashboardLayout693_();
-  var initialRefresh=refreshDashboardDataLight693_();
-  return {success:true,version:'6.9.4-DASHBOARD-REPAIR',trigger:'refreshDashboardDataLight693_',intervalMinutes:10,
-    initialRefresh:initialRefresh,note:'Format dan data awal disegarkan sekali; trigger berkala hanya memperbarui tabel dan sumber grafik.'};
+
+  ScriptApp.newTrigger("refreshDashboardDataLight693_").timeBased().everyMinutes(10).create();
+  var initialRefresh = refreshDashboardDataLight693_();
+  return {
+    success: true,
+    version: "6.9.6-DASHBOARD-4-CHARTS",
+    trigger: "refreshDashboardDataLight693_",
+    intervalMinutes: 10,
+    initialRefresh: initialRefresh,
+    note: "Satu trigger Dashboard ringan terpasang; refresh tidak membangun ulang layout."
+  };
 }
 // ============================================================
 // V6.6.5+ LIGHT STATUS STOCK + DASHBOARD CARDS
@@ -4028,150 +4138,19 @@ var LIGHT_DASH_KRITIS_START = 8;
 var LIGHT_DASH_AKTIVITAS_START = 21;
 
 function writeDashboardStatusCardsLight_() {
-  var ss = getSS();
-  var sh = ss.getSheetByName("Dashboard");
-  if (!sh) return { success: false, error: "Sheet Dashboard tidak ditemukan" };
-
-  var data = getDashboardData();
-  if (!data || !data.success) return { success: false, error: (data && data.error) || "getDashboardData gagal" };
-
-  var stamp = Utilities.formatDate(new Date(), TIMEZONE, "dd-MMM-yyyy HH:mm:ss");
-  var po = data.statusPO || {};
-  var aktif = (po.aktif) || { itemCount: 0, total: 0, cv: 0, pt: 0 };
-
-  sh.getRange(LIGHT_DASH_STATUS_START, 1, 4, 2).setValues([
-    ["STATUS STOK", stamp],
-    ["Aman", Number(data.aman) || 0],
-    ["Waspada", Number(data.waspada) || 0],
-    ["Kritis", Number(data.kritis) || 0]
-  ]);
-
-  sh.getRange(LIGHT_DASH_STATUS_START, 4, 4, 3).setValues([
-    ["STATUS PO AKTIF", Number(aktif.itemCount) || 0, Number(aktif.total) || 0],
-    ["PO CV (qty)", Number(aktif.cv) || 0, ""],
-    ["PO PT (qty)", Number(aktif.pt) || 0, ""],
-    ["Update", stamp, ""]
-  ]);
-
-  var kritisHeader = [["No", "Kode", "Nama", "Divisi", "Sisa", "Aman", "Kurang"]];
-  var kritisRows = [];
-  var top10 = data.top10Kritis || [];
-  for (var i = 0; i < 10; i++) {
-    if (i < top10.length) {
-      var it = top10[i];
-      kritisRows.push([
-        i + 1,
-        String(it.kode || ""),
-        String(it.nama || "").substring(0, 40),
-        String(it.divisi || ""),
-        Number(it.sisa) || 0,
-        Number(it.aman) || 0,
-        Number(it.kurang) || 0
-      ]);
-    } else {
-      kritisRows.push(["", "", "", "", "", "", ""]);
-    }
-  }
-  sh.getRange(LIGHT_DASH_KRITIS_START - 1, 1).setValue("TOP 10 ITEM KRITIS");
-  sh.getRange(LIGHT_DASH_KRITIS_START, 1, 1, 7).setValues(kritisHeader);
-  sh.getRange(LIGHT_DASH_KRITIS_START + 1, 1, 10, 7).setValues(kritisRows);
-
-  var act = data.aktivitasHariIni || { masuk: 0, keluar: 0, rusak: 0, total: 0 };
-  sh.getRange(LIGHT_DASH_AKTIVITAS_START, 1, 5, 2).setValues([
-    ["AKTIVITAS HARI INI", stamp],
-    ["Masuk", Number(act.masuk) || 0],
-    ["Keluar", Number(act.keluar) || 0],
-    ["Rusak", Number(act.rusak) || 0],
-    ["Total", Number(act.total) || 0]
-  ]);
-
-  try {
-    sh.getRange("A2").setValue("Pantauan Stok & Aktivitas — Real Time | Update terakhir: " + stamp);
-  } catch (e) {}
-
-  return {
-    success: true,
-    mode: "LIGHT_CARDS",
-    kritisCount: top10.length,
-    poAktifItem: Number(aktif.itemCount) || 0,
-    aktivitasTotal: Number(act.total) || 0,
-    updatedAt: stamp
-  };
+  // DINONAKTIFKAN: writer lama menimpa layout resmi Dashboard Opsi B.
+  return { success: true, skipped: true, reason: "Writer kartu light dinonaktifkan agar tidak menimpa layout Dashboard Opsi B" };
 }
 
 function refreshStatusStockLight_() {
-  var lock = LockService.getScriptLock();
-  try {
-    lock.waitLock(15000);
-  } catch (lockErr) {
-    return { success: false, error: "Lock timeout: " + lockErr.message };
-  }
-
-  try {
-    var result = { success: true, version: "6.6.5-LIGHT-STATUS", steps: {} };
-
-    try {
-      result.steps.divisionStock = syncDivisionStockLightweight_();
-    } catch (divErr) {
-      result.steps.divisionStock = { success: false, error: String(divErr.message || divErr) };
-    }
-
-    try {
-      result.steps.dashboardCards = writeDashboardStatusCardsLight_();
-    } catch (cardErr) {
-      result.steps.dashboardCards = { success: false, error: String(cardErr.message || cardErr) };
-    }
-
-    try {
-      updateLastUpdateTimestamp();
-      result.steps.timestamp = { success: true };
-    } catch (tsErr) {
-      result.steps.timestamp = { success: false, error: String(tsErr.message || tsErr) };
-    }
-
-    try {
-      result.steps.poSection = refreshDashboardPOSection_({ renderCharts: false, lightweight: true });
-    } catch (poErr) {
-      result.steps.poSection = { success: false, error: String(poErr.message || poErr) };
-    }
-
-    result.updatedAt = new Date().toISOString();
-    return result;
-  } finally {
-    try { lock.releaseLock(); } catch (e) {}
-  }
+  // Gunakan satu jalur refresh resmi. Lock dikelola oleh refreshDashboardDataLight693_.
+  // Jangan mengambil ScriptLock di sini karena akan menyebabkan lock bertingkat.
+  return refreshDashboardDataLight693_();
 }
 
 function installStatusStockLightTrigger_() {
-  var handlersToRemove = [
-    "refreshStatusStockLight_",
-    "refreshDashboardDataLight693_",
-    "refreshDashboardFinal_",
-    "refreshDashboardOperationalV68_",
-    "refreshDashboardPODataOnly_"
-  ];
-
-  ScriptApp.getProjectTriggers().forEach(function(t) {
-    if (handlersToRemove.indexOf(t.getHandlerFunction()) >= 0) {
-      ScriptApp.deleteTrigger(t);
-    }
-  });
-
-  ScriptApp.newTrigger("refreshStatusStockLight_")
-    .timeBased()
-    .everyMinutes(10)
-    .create();
-
-  var firstRun = refreshStatusStockLight_();
-
-  return {
-    success: true,
-    version: "6.6.5-LIGHT-STATUS",
-    trigger: "refreshStatusStockLight_",
-    intervalMinutes: 10,
-    firstRun: firstRun,
-    note: "Trigger 10 menit terpasang."
-  };
+  // Kompatibilitas: installer lama diarahkan ke satu installer resmi.
+  return installDashboardLightTrigger693_();
 }
 
 function testRefreshStatusStockLight_() {
