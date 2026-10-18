@@ -4019,3 +4019,208 @@ function installDashboardLightTrigger693_() {
   return {success:true,version:'6.9.4-DASHBOARD-REPAIR',trigger:'refreshDashboardDataLight693_',intervalMinutes:10,
     initialRefresh:initialRefresh,note:'Format dan data awal disegarkan sekali; trigger berkala hanya memperbarui tabel dan sumber grafik.'};
 }
+// ============================================================
+// V6.6.5+ LIGHT STATUS STOCK + DASHBOARD CARDS
+// ============================================================
+
+var LIGHT_DASH_STATUS_START = 3;
+var LIGHT_DASH_KRITIS_START = 8;
+var LIGHT_DASH_AKTIVITAS_START = 21;
+
+function writeDashboardStatusCardsLight_() {
+  var ss = getSS();
+  var sh = ss.getSheetByName("Dashboard");
+  if (!sh) return { success: false, error: "Sheet Dashboard tidak ditemukan" };
+
+  var data = getDashboardData();
+  if (!data || !data.success) return { success: false, error: (data && data.error) || "getDashboardData gagal" };
+
+  var stamp = Utilities.formatDate(new Date(), TIMEZONE, "dd-MMM-yyyy HH:mm:ss");
+  var po = data.statusPO || {};
+  var aktif = (po.aktif) || { itemCount: 0, total: 0, cv: 0, pt: 0 };
+
+  sh.getRange(LIGHT_DASH_STATUS_START, 1, 4, 2).setValues([
+    ["STATUS STOK", stamp],
+    ["Aman", Number(data.aman) || 0],
+    ["Waspada", Number(data.waspada) || 0],
+    ["Kritis", Number(data.kritis) || 0]
+  ]);
+
+  sh.getRange(LIGHT_DASH_STATUS_START, 4, 4, 3).setValues([
+    ["STATUS PO AKTIF", Number(aktif.itemCount) || 0, Number(aktif.total) || 0],
+    ["PO CV (qty)", Number(aktif.cv) || 0, ""],
+    ["PO PT (qty)", Number(aktif.pt) || 0, ""],
+    ["Update", stamp, ""]
+  ]);
+
+  var kritisHeader = [["No", "Kode", "Nama", "Divisi", "Sisa", "Aman", "Kurang"]];
+  var kritisRows = [];
+  var top10 = data.top10Kritis || [];
+  for (var i = 0; i < 10; i++) {
+    if (i < top10.length) {
+      var it = top10[i];
+      kritisRows.push([
+        i + 1,
+        String(it.kode || ""),
+        String(it.nama || "").substring(0, 40),
+        String(it.divisi || ""),
+        Number(it.sisa) || 0,
+        Number(it.aman) || 0,
+        Number(it.kurang) || 0
+      ]);
+    } else {
+      kritisRows.push(["", "", "", "", "", "", ""]);
+    }
+  }
+  sh.getRange(LIGHT_DASH_KRITIS_START - 1, 1).setValue("TOP 10 ITEM KRITIS");
+  sh.getRange(LIGHT_DASH_KRITIS_START, 1, 1, 7).setValues(kritisHeader);
+  sh.getRange(LIGHT_DASH_KRITIS_START + 1, 1, 10, 7).setValues(kritisRows);
+
+  var act = data.aktivitasHariIni || { masuk: 0, keluar: 0, rusak: 0, total: 0 };
+  sh.getRange(LIGHT_DASH_AKTIVITAS_START, 1, 5, 2).setValues([
+    ["AKTIVITAS HARI INI", stamp],
+    ["Masuk", Number(act.masuk) || 0],
+    ["Keluar", Number(act.keluar) || 0],
+    ["Rusak", Number(act.rusak) || 0],
+    ["Total", Number(act.total) || 0]
+  ]);
+
+  try {
+    sh.getRange("A2").setValue("Pantauan Stok & Aktivitas — Real Time | Update terakhir: " + stamp);
+  } catch (e) {}
+
+  return {
+    success: true,
+    mode: "LIGHT_CARDS",
+    kritisCount: top10.length,
+    poAktifItem: Number(aktif.itemCount) || 0,
+    aktivitasTotal: Number(act.total) || 0,
+    updatedAt: stamp
+  };
+}
+
+function refreshStatusStockLight_() {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(15000);
+  } catch (lockErr) {
+    return { success: false, error: "Lock timeout: " + lockErr.message };
+  }
+
+  try {
+    var result = { success: true, version: "6.6.5-LIGHT-STATUS", steps: {} };
+
+    try {
+      result.steps.divisionStock = syncDivisionStockLightweight_();
+    } catch (divErr) {
+      result.steps.divisionStock = { success: false, error: String(divErr.message || divErr) };
+    }
+
+    try {
+      result.steps.dashboardCards = writeDashboardStatusCardsLight_();
+    } catch (cardErr) {
+      result.steps.dashboardCards = { success: false, error: String(cardErr.message || cardErr) };
+    }
+
+    try {
+      updateLastUpdateTimestamp();
+      result.steps.timestamp = { success: true };
+    } catch (tsErr) {
+      result.steps.timestamp = { success: false, error: String(tsErr.message || tsErr) };
+    }
+
+    try {
+      result.steps.poSection = refreshDashboardPOSection_({ renderCharts: false, lightweight: true });
+    } catch (poErr) {
+      result.steps.poSection = { success: false, error: String(poErr.message || poErr) };
+    }
+
+    result.updatedAt = new Date().toISOString();
+    return result;
+  } finally {
+    try { lock.releaseLock(); } catch (e) {}
+  }
+}
+
+function installStatusStockLightTrigger_() {
+  var handlersToRemove = [
+    "refreshStatusStockLight_",
+    "refreshDashboardDataLight693_",
+    "refreshDashboardFinal_",
+    "refreshDashboardOperationalV68_",
+    "refreshDashboardPODataOnly_"
+  ];
+
+  ScriptApp.getProjectTriggers().forEach(function(t) {
+    if (handlersToRemove.indexOf(t.getHandlerFunction()) >= 0) {
+      ScriptApp.deleteTrigger(t);
+    }
+  });
+
+  ScriptApp.newTrigger("refreshStatusStockLight_")
+    .timeBased()
+    .everyMinutes(10)
+    .create();
+
+  var firstRun = refreshStatusStockLight_();
+
+  return {
+    success: true,
+    version: "6.6.5-LIGHT-STATUS",
+    trigger: "refreshStatusStockLight_",
+    intervalMinutes: 10,
+    firstRun: firstRun,
+    note: "Trigger 10 menit terpasang."
+  };
+}
+
+function testRefreshStatusStockLight_() {
+  var res = refreshStatusStockLight_();
+  Logger.log(JSON.stringify(res, null, 2));
+  return res;
+}
+/**
+ * Bersihkan sisa STATUS PO lama (baris 39–45)
+ * Jalankan SEKALI saja: pilih fungsi ini → Run
+ */
+function cleanDashboardPORows39to45() {
+  var ss = getSS();
+  var sh = ss.getSheetByName('Dashboard');
+  if (!sh) throw new Error('Sheet Dashboard tidak ditemukan');
+
+  var startRow = 39;
+  var endRow   = 45;
+  var numRows  = endRow - startRow + 1;
+
+  // Lepas merge jika ada
+  var range = sh.getRange(startRow, 1, numRows, 13);
+  var merges = range.getMergedRanges();
+  merges.forEach(function(m) { m.breakApart(); });
+
+  // Hapus konten + format
+  range.clearContent()
+       .clearFormat()
+       .clearDataValidations()
+       .clearNote();
+
+  // Tinggi baris normal
+  for (var r = startRow; r <= endRow; r++) {
+    sh.setRowHeight(r, 21);
+  }
+
+  SpreadsheetApp.flush();
+
+  // Refresh panel resmi di baris 46
+  try {
+    refreshDashboardPOSection_({ renderCharts: false, lightweight: true });
+  } catch (e) {
+    console.warn('Refresh PO setelah clean: ' + e.message);
+  }
+
+  return {
+    success: true,
+    message: 'Baris 39–45 berhasil dibersihkan. Panel STATUS PO resmi tetap di baris 46.',
+    cleanedRows: '39-45',
+    timestamp: new Date().toISOString()
+  };
+}
