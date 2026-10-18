@@ -1755,24 +1755,28 @@ function getStockByCode(kode, requestedEntitas) {
 
 function getAllStock(entitas) {
   const ss = getSS();
-  const master = ss.getSheetByName("Stock Awal");
-  if (!master) return { success: false, count: 0, items: [], error: 'Sumber master "Stock Awal" tidak ditemukan.' };
+  const requested = String(entitas || "ALL").trim().toUpperCase();
+  const byKey = {};
 
-  // Kumpulkan detail stok CV/PT sebagai data saldo pendukung, bukan sumber daftar item.
-  const stockByEntityCode = {};
+  // Daftar master adalah gabungan unik Stock CV + Stock PT + Stock Bahan Baku.
+  // Saldo CV/PT tetap dibaca dari sheet masing-masing; kode pada Stock Bahan Baku
+  // menimpa saldo kode tersebut dan menambah item BB yang belum ada di CV/PT.
   ["Stock CV", "Stock PT"].forEach(function(name) {
     const sheet = ss.getSheetByName(name);
     if (!sheet || sheet.getLastRow() < 4 || sheet.getLastColumn() < 1) return;
-    const headers = sheet.getRange(3, 1, 1, sheet.getLastColumn()).getValues()[0];
+    const lastCol = sheet.getLastColumn();
+    const headers = sheet.getRange(3, 1, 1, lastCol).getValues()[0];
     const lower = headers.map(function(h) { return String(h || "").toLowerCase().trim(); });
     const cKode = lower.findIndex(function(h) { return h.indexOf("kode") >= 0; });
     if (cKode < 0) return;
-    const data = sheet.getRange(4, 1, sheet.getLastRow() - 3, sheet.getLastColumn()).getValues();
-    const sheetEntity = name === "Stock CV" ? "CV" : "PT";
-    data.forEach(function(row) {
+    const rows = sheet.getRange(4, 1, sheet.getLastRow() - 3, lastCol).getValues();
+    const fallbackEntity = name === "Stock CV" ? "CV" : "PT";
+    rows.forEach(function(row) {
       const kode = String(row[cKode] || "").trim();
       if (!kode || /^total\b/i.test(kode)) return;
-      const item = { kode: kode, entitas: sheetEntity };
+      const normalized = normalizeEntityGroup_(fallbackEntity, kode);
+      const group = normalized.valid ? normalized.entitas : fallbackEntity;
+      const item = { kode: kode, entitas: group };
       headers.forEach(function(h, idx) {
         const key = String(h || "").toLowerCase().trim();
         if (key.indexOf("nama") >= 0) item.nama = row[idx];
@@ -1782,102 +1786,54 @@ function getAllStock(entitas) {
         if (key.indexOf("stock value") >= 0 || key.indexOf("nilai stok") >= 0 || key.indexOf("nilai stock") >= 0 || key === "value") item.stockValue = row[idx];
         if (key.indexOf("divisi") >= 0) item.divisi = row[idx];
       });
-      stockByEntityCode[sheetEntity + "|" + kode] = item;
+      byKey[group + "|" + kode] = Object.assign({}, byKey[group + "|" + kode] || {}, item);
     });
   });
 
-  // Master daftar item hanya dari Stock Awal. Header dicari di 5 baris pertama
-  // agar format header tidak bergantung pada satu posisi baris tertentu.
-  const masterLastRow = master.getLastRow();
-  const masterLastCol = master.getLastColumn();
-  if (masterLastRow < 2 || masterLastCol < 1) {
-    return { success: false, count: 0, items: [], error: 'Sumber master "Stock Awal" kosong.' };
+  const bbSheet = ss.getSheetByName("Stock Bahan Baku");
+  if (bbSheet) {
+    const bb = getBahanBakuStockMap_();
+    if (!bb.success) return { success: false, count: 0, items: [], error: bb.error || 'Gagal membaca "Stock Bahan Baku".' };
+    const lastRow = bbSheet.getLastRow(), lastCol = bbSheet.getLastColumn();
+    const top = lastRow && lastCol ? bbSheet.getRange(1, 1, Math.min(5, lastRow), lastCol).getValues() : [];
+    let headerRow = -1, headers = [], lower = [], cKode = -1;
+    for (let i = 0; i < top.length; i++) {
+      const h = top[i].map(function(v) { return String(v || "").toLowerCase().trim(); });
+      const k = h.findIndex(function(v) { return v.indexOf("kode") >= 0; });
+      if (k >= 0) { headerRow = i + 1; headers = top[i]; lower = h; cKode = k; break; }
+    }
+    if (headerRow < 0) return { success: false, count: 0, items: [], error: 'Header Kode tidak ditemukan di "Stock Bahan Baku".' };
+    const rows = lastRow > headerRow ? bbSheet.getRange(headerRow + 1, 1, lastRow - headerRow, lastCol).getValues() : [];
+    rows.forEach(function(row) {
+      const kode = String(row[cKode] || "").trim();
+      if (!kode || /^total\b/i.test(kode) || !Object.prototype.hasOwnProperty.call(bb.map, kode)) return;
+      const groupInfo = normalizeEntityGroup_("", kode);
+      if (!groupInfo.valid) { console.warn("Prefix entitas bahan baku tidak dikenal: " + kode); return; }
+      const group = groupInfo.entitas, key = group + "|" + kode;
+      const item = Object.assign({}, byKey[key] || {}, { kode: kode, entitas: group, stockAkhir: clampStockToZero_(bb.map[kode]) });
+      headers.forEach(function(h, idx) {
+        const field = String(h || "").toLowerCase().trim();
+        if (field.indexOf("nama") >= 0 && row[idx] !== "") item.nama = row[idx];
+        if (field.indexOf("satuan") >= 0 && row[idx] !== "") item.satuan = row[idx];
+        if (field.indexOf("divisi") >= 0 && row[idx] !== "") item.divisi = row[idx];
+        if (field.indexOf("stock aman") >= 0 && row[idx] !== "") item.stockAman = row[idx];
+        if ((field.indexOf("stock value") >= 0 || field.indexOf("nilai stok") >= 0 || field.indexOf("nilai stock") >= 0 || field === "value") && row[idx] !== "") item.stockValue = row[idx];
+      });
+      if (!item.divisi) item.divisi = "BAHAN BAKU";
+      byKey[key] = item;
+    });
+    Object.keys(bb.map).forEach(function(kode) {
+      if (Object.keys(byKey).some(function(key) { return key.endsWith("|" + kode); })) return;
+      const groupInfo = normalizeEntityGroup_("", kode);
+      if (!groupInfo.valid) return;
+      byKey[groupInfo.entitas + "|" + kode] = { kode: kode, entitas: groupInfo.entitas, nama: kode, satuan: "", divisi: "BAHAN BAKU", stockAkhir: clampStockToZero_(bb.map[kode]), stockAman: 0, stockValue: 0 };
+    });
   }
-  const scanRows = Math.min(5, masterLastRow);
-  const top = master.getRange(1, 1, scanRows, masterLastCol).getValues();
-  let headerRow = -1, masterHeaders = [], lowerHeaders = [];
-  let cKode = -1, cNama = -1, cSatuan = -1, cDivisi = -1, cEntitas = -1, cStockAman = -1;
-  for (let r = 0; r < top.length; r++) {
-    const h = top[r].map(function(v) { return String(v || "").toLowerCase().trim(); });
-    const k = h.findIndex(function(v) { return v.indexOf("kode") >= 0; });
-    const n = h.findIndex(function(v) { return v.indexOf("nama") >= 0; });
-    if (k >= 0 && n >= 0) {
-      headerRow = r + 1;
-      masterHeaders = top[r];
-      lowerHeaders = h;
-      cKode = k;
-      cNama = n;
-      cSatuan = h.findIndex(function(v) { return v.indexOf("satuan") >= 0; });
-      cDivisi = h.findIndex(function(v) { return v.indexOf("divisi") >= 0; });
-      cEntitas = h.findIndex(function(v) { return v.indexOf("entitas") >= 0; });
-      cStockAman = h.findIndex(function(v) { return v.indexOf("stock aman") >= 0; });
-      break;
-    }
-  }
-  if (headerRow < 0) {
-    return { success: false, count: 0, items: [], error: 'Header "Kode" dan "Nama" tidak ditemukan di "Stock Awal".' };
-  }
 
-  const rows = masterLastRow > headerRow
-    ? master.getRange(headerRow + 1, 1, masterLastRow - headerRow, masterLastCol).getValues()
-    : [];
-  const bahanBakuSheet = ss.getSheetByName("Stock Bahan Baku");
-  const bahanBakuMap = bahanBakuSheet ? getBahanBakuStockMap_() : { success: true, map: {}, count: 0 };
-  if (!bahanBakuMap.success) {
-    return { success: false, count: 0, items: [], error: bahanBakuMap.error || 'Gagal membaca Stock Bahan Baku.' };
-  }
-
-  const requested = String(entitas || "ALL").trim().toUpperCase();
-  const items = [];
-  const seen = {};
-  rows.forEach(function(row) {
-    const kode = String(row[cKode] || "").trim();
-    if (!kode || /^total\b/i.test(kode) || /^kode\b/i.test(kode)) return;
-
-    const prefix = kode.toUpperCase().split("-")[0];
-    let group = ["CV", "BBCV"].indexOf(prefix) >= 0 ? "CV" :
-      ["PT", "WK", "MM", "BBPT"].indexOf(prefix) >= 0 ? "PT" : "";
-    if (!group && cEntitas >= 0) {
-      const normalized = normalizeEntityGroup_(row[cEntitas], kode);
-      if (normalized.valid) group = normalized.entitas;
-    }
-    const cvItem = stockByEntityCode["CV|" + kode];
-    const ptItem = stockByEntityCode["PT|" + kode];
-    if (!group) {
-      if (cvItem && !ptItem) group = "CV";
-      else if (ptItem && !cvItem) group = "PT";
-    }
-    if (!group) {
-      // Fail closed: jangan menebak entitas untuk kode yang tidak terpetakan.
-      console.warn('Item Stock Awal dilewati karena entitas tidak dapat ditentukan: ' + kode);
-      return;
-    }
-    if (requested !== "ALL" && requested !== group) return;
-
-    const sourceItem = group === "CV" ? cvItem : ptItem;
-    const bbStock = Object.prototype.hasOwnProperty.call(bahanBakuMap.map || {}, kode);
-    const item = {
-      kode: kode,
-      entitas: group,
-      nama: row[cNama] || (sourceItem && sourceItem.nama) || "",
-      satuan: cSatuan >= 0 ? (row[cSatuan] || (sourceItem && sourceItem.satuan) || "") : ((sourceItem && sourceItem.satuan) || ""),
-      divisi: (cDivisi >= 0 ? row[cDivisi] : "") || (sourceItem && sourceItem.divisi) || "",
-      stockAman: cStockAman >= 0 && row[cStockAman] !== "" ? row[cStockAman] : ((sourceItem && sourceItem.stockAman) || 0),
-      stockValue: (sourceItem && sourceItem.stockValue) || 0,
-      stockAkhir: bbStock ? clampStockToZero_(bahanBakuMap.map[kode]) : clampStockToZero_(sourceItem ? sourceItem.stockAkhir : 0)
-    };
-    const uniqueKey = group + "|" + kode;
-    if (seen[uniqueKey]) {
-      console.warn('Kode duplikat pada Stock Awal dilewati: ' + uniqueKey);
-      return;
-    }
-    seen[uniqueKey] = true;
-    items.push(item);
-  });
-
-  return { success: true, count: items.length, items: items, source: "Stock Awal", skippedUnknownEntity: rows.length - items.length };
+  const items = Object.keys(byKey).sort().map(function(key) { return byKey[key]; })
+    .filter(function(item) { return requested === "ALL" || requested === item.entitas; });
+  return { success: true, count: items.length, items: items, source: "Stock CV + Stock PT + Stock Bahan Baku" };
 }
-
 function getLowStock() {
   const all = getAllStock("ALL");
   if (!all.success) return all;
