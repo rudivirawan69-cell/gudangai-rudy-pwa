@@ -393,7 +393,7 @@ function doPost(e) {
       case "getDashboard":
       case "getDashboardData": return jsonResponse(getDashboardData());
       case "getDashboardLegacy": return jsonResponse(getDashboard());
-      case "refreshDashboard": return jsonResponse(refreshDashboard(body.force === true || body.force === "true"));
+      case "refreshDashboard": return jsonResponse(refreshDashboardDataLight693_());
       case "syncDivision":
       case "syncDivisionStock": return jsonResponse(syncDivisionStock());
       case "writePO":
@@ -3458,7 +3458,7 @@ function setupEnvironment() {
   // Hapus trigger lama
   ScriptApp.getProjectTriggers().forEach(t => {
     const fn = t.getHandlerFunction();
-    if (["sendDailyStockReport","weeklyPOAutomation","logDailySnapshot","processEmailQueue","sendWeeklyPOReport","refreshDashboard","refreshAllData","onEdit"].indexOf(fn) >= 0) {
+    if (["sendDailyStockReport","weeklyPOAutomation","logDailySnapshot","processEmailQueue","sendWeeklyPOReport","refreshDashboard","refreshAllData","refreshDashboardDataLight693_","onEdit"].indexOf(fn) >= 0) {
       ScriptApp.deleteTrigger(t);
     }
   });
@@ -3467,8 +3467,8 @@ function setupEnvironment() {
   ScriptApp.newTrigger("sendDailyStockReport").timeBased().everyDays(1).atHour(7).create();
   ScriptApp.newTrigger("weeklyPOAutomation").timeBased().onWeekDay(ScriptApp.WeekDay.MONDAY).atHour(8).create();
   ScriptApp.newTrigger("logDailySnapshot").timeBased().everyDays(1).atHour(23).create();
-  // processEmailQueue sengaja tidak dijadwalkan; seluruh queue write fail-closed.
-  ScriptApp.newTrigger("refreshAllData").timeBased().everyMinutes(15).create();
+  // Trigger dashboard ringan menggantikan maintenance no-op 15 menit.
+  ScriptApp.newTrigger("refreshDashboardDataLight693_").timeBased().everyMinutes(10).create();
   // Installable onEdit trigger agar perubahan manual pada semua sumber stok
   // dapat menjalankan sinkronisasi yang membutuhkan otorisasi SpreadsheetApp.
   ScriptApp.newTrigger("onEdit").forSpreadsheet(ss).onEdit().create();
@@ -3484,7 +3484,7 @@ function setupEnvironment() {
   console.log("=== setupEnvironment BACKEND GudangAI-69 " + BACKEND_VERSION + " SELESAI ===");
   console.log("Spreadsheet: " + ss.getName());
   console.log("Bulan aktif: " + activeMonth.nama + " " + activeMonth.tahun);
-  console.log("Trigger: sendDailyStockReport(07:00), weeklyPOAutomation(Senin 08:00), logDailySnapshot(23:00), queue write disabled, refreshAllData(15min)");
+  console.log("Trigger: sendDailyStockReport(07:00), weeklyPOAutomation(Senin 08:00), logDailySnapshot(23:00), queue write disabled, dashboard refresh ringan (10min)");
   try {
     const masterNow = getAllStock("ALL");
     console.log("Total master data aktual: " + (masterNow && masterNow.count != null ? masterNow.count : 0));
@@ -3492,7 +3492,7 @@ function setupEnvironment() {
 
   return { success: true, spreadsheetId: ss.getId(), spreadsheetName: ss.getName(), activeMonth: activeMonth,
            title: APP_TITLE, configSheet: CONFIG_SHEET_NAME,
-           message: "Backend V6.5 optimized siap. Trigger dipertahankan; jalur transaksi/onEdit tidak lagi rebuild struktur Dashboard/Data Stok Per Divisi." };
+           message: "Backend GudangAI-69 siap. Trigger refreshAllData berat dinonaktifkan; Dashboard memakai refresh ringan 10 menit." };
 }
 
 function generateRandomSecret() {
@@ -3913,7 +3913,7 @@ function refreshDashboardPOSection_(options) {
   sh.setColumnWidth(7, 24);
   sh.getRange(currentTop, 1, Math.max(1, previousEnd - currentTop + 1), 13).setVerticalAlignment('middle');
   return { success: true, status: 'OK', sectionCurrent: 4, sectionPrevious: 5, noPO: data.noPO,
-    currentCount: (data.items || []).length, previousCount: previousItems.length, chartStartRow: chartStart,
+    currentCount: (data.items || []).length, previousCount: previousItems.length, chartStartRow: currentEnd + 2,
     chartsRendered: options.renderCharts !== false, updatedAt: new Date().toISOString() };
 }
 
