@@ -3320,25 +3320,30 @@ function installQueueTrigger() {
 
 
 // ============================================================
-// 18. onEdit TRIGGER [V6.0 + V6.2]
+// 18. onEdit TRIGGER — SAFE MODE (NO DASHBOARD WRITES)
+// Aturan: onEdit hanya invalidasi cache/menandai data berubah.
+// Dilarang menulis Dashboard atau memanggil renderer Dashboard dari trigger ini.
+// Tidak ada onOpen(e) di file ini.
 // ============================================================
 function onEdit(e) {
   try {
-    if (!e || !e.range) return;
+    if (!e || !e.range || !e.range.getSheet) return;
     const sheetName = e.range.getSheet().getName();
-    const affected = ["Stock CV", "Stock PT", "Stock awal", "purchase order"].indexOf(sheetName) >= 0 || Object.keys(SHEET_CONFIG).indexOf(sheetName) >= 0;
+    const affected = ["Stock CV", "Stock PT", "Stock awal", "purchase order", "Barang masuk", "Barang keluar", "Barang Rusak", "Barang Rusak/LO"].indexOf(sheetName) >= 0 || Object.keys(SHEET_CONFIG || {}).indexOf(sheetName) >= 0;
     if (!affected) return;
-    // onEdit: invalidasi cache + dirty + stempel waktu. Sinkronisasi divisi real-time bila stok berubah.
-    clearMasterCache();
-    markDataDirty_(sheetName);
-    updateLastUpdateTimestamp();
+
+    // Cache invalidation only; intentionally no Dashboard timestamp/PO refresh here.
+    try { clearMasterCache(); } catch (cacheErr) { console.error("onEdit clearMasterCache: " + cacheErr.message); }
+    try { markDataDirty_(sheetName); } catch (dirtyErr) { console.error("onEdit markDataDirty_: " + dirtyErr.message); }
+
+    // Preserve existing lightweight division-stock synchronization for master stock edits.
+    // This does not write to Dashboard or modify Stock CV/PT balances.
     if (sheetName === "Stock CV" || sheetName === "Stock PT" || sheetName === "Stock awal") {
       try { syncDivisionStockLightweight_(); } catch (divErr) { console.error("onEdit sync divisi: " + divErr.message); }
     }
-    if (sheetName === "Barang masuk" || sheetName === "purchase order") {
-      try { refreshDashboardPOSection_({ renderCharts: false, lightweight: true }); } catch (poErr) { console.error("Dashboard PO ringan gagal: " + poErr.message); }
-    }
-  } catch (err) { console.error("onEdit ringan gagal: " + err.message); }
+  } catch (err) {
+    console.error("onEdit safe mode gagal: " + (err && err.message ? err.message : err));
+  }
 }
 
 
