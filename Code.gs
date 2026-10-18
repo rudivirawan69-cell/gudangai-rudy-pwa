@@ -2165,17 +2165,17 @@ function getBahanBakuStockMap_() {
   const rows = sh.getRange(headerRow + 1, 1, lastRow - headerRow, lastCol).getValues();
   const map = {};
   const codes = [];
+  const invalidStockCodes = [];
 
   rows.forEach(function(row) {
     const kode = String(row[idxKode] || "").trim();
     if (!kode || /^total\b/i.test(kode) || /^kode\b/i.test(kode)) return;
-
     const raw = row[idxStock];
     const num = Number(raw);
-    // Angka valid = stok. Sel kosong dianggap 0; teks error tidak dianggap valid.
-    const stock = raw === "" || raw == null ? 0 : (isFinite(num) ? num : null);
-    if (stock === null) return;
-
+    // Kode barang tetap dihitung walau sel stok kosong/error; nilai stok invalid
+    // ditampilkan konservatif sebagai 0 dan dicatat agar item tidak hilang dari total master.
+    if (raw !== "" && raw != null && !isFinite(num)) invalidStockCodes.push(kode);
+    const stock = raw === "" || raw == null || !isFinite(num) ? 0 : num;
     map[kode] = clampStockToZero_(stock);
     codes.push(kode);
   });
@@ -2186,6 +2186,7 @@ function getBahanBakuStockMap_() {
     headerRow: headerRow,
     count: codes.length,
     codes: codes,
+    invalidStockCodes: invalidStockCodes,
     map: map
   };
 }
