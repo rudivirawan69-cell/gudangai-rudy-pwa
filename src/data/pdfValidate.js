@@ -105,7 +105,7 @@ async function extractPdfPagesWithOcr(pdf, onProgress) {
       const result = await Tesseract.recognize(canvas, 'ind+eng', {
         logger: (m) => {
           if (m.status === 'recognizing text' && onProgress) {
-            onProgress(`OCR PDF ${pageNo}/${pdf.numPages}${Math.round((m.progress || 0) * 100)}%`);
+            onProgress(`OCR PDF ${pageNo}/${pdf.numPages} ${Math.round((m.progress || 0) * 100)}%`);
           }
         },
       });
@@ -122,6 +122,20 @@ async function extractPdfPagesWithOcr(pdf, onProgress) {
  * Enhanced image OCR — pre-process text for better validation accuracy
  * Uses same normalizeOcr pipeline + additional OCR-specific cleaning
  */
+/** Reject OCR lines that are clearly scan noise, not product rows. */
+export function isLowQualityOcrLine(value) {
+  const line = String(value || '').replace(/\s+/g, ' ').trim();
+  if (line.length < 3) return true;
+  if (/^[\d\s.,:;|/\\_+=*-]+$/.test(line)) return true;
+  const letters = (line.match(/[A-Za-zÀ-ÿ]/g) || []).length;
+  const symbols = (line.match(/[^\p{L}\p{N}\s.,()/-]/gu) || []).length;
+  if (letters < 2) return true;
+  if (symbols > Math.max(4, letters * 0.7)) return true;
+  if (/^(?:page|halaman|invoice|faktur|tanggal|periode|total|subtotal|grand total|nama barang|qty|quantity|satuan)\b/i.test(line)) return true;
+  if (/^\d{1,2}[/-]\d{1,2}[/-]\d{2,4}$/.test(line)) return true;
+  return false;
+}
+
 export async function extractTextFromImage(file, onProgress) {
   if (onProgress) onProgress('OCR foto...');
   try {
@@ -134,13 +148,9 @@ export async function extractTextFromImage(file, onProgress) {
       },
     });
     const rawText = result?.data?.text || '';
-    // OCR post-processing: fix common OCR mistakes + drop low-quality noise lines
+    // OCR post-processing: normalize text, then drop only obvious scan noise.
     const cleaned = cleanOcrText(rawText);
-    const lines = cleaned
-      .split(/\n/)
-      .map((l) => l.trim())
-      .filter(Boolean)
-      .filter((l) => !isLowQualityOcrLine(l));
+    const lines = cleaned.split(/\n/).map((l) => l.trim()).filter((l) => l && !isLowQualityOcrLine(l));
     const text = lines.join('\n');
     return { ok: true, text, lines };
   } catch (err) {
@@ -149,8 +159,7 @@ export async function extractTextFromImage(file, onProgress) {
 }
 
 /**
- * Clean OCR text — fix common misreads for Indonesian food/stock items.
- * Extra aggressive cleaning for gallery-photo OCR (Tesseract noise).
+ * Clean OCR text — fix common misreads for Indonesian food/stock items
  */
 function cleanOcrText(text) {
   return String(text || '').split(/\r?\n/).map((line) => line
@@ -171,38 +180,10 @@ function cleanOcrText(text) {
     .replace(/\bPa[ck]k\b/gi, 'Pack')
     .replace(/\bpc[s5]\b/gi, 'pcs')
     .replace(/\bGR[A4]M\b/gi, 'GRAM')
-    // Additional OCR noise common on warehouse label photos
-    .replace(/\bEAH\b/gi, '')
-    .replace(/\bNER\b/gi, '')
-    .replace(/\bsekeEeseras\b/gi, '')
-    .replace(/\bSee\s+seke/gi, '')
-    .replace(/\|+/g, ' ')
-    .replace(/={2,}/g, ' ')
     .replace(/(\d)\s*[xX×]\s*(\d)/g, '$1 x $2')
-    .replace(/[~`^{}[\]\\]+/g, '')
+    .replace(/[~`^{}[\]\\]/g, '')
     .replace(/[ \t]+/g, ' ')
     .trim()).filter(Boolean).join('\n');
-}
-
-/**
- * Drop OCR lines that are almost certainly not product rows.
- * Used only for image/OCR path so PDF text remains permissive.
- */
-function isLowQualityOcrLine(line) {
-  const s = String(line || '').trim();
-  if (!s) return true;
-  if (s.length < 3) return true;
-  // Mostly symbols / punctuation
-  const letters = (s.match(/[A-Za-zÀ-ÿ]/g) || []).length;
-  const digits = (s.match(/\d/g) || []).length;
-  const symbols = s.length - letters - digits - (s.match(/\s/g) || []).length;
-  if (letters < 2) return true;
-  if (letters < 4 && digits === 0) return true;
-  if (symbols > letters + digits) return true;
-  // Pure noise patterns seen in gallery OCR
-  if (/^[|\-=~_\s.]+$/.test(s)) return true;
-  if (/^(?:EAH|NER|See|seke|HE)\b/i.test(s) && letters < 8) return true;
-  return false;
 }
 
 function stripLeadingNo(name) {
@@ -221,13 +202,10 @@ function stripLeadingNo(name) {
 /** Remove supplier/metadata noise while preserving product identity. */
 function sanitizePdfProductName(name) {
   return stripLeadingNo(String(name || '')
-    .replace(/\s*\([^)]*\b(?:supplier\vert{}vendor\vert{}cv\.?\vert{}pt\.?)\b[^)]*\)/gi, ' ')
+    .replace(/\s*\([^)]*\b(?:supplier|vendor|cv\.?|pt\.?)\b[^)]*\)/gi, ' ')
     .replace(/\s*[/|]\s*(?:cv|pt)\.?\s*[^|/]+$/gi, ' ')
     .replace(/\s+supplier\b.*$/gi, ' ')
     .replace(/\s+vendor\b.*$/gi, ' ')
-    // Shipping/storage labels are not part of the SKU name and commonly
-    // appear on both CV and PT order PDFs.
-    .replace(/\b(?:frozen|beku|chilled|fresh)\b/gi, ' ')
     .replace(/\s+/g, ' '));
 }
 
@@ -247,16 +225,22 @@ export function parsePdfLinesToItems(text) {
   let sourceIndex = 0;
 
   function parseProductSegment(segment) {
-    const nums = [...String(segment || '').matchAll(/(\d+(?:[.,]\d+)?)/g)];
+    // Supplier/keterangan text may contain numbers after the quantity column.
+    // Remove that metadata first so the rightmost product quantity remains authoritative.
+    const cleanSegment = String(segment || '')
+      .replace(/\s+\b(?:supplier|vendor)\b.*$/i, '')
+      .replace(/\s*[|/]\s*(?:cv|pt)\.?\s*(?:pd3\s*chicken|rasyuka|selera|supplier|vendor)?[^\n]*$/i, '')
+      .trim();
+    const nums = [...cleanSegment.matchAll(/(\d+(?:[.,]\d+)?)/g)];
     if (!nums.length) return null;
     const last = nums[nums.length - 1];
     const qty = parseFloat(last[1].replace(',', '.'));
     if (!(qty > 0) || qty > 99999) return null;
 
-    let rawName = String(segment).slice(0, last.index).trim();
+    let rawName = cleanSegment.slice(0, last.index).trim();
     rawName = sanitizePdfProductName(rawName)
       .replace(/\s+(?:\d+(?:[.,]\d+)?\s+){1,3}\d+(?:[.,]\d+)?\s*$/, '')
-      .replace(/\s*\([^)]*\b(?:\d+(?:[.,]\d+)?\s*(?:kg\vert{}gram\vert{}gr\vert{}pcs\vert{}pack\vert{}pail\vert{}liter\vert{}ml)\vert{}\d+\s*(?:pcs\vert{}pack\vert{}pail))[^)]*\)/gi, '')
+      .replace(/\s*\([^)]*\b(?:\d+(?:[.,]\d+)?\s*(?:kg|gram|gr|pcs|pack|pail|liter|ml)|\d+\s*(?:pcs|pack|pail))[^)]*\)/gi, '')
       .replace(/\s+\d+(?:[.,]\d+)?\s*(?:kg|gram|gr|pcs|pack|pail|liter|ml)\b/gi, '')
       .replace(/\b(?:pack|pcs|pail|ekor|kg|box|unit|porsi|gram|liter|ml)\b/gi, ' ')
       .replace(/\s+/g, ' ')
@@ -418,3 +402,156 @@ export function validatePdfItems(entity, textOrItems, masterOverride) {
     if (explicitRawCode) {
       const prefix = explicitRawCode[1].toUpperCase();
       const code = prefix + '-' + explicitRawCode[2].padStart(4, '0');
+      const expectedPrefix = selectedEntity === 'CV' ? 'BBCV' : 'BBPT';
+      const rawItem = sourceMaster.find((item) =>
+        String(item?.kode || item?.kodeBarang || '').trim().toUpperCase() === code &&
+        String(item?.divisi || item?.division || '').trim().toUpperCase().replace(/\s+/g, ' ') === 'BAHAN BAKU'
+      );
+      if (prefix === expectedPrefix && rawItem) {
+        match = { item: rawItem, matchType: 'explicit-raw-code' };
+        note = 'explicit-raw-code';
+      } else {
+        status = 'unmatched';
+        note = 'kode bahan baku tidak sesuai entitas atau tidak ada di master';
+      }
+    } else {
+      // Prevent a short raw-material name (e.g. "Ayam Negeri" or "Bebek")
+      // from being substring/fuzzy-matched to a different finished-goods SKU.
+      const cleanNameForRawCheck = normalizeMatchText(rawNameOriginal)
+        .replace(/\b(?:bahan\s+baku|raw\s+material)\b/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+      const exactRawName = sourceMaster.find((item) => {
+        const kode = String(item?.kode || item?.kodeBarang || '').trim().toUpperCase();
+        const divisi = String(item?.divisi || item?.division || '').trim().toUpperCase().replace(/\s+/g, ' ');
+        const isRawMaterial = /^(?:BBCV|BBPT)-/.test(kode) || divisi === 'BAHAN BAKU';
+        const masterName = normalizeMatchText(item?.nama || item?.namaBarang || '')
+          .replace(/\b(?:bahan\s+baku|raw\s+material)\b/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim();
+        return isRawMaterial && masterName && masterName === cleanNameForRawCheck;
+      });
+
+      if (exactRawName) {
+        status = 'unmatched';
+        note = 'nama bahan baku hanya valid melalui kode BBCV/BBPT eksplisit';
+      } else {
+        const deterministic = resolvePdfNameDeterministic(selectedEntity, rawNameOriginal, master);
+        if (deterministic) {
+          match = deterministic.item || deterministic;
+          note = deterministic.matchType || 'deterministic';
+        }
+
+        if (!match) {
+          const aliasResult = matchByAlias(selectedEntity, sanitizePdfProductName(rawNameOriginal));
+          if (aliasResult) {
+            const aliasItem = aliasResult.item || aliasResult;
+            const aliasKode = String(aliasItem?.kode || aliasItem?.kodeBarang || '').trim().toUpperCase();
+            if (aliasKode && allowedCodes.has(aliasKode)) {
+              match = aliasResult;
+              note = aliasResult.matchType || 'alias';
+            }
+          }
+        }
+
+        if (!match) {
+          const fuzzy = findFuzzyMasterMatch(selectedEntity, rawNameOriginal, master);
+          if (fuzzy) {
+            match = fuzzy;
+            note = fuzzy.matchType;
+          }
+        }
+      }
+    }
+
+    if (!match && status === 'matched') {
+      status = 'unmatched';
+      note = 'tidak cocok master';
+    }
+
+    const masterItem = match?.kode ? match : (match?.item || null);
+    const kode = masterItem?.kode || match?.kode || null;
+    results.push({
+      no: i + 1,
+      sourceIndex: Number(it.sourceIndex) || (i + 1),
+      pdfNo: it.pdfNo || null,
+      sourceLine: it.sourceLine || '',
+      rawName: rawNameOriginal,
+      qty,
+      status,
+      note,
+      kode,
+      nama: masterItem?.nama || match?.nama || null,
+      satuan: masterItem?.satuan || match?.satuan || null,
+      match: masterItem || match || null,
+    });
+  }
+  return results;
+}
+export function parseLinesFromText(text, _lines = []) {
+  return parsePdfLinesToItems(text).map((it, idx) => ({
+    no: idx + 1,
+    sourceIndex: Number(it.sourceIndex) || (idx + 1),
+    pdfNo: it.pdfNo || null,
+    name: it.rawName,
+    rawName: it.rawName,
+    qty: it.qty,
+    nameFromPdf: it.rawName,
+    sourceLine: it.sourceLine || '',
+  }));
+}
+
+export function validateItems(rows, entity) {
+  const results = validatePdfItems(entity, rows);
+  const matched = [], ambiguous = [], unmatched = [];
+  for (const r of results) {
+    const base = { ...r, name: r.nama || r.rawName, nameFromPdf: r.rawName, qty: r.qty };
+    if (r.status === 'matched') matched.push(base);
+    else if (r.status === 'ambiguous') ambiguous.push(base);
+    else unmatched.push(base);
+  }
+  return { matched, ambiguous, unmatched };
+}
+
+export function applyStockAwareFallback(matched) {
+  return Array.isArray(matched) ? matched : [];
+}
+
+export function detectEntityFromText(text) {
+  const t = String(text || '').toLowerCase();
+  if (/\bpt\.?\s*rasyuka|\brasyuka\b/.test(t)) return 'PT';
+  if (/\bcv\.?\s*selera|\bselera\b/.test(t)) return 'CV';
+
+  // Entity contract:
+  // CV group = CV / BBCV
+  // PT group = PT / WK / MM / BBPT
+  const ptCodeCount = (t.match(/\b(?:pt|wk|mm|bbpt)\s*[-:]?\s*\d+/g) || []).length;
+  const cvCodeCount = (t.match(/\b(?:cv|bbcv)\s*[-:]?\s*\d+/g) || []).length;
+  if (ptCodeCount > cvCodeCount && ptCodeCount > 0) return 'PT';
+  if (cvCodeCount > ptCodeCount && cvCodeCount > 0) return 'CV';
+
+  const ptCount = (t.match(/\bpt[-.\s]/g) || []).length;
+  const cvCount = (t.match(/\bcv[-.\s]/g) || []).length;
+  if (ptCount > cvCount && ptCount >= 2) return 'PT';
+  if (cvCount > ptCount && cvCount >= 2) return 'CV';
+  return null;
+}
+
+export async function scanBarcodeFromVideo(video) {
+  if (!('BarcodeDetector' in window)) {
+    return { ok: false, error: 'BarcodeDetector tidak didukung. Gunakan Chrome Android.' };
+  }
+  if (!video || video.readyState < 2) return { ok: false, error: 'Kamera belum siap' };
+  try {
+    const detector = new window.BarcodeDetector({
+      formats: ['qr_code', 'ean_13', 'ean_8', 'code_128', 'code_39', 'upc_a', 'upc_e'],
+    });
+    const barcodes = await detector.detect(video);
+    if (!barcodes?.length) return { ok: false, error: 'Tidak ada barcode terdeteksi.' };
+    const value = barcodes[0].rawValue == null ? '' : String(barcodes[0].rawValue);
+    if (!value) return { ok: false, error: 'Barcode kosong' };
+    return { ok: true, value };
+  } catch (err) {
+    return { ok: false, error: err?.message || 'Scan gagal' };
+  }
+}
