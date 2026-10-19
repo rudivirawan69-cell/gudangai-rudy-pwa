@@ -921,3 +921,4 @@ function PdfReviewRow({ row, entity, stockCatalog = [], onPick, onIgnore }) {
     </div>
   );
 }
+ 
