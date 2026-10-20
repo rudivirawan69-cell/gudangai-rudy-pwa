@@ -43,6 +43,7 @@ export default function InputPage() {
   const [accuracy, setAccuracy] = useState(null);
   const [cart, setCart] = useState([]);
   const [pdfReview, setPdfReview] = useState([]);
+  const [reviewSourceLabel, setReviewSourceLabel] = useState('PDF');
   const [showPhotoSource, setShowPhotoSource] = useState(false);
   const [photoCameraOpen, setPhotoCameraOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -196,6 +197,7 @@ export default function InputPage() {
       // Unmatched/ambiguous rows are retained for manual mapping; nothing is silently dropped.
       mergePdfIntoCart(matched, review);
       setPdfReview(review);
+      setReviewSourceLabel(sourceLabel === 'Foto' ? 'Foto' : sourceLabel === 'Tempel' ? 'Tempel' : 'PDF');
       const parts = [];
       if (matched.length) parts.push(matched.length + ' cocok');
       if (review.length) parts.push(review.length + ' perlu validasi');
@@ -222,6 +224,7 @@ export default function InputPage() {
     }
     setEntity(nextEntity);
     setPdfReview([]);
+    setReviewSourceLabel('PDF');
     setAccuracy(null);
     setStatusBanner('');
   };
@@ -565,7 +568,7 @@ export default function InputPage() {
           setStatusBanner('Belum terkonfirmasi — item tetap diamankan di antrian');
         }
 
-        setCart([]); setAccuracy(null); setPdfReview([]);
+        setCart([]); setAccuracy(null); setPdfReview([]); setReviewSourceLabel('PDF');
         window.dispatchEvent(new Event('gudangai-stock-refresh'));
       } else {
         pushNotification({ type: 'error', title: 'Transaksi belum dikirim', body: res?.error || 'Tidak ada data yang dinyatakan berhasil.' });
@@ -735,8 +738,12 @@ export default function InputPage() {
       {pdfReview.length > 0 && (
         <div className="rounded-2xl bg-white border border-amber-200 shadow-sm p-3 space-y-3">
           <div>
-            <p className="text-sm font-bold text-slate-900">Validasi PDF — {pdfReview.length} baris perlu dicocokkan</p>
-            <p className="text-[11px] text-slate-500 mt-0.5">Nomor di PDF diabaikan. Urutan mengikuti PDF dan nomor di aplikasi dibuat ulang mulai 1.</p>
+            <p className="text-sm font-bold text-slate-900">Validasi {reviewSourceLabel} — {pdfReview.length} baris perlu dicocokkan</p>
+            <p className="text-[11px] text-slate-500 mt-0.5">
+              {reviewSourceLabel === 'Foto'
+                ? 'Hasil OCR foto. Baris berisik otomatis dibuang. Nama yang tidak cocok master perlu dipilih manual atau diabaikan.'
+                : 'Nomor di PDF diabaikan. Urutan mengikuti PDF dan nomor di aplikasi dibuat ulang mulai 1.'}
+            </p>
           </div>
           {pdfReview.map((r, idx) => (
             <PdfReviewRow key={r.reviewId || (r.sourceIndex || idx) + '-' + idx} row={r} entity={entity} stockCatalog={stockCatalog} onPick={(item) => resolvePdfReview(idx, item)} onIgnore={() => ignorePdfReview(idx)} />
@@ -867,8 +874,6 @@ export default function InputPage() {
   );
   }
 
-
-
 function PdfReviewRow({ row, entity, stockCatalog = [], onPick, onIgnore }) {
   const [q, setQ] = useState(row.namaPdf || '');
   const hits = (() => {
@@ -917,3 +922,4 @@ function PdfReviewRow({ row, entity, stockCatalog = [], onPick, onIgnore }) {
     </div>
   );
 }
+ 

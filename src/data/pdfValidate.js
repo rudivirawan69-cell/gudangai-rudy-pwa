@@ -122,6 +122,20 @@ async function extractPdfPagesWithOcr(pdf, onProgress) {
  * Enhanced image OCR — pre-process text for better validation accuracy
  * Uses same normalizeOcr pipeline + additional OCR-specific cleaning
  */
+/** Reject OCR lines that are clearly scan noise, not product rows. */
+export function isLowQualityOcrLine(value) {
+  const line = String(value || '').replace(/\s+/g, ' ').trim();
+  if (line.length < 3) return true;
+  if (/^[\d\s.,:;|/\\_+=*-]+$/.test(line)) return true;
+  const letters = (line.match(/[A-Za-zÀ-ÿ]/g) || []).length;
+  const symbols = (line.match(/[^\p{L}\p{N}\s.,()/-]/gu) || []).length;
+  if (letters < 2) return true;
+  if (symbols > Math.max(4, letters * 0.7)) return true;
+  if (/^(?:page|halaman|invoice|faktur|tanggal|periode|total|subtotal|grand total|nama barang|qty|quantity|satuan)\b/i.test(line)) return true;
+  if (/^\d{1,2}[/-]\d{1,2}[/-]\d{2,4}$/.test(line)) return true;
+  return false;
+}
+
 export async function extractTextFromImage(file, onProgress) {
   if (onProgress) onProgress('OCR foto...');
   try {
@@ -135,9 +149,11 @@ export async function extractTextFromImage(file, onProgress) {
       },
     });
     const rawText = result?.data?.text || '';
+    // OCR post-processing: normalize text, then drop only obvious scan noise.
     const cleaned = cleanOcrText(rawText);
-    const lines = cleaned.split(/\n/).map((l) => l.trim()).filter(Boolean);
-    return { ok: true, text: cleaned, lines, method: 'preprocessed-image' };
+    const lines = cleaned.split(/\n/).map((l) => l.trim()).filter((l) => l && !isLowQualityOcrLine(l));
+    const text = lines.join('\n');
+    return { ok: true, text, lines, method: 'preprocessed-image' };
   } catch (err) {
     return { ok: false, error: err.message || 'OCR gagal' };
   }
@@ -214,9 +230,6 @@ function sanitizePdfProductName(name) {
     .replace(/\s*[/|]\s*(?:cv|pt)\.?\s*[^|/]+$/gi, ' ')
     .replace(/\s+supplier\b.*$/gi, ' ')
     .replace(/\s+vendor\b.*$/gi, ' ')
-    // Shipping/storage labels are not part of the SKU name and commonly
-    // appear on both CV and PT order PDFs.
-    .replace(/\b(?:frozen|beku|chilled|fresh)\b/gi, ' ')
     .replace(/\s+/g, ' '));
 }
 
@@ -236,13 +249,19 @@ export function parsePdfLinesToItems(text) {
   let sourceIndex = 0;
 
   function parseProductSegment(segment) {
-    const nums = [...String(segment || '').matchAll(/(\d+(?:[.,]\d+)?)/g)];
+    // Supplier/keterangan text may contain numbers after the quantity column.
+    // Remove that metadata first so the rightmost product quantity remains authoritative.
+    const cleanSegment = String(segment || '')
+      .replace(/\s+\b(?:supplier|vendor)\b.*$/i, '')
+      .replace(/\s*[|/]\s*(?:cv|pt)\.?\s*(?:pd3\s*chicken|rasyuka|selera|supplier|vendor)?[^\n]*$/i, '')
+      .trim();
+    const nums = [...cleanSegment.matchAll(/(\d+(?:[.,]\d+)?)/g)];
     if (!nums.length) return null;
     const last = nums[nums.length - 1];
     const qty = parseFloat(last[1].replace(',', '.'));
     if (!(qty > 0) || qty > 99999) return null;
 
-    let rawName = String(segment).slice(0, last.index).trim();
+    let rawName = cleanSegment.slice(0, last.index).trim();
     rawName = sanitizePdfProductName(rawName)
       .replace(/\s+(?:\d+(?:[.,]\d+)?\s+){1,3}\d+(?:[.,]\d+)?\s*$/, '')
       .replace(/\s*\([^)]*\b(?:\d+(?:[.,]\d+)?\s*(?:kg|gram|gr|pcs|pack|pail|liter|ml)|\d+\s*(?:pcs|pack|pail))[^)]*\)/gi, '')
