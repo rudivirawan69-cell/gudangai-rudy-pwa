@@ -126,7 +126,8 @@ export async function extractTextFromImage(file, onProgress) {
   if (onProgress) onProgress('OCR foto...');
   try {
     const Tesseract = (await import('tesseract.js')).default;
-    const result = await Tesseract.recognize(file, 'ind+eng', {
+    const source = await preprocessImageForOcr(file);
+    const result = await Tesseract.recognize(source, 'ind+eng', {
       logger: (m) => {
         if (m.status === 'recognizing text' && onProgress) {
           onProgress(`OCR ${Math.round((m.progress || 0) * 100)}%`);
@@ -134,13 +135,35 @@ export async function extractTextFromImage(file, onProgress) {
       },
     });
     const rawText = result?.data?.text || '';
-    // OCR post-processing: fix common OCR mistakes
     const cleaned = cleanOcrText(rawText);
     const lines = cleaned.split(/\n/).map((l) => l.trim()).filter(Boolean);
-    return { ok: true, text: cleaned, lines };
+    return { ok: true, text: cleaned, lines, method: 'preprocessed-image' };
   } catch (err) {
     return { ok: false, error: err.message || 'OCR gagal' };
   }
+}
+
+async function preprocessImageForOcr(file) {
+  if (typeof document === 'undefined' || typeof createImageBitmap !== 'function') return file;
+  const bitmap = await createImageBitmap(file);
+  const maxWidth = 2400;
+  const scale = Math.min(1.5, maxWidth / Math.max(bitmap.width, 1));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+  canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  for (let i = 0; i < image.data.length; i += 4) {
+    const gray = (image.data[i] * 0.299) + (image.data[i + 1] * 0.587) + (image.data[i + 2] * 0.114);
+    const contrast = Math.max(0, Math.min(255, ((gray - 128) * 1.35) + 128));
+    image.data[i] = contrast;
+    image.data[i + 1] = contrast;
+    image.data[i + 2] = contrast;
+  }
+  ctx.putImageData(image, 0, 0);
+  bitmap.close?.();
+  return canvas;
 }
 
 /**
@@ -355,9 +378,9 @@ function filterPdfMasterForEntity(entity, masterList) {
       // CV PDF hanya memakai barang jadi/produksi; bahan baku BBCV/BBPT tidak boleh masuk keranjang CV.
       return /^CV-/.test(kode) && divisi !== 'BAHAN BAKU' && !/^(?:BBCV|BBPT)-/.test(kode);
     }
-    // PDF PT juga hanya berisi barang yang dipesan sebagai barang jadi/operasional.
-    // BBPT dan divisi BAHAN BAKU harus diproses melalui master bahan baku, bukan keranjang PO PDF.
-    return /^(?:PT|WK|MM)-/.test(kode) && divisi !== 'BAHAN BAKU' && !/^(?:BBCV|BBPT)-/.test(kode);
+  // PT validation may need to disambiguate finished goods against BBPT stock.
+  // Keep BBPT candidates visible for manual selection when the product name is similar.
+  return /^(?:PT|WK|MM|BBPT)-/.test(kode) && (divisi !== 'BAHAN BAKU' || /^BBPT-/.test(kode));
   });
 }
 
