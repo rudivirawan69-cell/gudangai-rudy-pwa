@@ -3913,6 +3913,42 @@ function noteConnectionSuccess_() {
   try { PropertiesService.getScriptProperties().deleteProperty("GUDANGAI_CIRCUIT_STATE"); } catch(e) {}
 }
 
+/*
+ * One-time Dashboard migration.
+ * It is intentionally not called by onEdit, weeklyPOAutomation, or the
+ * lightweight refresh trigger. This prevents an old trigger from rebuilding
+ * the sheet and overwriting the approved layout.
+ */
+function setupCleanDashboardLayoutOnce() {
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(20000)) throw new Error('Setup Dashboard sedang dijalankan proses lain.');
+  try {
+    var props = PropertiesService.getScriptProperties();
+    var ss = getSS();
+    var sh = ss.getSheetByName('Dashboard');
+    if (!sh) throw new Error('Sheet Dashboard tidak ditemukan');
+
+    // Remove only known legacy writers; transaction and PO triggers remain intact.
+    var legacy = ['buildMasterExecutiveDashboardV69', 'refreshWeeklyPODashboard', 'formatDashboardLayout693_'];
+    var removed = 0;
+    ScriptApp.getProjectTriggers().forEach(function(trigger) {
+      if (legacy.indexOf(trigger.getHandlerFunction()) >= 0) {
+        ScriptApp.deleteTrigger(trigger);
+        removed++;
+      }
+    });
+
+    formatDashboardLayout693_();
+    props.setProperty('GUDANGAI_CLEAN_DASHBOARD_LAYOUT', 'v1');
+    props.setProperty('GUDANGAI_CLEAN_DASHBOARD_LAYOUT_AT', new Date().toISOString());
+    SpreadsheetApp.flush();
+    return {success:true, layout:'clean-v1', charts:3, legacyTriggersRemoved:removed,
+      protectedRows:'28:45', poArea:'46:99'};
+  } finally {
+    if (lock.hasLock()) lock.releaseLock();
+  }
+}
+
 /* DASHBOARD FINAL 6.9.3 — Opsi B: formatting stabil + refresh data ringan */
 var DASH693 = {
   head:'#0e7490', sub:'#155e75', alt:'#f0f9ff', white:'#ffffff',
@@ -3959,13 +3995,13 @@ function formatDashboardLayout693_() {
    sh.setColumnWidth(7,85),sh.setColumnWidth(8,110),sh.setColumnWidth(9,145),
    sh.setColumnWidth(10,85),sh.setColumnWidth(11,85),sh.setColumnWidth(12,85),
    sh.setColumnWidth(13,85),sh.setColumnWidth(14,85)];
+  // This is an explicit one-time layout writer only. Keep the chart set limited to
+  // the three approved visualizations; recurring refreshes never call this writer.
   clearDashboardCharts_(sh);
   var specs=[
-    {t:'Status Stok per Divisi',type:Charts.ChartType.BAR,r:'P1:S20',y:102,x:1,o:{legend:{position:'bottom'},isStacked:true,hAxis:{title:'Jumlah Item',minValue:0},vAxis:{title:'Divisi'}}},
-    {t:'Distribusi Status Stok',type:Charts.ChartType.PIE,r:'U1:V4',y:102,x:8,o:{pieHole:0.45,legend:{position:'right'}}},
-    {t:'Tren Total Item 7 Hari',type:Charts.ChartType.LINE,r:'X1:Y8',y:119,x:1,o:{legend:{position:'none'},hAxis:{title:'Tanggal'},vAxis:{title:'Total Item',minValue:0}}},
-    {t:'Aktivitas Hari Ini',type:Charts.ChartType.COLUMN,r:'AA1:AB4',y:119,x:8,o:{legend:{position:'none'},vAxis:{title:'Qty',minValue:0}}},
-    {t:'Status PO',type:Charts.ChartType.PIE,r:'AD1:AE4',y:136,x:1,o:{pieHole:0.45,legend:{position:'right'}}}
+    {t:'Status Stok per Divisi',type:Charts.ChartType.BAR,r:'P1:S20',y:6,x:1,o:{legend:{position:'bottom'},isStacked:true,hAxis:{title:'Jumlah Item',minValue:0},vAxis:{title:'Divisi'}}},
+    {t:'Tingkat Kritis & Prioritas',type:Charts.ChartType.BAR,r:'U1:V11',y:6,x:6,o:{legend:{position:'bottom'},hAxis:{title:'Jumlah Item',minValue:0},vAxis:{title:'Item'}}},
+    {t:'Volume Minggu Ini',type:Charts.ChartType.LINE,r:'X1:Z8',y:6,x:11,o:{legend:{position:'bottom'},hAxis:{title:'Hari'},vAxis:{title:'Qty',minValue:0}}}
   ];
   specs.forEach(function(z){var b=sh.newChart().setChartType(z.type).addRange(sh.getRange(z.r)).setOption('title',z.t).setOption('width',520).setOption('height',280).setPosition(z.y,z.x,0,0);Object.keys(z.o).forEach(function(k){b.setOption(k,z.o[k])});sh.insertChart(b.build())});
   sh.getRange('A46:M99').setVerticalAlignment('middle').setWrap(true);
