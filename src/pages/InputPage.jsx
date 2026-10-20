@@ -881,8 +881,9 @@ function PdfReviewRow({ row, entity, stockCatalog = [], onPick, onIgnore }) {
     if (!term) return [];
     const live = searchLiveStock(stockCatalog, term);
     const stat = searchMaster(entity, term);
+    const rawMaterial = entity === 'PT' ? searchMaster('CV', term).filter((h) => String(h?.kode || '').toUpperCase().startsWith('BBPT-')) : [];
     const seen = new Set();
-    return [...live, ...stat].filter((h) => {
+    return [...live, ...stat, ...rawMaterial].filter((h) => {
       const k = String(h?.kode || h?.kodeBarang || '').trim();
       if (!k || seen.has(k)) return false;
       seen.add(k);

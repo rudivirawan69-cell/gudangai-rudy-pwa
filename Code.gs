@@ -86,7 +86,9 @@ const PO_DATA_START_COL = 2; // B
 const PO_DATA_NUM_COLS = 8; // B:I
 const PO_LOCK_TIMEOUT_MS = 20000;
 const PO_SECTION_CURRENT_ROW = 46; // Dashboard PO terkunci mulai row 46; row 28–45 tidak boleh ditulis.
-const PO_DASHBOARD_MAX_VISIBLE_ROWS = 50;
+// Dashboard allocates two isolated 20-row blocks: current 46:65 and previous 66:85.
+// Four rows per block are reserved for title/subtitle/header, leaving 16 item rows.
+const PO_DASHBOARD_MAX_VISIBLE_ROWS = 16;
 const OPS_TITLE_ROWS = 2;
 const OPS_HEADER_ROW = 3;
 const OPS_DATA_START_ROW = 4;
@@ -109,7 +111,7 @@ const IDEMPOTENCY_HEADERS = [
   "Row", "WriteOccurred", "ErrorCode", "Details"
 ];
 const MAX_IDENTITY_LENGTH = 160;
-const MAX_KETERANGAN_LENGTH = 4500;
+const MAX_KETERANGAN_LENGTH = 200;
 const MASTER_SHEETS_READ_ONLY = ["Stock CV", "Stock PT"];
 
 // Mapping bulan Indonesia untuk auto-detect
@@ -1155,7 +1157,7 @@ function bulkTransaction(body) {
         if (kekurangan > 0) {
           shortageMode = true;
           finalQty = 0;
-          var structured = "HOLD; orderQty: " + numericQty + "; availableQty: " + sisa + "; shortageQty: " + kekurangan + "; followUp: verifikasi pembelian manual";
+          var structured = "Input pending " + numericQty + " > sisa stock " + sisa + " > kurang " + kekurangan;
           keterangan = keterangan ? (keterangan + " | " + structured) : structured;
         }
         if (st) st.stockAkhir = Math.max(0, sisa - (shortageMode ? 0 : finalQty));
@@ -3847,13 +3849,13 @@ function refreshDashboardPOSection_(options) {
   const currentTop = PO_SECTION_CURRENT_ROW;
   const currentCount = Math.min(PO_DASHBOARD_MAX_VISIBLE_ROWS, Math.max(1, (data.items || []).length));
   const currentEnd = currentTop + 4 + currentCount - 1;
-  const previousTop = currentTop;
+  // Keep the two weekly blocks isolated: current 46:65, previous 66:85.
+  const previousTop = currentTop + 20;
   const previousItems = previous.items || [];
   const previousCount = Math.min(PO_DASHBOARD_MAX_VISIBLE_ROWS, Math.max(1, previousItems.length));
   const previousEnd = previousTop + 4 + previousCount - 1;
-  // Bersihkan hanya rentang PO tetap A46:M99; tidak menyentuh baris 1–45,
-  // termasuk area lama 28–44, maupun kolom sumber chart tersembunyi P:V.
-  const clearEnd = currentTop + 4 + PO_DASHBOARD_MAX_VISIBLE_ROWS - 1;
+  // Clear only the reserved PO area; rows 1:45 and columns P:V remain untouched.
+  const clearEnd = previousTop + 20 - 1;
   dashboardClearPOArea_(sh, currentTop, clearEnd);
 
   const currentSubtitle = 'Periode: ' + (data.tanggalPO || data.weekKey || '-') + ' • No PO: ' + (data.noPO || '-') + ' • Total Qty: ' + (data.summary.totalPOQty || 0) + ' • Datang: ' + (data.summary.totalKonfirmasiQty || 0) + ' • Belum Datang: ' + (data.summary.totalSisaQty || 0);
