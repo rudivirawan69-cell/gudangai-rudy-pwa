@@ -4,7 +4,7 @@ const RETRY_COUNT = 2;
 const RETRY_BASE_MS = 400;
 const REQUEST_TIMEOUT_MS = 15000;
 /** Chunk aman agar Apps Script + spreadsheet selesai < timeout (anti-antrian). 20 item per POST. */
-const BATCH_CHUNK_SIZE = 35;
+const BATCH_CHUNK_SIZE = 20;
 const BATCH_TIMEOUT_MS = 120000;
 const SINGLE_TIMEOUT_MS = 60000;
 const SCHEMA_VERSION = '1.0';
@@ -51,14 +51,32 @@ function newIds() {
   return { requestId: 'REQ-' + uuid, transactionId: 'TX-RUDY-' + uuid };
 }
 function normalizeTanggal(raw) {
-  if (!raw) return new Date().toISOString().slice(0, 10);
+  // Use the device's local calendar date; avoid UTC rollover for Asia/Jakarta users.
+  const localToday = () => {
+    const now = new Date();
+    return now.getFullYear() + '-' +
+      String(now.getMonth() + 1).padStart(2, '0') + '-' +
+      String(now.getDate()).padStart(2, '0');
+  };
+  if (raw == null || String(raw).trim() === '') return localToday();
   const s = String(raw).trim();
-  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  const isRealDate = (year, month, day) => {
+    const d = new Date(year, month - 1, day);
+    return d.getFullYear() === year && d.getMonth() === month - 1 && d.getDate() === day;
+  };
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+    const [year, month, day] = s.split('-').map(Number);
+    if (!isRealDate(year, month, day)) throw new Error('Tanggal tidak valid: ' + s);
+    return s;
+  }
+  // Legacy input format is DD/MM/YYYY or DD-MM-YYYY.
   const m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
   if (m) {
-    const dd = m[1].padStart(2, '0');
-    const mm = m[2].padStart(2, '0');
-    return m[3] + '-' + mm + '-' + dd;
+    const day = Number(m[1]);
+    const month = Number(m[2]);
+    const year = Number(m[3]);
+    if (!isRealDate(year, month, day)) throw new Error('Tanggal tidak valid: ' + s);
+    return year + '-' + String(month).padStart(2, '0') + '-' + String(day).padStart(2, '0');
   }
   const d = new Date(s);
   if (!Number.isNaN(d.getTime())) {
@@ -67,7 +85,7 @@ function normalizeTanggal(raw) {
     const da = String(d.getDate()).padStart(2, '0');
     return y + '-' + mo + '-' + da;
   }
-  return new Date().toISOString().slice(0, 10);
+  throw new Error('Format tanggal tidak valid: ' + s);
 }
 async function fetchWithRetry(url, options = {}, retries = RETRY_COUNT, timeoutMs = REQUEST_TIMEOUT_MS) {
   let lastError;
