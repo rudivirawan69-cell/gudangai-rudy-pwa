@@ -102,13 +102,15 @@ async function extractPdfPagesWithOcr(pdf, onProgress) {
         canvasContext: canvas.getContext('2d', { willReadFrequently: true }),
         viewport: viewport.clone({ scale: 2 * Math.min(scaleX, scaleY) }),
       }).promise;
-      const result = await Tesseract.recognize(canvas, 'ind+eng', {
+      const ocrPromise = Tesseract.recognize(canvas, 'ind+eng', {
         logger: (m) => {
           if (m.status === 'recognizing text' && onProgress) {
             onProgress(`OCR PDF ${pageNo}/${pdf.numPages} ${Math.round((m.progress || 0) * 100)}%`);
           }
         },
       });
+      const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('OCR halaman timeout')), 25000));
+      const result = await Promise.race([ocrPromise, timeout]);
       pages.push(cleanOcrText(result?.data?.text || ''));
     }
     const text = pages.filter(Boolean).join('\n');
@@ -537,8 +539,25 @@ export function validateItems(rows, entity) {
   return { matched, ambiguous, unmatched };
 }
 
-export function applyStockAwareFallback(matched) {
-  return Array.isArray(matched) ? matched : [];
+export function applyStockAwareFallback(rows, entity, stock) {
+  if (!Array.isArray(rows)) return [];
+  const candidates = [
+    ...(Array.isArray(stock) ? stock : []),
+    ...(getMasterByEntity(entity) || []),
+  ];
+  return rows.map((row) => {
+    if (row?.status === 'matched' || !row?.rawName) return row;
+    const raw = normalizeMatchText(row.rawName);
+    const hit = candidates
+      .map((item) => ({ item, score: fuzzyScore(raw, item?.nama || item?.namaBarang || '') }))
+      .filter(({ item, score }) => item?.kode && score >= (raw.length <= 12 ? 0.9 : 0.82))
+      .sort((a, b) => b.score - a.score)[0];
+    if (!hit) return row;
+    const code = String(hit.item.kode || hit.item.kodeBarang || '').toUpperCase();
+    const prefixOk = entity === 'CV' ? /^CV-/.test(code) : /^(PT|WK|MM)-/.test(code);
+    if (!prefixOk) return row;
+    return { ...row, status: 'matched', kode: hit.item.kode || hit.item.kodeBarang, nama: hit.item.nama || hit.item.namaBarang, satuan: hit.item.satuan, match: hit.item, note: 'fallback-stock-name' };
+  });
 }
 
 export function detectEntityFromText(text) {

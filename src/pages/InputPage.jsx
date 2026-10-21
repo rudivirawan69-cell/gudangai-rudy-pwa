@@ -177,11 +177,18 @@ export default function InputPage() {
       const validation = validateItems(rows, useEntity);
       let stock = null;
       try { stock = await fetchStock(useEntity, { allowDemo: false }); } catch (_) { stock = null; }
-      const matched = applyStockAwareFallback(validation.matched || [], useEntity, stock)
+      const allRows = applyStockAwareFallback([
+        ...(validation.matched || []),
+        ...(validation.ambiguous || []),
+        ...(validation.unmatched || []),
+      ], useEntity, stock);
+      const cleanRows = allRows
         .filter((m) => !/\b\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4}\b/.test(String(m?.nameFromPdf || m?.rawName || '')))
         .filter((m) => !/\b(?:periode|period|minggu)\b.*\d{4}/i.test(String(m?.nameFromPdf || m?.rawName || '')));
-      const amb = validation.ambiguous || [];
-      const un = validation.unmatched || [];
+      const matched = cleanRows.filter((m) => m.status === 'matched');
+      const reviewRows = cleanRows.filter((m) => m.status !== 'matched');
+      const amb = reviewRows.filter((m) => m.status === 'ambiguous');
+      const un = reviewRows.filter((m) => m.status !== 'ambiguous');
       const reviewRunId = Date.now().toString(36);
       const review = [...amb, ...un].map((r, idx) => ({
         ...r,
