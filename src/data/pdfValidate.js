@@ -143,13 +143,17 @@ export async function extractTextFromImage(file, onProgress) {
   try {
     const Tesseract = (await import('tesseract.js')).default;
     const source = await preprocessImageForOcr(file);
-    const result = await Tesseract.recognize(source, 'ind+eng', {
+    const ocrPromise = Tesseract.recognize(source, 'ind+eng', {
+      // PSM 6 is more reliable for photographed stock tables than the default page mode.
+      config: { tessedit_pageseg_mode: '6', preserve_interword_spaces: '1' },
       logger: (m) => {
         if (m.status === 'recognizing text' && onProgress) {
           onProgress(`OCR ${Math.round((m.progress || 0) * 100)}%`);
         }
       },
     });
+    const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('OCR foto timeout')), 45000));
+    const result = await Promise.race([ocrPromise, timeout]);
     const rawText = result?.data?.text || '';
     // OCR post-processing: normalize text, then drop only obvious scan noise.
     const cleaned = cleanOcrText(rawText);
@@ -193,6 +197,11 @@ function cleanOcrText(text) {
     .replace(/[|l](?=\d)/gi, '1')
     .replace(/(?<=\d)[oO]/g, '0')
     .replace(/\bAyarn\b/gi, 'Ayam')
+    .replace(/\bA[yv]am\b/gi, 'Ayam')
+    .replace(/\bF[il1][il1]e?t\b/gi, 'Fillet')
+    .replace(/\bF[i1]l+e?t\b/gi, 'Fillet')
+    .replace(/\bD[a4]d[a4]\b/gi, 'Dada')
+    .replace(/\bP[a4]h[a4]\b/gi, 'Paha')
     .replace(/\bDag[il]ng\b/gi, 'Daging')
     .replace(/\bBaks[oO0]\b/gi, 'Bakso')
     .replace(/\bNugge[t7]\b/gi, 'Nugget')

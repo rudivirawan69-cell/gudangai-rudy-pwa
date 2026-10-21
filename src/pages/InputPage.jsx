@@ -176,7 +176,14 @@ export default function InputPage() {
       if (!rows.length) { setStatusBanner('Tidak ada baris barang terdeteksi dari ' + sourceLabel + '.'); return; }
       const validation = validateItems(rows, useEntity);
       let stock = null;
-      try { stock = await fetchStock(useEntity, { allowDemo: false }); } catch (_) { stock = null; }
+      // OCR validation must not wait for a slow stock endpoint. Matching can continue
+      // without stock; the stock-aware fallback is best-effort only.
+      try {
+        stock = await Promise.race([
+          fetchStock(useEntity, { allowDemo: false }),
+          new Promise((resolve) => setTimeout(() => resolve(null), 5000)),
+        ]);
+      } catch (_) { stock = null; }
       const allRows = applyStockAwareFallback([
         ...(validation.matched || []),
         ...(validation.ambiguous || []),
