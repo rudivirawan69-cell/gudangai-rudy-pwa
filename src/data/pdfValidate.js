@@ -102,13 +102,15 @@ async function extractPdfPagesWithOcr(pdf, onProgress) {
         canvasContext: canvas.getContext('2d', { willReadFrequently: true }),
         viewport: viewport.clone({ scale: 2 * Math.min(scaleX, scaleY) }),
       }).promise;
-      const result = await Tesseract.recognize(canvas, 'ind+eng', {
+      const ocrPromise = Tesseract.recognize(canvas, 'ind+eng', {
         logger: (m) => {
           if (m.status === 'recognizing text' && onProgress) {
             onProgress(`OCR PDF ${pageNo}/${pdf.numPages} ${Math.round((m.progress || 0) * 100)}%`);
           }
         },
       });
+      const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('OCR halaman timeout')), 25000));
+      const result = await Promise.race([ocrPromise, timeout]);
       pages.push(cleanOcrText(result?.data?.text || ''));
     }
     const text = pages.filter(Boolean).join('\n');
@@ -141,13 +143,17 @@ export async function extractTextFromImage(file, onProgress) {
   try {
     const Tesseract = (await import('tesseract.js')).default;
     const source = await preprocessImageForOcr(file);
-    const result = await Tesseract.recognize(source, 'ind+eng', {
+    const ocrPromise = Tesseract.recognize(source, 'ind+eng', {
+      // PSM 6 is more reliable for photographed stock tables than the default page mode.
+      config: { tessedit_pageseg_mode: '6', preserve_interword_spaces: '1' },
       logger: (m) => {
         if (m.status === 'recognizing text' && onProgress) {
           onProgress(`OCR ${Math.round((m.progress || 0) * 100)}%`);
         }
       },
     });
+    const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('OCR foto timeout')), 45000));
+    const result = await Promise.race([ocrPromise, timeout]);
     const rawText = result?.data?.text || '';
     // OCR post-processing: normalize text, then drop only obvious scan noise.
     const cleaned = cleanOcrText(rawText);
@@ -191,6 +197,11 @@ function cleanOcrText(text) {
     .replace(/[|l](?=\d)/gi, '1')
     .replace(/(?<=\d)[oO]/g, '0')
     .replace(/\bAyarn\b/gi, 'Ayam')
+    .replace(/\bA[yv]am\b/gi, 'Ayam')
+    .replace(/\bF[il1][il1]e?t\b/gi, 'Fillet')
+    .replace(/\bF[i1]l+e?t\b/gi, 'Fillet')
+    .replace(/\bD[a4]d[a4]\b/gi, 'Dada')
+    .replace(/\bP[a4]h[a4]\b/gi, 'Paha')
     .replace(/\bDag[il]ng\b/gi, 'Daging')
     .replace(/\bBaks[oO0]\b/gi, 'Bakso')
     .replace(/\bNugge[t7]\b/gi, 'Nugget')
@@ -537,8 +548,25 @@ export function validateItems(rows, entity) {
   return { matched, ambiguous, unmatched };
 }
 
-export function applyStockAwareFallback(matched) {
-  return Array.isArray(matched) ? matched : [];
+export function applyStockAwareFallback(rows, entity, stock) {
+  if (!Array.isArray(rows)) return [];
+  const candidates = [
+    ...(Array.isArray(stock) ? stock : []),
+    ...(getMasterByEntity(entity) || []),
+  ];
+  return rows.map((row) => {
+    if (row?.status === 'matched' || !row?.rawName) return row;
+    const raw = normalizeMatchText(row.rawName);
+    const hit = candidates
+      .map((item) => ({ item, score: fuzzyScore(raw, item?.nama || item?.namaBarang || '') }))
+      .filter(({ item, score }) => item?.kode && score >= (raw.length <= 12 ? 0.9 : 0.82))
+      .sort((a, b) => b.score - a.score)[0];
+    if (!hit) return row;
+    const code = String(hit.item.kode || hit.item.kodeBarang || '').toUpperCase();
+    const prefixOk = entity === 'CV' ? /^CV-/.test(code) : /^(PT|WK|MM)-/.test(code);
+    if (!prefixOk) return row;
+    return { ...row, status: 'matched', kode: hit.item.kode || hit.item.kodeBarang, nama: hit.item.nama || hit.item.namaBarang, satuan: hit.item.satuan, match: hit.item, note: 'fallback-stock-name' };
+  });
 }
 
 export function detectEntityFromText(text) {

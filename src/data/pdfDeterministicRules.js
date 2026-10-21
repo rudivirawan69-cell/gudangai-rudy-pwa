@@ -31,6 +31,15 @@ export function resolvePdfNameDeterministic(entity, rawName, masterList) {
   }
 
   // --- Specific rules (CV vs PT codes differ) ---
+  // Keep the two fillet variants explicit so OCR/PDF noise cannot swap them.
+  if (/fillet\s+dada/.test(norm)) {
+    const hit = pick(ent === 'PT' ? 'PT-0001' : 'CV-0001', 'det-ayam-fillet-dada');
+    if (hit) return hit;
+  }
+  if (/fillet\s+paha/.test(norm)) {
+    const hit = pick(ent === 'PT' ? 'PT-0002' : 'CV-0002', 'det-ayam-fillet-paha');
+    if (hit) return hit;
+  }
   // Deterministic mappings for items reported missing in PDF import.
   // PDFs often append a weight before the product variant and a storage label.
   // Match only the distinctive 2-dada + 2-paha product; do not fuzzy-match generic "ayam negeri".

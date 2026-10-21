@@ -176,12 +176,26 @@ export default function InputPage() {
       if (!rows.length) { setStatusBanner('Tidak ada baris barang terdeteksi dari ' + sourceLabel + '.'); return; }
       const validation = validateItems(rows, useEntity);
       let stock = null;
-      try { stock = await fetchStock(useEntity, { allowDemo: false }); } catch (_) { stock = null; }
-      const matched = applyStockAwareFallback(validation.matched || [], useEntity, stock)
+      // OCR validation must not wait for a slow stock endpoint. Matching can continue
+      // without stock; the stock-aware fallback is best-effort only.
+      try {
+        stock = await Promise.race([
+          fetchStock(useEntity, { allowDemo: false }),
+          new Promise((resolve) => setTimeout(() => resolve(null), 5000)),
+        ]);
+      } catch (_) { stock = null; }
+      const allRows = applyStockAwareFallback([
+        ...(validation.matched || []),
+        ...(validation.ambiguous || []),
+        ...(validation.unmatched || []),
+      ], useEntity, stock);
+      const cleanRows = allRows
         .filter((m) => !/\b\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4}\b/.test(String(m?.nameFromPdf || m?.rawName || '')))
         .filter((m) => !/\b(?:periode|period|minggu)\b.*\d{4}/i.test(String(m?.nameFromPdf || m?.rawName || '')));
-      const amb = validation.ambiguous || [];
-      const un = validation.unmatched || [];
+      const matched = cleanRows.filter((m) => m.status === 'matched');
+      const reviewRows = cleanRows.filter((m) => m.status !== 'matched');
+      const amb = reviewRows.filter((m) => m.status === 'ambiguous');
+      const un = reviewRows.filter((m) => m.status !== 'ambiguous');
       const reviewRunId = Date.now().toString(36);
       const review = [...amb, ...un].map((r, idx) => ({
         ...r,
