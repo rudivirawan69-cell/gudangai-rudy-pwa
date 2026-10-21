@@ -1,0 +1,93 @@
+/* GudangAI RUDY — UI refinement v6.9 (visual-only)
+   Deliberately limited to presentation: no component behavior, data, API, or navigation changes. */
+:root {
+  --ui-accent: #0f766e;
+  --ui-accent-strong: #0b5f5a;
+  --ui-page: #f4f7fb;
+  --ui-card: #ffffff;
+  --ui-line: #e3eaf2;
+  --ui-shadow: 0 8px 24px rgba(15, 35, 65, .075);
+  --ui-shadow-hover: 0 12px 28px rgba(15, 35, 65, .12);
+}
+html[data-theme="soft_light"] {
+  --ui-accent: #c65b22;
+  --ui-accent-strong: #a84617;
+  --ui-page: #f7f5f1;
+}
+html[data-theme="deep_ocean"] {
+  --ui-accent: #38bdf8;
+  --ui-accent-strong: #0284c7;
+  --ui-page: #071426;
+  --ui-card: #10233b;
+  --ui-line: rgba(148, 185, 220, .22);
+  --ui-shadow: 0 10px 28px rgba(0, 0, 0, .2);
+  --ui-shadow-hover: 0 14px 34px rgba(0, 0, 0, .3);
+}
+html[data-theme="warm_productive"] {
+  --ui-accent: #2563eb;
+  --ui-accent-strong: #1d4ed8;
+  --ui-page: #f1f5ff;
+  --ui-line: #dbe5fb;
+}
+html, body, #root { min-height: 100%; }
+body { background: var(--ui-page); }
+.app-bg {
+  background-color: var(--ui-page);
+  background-image:
+    radial-gradient(ellipse at 8% 0%, color-mix(in srgb, var(--ui-accent) 9%, transparent), transparent 42%),
+    linear-gradient(180deg, var(--ui-page) 0%, var(--ui-page) 100%);
+}
+.app-bg::after { background: linear-gradient(135deg, transparent 0%, rgba(255,255,255,.08) 100%); }
+.page-content { padding-top: clamp(.75rem, 2.5vw, 1.25rem); padding-bottom: max(7rem, calc(env(safe-area-inset-bottom) + 6.5rem)); }
+.page-header {
+  border-radius: 1.25rem;
+  padding: 1rem 1.05rem;
+  box-shadow: var(--ui-shadow);
+  border-color: var(--ui-line);
+}
+.page-title { font-size: clamp(1.08rem, 3.8vw, 1.3rem); letter-spacing: -.025em; }
+.page-subtitle { line-height: 1.55; }
+.section-card, .card, .surface, .menu-group {
+  border-color: var(--ui-line);
+  box-shadow: var(--ui-shadow);
+  transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+}
+.section-card { border-radius: 1.2rem; }
+.section-card-header { border-color: var(--ui-line); }
+.stat-tile { border-color: var(--ui-line); box-shadow: var(--ui-shadow); }
+.stock-card { border-color: var(--ui-line); box-shadow: var(--ui-shadow); }
+.page-content button:not(.nav-btn) {
+  transition: transform .15s ease, filter .15s ease, box-shadow .15s ease;
+}
+.page-content button:not(.nav-btn):active { transform: scale(.98); }
+.page-content button:disabled { cursor: not-allowed; }
+.btn-primary {
+  background: linear-gradient(135deg, var(--ui-accent), var(--ui-accent-strong));
+  box-shadow: 0 6px 16px color-mix(in srgb, var(--ui-accent) 24%, transparent);
+}
+.chip-btn.is-active { background: var(--ui-accent-strong); border-color: var(--ui-accent-strong); }
+.nav-bar {
+  border-top-color: var(--ui-line);
+  box-shadow: 0 -8px 28px rgba(15, 35, 65, .10);
+  padding-top: .2rem;
+}
+.nav-btn { min-height: 3.9rem; }
+.nav-btn.is-active .nav-icon-wrap {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor 15%, transparent);
+}
+.nav-label { letter-spacing: -.01em; }
+.form-control { min-height: 2.75rem; border-color: #cbd5e1; }
+.form-control:focus { border-color: var(--ui-accent); }
+@media (min-width: 768px) {
+  .page-content { padding-top: 1.5rem; }
+}
+@media (max-width: 420px) {
+  .page-content { padding-left: .75rem; padding-right: .75rem; }
+  .page-header { padding: .85rem; }
+  .section-card { border-radius: 1rem; }
+  .nav-bar { padding-top: .1rem; }
+  .nav-btn { padding-top: .45rem; padding-bottom: .4rem; min-height: 3.6rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .section-card, .card, .surface, .menu-group, .page-content button:not(.nav-btn) { transition: none; }
+}
