@@ -298,7 +298,7 @@ function parseTransactionDate_(value) {
   if (!raw) return null;
 
   // ISO: yyyy-mm-dd atau yyyy-mm-ddTHH:mm:ss...
-  let m = raw.match(/^(\\d{4})-(\\d{1,2})-(\\d{1,2})(?:[T\\s].*)?$/);
+  let m = raw.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[T\s].*)?$/);
   if (m) {
     const y = Number(m[1]), mo = Number(m[2]), d = Number(m[3]);
     const dt = new Date(y, mo - 1, d);
@@ -307,7 +307,7 @@ function parseTransactionDate_(value) {
   }
 
   // d-MMM-yyyy / dd-MMM-yyyy, termasuk singkatan bulan Indonesia.
-  m = raw.toUpperCase().match(/^(\\d{1,2})[-\\/ ]([A-ZÀ-Ÿ]{3,9})[-\\/ ](\\d{4})$/);
+  m = raw.toUpperCase().match(/^(\d{1,2})[-\/ ]([A-ZÀ-Ÿ]{3,9})[-\/ ](\d{4})$/);
   if (m) {
     const monthMap = {
       JAN:1, JANUARI:1, FEB:2, FEBRUARI:2, MAR:3, MARET:3, APR:4, APRIL:4,
@@ -355,13 +355,14 @@ function jsonResponse(obj) {
 // 3. ENTRY POINT: doPost / doGet
 // ============================================================
 function doPost(e) {
+  let body = null;
   const t0 = Date.now();
   try {
     if (!e || !e.postData || !e.postData.contents) {
       return jsonResponse({ success: false, error: "Payload kosong" });
     }
     const parsedBody = JSON.parse(e.postData.contents);
-    const body = normalizeIncomingRequest_(parsedBody);
+    body = normalizeIncomingRequest_(parsedBody);
     if (parsedBody && parsedBody.schemaVersion && String(parsedBody.schemaVersion) !== "1.0") {
       return jsonResponse({ success: false, status: "REJECTED", code: "UNSUPPORTED_SCHEMA_VERSION", requestId: body.requestId || null, error: "schemaVersion tidak didukung." });
     }
@@ -464,7 +465,7 @@ function doGet(e) {
     case "getLowStock": return jsonResponse(getLowStock());
     case "getDashboard":
     case "getDashboardData": return jsonResponse(getDashboardData());
-    case "getDashboardLegacy": return jsonResponse(getDashboard());
+    case "getDashboardLegacy": return jsonResponse(getDashboardData());
     case "getTransactionHistory": return jsonResponse(getTransactionHistory({ sheet: e.parameter.sheet, limit: e.parameter.limit }));
     case "getTransactionStatus": return jsonResponse(getTransactionStatus({ transactionId: e.parameter.transactionId, nonce: e.parameter.nonce, sheet: e.parameter.sheet }));
     case "searchByName": return jsonResponse(searchByName(e.parameter.query || e.parameter.q));
@@ -637,6 +638,31 @@ function readBackTransactionByIdentity_(identity, preferredSheet) {
       };
     }
   }
+  // Fallback ledger: marker GUDANGAI_TX tidak lagi ditulis ke Keterangan (lihat appendIdentityMarker_),
+  // sehingga verifikasi memakai baris yang tercatat di Idempotency Ledger.
+  try {
+    const rec = findIdempotencyRecord_(targetId, targetNonce);
+    const rowNo = rec ? Number(rec.dataRow) : 0;
+    const sName = preferredSheet || (rec ? rec.sheet : "");
+    const eligible = rec && (rec.status === "APPLIED" || rec.status === "UNKNOWN" || String(rec.writeOccurred) === "unknown");
+    if (eligible && rowNo > 0 && sName && (sName in SHEET_CONFIG)) {
+      const cfg = SHEET_CONFIG[sName];
+      const sh = getSS().getSheetByName(sName);
+      if (sh && rowNo > cfg.headerRow && rowNo <= sh.getMaxRows()) {
+        const r = sh.getRange(rowNo, 2, 1, 6).getValues()[0];
+        const qtyOk = Number(r[4]) === Number(rec.qty) || Number(r[4]) === 0;
+        if (String(r[1] || "").trim() === String(rec.kodeBarang || "").trim() &&
+            normalizeTransactionDateKey_(r[0]) === String(rec.tanggal || "") && qtyOk) {
+          return {
+            matched: true, sheet: sName, row: rowNo,
+            tanggal: normalizeTransactionDateKey_(r[0]), kodeBarang: String(r[1] || "").trim(),
+            namaBarang: r[2], satuan: r[3], qty: Number(r[4]) || 0, keterangan: String(r[5] || ""),
+            transactionId: targetId || null, nonce: targetNonce || null, via: "LEDGER_ROW"
+          };
+        }
+      }
+    }
+  } catch (fallbackErr) { console.error("readBack fallback ledger gagal: " + fallbackErr.message); }
   return { matched: false, transactionId: targetId || null, nonce: targetNonce || null };
 }
 
@@ -1542,7 +1568,7 @@ function rebuildAndCacheMasterMap() {
     const data = sheet.getRange(4, 1, lastRow - 3, lastCol).getValues();
     for (let i = 0; i < data.length; i++) {
       const kode = String(data[i][cKode] || "").trim();
-      if (!kode || /^total\\b/i.test(kode)) continue;
+      if (!kode || /^total\b/i.test(kode)) continue;
 
       // Key entity|kode mencegah collision bila suatu hari CV dan PT
       // memakai kode yang sama.
@@ -2629,7 +2655,28 @@ function getSevenDayTrend_() {
   return { labels: labels, values: values };
 }
 
+function getPOStatusFromStatusPO_() {
+  const st = getStatusPO();
+  if (!st || !st.success) return null;
+  const out = {
+    aktif: { cv: 0, pt: 0, purchaseOrder: 0, total: 0, itemCount: 0 },
+    konfirmasi: { cv: 0, pt: 0, purchaseOrder: 0, total: 0, itemCount: 0 }
+  };
+  (st.items || []).forEach(function(it) {
+    const b = it.status === "SELESAI" ? out.konfirmasi : out.aktif;
+    b.cv += Number(it.poCV) || 0;
+    b.pt += Number(it.poPT) || 0;
+    b.total += Number(it.totalPO) || 0;
+    b.itemCount++;
+  });
+  return out;
+}
+
 function getPOStatus_() {
+  try {
+    const viaStatusPO = getPOStatusFromStatusPO_();
+    if (viaStatusPO) return viaStatusPO;
+  } catch (poErr) { console.error("getPOStatus_ via getStatusPO gagal: " + poErr.message); }
   const result = {
     aktif: { cv: 0, pt: 0, purchaseOrder: 0, total: 0, itemCount: 0 },
     konfirmasi: { cv: 0, pt: 0, purchaseOrder: 0, total: 0, itemCount: 0 }
@@ -2645,9 +2692,9 @@ function getPOStatus_() {
   const headers = sh.getRange(headerRow, 1, 1, lastCol).getDisplayValues()[0].map(function(v) {
     return String(v || "").trim().toUpperCase();
   });
-  const cCV = headers.findIndex(function(h) { return /PO\\s*CV|CV\\s*PO/.test(h); });
-  const cPT = headers.findIndex(function(h) { return /PO\\s*PT|PT\\s*PO/.test(h); });
-  const cTotal = headers.findIndex(function(h) { return /^TOTAL$|TOTAL\\s*PO/.test(h); });
+  const cCV = headers.findIndex(function(h) { return /PO\s*CV|CV\s*PO/.test(h); });
+  const cPT = headers.findIndex(function(h) { return /PO\s*PT|PT\s*PO/.test(h); });
+  const cTotal = headers.findIndex(function(h) { return /^TOTAL$|TOTAL\s*PO/.test(h); });
   const cStatus = headers.findIndex(function(h) { return /STATUS|KONFIRM/.test(h); });
 
   if (cCV < 0 && cPT < 0 && cTotal < 0) {
