@@ -21,6 +21,26 @@ const examples = [
 ];
 assert.deepEqual(fallback(examples), examples, 'Fallback must preserve all validation statuses without changing SKU');
 assert.deepEqual(fallback(null), [], 'Fallback must fail closed on non-array input');
+
+// Page-level PDF completeness detection: weak text layers get OCR even when the
+// whole document has many other readable rows; healthy pages avoid unnecessary OCR.
+const ocrGateMatch = pdf.match(/export function shouldOcrPdfPage\(metrics\)\s*\{([\s\S]*?)\n\}/);
+assert.ok(ocrGateMatch, 'Missing page-aware PDF OCR gate');
+const shouldOcrPdfPage = new Function('metrics', ocrGateMatch[1]);
+assert.equal(shouldOcrPdfPage({
+  lineCount: 22, hasNumericText: true, candidateCount: 16, numericLineCount: 19,
+}), false, 'Healthy page should not require OCR');
+assert.equal(shouldOcrPdfPage({
+  lineCount: 25, hasNumericText: true, candidateCount: 4, numericLineCount: 18,
+}), true, 'Partially extracted page must be marked for OCR');
+assert.equal(shouldOcrPdfPage({
+  lineCount: 1, hasNumericText: false, candidateCount: 0, numericLineCount: 0,
+}), true, 'Empty/scan-only page must be marked for OCR');
+assert.match(pdf, /filter\(\(page\)\s*=>\s*shouldOcrPdfPage\(page\)\)/,
+  'Page-aware fallback must be applied when aggregate PDF extraction appears healthy');
+assert.match(pdf, /if\s*\(ocrCount\s*>\s*originalCount\)/,
+  'OCR must replace a page only when it recovers more product rows');
+
 assert.match(inputPage, /reviewRows\s*=\s*cleanRows\.filter\(\(m\)\s*=>\s*m\.status\s*!==\s*'matched'\)/,
   'InputPage must preserve non-matched PDF rows for review');
 
