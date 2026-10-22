@@ -5,6 +5,7 @@ import { ThemeProvider } from './hooks/useTheme';
 import LoginPage from './pages/LoginPage';
 import { useConnection } from './hooks/useConnection';
 import { useBootstrap } from './hooks/useBootstrap';
+import { getDashboardData } from './data/api';
 import {
   LayoutDashboard, Package, PackagePlus, Clock, Settings, ClipboardList,
   WifiOff, AlertTriangle, Loader2,
@@ -86,6 +87,57 @@ function ConnBanner({ online, hasUrl, status, message, syncing }) {
   return null;
 }
 
+function SharedLiveBar() {
+  const [sheetTime, setSheetTime] = useState('Memuat status spreadsheet…');
+  const [refreshing, setRefreshing] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    const load = async () => {
+      try {
+        const data = await getDashboardData();
+        if (!alive || !data?.success) return;
+        const value = data.lastUpdate ?? data.lastUpdatedAt ?? data.lastUpdated ?? data.updatedAt ?? data.updateTime ?? data.waktuUpdate ?? data.waktu_update ?? data.terakhirUpdate ?? data.timestamp;
+        if (value == null || value === '') {
+          setSheetTime('Timestamp belum tersedia dari spreadsheet');
+          return;
+        }
+        let d;
+        if (typeof value === 'number') d = new Date(value < 1e12 ? value * 1000 : value);
+        else d = new Date(value);
+        setSheetTime(Number.isNaN(d.getTime()) ? String(value) : new Intl.DateTimeFormat('id-ID', {
+          day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', second: '2-digit',
+          hourCycle: 'h23', timeZone: 'Asia/Jakarta',
+        }).format(d) + ' WIB');
+      } catch (_) {
+        if (alive) setSheetTime('Status spreadsheet belum dapat dibaca');
+      } finally { if (alive) setRefreshing(false); }
+    };
+    void load();
+    const timer = setInterval(() => { if (document.visibilityState === 'visible' && navigator.onLine) void load(); }, 30000);
+    const onRefresh = () => { setRefreshing(true); void load(); };
+    window.addEventListener('gudangai-dashboard-refresh', onRefresh);
+    return () => { alive = false; clearInterval(timer); window.removeEventListener('gudangai-dashboard-refresh', onRefresh); };
+  }, []);
+  return (
+    <div className="shared-live-bar sticky top-0 z-30 mx-auto w-full max-w-lg px-3 py-2">
+      <div className="shared-live-inner flex items-center justify-between gap-2 rounded-xl border px-3 py-2 shadow-sm">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1.5 text-[10px] font-extrabold">
+            <span className="shared-live-dot h-2 w-2 rounded-full shrink-0" />
+            <span className="truncate">Update Sheet: {sheetTime}</span>
+          </div>
+          <a href="mailto:rudivirawan69@gmail.com" className="shared-live-email mt-0.5 flex items-center gap-1 text-[10px] font-semibold truncate">
+            <Mail className="h-3 w-3 shrink-0" /> rudivirawan69@gmail.com
+          </a>
+        </div>
+        <button type="button" aria-label="Segarkan status spreadsheet" onClick={() => { setRefreshing(true); window.dispatchEvent(new Event('gudangai-dashboard-refresh')); }} className="shared-live-refresh shrink-0 rounded-lg border px-2.5 py-2 text-[10px] font-bold active:scale-95">
+          {refreshing ? 'Cek…' : 'Sync'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function AppShell() {
   const [installPrompt, setInstallPrompt] = useState(null);
 
@@ -157,6 +209,7 @@ function AppShell() {
     <div className="app-shell min-h-screen text-slate-100">
       <div className="app-bg" aria-hidden="true" />
       <ConnBanner online={online} hasUrl={hasUrl} status={status} message={message} syncing={syncing} />
+      <SharedLiveBar />
       {installPrompt && (
         <button type="button" onClick={installApp} className="fixed top-3 right-3 z-[60] rounded-full bg-[#0f9f9a] px-4 py-2 text-xs font-extrabold text-white shadow-lg border border-white/30">
           Pasang Aplikasi
