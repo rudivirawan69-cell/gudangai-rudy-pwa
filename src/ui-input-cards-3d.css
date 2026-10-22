@@ -1,0 +1,84 @@
+/* =========================================================
+   Input cards — soft 3D depth + contrast balance (all modes)
+   ========================================================= */
+
+/* Action tiles Masuk / Keluar / Rusak — always visible depth */
+html[data-theme] .grid.grid-cols-3 > button.rounded-2xl {
+  background: var(--bg-elevated) !important;
+  border: 1px solid var(--border) !important;
+  box-shadow: var(--shadow-1) !important;
+  color: var(--text-main) !important;
+  transition: box-shadow .2s ease, transform .15s ease, background .2s ease !important;
+}
+html[data-theme] .grid.grid-cols-3 > button.rounded-2xl:active {
+  box-shadow: var(--shadow-press) !important;
+  transform: scale(0.97);
+}
+/* Active state for tx type — keep readable, not washed out */
+html[data-theme] .grid.grid-cols-3 > button.rounded-2xl.bg-emerald-500,
+html[data-theme] .grid.grid-cols-3 > button.rounded-2xl.bg-amber-500,
+html[data-theme] .grid.grid-cols-3 > button.rounded-2xl.bg-rose-500,
+html[data-theme] .grid.grid-cols-3 > button.rounded-2xl[class*="bg-emerald"],
+html[data-theme] .grid.grid-cols-3 > button.rounded-2xl[class*="bg-amber"],
+html[data-theme] .grid.grid-cols-3 > button.rounded-2xl[class*="bg-rose"],
+html[data-theme] .grid.grid-cols-3 > button.rounded-2xl[class*="bg-cyan"],
+html[data-theme] .grid.grid-cols-3 > button.rounded-2xl[class*="bg-blue"] {
+  box-shadow: 8px 10px 20px color-mix(in srgb, currentColor 35%, transparent),
+              -4px -4px 12px rgba(255,255,255,0.35) !important;
+  border-color: transparent !important;
+}
+
+/* Glass mode: prevent washed-out white-on-light */
+html[data-theme="warm_productive"] .grid.grid-cols-3 > button.rounded-2xl:not([class*="bg-emerald"]):not([class*="bg-amber"]):not([class*="bg-rose"]):not([class*="bg-cyan"]):not([class*="bg-blue"]) {
+  background: #eef3fc !important;
+  border-color: rgba(59, 130, 246, 0.18) !important;
+  box-shadow: 8px 8px 18px #b0c4e0, -6px -6px 14px #ffffff !important;
+  color: #2d3f5c !important;
+}
+html[data-theme="warm_productive"] .grid.grid-cols-5 > button.rounded-2xl {
+  background: #eef3fc !important;
+  border-color: rgba(59, 130, 246, 0.18) !important;
+  box-shadow: 7px 7px 16px #b0c4e0, -5px -5px 12px #ffffff !important;
+  color: #2d3f5c !important;
+}
+html[data-theme="warm_productive"] .grid.grid-cols-5 > button.rounded-2xl:active,
+html[data-theme="warm_productive"] .grid.grid-cols-3 > button.rounded-2xl:active {
+  box-shadow: inset 5px 5px 12px #b0c4e0, inset -4px -4px 10px #ffffff !important;
+}
+
+/* Soft Light input tiles */
+html[data-theme="soft_light"] .grid.grid-cols-3 > button.rounded-2xl:not([class*="bg-"]),
+html[data-theme="soft_light"] .grid.grid-cols-5 > button.rounded-2xl {
+  background: #faf8f4 !important;
+  box-shadow: 8px 8px 18px #c5bdb0, -6px -6px 14px #ffffff !important;
+  border-color: rgba(255,255,255,0.85) !important;
+}
+
+/* Ocean input tiles already covered by general rules; reinforce depth */
+html[data-theme="deep_ocean"] .grid.grid-cols-3 > button.rounded-2xl:not([class*="bg-emerald"]):not([class*="bg-amber"]):not([class*="bg-rose"]),
+html[data-theme="deep_ocean"] .grid.grid-cols-5 > button.rounded-2xl {
+  background: #16324f !important;
+  border-color: rgba(56, 189, 248, 0.28) !important;
+  box-shadow: 8px 8px 18px #030a12, -5px -5px 14px #1a3a58 !important;
+  color: #e2eef9 !important;
+}
+
+/* Icon chips inside input tiles — soft raised */
+html[data-theme] .grid.grid-cols-3 > button.rounded-2xl span.w-9.h-9.rounded-xl,
+html[data-theme] .grid.grid-cols-5 > button.rounded-2xl span.w-9.h-9.rounded-xl {
+  box-shadow: 4px 4px 8px color-mix(in srgb, var(--bg-app) 60%, #000 8%),
+              -3px -3px 7px color-mix(in srgb, var(--bg-elevated) 80%, #fff 15%) !important;
+  border: 1px solid var(--border) !important;
+}
+html[data-theme="warm_productive"] .grid.grid-cols-5 > button.rounded-2xl span.w-9.h-9.rounded-xl {
+  background: #e0eaf8 !important;
+  box-shadow: 4px 4px 8px #b0c4e0, -3px -3px 7px #ffffff !important;
+}
+html[data-theme="soft_light"] .grid.grid-cols-5 > button.rounded-2xl span.w-9.h-9.rounded-xl {
+  box-shadow: 4px 4px 8px #c5bdb0, -3px -3px 7px #ffffff !important;
+}
+html[data-theme="deep_ocean"] .grid.grid-cols-5 > button.rounded-2xl span.w-9.h-9.rounded-xl {
+  background: rgba(56, 189, 248, 0.15) !important;
+  box-shadow: 4px 4px 9px #030a12, -3px -3px 7px #1a3555 !important;
+  border-color: rgba(56, 189, 248, 0.25) !important;
+}
