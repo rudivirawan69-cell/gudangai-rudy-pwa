@@ -548,25 +548,13 @@ export function validateItems(rows, entity) {
   return { matched, ambiguous, unmatched };
 }
 
-export function applyStockAwareFallback(rows, entity, stock) {
-  if (!Array.isArray(rows)) return [];
-  const candidates = [
-    ...(Array.isArray(stock) ? stock : []),
-    ...(getMasterByEntity(entity) || []),
-  ];
-  return rows.map((row) => {
-    if (row?.status === 'matched' || !row?.rawName) return row;
-    const raw = normalizeMatchText(row.rawName);
-    const hit = candidates
-      .map((item) => ({ item, score: fuzzyScore(raw, item?.nama || item?.namaBarang || '') }))
-      .filter(({ item, score }) => item?.kode && score >= (raw.length <= 12 ? 0.9 : 0.82))
-      .sort((a, b) => b.score - a.score)[0];
-    if (!hit) return row;
-    const code = String(hit.item.kode || hit.item.kodeBarang || '').toUpperCase();
-    const prefixOk = entity === 'CV' ? /^CV-/.test(code) : /^(PT|WK|MM)-/.test(code);
-    if (!prefixOk) return row;
-    return { ...row, status: 'matched', kode: hit.item.kode || hit.item.kodeBarang, nama: hit.item.nama || hit.item.namaBarang, satuan: hit.item.satuan, match: hit.item, note: 'fallback-stock-name' };
-  });
+/**
+ * Precision guard: live-stock similarity must not override master validation.
+ * Ambiguous/unmatched PDF rows stay in the manual-review queue until the operator
+ * selects a verified master SKU. Keep legacy call compatibility; extra args are ignored.
+ */
+export function applyStockAwareFallback(rows) {
+  return Array.isArray(rows) ? rows : [];
 }
 
 export function detectEntityFromText(text) {
