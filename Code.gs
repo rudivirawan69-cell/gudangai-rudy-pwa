@@ -3399,13 +3399,21 @@ function onEdit(e) {
     if (!e || !e.range) return;
     const sheetName = e.range.getSheet().getName();
     const stockSheets = ["Stock CV", "Stock PT", "Stock Awal", "Stock Bahan Baku"];
-    const affected = stockSheets.indexOf(sheetName) >= 0 || sheetName === "purchase order" || Object.keys(SHEET_CONFIG).indexOf(sheetName) >= 0;
+    // Manual edits to transaction journals also affect formula-derived Stock Akhir.
+    const transactionSheets = ["Barang masuk", "Barang keluar", "Barang Rusak"];
+    const stockImpacting = stockSheets.indexOf(sheetName) >= 0 || transactionSheets.indexOf(sheetName) >= 0;
+    const affected = stockImpacting || sheetName === "purchase order" || Object.keys(SHEET_CONFIG).indexOf(sheetName) >= 0;
     if (!affected) return;
     clearMasterCache();
     markDataDirty_(sheetName);
     updateLastUpdateTimestamp();
-    if (stockSheets.indexOf(sheetName) >= 0) {
-      try { syncDivisionStockLightweight_(); } catch (divErr) { console.error("onEdit sync divisi: " + divErr.message); }
+    if (stockImpacting) {
+      try {
+        SpreadsheetApp.flush();
+        syncDivisionStockLightweight_();
+      } catch (divErr) {
+        console.error("onEdit sync divisi: " + divErr.message);
+      }
     }
     try { refreshDashboardDataLight693_(); } catch (dashErr) { console.error("Dashboard refresh ringan gagal: " + dashErr.message); }
   } catch (err) { console.error("onEdit ringan gagal: " + err.message); }
