@@ -36,6 +36,8 @@ assert.equal(shouldOcrPdfPage({
 assert.equal(shouldOcrPdfPage({
   lineCount: 1, hasNumericText: false, candidateCount: 0, numericLineCount: 0,
 }), true, 'Empty/scan-only page must be marked for OCR');
+assert.match(pdf, /lineCount:\s*lines\.length/,
+  'OCR completeness gate must receive the actual per-page line count');
 assert.match(pdf, /filter\(\(page\)\s*=>\s*shouldOcrPdfPage\(page\)\)/,
   'Page-aware fallback must be applied when aggregate PDF extraction appears healthy');
 assert.match(pdf, /if\s*\(ocrCount\s*>\s*originalCount\)/,
