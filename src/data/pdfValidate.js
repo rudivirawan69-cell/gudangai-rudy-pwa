@@ -48,6 +48,20 @@ function itemsToLines(items) {
   return lines.filter((l) => l.length >= 1);
 }
 
+export function shouldOcrPdfPage(metrics) {
+  const m = metrics && typeof metrics === 'object' ? metrics : {};
+  const lineCount = Math.max(0, Number(m.lineCount) || 0);
+  const candidateCount = Math.max(0, Number(m.candidateCount) || 0);
+  const numericLineCount = Math.max(0, Number(m.numericLineCount) || 0);
+  const hasNumericText = Boolean(m.hasNumericText);
+
+  // OCR a page with no useful text layer, or where numeric/product-like rows
+  // significantly outnumber rows the deterministic table parser can recover.
+  // A page with only a few genuine order lines is not flagged solely for being short.
+  if (lineCount < 3 || !hasNumericText || candidateCount === 0) return true;
+  return numericLineCount >= 8 && (candidateCount / numericLineCount) < 0.35;
+}
+
 export async function extractTextFromPdf(file, onProgress) {
   if (onProgress) onProgress('Membaca PDF...');
   const lib = await loadPdfjs();
@@ -55,42 +69,89 @@ export async function extractTextFromPdf(file, onProgress) {
   try {
     const buf = await file.arrayBuffer();
     const pdf = await lib.getDocument({ data: buf }).promise;
-    let fullText = '';
-    const allLines = [];
+    const pageRecords = [];
+
     for (let p = 1; p <= pdf.numPages; p++) {
-      if (onProgress) onProgress(`Halaman ${p}/${pdf.numPages}`);
+      if (onProgress) onProgress('Halaman ' + p + '/' + pdf.numPages);
       const page = await pdf.getPage(p);
       const content = await page.getTextContent();
       const lines = itemsToLines(content.items);
-      allLines.push(...lines);
-      fullText += lines.join('\n') + '\n';
+      const text = lines.join('\n').trim();
+      pageRecords.push({
+        pageNo: p,
+        text,
+        lines,
+        lineCount: lines.length,
+        candidateCount: parsePdfLinesToItems(text).length,
+        numericLineCount: lines.filter((line) => /\d/.test(line) && /[A-Za-zÀ-ÿ]/.test(line)).length,
+        hasNumericText: /\d/.test(text),
+      });
     }
-    // PDF scan/hasil export tertentu dapat mengandung text layer parsial:
-    // beberapa baris terbaca tetapi sebagian besar tabel hilang. Jangan
-    // menganggap >=3 baris sebagai tanda bahwa ekstraksi sudah lengkap.
-    const textCandidateCount = parsePdfLinesToItems(fullText).length;
-    const suspicious = allLines.length < 3 || !/\d/.test(fullText) || textCandidateCount < 15;
-    if (suspicious) {
-      const ocr = await extractPdfPagesWithOcr(pdf, onProgress);
-      if (ocr.text.trim()) {
-        const ocrCandidateCount = parsePdfLinesToItems(ocr.text).length;
-        if (ocrCandidateCount > textCandidateCount) {
-          return { ok: true, text: ocr.text, lines: ocr.lines, pageCount: pdf.numPages, method: 'ocr' };
+
+    const textCandidateCount = pageRecords.reduce((sum, page) => sum + page.candidateCount, 0);
+    const fullText = pageRecords.map((page) => page.text).filter(Boolean).join('\n');
+    const allLines = pageRecords.flatMap((page) => page.lines);
+    const suspiciousDocument =
+      allLines.length < 3 || !/\d/.test(fullText) || textCandidateCount < 15;
+    // A document that looks healthy in aggregate can still have a partially
+    // extracted page. OCR all pages for a clearly weak document, or just weak
+    // pages when another page already supplies enough rows.
+    const pagesToOcr = suspiciousDocument
+      ? pageRecords.map((page) => page.pageNo)
+      : pageRecords
+          .filter((page) => shouldOcrPdfPage(page))
+          .map((page) => page.pageNo);
+
+    if (pagesToOcr.length) {
+      const ocr = await extractPdfPagesWithOcr(pdf, onProgress, pagesToOcr);
+      if (Array.isArray(ocr.pages) && ocr.pages.length) {
+        const ocrByPage = new Map(ocr.pages.map((page) => [page.pageNo, page]));
+        let usedOcr = false;
+        const selected = pageRecords.map((page) => {
+          const ocrPage = ocrByPage.get(page.pageNo);
+          if (!ocrPage || !String(ocrPage.text || '').trim()) return page;
+          const originalCount = parsePdfLinesToItems(page.text).length;
+          const ocrCount = parsePdfLinesToItems(ocrPage.text).length;
+          // Keep the text layer unless OCR demonstrably recovers more product rows.
+          if (ocrCount > originalCount) {
+            usedOcr = true;
+            return { ...page, text: ocrPage.text, lines: ocrPage.lines };
+          }
+          return page;
+        });
+        if (usedOcr) {
+          return {
+            ok: true,
+            text: selected.map((page) => page.text).filter(Boolean).join('\n'),
+            lines: selected.flatMap((page) => page.lines),
+            pageCount: pdf.numPages,
+            method: 'ocr',
+          };
         }
       }
     }
+
     return { ok: true, text: fullText, lines: allLines, pageCount: pdf.numPages, method: 'text' };
   } catch (err) {
     return { ok: false, error: err.message || 'Gagal baca PDF' };
   }
 }
 
-async function extractPdfPagesWithOcr(pdf, onProgress) {
+async function extractPdfPagesWithOcr(pdf, onProgress, pageNumbers) {
+  let Tesseract;
   try {
-    const Tesseract = (await import('tesseract.js')).default;
-    const pages = [];
-    for (let pageNo = 1; pageNo <= pdf.numPages; pageNo++) {
-      if (onProgress) onProgress(`OCR PDF halaman ${pageNo}/${pdf.numPages}...`);
+    Tesseract = (await import('tesseract.js')).default;
+  } catch {
+    return { text: '', lines: [], pages: [] };
+  }
+  const requested = Array.isArray(pageNumbers) && pageNumbers.length
+    ? [...new Set(pageNumbers.map(Number).filter((n) => n >= 1 && n <= pdf.numPages))]
+    : Array.from({ length: pdf.numPages }, (_, i) => i + 1);
+  const pages = [];
+
+  for (const pageNo of requested) {
+    try {
+      if (onProgress) onProgress('OCR PDF halaman ' + pageNo + '/' + pdf.numPages + '...');
       const page = await pdf.getPage(pageNo);
       const viewport = page.getViewport({ scale: 2 });
       const canvas = document.createElement('canvas');
@@ -105,19 +166,28 @@ async function extractPdfPagesWithOcr(pdf, onProgress) {
       const ocrPromise = Tesseract.recognize(canvas, 'ind+eng', {
         logger: (m) => {
           if (m.status === 'recognizing text' && onProgress) {
-            onProgress(`OCR PDF ${pageNo}/${pdf.numPages} ${Math.round((m.progress || 0) * 100)}%`);
+            onProgress('OCR PDF ' + pageNo + '/' + pdf.numPages + ' ' + Math.round((m.progress || 0) * 100) + '%');
           }
         },
       });
-      const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('OCR halaman timeout')), 25000));
+      const timeout = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('OCR halaman timeout')), 25000)
+      );
       const result = await Promise.race([ocrPromise, timeout]);
-      pages.push(cleanOcrText(result?.data?.text || ''));
+      const text = cleanOcrText(result?.data?.text || '');
+      const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+      pages.push({ pageNo, text, lines });
+    } catch (err) {
+      // One page's OCR failure must not prevent recovery on other pages.
+      if (onProgress) onProgress('OCR halaman ' + pageNo + ' gagal; mempertahankan hasil teks yang tersedia.');
     }
-    const text = pages.filter(Boolean).join('\n');
-    return { text, lines: text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean) };
-  } catch {
-    return { text: '', lines: [] };
   }
+
+  return {
+    text: pages.map((page) => page.text).filter(Boolean).join('\n'),
+    lines: pages.flatMap((page) => page.lines),
+    pages,
+  };
 }
 
 /**
