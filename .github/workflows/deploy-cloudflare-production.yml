@@ -1,0 +1,50 @@
+name: Deploy GudangAI RUDY PWA to Cloudflare Workers
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cloudflare-production
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    name: Build and deploy production Worker
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout latest main commit
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Build production PWA
+        run: npm run build
+        env:
+          CLOUDFLARE_WORKERS: "true"
+
+      - name: Deploy to production Cloudflare Worker
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy --config wrangler.jsonc
+
+      - name: Report deployed commit
+        run: |
+          echo "Cloudflare production deployment requested for commit ${GITHUB_SHA}"
+          echo "Worker: gudangai-rudy-pwa69"
+          echo "URL: https://gudangai-rudy-pwa69.rudivirawan69.workers.dev/"
