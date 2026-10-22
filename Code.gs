@@ -1080,7 +1080,19 @@ function bulkTransaction(body) {
     if (!tx.nonce) tx.nonce = tx.transactionId;
     var check = validateTransactionRequest_(tx, { requireDate: !!tx._syncMode || !!body._syncMode, requireEntity: true });
     if (!check.valid) {
-      validationErrors.push({ index: i + 1, error: check.error });
+      validationErrors.push({
+        batchId: batchId,
+        batchIndex: i + 1,
+        index: i + 1,
+        clientItemId: tx.clientItemId || tx.requestId || "",
+        requestId: tx.requestId || "",
+        transactionId: tx.transactionId,
+        nonce: tx.nonce,
+        success: false,
+        status: "REJECTED",
+        code: check.code || "PRECHECK_REJECTED",
+        error: check.error,
+      });
       continue;
     }
     var normalizedKode = String(check.kode || tx.kodeBarang || tx.kode || "").trim();
@@ -1093,11 +1105,9 @@ function bulkTransaction(body) {
     tx.kodeBarang = normalizedKode;
     prepared.push(tx);
   }
-  if (validationErrors.length > 0) {
-    var rejected = { success: false, status: "PRECHECK_REJECTED", batchId: batchId, total: list.length, validationErrors: validationErrors, results: [] };
-    batchCache.put("batchResult_" + batchId, JSON.stringify(rejected), DUP_CACHE_TTL_SEC);
-    return rejected;
-  }
+  // Item valid tetap diproses walaupun sebagian item gagal preflight.
+  // Ini mencegah 1 item invalid menggagalkan seluruh bulkTransaction.
+  var preflightResults = validationErrors.slice();
 
   // Load stok 1x (untuk shortage HOLD pada keluar)
   var stockMap = {};
@@ -1122,9 +1132,9 @@ function bulkTransaction(body) {
     return { success: false, status: "UNKNOWN", code: "LOCK_TIMEOUT", batchId: batchId, writeOccurred: "unknown", error: "Lock backend tidak tersedia; lakukan read-back sebelum retry." };
   }
 
-  var results = [];
+  var results = preflightResults.slice();
   var successCount = 0;
-  var failCount = 0;
+  var failCount = preflightResults.length;
   var writeTouched = false;
   var rowsToWrite = [];
 
@@ -1286,16 +1296,17 @@ function bulkTransaction(body) {
             var rec2 = findIdempotencyRecord_(rw.txId, rw.nonce);
             if (rec2) updateIdempotencyRecord_(rec2, { status: "UNKNOWN", dataRow: rowNum, writeOccurred: "unknown", errorCode: "VERIFY_FAILED" });
           } catch (u2) {}
-          results.push({
-            success: false, status: "UNKNOWN", code: "VERIFY_FAILED",
-            batchId: batchId, batchIndex: rw.index + 1,
-            transactionId: rw.txId, nonce: rw.nonce,
-            requestId: rw.requestId || "",
-            clientItemId: rw.clientItemId || rw.requestId || "",
-            kode: rw.kode,
-            writeOccurred: "unknown", error: "Verifikasi integritas gagal di baris " + rowNum
-          });
-          break;
+            results.push({
+              success: false, status: "UNKNOWN", code: "VERIFY_FAILED",
+              batchId: batchId, batchIndex: rw.index + 1,
+              transactionId: rw.txId, nonce: rw.nonce,
+              requestId: rw.requestId || "",
+              clientItemId: rw.clientItemId || rw.requestId || "",
+              kode: rw.kode,
+              writeOccurred: "unknown", error: "Verifikasi integritas gagal di baris " + rowNum
+            });
+            // Lanjutkan verifikasi item berikutnya; item valid lain tetap tercatat.
+            continue;
         }
       }
     }
