@@ -1068,7 +1068,7 @@ function bulkTransaction(body) {
   // Preflight — validasi semua dulu tanpa write
   var prepared = [];
   var validationErrors = [];
-  var seenKeys = {};
+  var seenIdentities = {};
   for (var i = 0; i < list.length; i++) {
     var original = list[i] || {};
     var tx = Object.assign({}, original);
@@ -1084,12 +1084,12 @@ function bulkTransaction(body) {
       continue;
     }
     var normalizedKode = String(check.kode || tx.kodeBarang || tx.kode || "").trim();
-    var duplicateKey = String(tx.sheet) + "|" + normalizedKode + "|" + String(tx.qty);
-    if (seenKeys[duplicateKey]) {
-      validationErrors.push({ index: i + 1, error: "Duplikat item dalam batch: " + normalizedKode + " qty " + tx.qty });
+    var identityKey = String(tx.transactionId) + "|" + String(tx.nonce);
+    if (seenIdentities[identityKey]) {
+      validationErrors.push({ index: i + 1, error: "Duplikat identity dalam batch: " + tx.transactionId });
       continue;
     }
-    seenKeys[duplicateKey] = true;
+    seenIdentities[identityKey] = true;
     tx.kodeBarang = normalizedKode;
     prepared.push(tx);
   }
