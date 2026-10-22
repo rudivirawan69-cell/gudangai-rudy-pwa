@@ -529,7 +529,7 @@ export default function InputPage() {
         if (!items.length) { setStatusBanner('Isi minimal 1 jumlah barang sebelum dikirim.'); return; }
       const fn = txType === 'masuk' ? submitBarangMasuk : txType === 'rusak' ? submitBarangRusak : submitBarangKeluar;
       const res = await fn({ entity, tanggal, items });
-      if (res?.success !== false) {
+      if (res && (res.success !== false || Number(res.count || 0) > 0 || Number(res.queuedCount || 0) > 0 || (res.results || []).length > 0)) {
         const okCount = Number(res.count || 0);
         const queuedCount = Number(res.queuedCount || 0);
         const failCount = Number(res.failed || 0);
@@ -582,7 +582,13 @@ export default function InputPage() {
           setStatusBanner('Belum terkonfirmasi — item tetap diamankan di antrian');
         }
 
-        setCart([]); setAccuracy(null); setPdfReview([]); setReviewSourceLabel('PDF');
+        const confirmedIds = new Set(confirmedItems.map((item) => item.clientItemId));
+        const queuedIds = new Set((res.results || []).filter((r) => r?.queued && r.clientItemId).map((r) => r.clientItemId));
+        const pendingItems = cart.filter((item) => !confirmedIds.has(item.clientItemId) || queuedIds.has(item.clientItemId));
+        setCart(pendingItems);
+        if (!pendingItems.length) {
+          setAccuracy(null); setPdfReview([]); setReviewSourceLabel('PDF');
+        }
         window.dispatchEvent(new Event('gudangai-stock-refresh'));
       } else {
         pushNotification({ type: 'error', title: 'Transaksi belum dikirim', body: res?.error || 'Tidak ada data yang dinyatakan berhasil.' });
