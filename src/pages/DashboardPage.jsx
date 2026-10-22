@@ -1232,16 +1232,6 @@ export default function DashboardPage({ onNavigate }) {
             <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-cyan-700">{greeting} · GUDANG PUSAT</p>
             <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 truncate mt-1 leading-tight">Dashboard Operasional</h1>
             <p className="text-[13px] text-slate-600 mt-1 leading-snug">{reminder} <span className="text-slate-400">· {name}</span></p>
-            <div className="mt-2.5 grid gap-1.5 text-[10px] font-medium text-slate-600">
-              <div className="flex min-w-0 items-center gap-1.5">
-                <Clock3 className="h-3.5 w-3.5 shrink-0 text-cyan-700" aria-hidden="true" />
-                <span><span className="font-bold text-slate-700">Update spreadsheet:</span> {formatSpreadsheetTimestamp(spreadsheetTimestamp)}</span>
-              </div>
-              <div className="flex min-w-0 items-center gap-1.5">
-                <Mail className="h-3.5 w-3.5 shrink-0 text-cyan-700" aria-hidden="true" />
-                <a className="truncate hover:underline" href="mailto:rudivirawan69@gmail.com">rudivirawan69@gmail.com</a>
-              </div>
-            </div>
           </div>
           <button
             type="button"
