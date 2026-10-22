@@ -1,0 +1,36 @@
+name: Deploy GudangAI UI Evaluation to Cloudflare
+
+on:
+  push:
+    branches:
+      - ui/compact-dashboard-dual-domain-20261022
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gudangai-audit-ui-cloudflare
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout isolated UI branch
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Build production assets
+        run: npm run build
+      - name: Deploy isolated evaluation Worker
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy --config wrangler.jsonc
