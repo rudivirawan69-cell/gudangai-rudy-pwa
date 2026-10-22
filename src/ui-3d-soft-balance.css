@@ -1,0 +1,312 @@
+/* =========================================================
+   UI Soft Balance — kontras halus, natural, proporsional
+   Semua mode: Soft / Ocean / Glass
+   Halaman: Atur (theme picker), Input (kartu aksi), Nav, Kartu umum
+   ========================================================= */
+
+/* ---- Bayangan global lebih halus (proporsi kartu mobile) ---- */
+html[data-theme] .card,
+html[data-theme] .surface,
+html[data-theme] .section-card,
+html[data-theme] .stat-tile,
+html[data-theme] .stock-card {
+  box-shadow: 5px 6px 14px color-mix(in srgb, var(--bg-app) 55%, #000 8%),
+              -4px -4px 12px color-mix(in srgb, var(--bg-elevated) 80%, #fff 12%) !important;
+  border: 1px solid var(--border) !important;
+  transition: box-shadow .22s ease, transform .16s ease !important;
+}
+html[data-theme] .card:active,
+html[data-theme] button.card:active {
+  box-shadow: inset 3px 3px 8px color-mix(in srgb, var(--bg-app) 50%, #000 10%),
+              inset -2px -2px 6px color-mix(in srgb, var(--bg-elevated) 70%, #fff 15%) !important;
+  transform: scale(0.985);
+}
+
+html[data-theme="soft_light"] .card,
+html[data-theme="soft_light"] .surface,
+html[data-theme="soft_light"] .section-card {
+  box-shadow: 5px 6px 14px #cfc7ba88, -4px -4px 12px #ffffffcc !important;
+}
+html[data-theme="deep_ocean"] .card,
+html[data-theme="deep_ocean"] .surface,
+html[data-theme="deep_ocean"] .section-card {
+  box-shadow: 5px 6px 16px #02080fcc, -3px -3px 10px #1a355566 !important;
+}
+html[data-theme="warm_productive"] .card,
+html[data-theme="warm_productive"] .surface,
+html[data-theme="warm_productive"] .section-card {
+  box-shadow: 5px 6px 14px #a8bddc77, -4px -4px 12px #ffffffcc !important;
+}
+
+/* ---- Theme picker Atur ---- */
+html[data-theme] .theme-picker-btn,
+html[data-theme] button.theme-picker-btn {
+  background: var(--bg-elevated) !important;
+  border: 1px solid var(--border) !important;
+  box-shadow: 4px 5px 12px color-mix(in srgb, var(--bg-app) 50%, #000 6%),
+              -3px -3px 10px color-mix(in srgb, var(--bg-elevated) 85%, #fff 10%) !important;
+  color: var(--text-main) !important;
+  -webkit-text-fill-color: var(--text-main) !important;
+  --tw-ring-shadow: 0 0 #0000 !important;
+  transition: box-shadow .2s ease, transform .15s ease, background .2s ease, border-color .2s ease !important;
+}
+html[data-theme] .theme-picker-btn:not(.is-active),
+html[data-theme] button.theme-picker-btn:not(.is-active):not([aria-pressed="true"]) {
+  color: var(--text-muted) !important;
+  -webkit-text-fill-color: var(--text-muted) !important;
+  background: color-mix(in srgb, var(--bg-elevated) 92%, var(--bg-muted) 8%) !important;
+}
+html[data-theme] .theme-picker-btn.is-active,
+html[data-theme] button.theme-picker-btn.is-active,
+html[data-theme] button.theme-picker-btn[aria-pressed="true"] {
+  background: color-mix(in srgb, var(--bg-elevated) 78%, var(--accent) 22%) !important;
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent) !important;
+  box-shadow: 5px 6px 14px color-mix(in srgb, var(--bg-app) 45%, #000 8%),
+              -3px -3px 10px color-mix(in srgb, var(--bg-elevated) 80%, #fff 12%),
+              0 0 0 1.5px color-mix(in srgb, var(--accent) 35%, transparent) !important;
+  color: var(--text-main) !important;
+  -webkit-text-fill-color: var(--text-main) !important;
+  transform: translateY(-0.5px);
+}
+html[data-theme] .theme-picker-btn svg,
+html[data-theme] button.theme-picker-btn svg {
+  color: inherit !important;
+  stroke: currentColor !important;
+  opacity: 0.92 !important;
+}
+html[data-theme] .theme-picker-btn.is-active svg,
+html[data-theme] button.theme-picker-btn[aria-pressed="true"] svg {
+  color: var(--accent-strong) !important;
+  stroke: var(--accent-strong) !important;
+  opacity: 1 !important;
+}
+html[data-theme] .theme-picker-btn:active {
+  transform: scale(0.97);
+  box-shadow: inset 3px 3px 8px color-mix(in srgb, var(--bg-app) 40%, #000 8%) !important;
+}
+
+html[data-theme="warm_productive"] .theme-picker-btn,
+html[data-theme="warm_productive"] button.theme-picker-btn {
+  background: #eef2f9 !important;
+  border-color: rgba(59, 130, 246, 0.14) !important;
+  color: #3a4f6a !important;
+  -webkit-text-fill-color: #3a4f6a !important;
+  box-shadow: 4px 5px 12px #b4c5dc88, -3px -3px 10px #ffffffcc !important;
+}
+html[data-theme="warm_productive"] .theme-picker-btn:not(.is-active):not([aria-pressed="true"]) {
+  background: #e8eef7 !important;
+  color: #5a6f88 !important;
+  -webkit-text-fill-color: #5a6f88 !important;
+}
+html[data-theme="warm_productive"] .theme-picker-btn.is-active,
+html[data-theme="warm_productive"] button.theme-picker-btn.bg-blue-50,
+html[data-theme="warm_productive"] button.theme-picker-btn[aria-pressed="true"] {
+  background: linear-gradient(145deg, #e3ecf9 0%, #d6e4f6 100%) !important;
+  border-color: rgba(59, 130, 246, 0.4) !important;
+  color: #1e3a5c !important;
+  -webkit-text-fill-color: #1e3a5c !important;
+  box-shadow: 5px 6px 14px #a8bddc77, -3px -3px 10px #ffffffcc,
+              0 0 0 1.5px rgba(59, 130, 246, 0.28) !important;
+}
+html[data-theme="warm_productive"] .theme-picker-btn.is-active svg,
+html[data-theme="warm_productive"] button.theme-picker-btn.bg-blue-50 svg {
+  color: #2563eb !important;
+  stroke: #2563eb !important;
+}
+
+html[data-theme="soft_light"] .theme-picker-btn.is-active,
+html[data-theme="soft_light"] button.theme-picker-btn[aria-pressed="true"] {
+  background: linear-gradient(145deg, #fff8ed 0%, #ffefd8 100%) !important;
+  border-color: rgba(245, 158, 11, 0.4) !important;
+  color: #7a4a08 !important;
+  -webkit-text-fill-color: #7a4a08 !important;
+  box-shadow: 5px 6px 14px #c5bdb088, -3px -3px 10px #ffffffcc,
+              0 0 0 1.5px rgba(245, 158, 11, 0.25) !important;
+}
+
+html[data-theme="deep_ocean"] .theme-picker-btn,
+html[data-theme="deep_ocean"] button.theme-picker-btn {
+  background: #0e1e33 !important;
+  border-color: rgba(148, 163, 184, 0.22) !important;
+  color: #c5d4e8 !important;
+  -webkit-text-fill-color: #c5d4e8 !important;
+  box-shadow: 4px 5px 12px #02080fcc, -2px -2px 8px #1a355555 !important;
+}
+html[data-theme="deep_ocean"] .theme-picker-btn.is-active,
+html[data-theme="deep_ocean"] button.theme-picker-btn[aria-pressed="true"] {
+  background: rgba(56, 189, 248, 0.18) !important;
+  border-color: rgba(56, 189, 248, 0.45) !important;
+  color: #f0f9ff !important;
+  -webkit-text-fill-color: #f0f9ff !important;
+  box-shadow: 5px 6px 14px #02080fcc, -2px -2px 8px #1a355566,
+              0 0 0 1.5px rgba(56, 189, 248, 0.3) !important;
+}
+
+html[data-theme] button.theme-picker-btn .text-blue-700,
+html[data-theme] button.theme-picker-btn .text-blue-800,
+html[data-theme] button.theme-picker-btn .text-slate-500,
+html[data-theme] button.theme-picker-btn .text-slate-600 {
+  color: inherit !important;
+  -webkit-text-fill-color: inherit !important;
+}
+
+/* ---- Settings menu icons ---- */
+html[data-theme] .settings-menu-icon {
+  box-shadow: 3px 4px 10px color-mix(in srgb, var(--bg-app) 45%, #000 6%),
+              -2px -2px 8px color-mix(in srgb, var(--bg-elevated) 85%, #fff 10%) !important;
+  border: 1px solid var(--border) !important;
+  transition: box-shadow .18s ease, transform .12s ease !important;
+}
+html[data-theme] .menu-row:active .settings-menu-icon {
+  box-shadow: inset 2px 2px 6px color-mix(in srgb, var(--bg-app) 40%, #000 8%) !important;
+  transform: scale(0.96);
+}
+html[data-theme="soft_light"] .settings-menu-icon {
+  background: #f3efe8 !important;
+  box-shadow: 3px 4px 10px #c5bdb088, -2px -2px 8px #ffffffcc !important;
+}
+html[data-theme="deep_ocean"] .settings-menu-icon {
+  background: rgba(56, 189, 248, 0.14) !important;
+  box-shadow: 3px 4px 10px #02080fcc, -2px -2px 8px #1a355555 !important;
+  border-color: rgba(56, 189, 248, 0.2) !important;
+}
+html[data-theme="warm_productive"] .settings-menu-icon {
+  background: #eaf0f9 !important;
+  box-shadow: 3px 4px 10px #b0c4e088, -2px -2px 8px #ffffffcc !important;
+  border-color: rgba(59, 130, 246, 0.14) !important;
+}
+
+/* ---- Nav icons ---- */
+html[data-theme] .nav-icon-wrap {
+  border-radius: 0.8rem !important;
+  box-shadow: 3px 4px 9px color-mix(in srgb, var(--bg-app) 50%, #000 5%),
+              -2px -2px 7px color-mix(in srgb, var(--bg-elevated) 85%, #fff 10%) !important;
+  background: var(--bg-elevated) !important;
+  transition: box-shadow .2s ease, transform .15s ease, background .2s ease !important;
+}
+html[data-theme] .nav-btn.is-active .nav-icon-wrap {
+  background: var(--accent-soft) !important;
+  box-shadow: 4px 5px 12px color-mix(in srgb, var(--bg-app) 45%, #000 6%),
+              -2px -2px 8px color-mix(in srgb, var(--bg-elevated) 80%, #fff 12%) !important;
+  transform: translateY(-1.5px) scale(1.04);
+}
+html[data-theme] .nav-btn:active .nav-icon-wrap {
+  transform: scale(0.94);
+  box-shadow: inset 2px 2px 6px color-mix(in srgb, var(--bg-app) 40%, #000 8%) !important;
+}
+html[data-theme="soft_light"] .nav-icon-wrap {
+  background: #faf8f4 !important;
+  box-shadow: 3px 4px 9px #c5bdb088, -2px -2px 7px #ffffffcc !important;
+}
+html[data-theme="deep_ocean"] .nav-icon-wrap {
+  background: #12263d !important;
+  box-shadow: 3px 4px 10px #02080fcc, -2px -2px 7px #1a355555 !important;
+}
+html[data-theme="deep_ocean"] .nav-btn.is-active .nav-icon-wrap {
+  background: rgba(56, 189, 248, 0.16) !important;
+}
+html[data-theme="warm_productive"] .nav-icon-wrap {
+  background: #f2f6fc !important;
+  box-shadow: 3px 4px 9px #b0c4e088, -2px -2px 7px #ffffffcc !important;
+}
+html[data-theme="warm_productive"] .nav-btn.is-active .nav-icon-wrap {
+  background: rgba(59, 130, 246, 0.12) !important;
+}
+
+/* ---- Input cards ---- */
+html[data-theme] .grid.grid-cols-3 > button.rounded-2xl {
+  background: var(--bg-elevated) !important;
+  border: 1px solid var(--border) !important;
+  box-shadow: 4px 5px 12px color-mix(in srgb, var(--bg-app) 45%, #000 6%),
+              -3px -3px 10px color-mix(in srgb, var(--bg-elevated) 85%, #fff 10%) !important;
+  color: var(--text-main) !important;
+  transition: box-shadow .2s ease, transform .14s ease, background .2s ease, border-color .2s ease !important;
+}
+html[data-theme] .grid.grid-cols-3 > button.rounded-2xl:active {
+  box-shadow: inset 3px 3px 8px color-mix(in srgb, var(--bg-app) 40%, #000 8%) !important;
+  transform: scale(0.97);
+}
+html[data-theme] .grid.grid-cols-3 > button.rounded-2xl[class*="bg-emerald"],
+html[data-theme] .grid.grid-cols-3 > button.rounded-2xl[class*="bg-amber"],
+html[data-theme] .grid.grid-cols-3 > button.rounded-2xl[class*="bg-rose"],
+html[data-theme] .grid.grid-cols-3 > button.rounded-2xl[class*="bg-cyan"],
+html[data-theme] .grid.grid-cols-3 > button.rounded-2xl[class*="bg-blue"] {
+  box-shadow: 4px 6px 14px color-mix(in srgb, currentColor 22%, transparent),
+              -2px -2px 8px rgba(255,255,255,0.25) !important;
+  border-color: transparent !important;
+}
+html[data-theme] .grid.grid-cols-5 > button.rounded-2xl {
+  background: var(--bg-elevated) !important;
+  border: 1px solid var(--border) !important;
+  box-shadow: 3px 4px 10px color-mix(in srgb, var(--bg-app) 45%, #000 5%),
+              -2px -2px 8px color-mix(in srgb, var(--bg-elevated) 85%, #fff 10%) !important;
+  color: var(--text-main) !important;
+  transition: box-shadow .18s ease, transform .12s ease !important;
+}
+html[data-theme] .grid.grid-cols-5 > button.rounded-2xl:active {
+  box-shadow: inset 2px 2px 6px color-mix(in srgb, var(--bg-app) 40%, #000 8%) !important;
+  transform: scale(0.96);
+}
+
+html[data-theme="warm_productive"] .grid.grid-cols-3 > button.rounded-2xl:not([class*="bg-emerald"]):not([class*="bg-amber"]):not([class*="bg-rose"]):not([class*="bg-cyan"]):not([class*="bg-blue"]) {
+  background: #eef2f9 !important;
+  border-color: rgba(59, 130, 246, 0.12) !important;
+  box-shadow: 4px 5px 12px #b0c4e088, -3px -3px 10px #ffffffcc !important;
+  color: #2d3f5c !important;
+}
+html[data-theme="warm_productive"] .grid.grid-cols-5 > button.rounded-2xl {
+  background: #eef2f9 !important;
+  border-color: rgba(59, 130, 246, 0.12) !important;
+  box-shadow: 3px 4px 10px #b0c4e088, -2px -2px 8px #ffffffcc !important;
+  color: #2d3f5c !important;
+}
+html[data-theme="warm_productive"] .grid.grid-cols-3 > button.rounded-2xl:active,
+html[data-theme="warm_productive"] .grid.grid-cols-5 > button.rounded-2xl:active {
+  box-shadow: inset 3px 3px 8px #b0c4e099, inset -2px -2px 6px #ffffffaa !important;
+}
+
+html[data-theme="soft_light"] .grid.grid-cols-3 > button.rounded-2xl:not([class*="bg-emerald"]):not([class*="bg-amber"]):not([class*="bg-rose"]) {
+  background: #faf8f4 !important;
+  box-shadow: 4px 5px 12px #c5bdb088, -3px -3px 10px #ffffffcc !important;
+}
+html[data-theme="soft_light"] .grid.grid-cols-5 > button.rounded-2xl {
+  background: #faf8f4 !important;
+  box-shadow: 3px 4px 10px #c5bdb088, -2px -2px 8px #ffffffcc !important;
+}
+
+html[data-theme="deep_ocean"] .grid.grid-cols-3 > button.rounded-2xl:not([class*="bg-emerald"]):not([class*="bg-amber"]):not([class*="bg-rose"]) {
+  background: #12263d !important;
+  border-color: rgba(148, 163, 184, 0.18) !important;
+  box-shadow: 4px 5px 12px #02080fcc, -2px -2px 8px #1a355555 !important;
+  color: #e2e8f0 !important;
+}
+html[data-theme="deep_ocean"] .grid.grid-cols-5 > button.rounded-2xl {
+  background: #12263d !important;
+  border-color: rgba(148, 163, 184, 0.18) !important;
+  box-shadow: 3px 4px 10px #02080fcc, -2px -2px 8px #1a355555 !important;
+  color: #e2e8f0 !important;
+}
+
+/* Profile header Settings */
+html[data-theme] .page-content > .space-y-3 > .flex.items-center.gap-3.rounded-2xl.bg-white\/95 {
+  background: var(--bg-elevated) !important;
+  border: 1px solid var(--border) !important;
+  box-shadow: 4px 5px 12px color-mix(in srgb, var(--bg-app) 45%, #000 6%),
+              -3px -3px 10px color-mix(in srgb, var(--bg-elevated) 85%, #fff 10%) !important;
+}
+html[data-theme="warm_productive"] .page-content > .space-y-3 > .flex.items-center.gap-3.rounded-2xl.bg-white\/95 {
+  background: #f5f8fc !important;
+  box-shadow: 4px 5px 12px #a8bddc77, -3px -3px 10px #ffffffcc !important;
+}
+html[data-theme="warm_productive"] .page-content .text-slate-900 {
+  color: #0f2747 !important;
+  -webkit-text-fill-color: #0f2747 !important;
+}
+html[data-theme="deep_ocean"] .page-content > .space-y-3 > .flex.items-center.gap-3.rounded-2xl.bg-white\/95 {
+  background: #12263d !important;
+  box-shadow: 4px 5px 12px #02080fcc, -2px -2px 8px #1a355555 !important;
+}
+html[data-theme="deep_ocean"] .page-content .text-slate-900 {
+  color: #f8fafc !important;
+  -webkit-text-fill-color: #f8fafc !important;
+}
