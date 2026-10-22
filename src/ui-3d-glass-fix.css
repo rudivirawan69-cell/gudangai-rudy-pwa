@@ -156,3 +156,84 @@ html[data-theme] button.card:active {
   box-shadow: var(--shadow-press) !important;
   transform: scale(0.99);
 }
+
+/* =========================================================
+   Force theme-picker contrast — override Tailwind utilities
+   ========================================================= */
+html[data-theme] button.theme-picker-btn.bg-blue-50,
+html[data-theme] button.theme-picker-btn.border-blue-600,
+html[data-theme] button.theme-picker-btn {
+  background: var(--bg-elevated) !important;
+  border: 1px solid var(--border) !important;
+  box-shadow: var(--shadow-1) !important;
+  color: var(--text-main) !important;
+  -webkit-text-fill-color: var(--text-main) !important;
+  --tw-ring-shadow: 0 0 #0000 !important;
+}
+html[data-theme] button.theme-picker-btn.is-active,
+html[data-theme] button.theme-picker-btn.bg-blue-50.is-active,
+html[data-theme] button.theme-picker-btn[aria-pressed="true"] {
+  background: color-mix(in srgb, var(--bg-elevated) 70%, var(--accent) 30%) !important;
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent) !important;
+  box-shadow: var(--shadow-2), 0 0 0 2px var(--accent-soft) !important;
+  color: var(--text-main) !important;
+  -webkit-text-fill-color: var(--text-main) !important;
+}
+html[data-theme] button.theme-picker-btn .text-blue-700,
+html[data-theme] button.theme-picker-btn .text-blue-800,
+html[data-theme] button.theme-picker-btn .text-slate-500,
+html[data-theme] button.theme-picker-btn .text-slate-600 {
+  color: inherit !important;
+  -webkit-text-fill-color: inherit !important;
+}
+html[data-theme="warm_productive"] button.theme-picker-btn,
+html[data-theme="warm_productive"] button.theme-picker-btn.border-slate-200 {
+  background: #eef3fc !important;
+  border-color: rgba(59, 130, 246, 0.22) !important;
+  box-shadow: 8px 8px 18px #b8c9e4, -6px -6px 14px #ffffff !important;
+  color: #3b4f6e !important;
+  -webkit-text-fill-color: #3b4f6e !important;
+}
+html[data-theme="warm_productive"] button.theme-picker-btn.is-active,
+html[data-theme="warm_productive"] button.theme-picker-btn.bg-blue-50,
+html[data-theme="warm_productive"] button.theme-picker-btn[aria-pressed="true"] {
+  background: linear-gradient(145deg, #dbe8ff 0%, #c9dbff 100%) !important;
+  border-color: #3b82f6 !important;
+  box-shadow: 10px 10px 22px #a3b8d8, -7px -7px 16px #ffffff, 0 0 0 2px rgba(59,130,246,.28) !important;
+  color: #1e3a6e !important;
+  -webkit-text-fill-color: #1e3a6e !important;
+}
+html[data-theme="warm_productive"] button.theme-picker-btn.is-active svg,
+html[data-theme="warm_productive"] button.theme-picker-btn.bg-blue-50 svg {
+  color: #2563eb !important;
+  stroke: #2563eb !important;
+}
+html[data-theme="warm_productive"] button.theme-picker-btn:not(.is-active):not([aria-pressed="true"]) {
+  background: #e4ecf8 !important;
+  color: #5a6f8f !important;
+  -webkit-text-fill-color: #5a6f8f !important;
+}
+
+/* Profile header on Settings — force card elevation in Glass */
+html[data-theme] .page-content > .space-y-3 > .flex.items-center.gap-3.rounded-2xl.bg-white\/95 {
+  background: var(--bg-elevated) !important;
+  border: 1px solid var(--border) !important;
+  box-shadow: var(--shadow-1) !important;
+  color: var(--text-main) !important;
+}
+html[data-theme="warm_productive"] .page-content > .space-y-3 > .flex.items-center.gap-3.rounded-2xl.bg-white\/95 {
+  background: #f7f9ff !important;
+  box-shadow: 10px 12px 24px #a8bddc, -8px -8px 20px #ffffff !important;
+}
+html[data-theme="warm_productive"] .page-content .text-slate-900 {
+  color: #0f2747 !important;
+  -webkit-text-fill-color: #0f2747 !important;
+}
+html[data-theme="deep_ocean"] .page-content > .space-y-3 > .flex.items-center.gap-3.rounded-2xl.bg-white\/95 {
+  background: #12263d !important;
+  box-shadow: 10px 10px 22px #030a12, -6px -6px 16px #1a3555 !important;
+}
+html[data-theme="deep_ocean"] .page-content .text-slate-900 {
+  color: #f8fafc !important;
+  -webkit-text-fill-color: #f8fafc !important;
+}
