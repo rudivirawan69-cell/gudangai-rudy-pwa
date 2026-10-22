@@ -1,1 +1,2 @@
-PLACEHOLDER
+.nav-moving-ball,.nav-moving-ball-mobile,.nav-moving-ball-desktop{display:none!important;visibility:hidden!important;opacity:0!important;pointer-events:none!important;width:0!important;height:0!important}
+/* full content will be replaced - using push_files instead */
