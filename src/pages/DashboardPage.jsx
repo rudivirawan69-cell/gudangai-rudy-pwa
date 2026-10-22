@@ -1015,6 +1015,8 @@ export default function DashboardPage({ onNavigate }) {
     void stockPT.refresh({ force: true });
   }, [stockAll.refresh, stockCV.refresh, stockPT.refresh]);
 
+  const [expandedPanels, setExpandedPanels] = useState({ divisions: false, po: false });
+  const togglePanel = (key) => setExpandedPanels((prev) => ({ ...prev, [key]: !prev[key] }));
   const [poData, setPoData] = useState(null);
   const [poLoading, setPoLoading] = useState(true);
   const [poError, setPoError] = useState('');
@@ -1139,11 +1141,13 @@ export default function DashboardPage({ onNavigate }) {
     };
     const timer = setInterval(refreshSources, 15000); // Dashboard backend polling
     window.addEventListener('online', refreshSources);
+    window.addEventListener('gudangai-dashboard-refresh', refreshSources);
     window.addEventListener('gudangai-po-changed', refreshSources);
     document.addEventListener('visibilitychange', refreshSources);
     return () => {
       clearInterval(timer);
       window.removeEventListener('online', refreshSources);
+      window.removeEventListener('gudangai-dashboard-refresh', refreshSources);
       window.removeEventListener('gudangai-po-changed', refreshSources);
       document.removeEventListener('visibilitychange', refreshSources);
     };
@@ -1263,30 +1267,34 @@ export default function DashboardPage({ onNavigate }) {
         <div className="xl:col-span-2"><DashboardTotals totalItem={dashboardTotalItem} /></div>
       </section>
 
-      <div className="rounded-2xl bg-white border border-slate-200 shadow-sm p-4 sm:p-5">
-        <div className="mb-3">
-        <div className="flex items-center gap-2"><span className="dashboard-icon-badge dashboard-icon-cyan"><Layers3 className="h-4 w-4" aria-hidden="true" /></span><p className="text-sm font-extrabold text-slate-900">Status Stok per Divisi</p></div>
-        <p className="text-[11px] text-slate-500 mt-0.5">Ringkas kondisi item di setiap divisi</p>
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-[9px] font-semibold">
-          <span className="text-emerald-600"><i className="inline-block w-2 h-2 rounded-full bg-emerald-500 mr-1" />Aman</span>
-          <span className="text-amber-600"><i className="inline-block w-2 h-2 rounded-full bg-amber-400 mr-1" />Waspada</span>
-          <span className="text-red-600"><i className="inline-block w-2 h-2 rounded-full bg-red-500 mr-1" />Kritis</span>
-          <span className="text-slate-400">Ring = % kritis</span>
-        </div>
-      </div>
-        <DivisionStatus3D items={allItems} sourceRows={dashboardData?.statusPerDivisi} />
-      </div>
+      <section className="dashboard-expand-card rounded-2xl bg-white border border-slate-200 shadow-sm overflow-hidden">
+        <button type="button" onClick={() => togglePanel('divisions')} aria-expanded={expandedPanels.divisions} className="dashboard-expand-trigger w-full flex items-center gap-3 p-3.5 text-left">
+          <span className="dashboard-icon-badge dashboard-icon-cyan"><Layers3 className="h-4 w-4" aria-hidden="true" /></span>
+          <span className="min-w-0 flex-1"><span className="block text-sm font-extrabold text-slate-900">Status Stok per Divisi</span><span className="block text-[10px] text-slate-500 mt-0.5">Grafik ringkas · ketuk untuk melihat detail</span></span>
+          <span className="dashboard-expand-count text-[10px] font-bold rounded-full px-2 py-1">{allItems.length} SKU</span>
+          <span className="dashboard-expand-chevron text-slate-500" aria-hidden="true">{expandedPanels.divisions ? '−' : '+'}</span>
+        </button>
+        {expandedPanels.divisions && <div className="px-3.5 pb-4 animate-fade-in">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mb-3 text-[9px] font-semibold">
+            <span className="text-emerald-600"><i className="inline-block w-2 h-2 rounded-full bg-emerald-500 mr-1" />Aman</span>
+            <span className="text-amber-600"><i className="inline-block w-2 h-2 rounded-full bg-amber-400 mr-1" />Waspada</span>
+            <span className="text-red-600"><i className="inline-block w-2 h-2 rounded-full bg-red-500 mr-1" />Kritis</span>
+            <span className="text-slate-400">Ring = % kritis</span>
+          </div>
+          <DivisionStatus3D items={allItems} sourceRows={dashboardData?.statusPerDivisi} />
+        </div>}
+      </section>
 
-      <section aria-label="Purchase Order" className="scroll-mt-4">
-      <StatusPOCard
-        data={poData}
-        loading={poLoading}
-        error={poError}
-        onRefresh={loadPO}
-        onConfirm={handleConfirm}
-        confirmingId={confirmingId}
-        onNavigate={onNavigate}
-      />
+      <section aria-label="Purchase Order" className="dashboard-expand-card rounded-2xl bg-white border border-slate-200 shadow-sm overflow-hidden scroll-mt-4">
+        <button type="button" onClick={() => togglePanel('po')} aria-expanded={expandedPanels.po} className="dashboard-expand-trigger w-full flex items-center gap-3 p-3.5 text-left">
+          <span className="dashboard-icon-badge dashboard-icon-violet"><ClipboardCheck className="h-4 w-4" aria-hidden="true" /></span>
+          <span className="min-w-0 flex-1"><span className="block text-sm font-extrabold text-slate-900">Status PO</span><span className="block text-[10px] text-slate-500 mt-0.5">Grafik donat dan status kedatangan · ketuk untuk membuka</span></span>
+          <span className="dashboard-expand-count text-[10px] font-bold rounded-full px-2 py-1">{poData?.summary?.totalItem ?? 0} item</span>
+          <span className="dashboard-expand-chevron text-slate-500" aria-hidden="true">{expandedPanels.po ? '−' : '+'}</span>
+        </button>
+        {expandedPanels.po && <div className="p-3.5 pt-0 animate-fade-in">
+          <StatusPOCard data={poData} loading={poLoading} error={poError} onRefresh={loadPO} onConfirm={handleConfirm} confirmingId={confirmingId} onNavigate={onNavigate} />
+        </div>}
       </section>
 
       {pending > 0 && (
