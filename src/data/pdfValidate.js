@@ -81,6 +81,7 @@ export async function extractTextFromPdf(file, onProgress) {
         pageNo: p,
         text,
         lines,
+        lineCount: lines.length,
         candidateCount: parsePdfLinesToItems(text).length,
         numericLineCount: lines.filter((line) => /\d/.test(line) && /[A-Za-zÀ-ÿ]/.test(line)).length,
         hasNumericText: /\d/.test(text),
