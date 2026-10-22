@@ -808,3 +808,18 @@ html[data-theme="warm_productive"] .page-content :is(.page-header, .section-card
     animation: none !important;
   }
 }
+
+/* Dual-domain UI evaluation: persistent status bar and compact expandable dashboard panels */
+.shared-live-bar{padding-top:.45rem;padding-bottom:.2rem;background:var(--page-bg,#f4f8f9)}
+.shared-live-inner{background:rgba(255,255,255,.97);border-color:#d9e5e8;color:#12313a}
+.shared-live-dot{background:#16a34a;box-shadow:0 0 0 3px rgba(22,163,74,.12)}
+.shared-live-email{color:#0e7490}
+.shared-live-refresh{background:#e8f8f8;border-color:#b8e7e8;color:#087b80}
+.dashboard-expand-card{border-color:#dce7e9;box-shadow:0 5px 18px rgba(12,45,54,.055)}
+.dashboard-expand-trigger{min-height:68px;transition:background-color .18s ease}
+.dashboard-expand-trigger:hover{background:#f7fbfb}
+.dashboard-expand-trigger:focus-visible{outline:3px solid rgba(6,182,212,.28);outline-offset:-3px}
+.dashboard-expand-count{background:#e8f8f8;color:#087b80}
+.dashboard-expand-chevron{font-weight:800;font-size:1.35rem;line-height:1;width:1.25rem;text-align:center}
+.dashboard-icon-violet{background:#f1edff;color:#6d4bd1}
+@media(max-width:420px){.shared-live-bar{padding-left:.6rem;padding-right:.6rem}.shared-live-inner{padding:.5rem .65rem}.shared-live-bar .shared-live-email{max-width:16rem}.dashboard-expand-trigger{gap:.55rem;padding:.75rem}.dashboard-expand-count{font-size:9px}}
