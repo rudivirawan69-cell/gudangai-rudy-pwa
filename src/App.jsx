@@ -8,7 +8,7 @@ import { useBootstrap } from './hooks/useBootstrap';
 import { getDashboardData } from './data/api';
 import {
   LayoutDashboard, Package, PackagePlus, Clock, Settings, ClipboardList,
-  WifiOff, AlertTriangle, Loader2,
+  WifiOff, AlertTriangle, Loader2, Mail,
 } from 'lucide-react';
 
 const DashboardPage = lazy(() => import('./pages/DashboardPage'));
