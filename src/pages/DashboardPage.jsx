@@ -7,7 +7,7 @@ import {
 import { DIVISIONS } from '../data/master';
 import {
   AlertTriangle, RefreshCw, FileText, Package, Users, Boxes, ShieldAlert, CheckCircle2, AlertCircle, X,
-  CalendarDays, CalendarClock, ClipboardCheck, FilePlus2, Mail, Clock3, Layers3, ArrowUpRight,
+  CalendarDays, CalendarClock, ClipboardCheck, FilePlus2, Layers3, ArrowUpRight,
 } from 'lucide-react';
 
 function classifyItem(it) {
@@ -1219,11 +1219,6 @@ export default function DashboardPage({ onNavigate }) {
   else { greeting = 'Selamat malam'; reminder = 'Pastikan data hari ini sudah lengkap.'; }
 
   const name = user?.name || user?.nama || 'Rudi';
-  const spreadsheetTimestamp =
-    dashboardData?.lastUpdate ?? dashboardData?.lastUpdatedAt ?? dashboardData?.lastUpdated ??
-    dashboardData?.updatedAt ?? dashboardData?.updateTime ?? dashboardData?.waktuUpdate ??
-    dashboardData?.waktu_update ?? dashboardData?.terakhirUpdate ?? dashboardData?.timestamp ?? null;
-
   return (
     <div className="dashboard-shell w-full max-w-6xl mx-auto px-3 sm:px-5 lg:px-7 pt-4 pb-24 space-y-4">
       <div className="dashboard-header-card dashboard-3d-card rounded-2xl bg-white border border-slate-200 shadow-sm px-4 sm:px-5 py-4">
