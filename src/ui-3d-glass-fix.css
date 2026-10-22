@@ -1,0 +1,158 @@
+/* =========================================================
+   UI 3D Soft Depth + Contrast Fix (V6.6.x visual polish)
+   Soft / Ocean / Blue Glass — consistent natural 3D cards
+   ========================================================= */
+
+/* Theme picker: soft raised 3D + readable contrast in ALL modes */
+html[data-theme] .theme-picker-btn {
+  background: var(--bg-elevated) !important;
+  border: 1px solid var(--border) !important;
+  box-shadow: var(--shadow-1) !important;
+  color: var(--text-main) !important;
+  -webkit-text-fill-color: var(--text-main) !important;
+  transition: box-shadow .22s ease, transform .18s ease, background .2s ease, border-color .2s ease !important;
+}
+html[data-theme] .theme-picker-btn:not(.is-active) {
+  background: color-mix(in srgb, var(--bg-elevated) 88%, var(--bg-muted) 12%) !important;
+  color: var(--text-muted) !important;
+  -webkit-text-fill-color: var(--text-muted) !important;
+}
+html[data-theme] .theme-picker-btn.is-active {
+  background: color-mix(in srgb, var(--bg-elevated) 70%, var(--accent) 30%) !important;
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent) !important;
+  box-shadow: var(--shadow-2), 0 0 0 2px var(--accent-soft) !important;
+  color: var(--text-main) !important;
+  -webkit-text-fill-color: var(--text-main) !important;
+  transform: translateY(-1px);
+}
+html[data-theme] .theme-picker-btn svg {
+  color: inherit !important;
+  stroke: currentColor !important;
+  opacity: 1 !important;
+}
+html[data-theme] .theme-picker-btn.is-active svg {
+  color: var(--accent-strong) !important;
+  stroke: var(--accent-strong) !important;
+}
+html[data-theme] .theme-picker-btn:active {
+  box-shadow: var(--shadow-press) !important;
+  transform: scale(0.97);
+}
+
+/* Blue Glass (warm_productive) specific readable contrast for picker */
+html[data-theme="warm_productive"] .theme-picker-btn {
+  background: #eef3fc !important;
+  border-color: rgba(59, 130, 246, 0.22) !important;
+  color: #3b4f6e !important;
+  -webkit-text-fill-color: #3b4f6e !important;
+  box-shadow: 8px 8px 18px #b8c9e4, -6px -6px 14px #ffffff !important;
+}
+html[data-theme="warm_productive"] .theme-picker-btn:not(.is-active) {
+  background: #e4ecf8 !important;
+  color: #5a6f8f !important;
+  -webkit-text-fill-color: #5a6f8f !important;
+}
+html[data-theme="warm_productive"] .theme-picker-btn.is-active {
+  background: linear-gradient(145deg, #dbe8ff 0%, #c9dbff 100%) !important;
+  border-color: #3b82f6 !important;
+  box-shadow: 10px 10px 22px #a3b8d8, -7px -7px 16px #ffffff, 0 0 0 2px rgba(59,130,246,.28) !important;
+  color: #1e3a6e !important;
+  -webkit-text-fill-color: #1e3a6e !important;
+}
+html[data-theme="warm_productive"] .theme-picker-btn.is-active svg {
+  color: #2563eb !important;
+  stroke: #2563eb !important;
+}
+
+/* Soft Light picker refinement */
+html[data-theme="soft_light"] .theme-picker-btn {
+  box-shadow: 8px 8px 18px #c8c0b3, -6px -6px 14px #ffffff !important;
+}
+html[data-theme="soft_light"] .theme-picker-btn.is-active {
+  background: linear-gradient(145deg, #fff8eb 0%, #ffefd4 100%) !important;
+  border-color: #f59e0b !important;
+  box-shadow: 10px 10px 22px #bdb5a8, -7px -7px 16px #ffffff, 0 0 0 2px rgba(245,158,11,.28) !important;
+  color: #7c4a00 !important;
+  -webkit-text-fill-color: #7c4a00 !important;
+}
+html[data-theme="soft_light"] .theme-picker-btn.is-active svg {
+  color: #d97706 !important;
+  stroke: #d97706 !important;
+}
+
+/* Settings menu icons — consistent soft 3D raised (match connection style) */
+html[data-theme] .settings-menu-icon {
+  box-shadow: var(--shadow-1) !important;
+  border: 1px solid var(--border) !important;
+  background: color-mix(in srgb, var(--bg-elevated) 75%, var(--accent-soft) 25%) !important;
+  transition: box-shadow .2s ease, transform .15s ease !important;
+}
+html[data-theme] .menu-row:active .settings-menu-icon {
+  box-shadow: var(--shadow-press) !important;
+  transform: scale(0.96);
+}
+html[data-theme="soft_light"] .settings-menu-icon {
+  background: #f5f1ea !important;
+  box-shadow: 6px 6px 12px #c5bdb0, -4px -4px 10px #ffffff !important;
+}
+html[data-theme="deep_ocean"] .settings-menu-icon {
+  background: rgba(56, 189, 248, 0.18) !important;
+  box-shadow: 6px 6px 14px #030a12, -4px -4px 10px #1a3555 !important;
+  border-color: rgba(56, 189, 248, 0.25) !important;
+}
+html[data-theme="warm_productive"] .settings-menu-icon {
+  background: #e8f0fc !important;
+  box-shadow: 6px 6px 12px #b0c4e0, -4px -4px 10px #ffffff !important;
+  border-color: rgba(59, 130, 246, 0.2) !important;
+}
+
+/* Nav icons — soft 3D depth on all states (like connection icon) */
+html[data-theme] .nav-icon-wrap {
+  box-shadow: 5px 5px 10px color-mix(in srgb, var(--bg-app) 70%, #000 8%),
+              -4px -4px 9px color-mix(in srgb, var(--bg-elevated) 90%, #fff 10%) !important;
+  background: var(--bg-elevated) !important;
+  border-radius: 0.85rem !important;
+  transition: box-shadow .22s ease, transform .18s ease, background .2s ease !important;
+}
+html[data-theme] .nav-btn.is-inactive .nav-icon-wrap {
+  opacity: 0.92;
+  box-shadow: 4px 4px 9px color-mix(in srgb, var(--bg-app) 75%, #000 6%),
+              -3px -3px 8px color-mix(in srgb, var(--bg-elevated) 85%, #fff 10%) !important;
+}
+html[data-theme] .nav-btn.is-active .nav-icon-wrap {
+  background: var(--accent-soft) !important;
+  box-shadow: var(--shadow-1) !important;
+  transform: translateY(-2px) scale(1.06);
+}
+html[data-theme="deep_ocean"] .nav-icon-wrap {
+  background: #12263d !important;
+  box-shadow: 5px 5px 12px #030a12, -3px -3px 9px #1a3555 !important;
+}
+html[data-theme="deep_ocean"] .nav-btn.is-active .nav-icon-wrap {
+  background: rgba(56, 189, 248, 0.22) !important;
+  box-shadow: 7px 7px 16px #02070e, -4px -4px 12px #1f3d62 !important;
+}
+html[data-theme="warm_productive"] .nav-icon-wrap {
+  background: #f0f5ff !important;
+  box-shadow: 5px 5px 11px #b0c4e0, -4px -4px 9px #ffffff !important;
+}
+html[data-theme="warm_productive"] .nav-btn.is-active .nav-icon-wrap {
+  background: rgba(59, 130, 246, 0.18) !important;
+  box-shadow: 7px 7px 16px #a3b8d8, -4px -4px 12px #ffffff !important;
+}
+html[data-theme="soft_light"] .nav-icon-wrap {
+  background: #faf8f4 !important;
+  box-shadow: 5px 5px 11px #c5bdb0, -4px -4px 9px #ffffff !important;
+}
+
+/* Card press feedback — soft & natural across modes */
+html[data-theme] .card,
+html[data-theme] .surface,
+html[data-theme] .section-card {
+  transition: box-shadow .22s ease, transform .18s ease !important;
+}
+html[data-theme] .card:active,
+html[data-theme] button.card:active {
+  box-shadow: var(--shadow-press) !important;
+  transform: scale(0.99);
+}
