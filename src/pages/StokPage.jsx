@@ -1,6 +1,8 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useBootstrapRevision } from '../hooks/useBootstrapRevision';
-import { Search, RefreshCw, LayoutGrid, Boxes, ShieldAlert, TriangleAlert, ShieldCheck } from 'lucide-react';
+import {
+  Search, RefreshCw, LayoutGrid, Boxes, ShieldAlert, TriangleAlert, ShieldCheck, ChevronDown,
+} from 'lucide-react';
 import { useStock } from '../hooks/useStock';
 
 function levelOf(stok) {
@@ -11,7 +13,7 @@ function levelOf(stok) {
   return 'safe';
 }
 
-function StockCard({ item }) {
+function StockRow({ item }) {
   const qty = Number(item.stok ?? item.stockAkhir ?? item.sisa ?? 0) || 0;
   const level = levelOf(qty);
   const border = {
@@ -28,32 +30,25 @@ function StockCard({ item }) {
   }[level];
 
   return (
-    <div className={`stock-card w-full rounded-2xl bg-white border border-slate-100 shadow-sm border-l-4 ${border} px-4 py-3 box-border`}>
+    <div className={`stock-card w-full rounded-xl bg-white border border-slate-100 shadow-sm border-l-4 ${border} px-3.5 py-2.5 box-border`}>
       <div className="flex items-center gap-3 min-w-0">
         <div className="flex-1 min-w-0">
-          <p className="text-[11px] text-slate-400 font-mono font-medium truncate">{item.kode}</p>
-          <p className="text-[14px] font-bold text-slate-900 truncate leading-snug mt-0.5">{item.nama}</p>
-          <p className="text-[11px] text-slate-500 mt-1 font-medium truncate">
+          <p className="text-[10px] text-slate-400 font-mono font-medium truncate">{item.kode}</p>
+          <p className="text-[13px] font-bold text-slate-900 truncate leading-snug mt-0.5">{item.nama}</p>
+          <p className="text-[10px] text-slate-500 mt-0.5 font-medium truncate">
             {item.divisi || '—'} · {item.satuan || 'Pack'}
           </p>
         </div>
-        <div className="shrink-0 text-right min-w-[3.25rem]">
-          <p className={`text-xl font-extrabold tabular-nums leading-none ${numColor}`}>
+        <div className="shrink-0 text-right min-w-[3rem]">
+          <p className={`text-lg font-extrabold tabular-nums leading-none ${numColor}`}>
             {qty.toLocaleString('id-ID')}
           </p>
-          <p className="text-[9px] text-slate-400 mt-1 font-semibold uppercase tracking-wide">sisa</p>
+          <p className="text-[8px] text-slate-400 mt-0.5 font-semibold uppercase tracking-wide">sisa</p>
         </div>
       </div>
     </div>
   );
 }
-
-const FILTER_LABEL = {
-  all: 'Semua',
-  kritis: 'Kritis',
-  menipis: 'Waspada',
-  aman: 'Aman',
-};
 
 export default function StokPage() {
   const [entity, setEntity] = useState('CV');
@@ -63,23 +58,22 @@ export default function StokPage() {
   useEffect(() => {
     refresh?.({ force: true });
   }, [bootstrapRevision, refresh]);
+
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
-  const [divisi, setDivisi] = useState('Semua');
+  /** Nama divisi yang dibuka — item muncul di dalam kartu divisi */
+  const [openDivisi, setOpenDivisi] = useState(null);
 
   const entityItems = useMemo(
     () => (items || []).filter((it) => (it.entity || it.entitas || 'CV') === entity),
     [items, entity]
   );
 
-  const divisions = useMemo(() => {
-    const set = new Set();
-    entityItems.forEach((it) => { if (it.divisi) set.add(it.divisi); });
-    return ['Semua', ...Array.from(set).sort()];
-  }, [entityItems]);
-
   const stats = useMemo(() => {
-    let aman = 0, waspada = 0, kritis = 0, habis = 0;
+    let aman = 0;
+    let waspada = 0;
+    let kritis = 0;
+    let habis = 0;
     entityItems.forEach((it) => {
       const n = Number(it.stok ?? it.stockAkhir ?? 0) || 0;
       const l = levelOf(n);
@@ -91,34 +85,57 @@ export default function StokPage() {
     return { total: entityItems.length, aman, waspada, kritis: kritis + habis };
   }, [entityItems]);
 
-  const filtered = useMemo(() => {
-    let list = entityItems;
-    if (divisi !== 'Semua') list = list.filter((it) => it.divisi === divisi);
+  /** Ringkasan per divisi + daftar item (setelah filter status & search) */
+  const divisionCards = useMemo(() => {
+    const map = new Map();
+    entityItems.forEach((it) => {
+      const name = String(it.divisi || 'LAINNYA').trim() || 'LAINNYA';
+      if (!map.has(name)) {
+        map.set(name, { name, total: 0, kritis: 0, waspada: 0, aman: 0, items: [] });
+      }
+      const row = map.get(name);
+      row.total += 1;
+      const l = levelOf(it.stok ?? it.stockAkhir);
+      if (l === 'safe') row.aman += 1;
+      else if (l === 'warning') row.waspada += 1;
+      else row.kritis += 1;
+      row.items.push(it);
+    });
+
     const q = search.trim().toLowerCase();
-    if (q) {
-      list = list.filter(
-        (it) =>
-          (it.kode || '').toLowerCase().includes(q) ||
-          (it.nama || '').toLowerCase().includes(q)
-      );
-    }
-    if (filterStatus === 'aman') list = list.filter((it) => levelOf(it.stok ?? it.stockAkhir) === 'safe');
-    if (filterStatus === 'menipis') list = list.filter((it) => levelOf(it.stok ?? it.stockAkhir) === 'warning');
-    if (filterStatus === 'kritis') {
-      list = list.filter((it) => {
-        const l = levelOf(it.stok ?? it.stockAkhir);
-        return l === 'danger' || l === 'zero';
-      });
-    }
-    return list;
-  }, [entityItems, divisi, search, filterStatus]);
+    return Array.from(map.values())
+      .map((d) => {
+        let list = d.items;
+        if (q) {
+          list = list.filter(
+            (it) =>
+              (it.kode || '').toLowerCase().includes(q) ||
+              (it.nama || '').toLowerCase().includes(q)
+          );
+        }
+        if (filterStatus === 'aman') list = list.filter((it) => levelOf(it.stok ?? it.stockAkhir) === 'safe');
+        if (filterStatus === 'menipis') list = list.filter((it) => levelOf(it.stok ?? it.stockAkhir) === 'warning');
+        if (filterStatus === 'kritis') {
+          list = list.filter((it) => {
+            const l = levelOf(it.stok ?? it.stockAkhir);
+            return l === 'danger' || l === 'zero';
+          });
+        }
+        return { ...d, filteredItems: list, filteredCount: list.length };
+      })
+      .sort((a, b) => a.name.localeCompare(b.name, 'id'));
+  }, [entityItems, search, filterStatus]);
 
   const topStats = [
-    { key: 'total', label: 'TOTAL ITEM', value: stats.total, color: 'text-slate-900', sub: 'item', filter: 'all', ring: 'ring-slate-300', icon: Boxes, iconClass: 'stock-metric-icon-cyan' },
-    { key: 'kritis', label: 'KRITIS', value: stats.kritis, color: 'text-red-600', sub: 'item', filter: 'kritis', ring: 'ring-red-300', icon: ShieldAlert, iconClass: 'stock-metric-icon-red' },
-    { key: 'menipis', label: 'WASPADA', value: stats.waspada, color: 'text-amber-600', sub: 'item', filter: 'menipis', ring: 'ring-amber-300', icon: TriangleAlert, iconClass: 'stock-metric-icon-amber' },
-    { key: 'aman', label: 'AMAN', value: stats.aman, color: 'text-emerald-600', sub: 'item', filter: 'aman', ring: 'ring-emerald-300', icon: ShieldCheck, iconClass: 'stock-metric-icon-green' },
+    { key: 'all', label: 'TOTAL ITEM', value: stats.total, color: 'text-slate-900', filter: 'all', ring: 'ring-slate-300', icon: Boxes, iconClass: 'stock-metric-icon-cyan' },
+    { key: 'kritis', label: 'KRITIS', value: stats.kritis, color: 'text-red-600', filter: 'kritis', ring: 'ring-red-300', icon: ShieldAlert, iconClass: 'stock-metric-icon-red' },
+    { key: 'menipis', label: 'WASPADA', value: stats.waspada, color: 'text-amber-600', filter: 'menipis', ring: 'ring-amber-300', icon: TriangleAlert, iconClass: 'stock-metric-icon-amber' },
+    { key: 'aman', label: 'AMAN', value: stats.aman, color: 'text-emerald-600', filter: 'aman', ring: 'ring-emerald-300', icon: ShieldCheck, iconClass: 'stock-metric-icon-green' },
   ];
+
+  function toggleDivisi(name) {
+    setOpenDivisi((prev) => (prev === name ? null : name));
+  }
 
   return (
     <div className="w-full max-w-full box-border space-y-3 pb-28 animate-fade-in overflow-x-hidden">
@@ -139,7 +156,11 @@ export default function StokPage() {
           <button
             key={e}
             type="button"
-            onClick={() => { setEntity(e); setDivisi('Semua'); setFilterStatus('all'); }}
+            onClick={() => {
+              setEntity(e);
+              setOpenDivisi(null);
+              setFilterStatus('all');
+            }}
             className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all ${
               entity === e ? 'bg-cyan-600 text-white shadow-sm' : 'text-slate-500'
             }`}
@@ -149,26 +170,31 @@ export default function StokPage() {
         ))}
       </div>
 
+      {/* Status — grid 2x2, tanpa scroll samping */}
       <div className="grid grid-cols-2 gap-2.5 w-full">
         {topStats.map((s) => {
           const selected = filterStatus === s.filter;
+          const Icon = s.icon;
           return (
             <button
               key={s.key}
               type="button"
-              onClick={() => setFilterStatus(s.filter)}
+              onClick={() => {
+                setFilterStatus(s.filter);
+                setOpenDivisi(null);
+              }}
               aria-pressed={selected}
               className={`stock-metric-surface rounded-2xl bg-white border border-slate-100 shadow-sm px-3 py-3 text-left transition ${
                 selected ? `ring-2 ${s.ring} is-selected` : ''
               }`}
             >
               <div className="flex items-center justify-between">
-                <span className={`stock-metric-icon ${s.iconClass}`}><s.icon className="w-5 h-5" /></span>
+                <span className={`stock-metric-icon ${s.iconClass}`}><Icon className="w-5 h-5" /></span>
                 <span className="text-[9px] font-extrabold text-slate-400">STATUS</span>
               </div>
-              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wide mt-3">{s.label}</p>
+              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wide mt-2">{s.label}</p>
               <p className={`text-2xl font-extrabold tabular-nums leading-none mt-1 ${s.color}`}>{s.value}</p>
-              <p className="text-[11px] text-slate-400 mt-1 font-medium">{s.sub}</p>
+              <p className="text-[11px] text-slate-400 mt-1 font-medium">item</p>
             </button>
           );
         })}
@@ -184,53 +210,86 @@ export default function StokPage() {
         />
       </div>
 
-      <div className="flex gap-2 overflow-x-auto pb-0.5 w-full">
-        {divisions.map((d) => (
-          <button
-            key={d}
-            type="button"
-            onClick={() => setDivisi(d)}
-            className={`shrink-0 px-3.5 py-1.5 rounded-full text-[12px] font-semibold border transition ${
-              divisi === d
-                ? 'bg-cyan-600 text-white border-cyan-600 shadow-sm'
-                : 'bg-white text-slate-600 border-slate-200'
-            }`}
-          >
-            {d}
-          </button>
-        ))}
-      </div>
-
-      <div className="flex items-center gap-2 flex-wrap px-0.5">
-        <p className="text-[12px] text-slate-600 font-medium">
-          {filtered.length} item · {entity}
-        </p>
-        {filterStatus !== 'all' && (
-          <span className="stok-filter-badge">
-            Filter: {FILTER_LABEL[filterStatus] || filterStatus}
-          </span>
-        )}
+      <div className="px-0.5">
+        <p className="text-[12px] font-bold text-slate-700">Divisi · {entity}</p>
+        <p className="text-[11px] text-slate-500 mt-0.5">Ketuk kartu divisi untuk melihat item</p>
       </div>
 
       {error && (
         <div className="rounded-2xl bg-red-50 border border-red-200 px-3 py-2.5 text-xs text-red-700">{error}</div>
       )}
 
+      {/* Kartu divisi full-width — klik = buka item di dalam kartu */}
       <div className="space-y-2.5 w-full">
-        {loading && !filtered.length && (
+        {loading && !divisionCards.length && (
           <div className="space-y-2">
-            {[1, 2, 3, 4].map((i) => (
-              <div key={i} className="h-[4.5rem] rounded-2xl skeleton" />
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="h-16 rounded-2xl skeleton" />
             ))}
           </div>
         )}
-        {filtered.map((item) => (
-          <StockCard key={(item.kode || '') + (item.entity || '')} item={item} />
-        ))}
-        {!loading && !filtered.length && (
+
+        {divisionCards.map((d) => {
+          const open = openDivisi === d.name;
+          return (
+            <div
+              key={d.name}
+              className={`w-full rounded-2xl bg-white border border-slate-100 shadow-sm overflow-hidden transition ${
+                open ? 'ring-2 ring-cyan-400' : ''
+              }`}
+            >
+              <button
+                type="button"
+                onClick={() => toggleDivisi(d.name)}
+                aria-expanded={open}
+                className="w-full px-3.5 py-3.5 text-left flex items-center gap-3"
+              >
+                <div className="w-10 h-10 rounded-xl bg-cyan-500/10 text-cyan-700 flex items-center justify-center shrink-0">
+                  <LayoutGrid className="w-5 h-5" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[13px] font-extrabold text-slate-900 uppercase tracking-wide truncate">{d.name}</p>
+                  <p className="text-[11px] text-slate-500 font-medium mt-0.5">
+                    {d.filteredCount} item
+                    {filterStatus !== 'all' ? ` · filter ${filterStatus}` : ''}
+                    {' · '}
+                    <span className="text-emerald-600">{d.aman} aman</span>
+                    {' · '}
+                    <span className="text-amber-600">{d.waspada} waspada</span>
+                    {' · '}
+                    <span className="text-red-600">{d.kritis} kritis</span>
+                  </p>
+                </div>
+                <ChevronDown
+                  className={`w-5 h-5 text-slate-400 shrink-0 transition-transform duration-200 ${
+                    open ? 'rotate-180' : ''
+                  }`}
+                />
+              </button>
+
+              {open && (
+                <div className="px-3 pb-3 pt-0 border-t border-slate-100 space-y-2">
+                  <p className="text-[11px] text-slate-500 font-medium py-2">
+                    {d.filteredCount} item · {d.name} · {entity}
+                  </p>
+                  {d.filteredItems.map((item) => (
+                    <StockRow key={(item.kode || '') + (item.entity || '')} item={item} />
+                  ))}
+                  {!d.filteredItems.length && (
+                    <div className="py-6 text-center">
+                      <p className="text-xs text-slate-400 font-medium">Tidak ada item di divisi ini</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+
+        {!loading && !divisionCards.length && (
           <div className="rounded-2xl bg-white border border-slate-100 shadow-sm py-12 text-center">
             <LayoutGrid className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-            <p className="text-sm text-slate-400 font-medium">Tidak ada item</p>
+            <p className="text-sm text-slate-400 font-medium">Tidak ada data stok</p>
           </div>
         )}
       </div>
