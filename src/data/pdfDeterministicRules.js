@@ -6,6 +6,10 @@ export function normalizeOcr(s) {
     .replace(/[\u2018\u2019]/g, "'")
     .replace(/[\u201c\u201d]/g, '"')
     .replace(/\bsomay\b/g, 'siomay')
+    // Normalize common PDF/OCR substitutions before deterministic product matching.
+    .replace(/\bf[i1l]l?e?t\b/g, 'fillet')
+    .replace(/\bd[a4]d[a4]\b/g, 'dada')
+    .replace(/\bp[a4]h[a4]\b/g, 'paha')
     .replace(/\b(?:frozen|beku|chilled|fresh)\b/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
