@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Plus, Trash2, CheckCircle2, Circle, Truck, PackageCheck, ClipboardCheck } from 'lucide-react';
+import { Plus, Trash2, CheckCircle2, Circle, Truck, PackageCheck, ClipboardCheck, BellRing } from 'lucide-react';
 
 const STORAGE_KEY = 'gudangai_operator_tasks_v1';
 
@@ -75,17 +75,23 @@ export default function OperatorTasks() {
   const pending = tasks.filter((t) => !t.done).length;
 
   return (
-    <div className="mt-3 rounded-xl border border-slate-200/80 bg-slate-50/80 dark:bg-slate-800/40 px-3 py-3 space-y-2.5">
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-[11px] font-extrabold text-slate-800 uppercase tracking-wide">
-          Catatan tugas operator
-        </p>
-        <span className="text-[10px] font-bold text-slate-500 tabular-nums">
-          {pending} aktif · {tasks.length} total
+    <section aria-label="Pengingat dan konfirmasi kedatangan" className="mt-4 rounded-[26px] border border-stone-200/80 bg-[#fffdfa] p-4 sm:p-6 shadow-[0_10px_30px_rgba(30,41,59,0.07)] space-y-4">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-amber-100 text-amber-600">
+            <BellRing className="h-5 w-5" />
+          </span>
+          <div className="min-w-0">
+            <h2 className="text-base sm:text-lg font-extrabold tracking-tight text-slate-900">Pengingat &amp; Konfirmasi Kedatangan</h2>
+            <p className="text-xs sm:text-sm text-slate-500">Catatan tugas &amp; verifikasi supplier</p>
+          </div>
+        </div>
+        <span className="shrink-0 rounded-full bg-amber-50 px-3 py-2 text-xs font-extrabold text-amber-700 tabular-nums">
+          {pending} Catatan
         </span>
       </div>
 
-      <div className="flex flex-wrap gap-1.5">
+      <div className="flex flex-wrap gap-1.5" aria-label="Jenis pengingat">
         {Object.entries(TYPE_META).map(([key, meta]) => (
           <button
             key={key}
@@ -93,8 +99,8 @@ export default function OperatorTasks() {
             onClick={() => setType(key)}
             className={`px-2.5 py-1 rounded-full text-[10px] font-bold border transition ${
               type === key
-                ? 'bg-cyan-600 text-white border-cyan-600'
-                : 'bg-white text-slate-600 border-slate-200'
+                ? 'bg-cyan-700 text-white border-cyan-700 shadow-sm'
+                : 'bg-white text-slate-600 border-slate-200 hover:border-cyan-300'
             }`}
           >
             {meta.label}
@@ -116,19 +122,19 @@ export default function OperatorTasks() {
                 ? 'Contoh: Terima 20 pack udang PND…'
                 : 'Contoh: Kirim ke Malang Senin 10:00…'
           }
-          className="flex-1 min-w-0 rounded-xl border border-slate-200 bg-white px-3 py-2 text-[12px] text-slate-900 font-medium placeholder:text-slate-400"
+          className="flex-1 min-w-0 h-12 rounded-2xl border border-slate-200/80 bg-white px-4 text-sm text-slate-900 font-medium placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-cyan-100"
         />
         <button
           type="button"
           onClick={addTask}
-          className="shrink-0 w-10 h-10 rounded-xl bg-cyan-600 text-white flex items-center justify-center active:scale-95"
+          className="shrink-0 h-12 rounded-2xl bg-cyan-700 px-4 text-white flex items-center justify-center gap-2 font-bold active:scale-95"
           aria-label="Tambah catatan"
         >
-          <Plus className="w-5 h-5" />
+          <Plus className="w-5 h-5" /><span className="hidden sm:inline">Tambah</span>
         </button>
       </div>
 
-      <ul className="space-y-1.5 max-h-52 overflow-y-auto">
+      <ul className="space-y-2.5 max-h-72 overflow-y-auto">
         {tasks.length === 0 && (
           <li className="text-[11px] text-slate-400 text-center py-3 font-medium">
             Belum ada catatan. Tambah konfirmasi PO, kedatangan, atau jadwal kirim luar kota.
@@ -140,10 +146,10 @@ export default function OperatorTasks() {
           return (
             <li
               key={task.id}
-              className={`flex items-start gap-2 rounded-xl border px-2.5 py-2 ${
+              className={`flex items-start gap-3 rounded-2xl border px-3 py-3.5 sm:px-4 ${
                 task.done
-                  ? 'bg-white/60 border-slate-100 opacity-70'
-                  : 'bg-white border-slate-200 shadow-sm'
+                  ? 'bg-white/70 border-slate-100 opacity-70'
+                  : 'bg-white border-slate-100 shadow-[0_2px_8px_rgba(15,23,42,0.035)]'
               }`}
             >
               <button
@@ -152,7 +158,7 @@ export default function OperatorTasks() {
                 className="mt-0.5 shrink-0 text-cyan-700"
                 aria-label={task.done ? 'Tandai belum' : 'Tandai selesai'}
               >
-                {task.done ? <CheckCircle2 className="w-5 h-5 text-emerald-600" /> : <Circle className="w-5 h-5" />}
+                {task.done ? <CheckCircle2 className="w-6 h-6 text-emerald-600" /> : <Circle className="w-6 h-6 text-slate-400" />}
               </button>
               <div className="flex-1 min-w-0">
                 <span className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[9px] font-bold ${meta.chip}`}>
@@ -160,7 +166,7 @@ export default function OperatorTasks() {
                   {meta.label}
                 </span>
                 <p
-                  className={`text-[12px] font-semibold text-slate-800 mt-1 leading-snug ${
+                  className={`text-sm font-semibold text-slate-800 mt-1 leading-snug ${
                     task.done ? 'line-through text-slate-400' : ''
                   }`}
                 >
@@ -179,6 +185,6 @@ export default function OperatorTasks() {
           );
         })}
       </ul>
-    </div>
+    </section>
   );
 }
