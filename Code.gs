@@ -951,7 +951,7 @@ function addTransaction(body) {
         if (kekurangan > 0) {
           shortageMode = true;
           finalQty = 0;
-          const structured = "Input pending " + numericQty + " > sisa stock " + sisa + " > kurang " + kekurangan;
+          const structured = "pending ❌ PO " + numericQty + " sisa stock " + sisa + " kekurangan " + kekurangan;
           keterangan = keterangan ? (keterangan + " | " + structured) : structured;
           flags.push("STOCK_KURANG", "STOCK_KURANG_HOLD", "QTY_HOLD_0");
           try {
