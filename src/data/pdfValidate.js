@@ -498,27 +498,16 @@ export function validatePdfItems(entity, textOrItems, masterOverride) {
     const qty = Number(it.qty) || 0;
     if (!rawNameOriginal || qty <= 0) continue;
 
-    // BBCV/BBPT raw material may pass only when its matching code is explicitly present.
+    // PDF upload is for finished-goods/order SKUs only. Raw-material codes
+    // (BBCV/BBPT) are never valid output from this flow, even when explicitly typed.
     const explicitRawCode = rawNameOriginal.match(/\b(BBCV|BBPT)[\s-]?(\d{3,4})\b/i);
     let match = null;
     let status = 'matched';
     let note = '';
 
     if (explicitRawCode) {
-      const prefix = explicitRawCode[1].toUpperCase();
-      const code = prefix + '-' + explicitRawCode[2].padStart(4, '0');
-      const expectedPrefix = selectedEntity === 'CV' ? 'BBCV' : 'BBPT';
-      const rawItem = sourceMaster.find((item) =>
-        String(item?.kode || item?.kodeBarang || '').trim().toUpperCase() === code &&
-        String(item?.divisi || item?.division || '').trim().toUpperCase().replace(/\s+/g, ' ') === 'BAHAN BAKU'
-      );
-      if (prefix === expectedPrefix && rawItem) {
-        match = { item: rawItem, matchType: 'explicit-raw-code' };
-        note = 'explicit-raw-code';
-      } else {
-        status = 'unmatched';
-        note = 'kode bahan baku tidak sesuai entitas atau tidak ada di master';
-      }
+      status = 'unmatched';
+      note = 'upload PDF tidak boleh menghasilkan kode bahan baku';
     } else {
       // Prevent a short raw-material name (e.g. "Ayam Negeri" or "Bebek")
       // from being substring/fuzzy-matched to a different finished-goods SKU.
@@ -574,6 +563,14 @@ export function validatePdfItems(entity, textOrItems, masterOverride) {
       note = 'tidak cocok master';
     }
 
+    // Final fail-closed guard: no matching route may emit raw-material SKU.
+    const candidate = match?.kode ? match : (match?.item || null);
+    const candidateCode = String(candidate?.kode || candidate?.kodeBarang || '').trim().toUpperCase();
+    if (/^(?:BBCV|BBPT)-\d{3,4}$/.test(candidateCode)) {
+      match = null;
+      status = 'unmatched';
+      note = 'upload PDF tidak boleh menghasilkan kode bahan baku';
+    }
     const masterItem = match?.kode ? match : (match?.item || null);
     const kode = masterItem?.kode || match?.kode || null;
     results.push({
