@@ -35,6 +35,18 @@ export function resolvePdfNameDeterministic(entity, rawName, masterList) {
   }
 
   // --- Specific rules (CV vs PT codes differ) ---
+  // Explicit order-SKU mappings reported missing in live PDF validation.
+  // Saos Ayam 69 is CV-0036 in CV and WK-0021 in PT; never resolve to raw material.
+  if (/sa[o0]s?\s+ayam\s+69\b/.test(norm)) {
+    const hit = pick(ent === 'PT' ? 'WK-0021' : 'CV-0036', 'det-saos-ayam-69');
+    if (hit) return hit;
+  }
+  // In PT order PDFs, Bebek refers to finished/order SKU WK-0040, not BBPT-0012.
+  // CV must not borrow the PT code.
+  if (ent === 'PT' && /\bbebek\b/.test(norm)) {
+    const hit = pick('WK-0040', 'det-bebek-pt-wk-0040');
+    if (hit) return hit;
+  }
   // Keep the two fillet variants explicit so OCR/PDF noise cannot swap them.
   if (/fillet\s+dada/.test(norm)) {
     const hit = pick(ent === 'PT' ? 'PT-0001' : 'CV-0001', 'det-ayam-fillet-dada');
