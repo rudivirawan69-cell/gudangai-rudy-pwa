@@ -68,4 +68,27 @@ assert.match(sync, /dest\.getRange\(u\.row,\s*6\)\.setValue\(u\.value\)/,
 assert.doesNotMatch(sync, /(?:sh|src)\.getRange\([^\n]*\)\.set(?:Value|Values)\(/,
   'Source stock sheets must remain read-only in the lightweight sync');
 
+
+const resolverPath = new URL('../src/data/pdfDeterministicRules.js', import.meta.url);
+const resolverSource = readFileSync(resolverPath, 'utf8');
+const normalizeMatch = resolverSource.match(/export function normalizeOcr\(s\)\s*\{([\s\S]*?)\n\}/);
+assert.ok(normalizeMatch, 'Missing normalizeOcr');
+const normalizeOcr = new Function('s', normalizeMatch[1]);
+const resolverMatch = resolverSource.match(/export function resolvePdfNameDeterministic\(entity, rawName, masterList\)\s*\{([\s\S]*)\n\}$/);
+assert.ok(resolverMatch, 'Missing deterministic resolver');
+const resolvePdfNameDeterministic = new Function('normalizeOcr', resolverMatch[1]);
+const master = [
+  { kode: 'CV-0001', nama: 'Ayam Fillet Dada', satuan: 'Kg', divisi: 'CS' },
+  { kode: 'CV-0002', nama: 'Ayam Fillet Paha', satuan: 'Kg', divisi: 'CS' },
+];
+for (const [input, expected] of [
+  ['Ayam Fillet Dada', 'CV-0001'],
+  ['AYAM FILLET PAHA', 'CV-0002'],
+  ['Ayam F1llet D4da', 'CV-0001'],
+  ['Ayam FiIlet P4ha', 'CV-0002'],
+]) {
+  const hit = resolvePdfNameDeterministic(normalizeOcr, input, master);
+  assert.equal(hit?.item?.kode, expected, 'Must resolve product correctly: ' + input);
+}
+
 console.log('PASS: conservative PDF matching + manual stock sync contracts');
