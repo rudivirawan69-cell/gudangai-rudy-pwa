@@ -75,6 +75,16 @@ const bebekPt = resolvePdfNameDeterministic('PT', 'Bebek (WK-0040)', ptMaster);
 assert.equal(bebekPt?.item?.kode, 'WK-0040', 'Bebek must resolve to PT SKU WK-0040');
 assert.equal(resolvePdfNameDeterministic('CV', 'Bebek (WK-0040)', cvMaster), null,
   'CV master must not resolve a PT WK SKU');
+const saosMaster = [{ kode: 'CV-0036', nama: 'Saos Ayam 69', satuan: 'Pack', divisi: 'PACKING' }];
+const saosPtMaster = [{ kode: 'WK-0021', nama: 'Saos Ayam 69', satuan: 'Pack', divisi: 'CS' }];
+assert.equal(resolvePdfNameDeterministic('CV', 'Saos Ayam 69 (250 gr)', saosMaster)?.item?.kode, 'CV-0036');
+assert.equal(resolvePdfNameDeterministic('PT', 'Saos Ayam 69', saosPtMaster)?.item?.kode, 'WK-0021');
+const bebekOrderMaster = [{ kode: 'WK-0040', nama: 'Bebek Penyet', satuan: 'Pack', divisi: 'CS' }];
+assert.equal(resolvePdfNameDeterministic('PT', 'Bebek (WK-0040)', bebekOrderMaster)?.item?.kode, 'WK-0040');
+assert.equal(resolvePdfNameDeterministic('PT', 'Bebek', bebekOrderMaster)?.item?.kode, 'WK-0040');
+assert.match(gs, /pending ❌ PO .* sisa stock .* kekurangan/);
+assert.doesNotMatch(gs, /const structured = "Input pending " \+ numericQty \+ " > sisa stock "/);
+
 
 assert.match(pdf, /upload PDF tidak boleh menghasilkan kode bahan baku/);
 assert.match(pdf, /if \(\/\^\(\?:BBCV\|BBPT\)-\\d\{3,4\}\$\/\.test\(candidateCode\)\)/);
