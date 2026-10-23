@@ -1,1 +1,1 @@
-deploy 2026-10-17-pin-ubuntu-24.04-ci
+deploy 2026-10-23-pdf-pt-bebek-wk-0040
