@@ -74,7 +74,7 @@ const resolverSource = readFileSync(resolverPath, 'utf8');
 const normalizeMatch = resolverSource.match(/export function normalizeOcr\(s\)\s*\{([\s\S]*?)\n\}/);
 assert.ok(normalizeMatch, 'Missing normalizeOcr');
 const normalizeOcr = new Function('s', normalizeMatch[1]);
-const resolverMatch = resolverSource.match(/export function resolvePdfNameDeterministic\(entity, rawName, masterList\)\s*\{([\s\S]*)\n\}$/);
+const resolverMatch = resolverSource.match(/export function resolvePdfNameDeterministic\(entity, rawName, masterList\)\s*\{([\s\S]*?)\n\}/);
 assert.ok(resolverMatch, 'Missing deterministic resolver');
 const resolvePdfNameDeterministic = new Function('normalizeOcr', resolverMatch[1]);
 const master = [
