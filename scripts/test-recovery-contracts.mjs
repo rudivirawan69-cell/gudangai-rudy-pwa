@@ -98,7 +98,7 @@ for (const [input, expected] of [
  assert.match(pdf, /if \(\/\^\(\?:BBCV\|BBPT\)-\\d\{3,4\}\$\/\.test\(candidateCode\)\)/);
  assert.match(pdf, /return source\.filter\(\(item\) => \{/);
  assert.match(pdf, /return \/\^CV-\//);
- assert.match(pdf, /return \/\^\(\?:PT\|WK\|MM\)-\//);
+ assert.match(pdf, /return \/\^\(\?:PT\|WK\|MM\|BBPT\)-\//);
  assert.match(pdf, /nama bahan baku hanya valid melalui kode BBCV\/BBPT eksplisit/);
 
 console.log('PASS: conservative PDF matching + manual stock sync contracts');
