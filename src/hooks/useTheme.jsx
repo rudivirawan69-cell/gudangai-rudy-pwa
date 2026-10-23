@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useState, useCallback } 
 
 const STORAGE_KEY = 'gudangai_theme';
 
-/** Tiga mode tampilan — ide visual mock 3D, struktur app tetap GudangAI */
+/** Tiga mode: Soft (domain default) + Teal + Navy dari mock centang */
 export const THEME_IDS = ['soft_light', 'deep_ocean', 'warm_productive'];
 
 export const THEME_META = {
@@ -10,19 +10,19 @@ export const THEME_META = {
     id: 'soft_light',
     label: 'Soft Productive',
     short: 'Soft',
-    description: 'Cream · aksen oranye · jadwal produktif',
+    description: 'Cream · kartu putih · 3D halus (default domain)',
   },
   deep_ocean: {
     id: 'deep_ocean',
-    label: 'Deep Ocean',
-    short: 'Ocean',
-    description: 'Navy glass · statistik gelap · kontras tinggi',
+    label: 'Navy Dark',
+    short: 'Navy',
+    description: 'Navy gelap · kontras tinggi · aksen cyan',
   },
   warm_productive: {
     id: 'warm_productive',
-    label: 'Blue Glass',
-    short: 'Glass',
-    description: 'Biru-ungu soft · kartu kaca 3D',
+    label: 'Teal Soft',
+    short: 'Teal',
+    description: 'Teal solid · kartu kaca · fokus angka',
   },
 };
 
@@ -30,8 +30,8 @@ const ThemeContext = createContext(null);
 
 function normalizeTheme(raw) {
   const v = String(raw || '').toLowerCase().trim();
-  if (v === 'dark' || v === 'deep_ocean' || v === 'ocean') return 'deep_ocean';
-  if (v === 'warm' || v === 'warm_productive' || v === 'productive') return 'warm_productive';
+  if (v === 'dark' || v === 'deep_ocean' || v === 'ocean' || v === 'navy') return 'deep_ocean';
+  if (v === 'warm' || v === 'warm_productive' || v === 'productive' || v === 'teal' || v === 'glass') return 'warm_productive';
   if (v === 'light' || v === 'soft_light' || v === 'soft') return 'soft_light';
   if (THEME_IDS.includes(v)) return v;
   return 'soft_light';
