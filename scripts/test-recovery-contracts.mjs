@@ -91,4 +91,14 @@ for (const [input, expected] of [
   assert.equal(hit?.item?.kode, expected, 'Must resolve product correctly: ' + input);
 }
 
+
+ // PDF entity/code contract: CV must not validate a PT WK SKU, and no PDF row
+ // may ever return BBCV/BBPT raw-material codes (including a raw-name match).
+ assert.match(pdf, /upload PDF tidak boleh menghasilkan kode bahan baku/);
+ assert.match(pdf, /if \(\/\^\(\?:BBCV\|BBPT\)-\\d\{3,4\}\$\/\.test\(candidateCode\)\)/);
+ assert.match(pdf, /return source\.filter\(\(item\) => \{/);
+ assert.match(pdf, /return \/\^CV-\//);
+ assert.match(pdf, /return \/\^\(\?:PT\|WK\|MM\)-\//);
+ assert.match(pdf, /nama bahan baku hanya valid melalui kode BBCV\/BBPT eksplisit/);
+
 console.log('PASS: conservative PDF matching + manual stock sync contracts');
