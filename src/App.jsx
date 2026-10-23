@@ -1,13 +1,13 @@
 import { useState, useEffect, Component, lazy, Suspense } from 'react';
 import { SpeedInsights } from '@vercel/speed-insights/react';
-import { AuthProvider, useAuth } from './hooks/useAuth';
+import { AuthProvider, useAuth, DEFAULT_PROFILE_PHOTO } from './hooks/useAuth';
 import { ThemeProvider } from './hooks/useTheme';
 import LoginPage from './pages/LoginPage';
 import { useConnection } from './hooks/useConnection';
 import { useBootstrap } from './hooks/useBootstrap';
 import {
   LayoutDashboard, Package, PackagePlus, Clock, Settings, ClipboardList,
-  WifiOff, AlertTriangle, Loader2,
+  WifiOff, AlertTriangle, Loader2, Mail, RefreshCw,
 } from 'lucide-react';
 
 const DashboardPage = lazy(() => import('./pages/DashboardPage'));
@@ -60,6 +60,16 @@ const TAB_ACCENT = {
   settings: 'from-slate-400 to-slate-600',
 };
 
+const TAB_SUBTITLE = {
+  dashboard: 'STATUS UPDATE REAL TIME',
+  stok: 'MONITORING STOK RAK',
+  input: 'PENERIMAAN & PENGELUARAN',
+  po: 'PURCHASE ORDER SYSTEM',
+  riwayat: 'LOG AUDIT TRANSAKSI',
+  settings: 'PENGATURAN SYSTEM',
+  sync: 'ANTRIAN SINKRONISASI',
+};
+
 function ConnBanner({ online, hasUrl, status, message, syncing }) {
   if (!hasUrl) return null;
   if (syncing || status === 'syncing') {
@@ -86,8 +96,108 @@ function ConnBanner({ online, hasUrl, status, message, syncing }) {
   return null;
 }
 
+/** Header global: foto profil kiri + GUDANG-69 RUDI + update sheet + email */
+function AppHeader({ user, tab, onOpenSettings, online, status, onRefreshClock, liveTime }) {
+  const photo = (user?.photo && String(user.photo).length > 40) ? user.photo : DEFAULT_PROFILE_PHOTO;
+  const connected = online && status !== 'offline' && status !== 'error';
+
+  return (
+    <header className="app-top-header sticky top-0 z-50 px-3 pt-2 pb-2">
+      <div className="max-w-lg mx-auto rounded-2xl border border-slate-200/80 bg-white/95 dark:bg-slate-900/90 backdrop-blur-md shadow-sm px-3 py-2.5">
+        <div className="flex items-center gap-2.5 min-w-0">
+          {/* Slot foto profil — klik buka Atur untuk ganti foto */}
+          <button
+            type="button"
+            onClick={onOpenSettings}
+            className="shrink-0 relative rounded-xl overflow-hidden ring-2 ring-cyan-500/30 active:scale-95 transition"
+            aria-label="Profil — ganti foto di Atur"
+            title="Ganti foto di Pengaturan"
+          >
+            <img
+              src={photo}
+              alt={user?.name || 'Profil'}
+              className="w-10 h-10 object-cover block"
+              onError={(e) => { e.currentTarget.src = DEFAULT_PROFILE_PHOTO; }}
+            />
+            <span
+              className={`absolute bottom-0.5 right-0.5 w-2.5 h-2.5 rounded-full border-2 border-white ${
+                connected ? 'bg-emerald-500' : 'bg-amber-400'
+              }`}
+            />
+          </button>
+
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 min-w-0">
+              <h1 className="text-[13px] font-black tracking-wide text-slate-900 dark:text-slate-100 uppercase truncate leading-none">
+                GUDANG-69 RUDI
+              </h1>
+              <span className={`shrink-0 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[9px] font-bold ${
+                connected
+                  ? 'bg-emerald-500/15 text-emerald-700'
+                  : 'bg-amber-500/15 text-amber-700'
+              }`}>
+                <span className={`w-1.5 h-1.5 rounded-full ${connected ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
+                {connected ? 'Terhubung' : 'Cek koneksi'}
+              </span>
+            </div>
+            <p className="text-[9px] font-bold text-slate-500 tracking-wide mt-0.5 truncate">
+              {TAB_SUBTITLE[tab] || 'STATUS UPDATE REAL TIME'}
+            </p>
+            <div className="mt-1 flex flex-col gap-0.5 text-[10px] font-medium text-slate-600 dark:text-slate-300">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                <span className="truncate">
+                  Update Sheet: <strong className="text-slate-800 dark:text-slate-100 font-bold">{liveTime}</strong>
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5 min-w-0">
+                <Mail className="w-3 h-3 text-cyan-700 shrink-0" aria-hidden />
+                <a className="truncate hover:underline text-cyan-800 dark:text-cyan-300" href="mailto:rudivirawan69@gmail.com">
+                  rudivirawan69@gmail.com
+                </a>
+              </div>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={onRefreshClock}
+            className="shrink-0 w-9 h-9 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center active:scale-95"
+            aria-label="Refresh waktu"
+            title="Refresh"
+          >
+            <RefreshCw className="w-3.5 h-3.5 text-slate-600 dark:text-slate-300" />
+          </button>
+        </div>
+      </div>
+    </header>
+  );
+}
+
 function AppShell() {
   const [installPrompt, setInstallPrompt] = useState(null);
+  const [liveTime, setLiveTime] = useState('—');
+
+  const tickClock = () => {
+    try {
+      const now = new Date();
+      const dateStr = now.toLocaleDateString('id-ID', {
+        day: '2-digit', month: 'short', year: 'numeric', timeZone: 'Asia/Jakarta',
+      });
+      const timeStr = now.toLocaleTimeString('id-ID', {
+        hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23', timeZone: 'Asia/Jakarta',
+      });
+      setLiveTime(`${dateStr}, ${timeStr} WIB`);
+    } catch (_) {
+      setLiveTime(new Date().toLocaleString('id-ID'));
+    }
+  };
+
+  useEffect(() => {
+    tickClock();
+    const id = setInterval(tickClock, 1000);
+    return () => clearInterval(id);
+  }, []);
 
   useEffect(() => {
     const onBeforeInstall = (event) => {
@@ -157,12 +267,21 @@ function AppShell() {
     <div className="app-shell min-h-screen text-slate-100">
       <div className="app-bg" aria-hidden="true" />
       <ConnBanner online={online} hasUrl={hasUrl} status={status} message={message} syncing={syncing} />
+      <AppHeader
+        user={user}
+        tab={tab}
+        onOpenSettings={() => goTab('settings')}
+        online={online}
+        status={status}
+        onRefreshClock={tickClock}
+        liveTime={liveTime}
+      />
       {installPrompt && (
         <button type="button" onClick={installApp} className="fixed top-3 right-3 z-[60] rounded-full bg-[#0f9f9a] px-4 py-2 text-xs font-extrabold text-white shadow-lg border border-white/30">
           Pasang Aplikasi
         </button>
       )}
-      <main className="page-content app-content max-w-lg mx-auto min-h-screen px-3 pb-28">
+      <main className="page-content app-content max-w-lg mx-auto min-h-screen px-3 pb-28 pt-1">
         <div key={pageKey} className="animate-page-in">
           <ErrorBoundary>
             <Suspense fallback={<div className="flex justify-center py-20"><Loader2 className="w-7 h-7 text-cyan-400 animate-spin" /></div>}>
