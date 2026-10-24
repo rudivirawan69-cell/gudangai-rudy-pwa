@@ -7,7 +7,8 @@ export function normalizeOcr(s) {
     .replace(/[\u201c\u201d]/g, '"')
     .replace(/\bsomay\b/g, 'siomay')
     // Normalize common PDF/OCR substitutions before deterministic product matching.
-    .replace(/\bf[il1]+e?t\b/g, 'fillet')
+    .replace(/\bf[il1|]{1,4}e?[t7]\b/g, 'fillet')
+    .replace(/\bfillet(?=(?:dada|paha)\b)/g, 'fillet ')
     .replace(/\bd[a4]d[a4]\b/g, 'dada')
     .replace(/\bp[a4]h[a4]\b/g, 'paha')
     .replace(/\b(?:frozen|beku|chilled|fresh)\b/g, ' ')
@@ -35,6 +36,40 @@ export function resolvePdfNameDeterministic(entity, rawName, masterList) {
   }
 
   // --- Specific rules (CV vs PT codes differ) ---
+  function pickCanonicalName(targetName, matchType) {
+    const target = normalizeOcr(targetName).replace(/[^a-z]/g, '');
+    const item = masterList.find((m) => {
+      const code = String(m.kode || '').trim().toUpperCase();
+      if (/^(?:BBCV|BBPT)-/.test(code)) return false;
+      return normalizeOcr(m.nama || '').replace(/[^a-z]/g, '') === target;
+    });
+    return item ? { item, matchType } : null;
+  }
+  const compact = norm.replace(/[^a-z0-9]/g, '');
+  if (/ayam/.test(norm) && /filletdada/.test(compact)) {
+    const hit = pick(ent === 'PT' ? 'PT-0001' : 'CV-0001', 'det-ayam-fillet-dada');
+    if (hit) return hit;
+    const byName = pickCanonicalName('Ayam Fillet Dada', 'det-ayam-fillet-dada-name');
+    if (byName) return byName;
+  }
+  if (/ayam/.test(norm) && /filletpaha/.test(compact)) {
+    const hit = pick(ent === 'PT' ? 'PT-0002' : 'CV-0002', 'det-ayam-fillet-paha');
+    if (hit) return hit;
+    const byName = pickCanonicalName('Ayam Fillet Paha', 'det-ayam-fillet-paha-name');
+    if (byName) return byName;
+  }
+  if (/sa[o0]s?ayam69/.test(compact)) {
+    const hit = pick(ent === 'PT' ? 'WK-0021' : 'CV-0036', 'det-saos-ayam-69');
+    if (hit) return hit;
+    const byName = pickCanonicalName('Saos Ayam 69', 'det-saos-ayam-69-name');
+    if (byName) return byName;
+  }
+  if (ent === 'PT' && /bebek/.test(norm)) {
+    const hit = pick('WK-0040', 'det-bebek-pt-wk-0040');
+    if (hit) return hit;
+    const byName = pickCanonicalName('Bebek Penyet', 'det-bebek-pt-wk-0040-name');
+    if (byName) return byName;
+  }
   // Keep the two fillet variants explicit so OCR/PDF noise cannot swap them.
   if (/fillet\s+dada/.test(norm)) {
     const hit = pick(ent === 'PT' ? 'PT-0001' : 'CV-0001', 'det-ayam-fillet-dada');
