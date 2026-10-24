@@ -78,7 +78,6 @@ html[data-theme="dark"] {
   --panel-dark-text: #f8fafc;
 }
 
-/* TEAL: latar hijau, kartu putih, NAV TERANG agar ikon terbaca */
 html[data-theme="warm_productive"] {
   color-scheme: light;
   --bg-app: #0f766e;
@@ -106,7 +105,7 @@ html[data-theme="warm_productive"] {
   --shadow-2: 0 14px 36px rgba(6, 78, 72, 0.35), 0 6px 16px rgba(6, 78, 72, 0.15);
   --shadow-press: inset 0 2px 8px rgba(6, 78, 72, 0.2);
   --shadow-inset: inset 0 1px 4px rgba(6, 78, 72, 0.12);
-  --nav-bg: rgba(255, 255, 255, 0.97);
+  --nav-bg: rgba(255, 255, 255, 0.98);
   --nav-blur: blur(18px) saturate(1.15);
   --focus-ring: 0 0 0 3px rgba(20, 184, 166, 0.4);
   --surface: var(--bg-elevated);
@@ -155,62 +154,11 @@ html[data-theme] .nav-bar {
 html[data-theme] .nav-bar .nav-btn svg {
   stroke: currentColor !important;
   color: inherit !important;
+  opacity: 1 !important;
 }
 html[data-theme] .nav-bar .nav-btn {
   opacity: 1 !important;
 }
-
-/* Soft: nav gelap teks */
-html[data-theme="soft_light"] .nav-bar .nav-btn.is-inactive,
-html[data-theme="light"] .nav-bar .nav-btn.is-inactive {
-  color: #64748b !important;
-}
-html[data-theme="soft_light"] .nav-bar .nav-btn.is-active,
-html[data-theme="light"] .nav-bar .nav-btn.is-active {
-  color: #0f172a !important;
-}
-
-/* Navy: nav gelap, ikon terang */
-html[data-theme="deep_ocean"] .nav-bar .nav-btn.is-inactive {
-  color: #94a3b8 !important;
-}
-html[data-theme="deep_ocean"] .nav-bar .nav-btn.is-active {
-  color: #e0f2fe !important;
-}
-html[data-theme="deep_ocean"] .nav-bar .nav-btn.is-active .text-cyan-300,
-html[data-theme="deep_ocean"] .nav-bar .nav-btn.is-active .text-blue-300,
-html[data-theme="deep_ocean"] .nav-bar .nav-btn.is-active .text-emerald-300,
-html[data-theme="deep_ocean"] .nav-bar .nav-btn.is-active .text-violet-300,
-html[data-theme="deep_ocean"] .nav-bar .nav-btn.is-active .text-amber-300,
-html[data-theme="deep_ocean"] .nav-bar .nav-btn.is-active .text-slate-200 {
-  color: #e0f2fe !important;
-}
-
-/* Teal: NAV PUTIH — ikon teal gelap, jelas terbaca */
-html[data-theme="warm_productive"] .nav-bar .nav-btn.is-inactive {
-  color: #0f766e !important;
-}
-html[data-theme="warm_productive"] .nav-bar .nav-btn.is-active {
-  color: #0d9488 !important;
-}
-html[data-theme="warm_productive"] .nav-bar .nav-btn.is-active .text-cyan-300,
-html[data-theme="warm_productive"] .nav-bar .nav-btn.is-active .text-blue-300,
-html[data-theme="warm_productive"] .nav-bar .nav-btn.is-active .text-emerald-300,
-html[data-theme="warm_productive"] .nav-bar .nav-btn.is-active .text-violet-300,
-html[data-theme="warm_productive"] .nav-bar .nav-btn.is-active .text-amber-300,
-html[data-theme="warm_productive"] .nav-bar .nav-btn.is-active .text-slate-200 {
-  color: #0d9488 !important;
-}
-html[data-theme="warm_productive"] .nav-bar .nav-label {
-  color: inherit !important;
-  opacity: 1 !important;
-}
-html[data-theme="warm_productive"] .nav-bar .nav-btn svg {
-  stroke: currentColor !important;
-  opacity: 1 !important;
-}
-
-/* Teks di kartu */
 html[data-theme] .text-slate-900,
 html[data-theme] .text-slate-800,
 html[data-theme] .text-slate-700 {
@@ -222,62 +170,19 @@ html[data-theme] .text-slate-400,
 html[data-theme] .text-slate-300 {
   color: var(--text-muted) !important;
 }
-
-/* Teal: judul di luar kartu (latar hijau) harus terang */
 html[data-theme="warm_productive"] .page-content h1,
 html[data-theme="warm_productive"] .app-content h1 {
   color: #f0fdfa !important;
   text-shadow: 0 1px 2px rgba(6, 78, 72, 0.35);
 }
-html[data-theme="warm_productive"] .page-content h1 + p,
-html[data-theme="warm_productive"] .app-content .text-[11px].text-slate-400,
-html[data-theme="warm_productive"] .app-content p.text-\[11px\] {
-  color: rgba(240, 253, 250, 0.85) !important;
-}
 html[data-theme="warm_productive"] .page-content .text-cyan-600,
-html[data-theme="warm_productive"] .page-content .text-cyan-700,
-html[data-theme="warm_productive"] .app-content .text-\[10px\].font-bold.uppercase {
+html[data-theme="warm_productive"] .page-content .text-cyan-700 {
   color: #99f6e4 !important;
 }
 html[data-theme="warm_productive"] .stock-card,
-html[data-theme="warm_productive"] .stock-metric-surface,
 html[data-theme="warm_productive"] .dashboard-header-card,
-html[data-theme="warm_productive"] .dashboard-po-card,
 html[data-theme="warm_productive"] .division-status-card {
   color: #134e4a !important;
-}
-html[data-theme="warm_productive"] .stock-card h1,
-html[data-theme="warm_productive"] .dashboard-header-card h1,
-html[data-theme="warm_productive"] .stock-card .text-slate-900,
-html[data-theme="warm_productive"] .dashboard-header-card .text-slate-900 {
-  color: #134e4a !important;
-  text-shadow: none !important;
-}
-
-html[data-theme="deep_ocean"] .text-cyan-700,
-html[data-theme="deep_ocean"] .text-cyan-600 {
-  color: #7dd3fc !important;
-}
-html[data-theme="deep_ocean"] .bg-white,
-html[data-theme="deep_ocean"] .bg-white\/95,
-html[data-theme="deep_ocean"] .bg-slate-50 {
-  background-color: var(--bg-elevated) !important;
-  color: var(--text-main) !important;
-}
-html[data-theme="deep_ocean"] .border-slate-200,
-html[data-theme="deep_ocean"] .border-slate-100 {
-  border-color: rgba(148, 163, 184, 0.28) !important;
-}
-
-html[data-theme] .app-header-card {
-  background: var(--bg-elevated) !important;
-  border-color: var(--border) !important;
-  color: var(--text-main) !important;
-  box-shadow: var(--shadow-1) !important;
-}
-html[data-theme] .app-header-card h1,
-html[data-theme] .app-header-card strong {
-  color: var(--text-main) !important;
 }
 html[data-theme="warm_productive"] .app-header-card {
   background: rgba(255, 255, 255, 0.97) !important;
@@ -287,16 +192,76 @@ html[data-theme="warm_productive"] .app-header-card h1 {
   color: #134e4a !important;
   text-shadow: none !important;
 }
-
-/* Transisi tekan tombol (Input & global) */
+html[data-theme] .app-header-card {
+  background: var(--bg-elevated) !important;
+  border-color: var(--border) !important;
+  color: var(--text-main) !important;
+  box-shadow: var(--shadow-1) !important;
+}
 html[data-theme] button {
-  transition: transform 0.14s ease, box-shadow 0.14s ease, background-color 0.14s ease, color 0.14s ease, opacity 0.14s ease;
+  transition: transform 0.14s ease, box-shadow 0.14s ease, background-color 0.14s ease;
 }
 html[data-theme] button:active:not(:disabled) {
   transform: scale(0.96);
 }
-html[data-theme] .nav-btn:active {
-  transform: scale(0.92);
+
+/* Status PO & Divisi: summary jadi kotak kartu putih */
+html[data-theme] details.scroll-mt-4 > summary,
+html[data-theme] details.rounded-2xl > summary {
+  list-style: none;
+  background: var(--bg-elevated) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 1.1rem !important;
+  box-shadow: var(--shadow-1) !important;
+  padding: 0.85rem 1rem !important;
+  color: var(--text-main) !important;
+  font-weight: 800;
+  margin: 0;
+  display: block;
+}
+html[data-theme] details.scroll-mt-4 > summary::-webkit-details-marker,
+html[data-theme] details.rounded-2xl > summary::-webkit-details-marker {
+  display: none;
+}
+html[data-theme="warm_productive"] details > summary {
+  background: rgba(255,255,255,0.97) !important;
+  color: #134e4a !important;
+}
+
+/* Nav ikon paksa terbaca */
+html[data-theme] .nav-bar .nav-btn.is-inactive,
+html[data-theme] .nav-bar .nav-btn.is-inactive .nav-label {
+  color: var(--text-muted) !important;
+  opacity: 1 !important;
+}
+html[data-theme] .nav-bar .nav-btn.is-active,
+html[data-theme] .nav-bar .nav-btn.is-active .nav-label {
+  color: var(--accent-strong) !important;
+  opacity: 1 !important;
+}
+html[data-theme="warm_productive"] .nav-bar {
+  background: rgba(255,255,255,0.98) !important;
+  border-top: 1px solid rgba(15,118,110,0.2) !important;
+}
+html[data-theme="warm_productive"] .nav-bar .nav-btn.is-inactive {
+  color: #0f766e !important;
+}
+html[data-theme="warm_productive"] .nav-bar .nav-btn.is-active {
+  color: #0d9488 !important;
+}
+html[data-theme="deep_ocean"] .nav-bar .nav-btn.is-inactive {
+  color: #94a3b8 !important;
+}
+html[data-theme="deep_ocean"] .nav-bar .nav-btn.is-active {
+  color: #38bdf8 !important;
+}
+html[data-theme="soft_light"] .nav-bar .nav-btn.is-inactive,
+html[data-theme="light"] .nav-bar .nav-btn.is-inactive {
+  color: #64748b !important;
+}
+html[data-theme="soft_light"] .nav-bar .nav-btn.is-active,
+html[data-theme="light"] .nav-bar .nav-btn.is-active {
+  color: #0f172a !important;
 }
 
 .theme-picker {
