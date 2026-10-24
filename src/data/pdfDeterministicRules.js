@@ -73,7 +73,7 @@ export function resolvePdfNameDeterministic(entity, rawName, masterList) {
     if (byName) return byName;
   }
 
-  // --- Explicit spaced fillet (keep order so OCR noise cannot swap) ---
+  // --- Explicit spaced fillet ---
   if (/fillet\s+dada/.test(norm)) {
     const hit = pick(ent === 'PT' ? 'PT-0001' : 'CV-0001', 'det-ayam-fillet-dada');
     if (hit) return hit;
@@ -83,7 +83,6 @@ export function resolvePdfNameDeterministic(entity, rawName, masterList) {
     if (hit) return hit;
   }
 
-  // Deterministic mappings for items reported missing in PDF import.
   if (/ayam\s+negeri/.test(norm) && /2\s*dada/.test(norm) && /2\s*paha/.test(norm)) {
     const hit = pick(ent === 'PT' ? 'WK-0039' : 'CV-0071', 'det-ayam-negeri-2dada-2paha');
     if (hit) return hit;
@@ -112,61 +111,49 @@ export function resolvePdfNameDeterministic(entity, rawName, masterList) {
     const hit = pick('MM-0015', 'det-paket-siomay');
     if (hit) return hit;
   }
-  // Bakso ikan CIDEA / GOOD EAT (with brand)
   if (/bakso\s*ikan/.test(norm) && /(cidea|good\s*eat)/.test(norm)) {
     const hit = pick(ent === 'PT' ? 'PT-0007' : 'CV-0004', 'det-bakso-cidea');
     if (hit) return hit;
   }
-  // Bakso ikan plain (no CIDEA/GOOD EAT)
   if (/bakso\s*ikan/.test(norm) && !/(cidea|good\s*eat)/.test(norm)) {
     const hit = pick(ent === 'PT' ? 'PT-0008' : 'CV-0007', 'det-bakso-plain');
     if (hit) return hit;
   }
-  // Saos Lada Hitam PROMO
   if (/saos?\s*lada\s*hitam/.test(norm) && /promo/.test(norm)) {
     const hit = pick(ent === 'PT' ? 'PT-0052' : 'CV-0092', 'det-saos-lada-promo');
     if (hit) return hit;
   }
-  // Saos Lada Hitam (non-promo)
   if (/saos?\s*lada\s*hitam/.test(norm) && !/promo/.test(norm)) {
     const hit = pick(ent === 'PT' ? 'PT-0022' : 'CV-0021', 'det-saos-lada');
     if (hit) return hit;
   }
-  // K. Polong / Golden Farm Mix
   if (/(k\.?\s*polong|golden\s*fa[er]m\s*mix|golden\s*farm)/.test(norm)) {
     const hit = pick(ent === 'PT' ? 'WK-0020' : 'CV-0033', 'det-golden-farm');
     if (hit) return hit;
   }
-  // Daging slice LOWFAT (≠ YAKINIKU)
   if (/daging.*slice/.test(norm) && /low\s*fat|lowfat/.test(norm) && !/yakiniku/.test(norm)) {
     const hit = pick(ent === 'PT' ? 'PT-0044' : 'CV-0084', 'det-lowfat');
     if (hit) return hit;
   }
-  // Bumbu urap / urap-urap — PT uses Rekanan/WK code.
   if (/bumbu\s+urap/.test(norm) || /urap[-\s]*urap/.test(norm)) {
     const hit = pick(ent === 'PT' ? 'WK-0009' : 'CV-0077', 'det-bumbu-urap');
     if (hit) return hit;
   }
-  // Daging slice YAKINIKU
   if (/daging.*(slice|sapi)/.test(norm) && /yakiniku/.test(norm)) {
     const hit = pick(ent === 'PT' ? 'PT-0009' : 'CV-0008', 'det-yakiniku');
     if (hit) return hit;
   }
-  // Udang PND
   if (/udang/.test(norm) && /(pnd|115)/.test(norm)) {
     const hit = pick(ent === 'PT' ? 'PT-0005' : 'CV-0003', 'det-udang-pnd');
     if (hit) return hit;
   }
 
-  // Exact nama
   for (const m of masterList) {
     if (normalizeOcr(m.nama) === norm) return { item: m, matchType: 'exact' };
   }
-  // Kode exact
   for (const m of masterList) {
     if (normalizeOcr(m.kode) === norm) return { item: m, matchType: 'kode' };
   }
-  // Contains (longest nama wins)
   let best = null;
   let bestLen = 0;
   for (const m of masterList) {
