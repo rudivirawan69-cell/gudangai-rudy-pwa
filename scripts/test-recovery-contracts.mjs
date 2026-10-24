@@ -57,6 +57,8 @@ const normalizeOcr = new Function('s', normalizeMatch[1]);
 const resolverMatch = resolverSource.match(/export function resolvePdfNameDeterministic\(entity, rawName, masterList\)\s*\{([\s\S]*?)\n\}/);
 assert.ok(resolverMatch, 'Missing deterministic resolver');
 const resolvePdfNameDeterministic = new Function('entity', 'rawName', 'masterList', 'normalizeOcr', resolverMatch[1]);
+
+// Baseline fillet + OCR variants
 const cvMaster = [
   { kode: 'CV-0001', nama: 'Ayam Fillet Dada', satuan: 'Kg', divisi: 'CS' },
   { kode: 'CV-0002', nama: 'Ayam Fillet Paha', satuan: 'Kg', divisi: 'CS' },
@@ -76,6 +78,36 @@ assert.equal(bebekPt?.item?.kode, 'WK-0040', 'Bebek must resolve to PT SKU WK-00
 assert.equal(resolvePdfNameDeterministic('CV', 'Bebek (WK-0040)', cvMaster), null,
   'CV master must not resolve a PT WK SKU');
 
+// Extended regression: no-space + Saos Ayam 69 + entity-specific
+const cvFilletMaster = [
+  { kode: 'CV-0001', nama: 'Ayam Fillet Dada', satuan: 'Kg', divisi: 'CS' },
+  { kode: 'CV-0002', nama: 'Ayam Fillet Paha', satuan: 'Kg', divisi: 'CS' },
+];
+const ptFilletMaster = [
+  { kode: 'PT-0001', nama: 'Ayam Fillet Dada', satuan: 'Kg', divisi: 'CS' },
+  { kode: 'PT-0002', nama: 'Ayam Fillet Paha', satuan: 'Kg', divisi: 'CS' },
+];
+for (const [entity, master] of [['CV', cvFilletMaster], ['PT', ptFilletMaster]]) {
+  for (const [name, code] of [
+    ['Ayam Fillet Dada', entity === 'CV' ? 'CV-0001' : 'PT-0001'],
+    ['Ayam Fillet Paha', entity === 'CV' ? 'CV-0002' : 'PT-0002'],
+    ['Ayam F1llet D4da', entity === 'CV' ? 'CV-0001' : 'PT-0001'],
+    ['Ayam FiIlet P4ha', entity === 'CV' ? 'CV-0002' : 'PT-0002'],
+    ['Ayam FilletDada', entity === 'CV' ? 'CV-0001' : 'PT-0001'],
+    ['Ayam FilletPaha', entity === 'CV' ? 'CV-0002' : 'PT-0002'],
+  ]) assert.equal(resolvePdfNameDeterministic(entity, name, master)?.item?.kode, code, entity + ' PDF match: ' + name);
+}
+const saosCv = [{ kode: 'CV-0036', nama: 'Saos Ayam 69', satuan: 'Pack', divisi: 'PACKING' }];
+const saosPt = [{ kode: 'WK-0021', nama: 'Saos Ayam 69', satuan: 'Pack', divisi: 'CS' }];
+assert.equal(resolvePdfNameDeterministic('CV', 'Saos Ayam 69 (250 gr)', saosCv)?.item?.kode, 'CV-0036');
+assert.equal(resolvePdfNameDeterministic('PT', 'Saos Ayam 69', saosPt)?.item?.kode, 'WK-0021');
+const bebekPtMaster = [{ kode: 'WK-0040', nama: 'Bebek Penyet', satuan: 'Pack', divisi: 'CS' }];
+assert.equal(resolvePdfNameDeterministic('PT', 'Bebek (WK-0040)', bebekPtMaster)?.item?.kode, 'WK-0040');
+
+// HOLD format contract (new simple form)
+assert.match(gs, /pending ❌ PO .* sisa stock .* kekurangan/);
+assert.doesNotMatch(gs, /const structured = "Input pending " \+ numericQty \+ " > sisa stock "/);
+
 assert.match(pdf, /upload PDF tidak boleh menghasilkan kode bahan baku/);
 assert.match(pdf, /if \(\/\^\(\?:BBCV\|BBPT\)-\\d\{3,4\}\$\/\.test\(candidateCode\)\)/);
 assert.match(pdf, /return source\.filter\(\(item\) => \{/);
@@ -83,4 +115,4 @@ assert.match(pdf, /return \/\^CV-\//);
 assert.match(pdf, /return \/\^\(\?:PT\|WK\|MM\|BBPT\)-\//);
 assert.match(pdf, /nama bahan baku hanya valid melalui kode BBCV\/BBPT eksplisit/);
 
-console.log('PASS: conservative PDF matching + manual stock sync contracts');
+console.log('PASS: conservative PDF matching + HOLD format + OCR variants');
