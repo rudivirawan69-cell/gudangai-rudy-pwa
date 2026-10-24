@@ -43,12 +43,12 @@ class ErrorBoundary extends Component {
 }
 
 const TABS = [
-  { id: 'dashboard', label: 'Beranda', icon: LayoutDashboard, active: 'text-cyan-300', chip: 'bg-cyan-500/25' },
-  { id: 'stok', label: 'Stok', icon: Package, active: 'text-blue-300', chip: 'bg-blue-500/25' },
-  { id: 'input', label: 'Input', icon: PackagePlus, active: 'text-emerald-300', chip: 'bg-emerald-500/25' },
-  { id: 'po', label: 'PO', icon: ClipboardList, active: 'text-violet-300', chip: 'bg-violet-500/25' },
-  { id: 'riwayat', label: 'Riwayat', icon: Clock, active: 'text-amber-300', chip: 'bg-amber-500/25' },
-  { id: 'settings', label: 'Atur', icon: Settings, active: 'text-slate-200', chip: 'bg-slate-500/25' },
+  { id: 'dashboard', label: 'Beranda', icon: LayoutDashboard, chip: 'bg-cyan-500/25' },
+  { id: 'stok', label: 'Stok', icon: Package, chip: 'bg-blue-500/25' },
+  { id: 'input', label: 'Input', icon: PackagePlus, chip: 'bg-emerald-500/25' },
+  { id: 'po', label: 'PO', icon: ClipboardList, chip: 'bg-violet-500/25' },
+  { id: 'riwayat', label: 'Riwayat', icon: Clock, chip: 'bg-amber-500/25' },
+  { id: 'settings', label: 'Atur', icon: Settings, chip: 'bg-slate-500/25' },
 ];
 
 const TAB_ACCENT = {
@@ -299,7 +299,7 @@ function AppShell() {
                 type="button"
                 onClick={() => goTab(t.id)}
                 className={`nav-btn flex-1 flex flex-col items-center pt-2 pb-1.5 relative min-w-0 ${
-                  isActive ? `${t.active} is-active` : 'text-slate-400 is-inactive'
+                  isActive ? 'is-active' : 'is-inactive'
                 }`}
               >
                 <div className={`nav-icon-wrap p-1 rounded-xl ${isActive ? t.chip : ''}`}>
