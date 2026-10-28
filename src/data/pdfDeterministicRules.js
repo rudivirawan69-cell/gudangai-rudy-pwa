@@ -58,6 +58,15 @@ export function resolvePdfNameDeterministic(entity, rawName, masterList) {
     const byName = pickCanonicalName('Ayam Fillet Paha', 'det-ayam-fillet-paha-name');
     if (byName) return byName;
   }
+  // Explicit alias confirmed by the operator: Saos Ayam FROZEN is the same item as Saos Ayam 69.
+  // Use the entity-specific SKU and only match if that SKU exists in the active master list.
+  const rawCompact = name.toLowerCase().normalize('NFKC').replace(/[^a-z0-9]/g, '');
+  if (/sa[o0]s?ayamfrozen/.test(rawCompact)) {
+    const hit = pick(ent === 'PT' ? 'WK-0021' : 'CV-0036', 'det-saos-ayam-frozen-alias-saos-ayam-69');
+    if (hit) return hit;
+    const byName = pickCanonicalName('Saos Ayam 69', 'det-saos-ayam-frozen-alias-name');
+    if (byName) return byName;
+  }
   if (/sa[o0]s?ayam69/.test(compact)) {
     const hit = pick(ent === 'PT' ? 'WK-0021' : 'CV-0036', 'det-saos-ayam-69');
     if (hit) return hit;
