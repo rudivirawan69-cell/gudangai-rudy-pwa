@@ -1,12 +1,24 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { Plus, Trash2, CheckCircle2, Circle, Truck, PackageCheck, ClipboardCheck, BellRing } from 'lucide-react';
 
 const STORAGE_KEY = 'gudangai_operator_tasks_v1';
 
 const TYPE_META = {
-  po: { label: 'Konfirmasi PO', Icon: ClipboardCheck, chip: 'bg-violet-500/15 text-violet-700' },
-  datang: { label: 'Kedatangan barang', Icon: PackageCheck, chip: 'bg-emerald-500/15 text-emerald-700' },
-  kirim: { label: 'Kirim luar kota', Icon: Truck, chip: 'bg-amber-500/15 text-amber-700' },
+  po: {
+    label: 'Konfirmasi PO',
+    Icon: ClipboardCheck,
+    chip: 'ot-chip ot-chip-po',
+  },
+  datang: {
+    label: 'Kedatangan barang',
+    Icon: PackageCheck,
+    chip: 'ot-chip ot-chip-datang',
+  },
+  kirim: {
+    label: 'Kirim luar kota',
+    Icon: Truck,
+    chip: 'ot-chip ot-chip-kirim',
+  },
 };
 
 function loadTasks() {
@@ -38,6 +50,7 @@ function uid() {
  * - Kedatangan barang
  * - Jadwal pengiriman luar kota
  * Bisa ditambah, dicentang selesai/belum, dihapus. Tersimpan lokal perangkat.
+ * Mendukung Soft Productive / Navy Dark / Teal Soft.
  */
 export default function OperatorTasks() {
   const [tasks, setTasks] = useState(() => loadTasks());
@@ -72,21 +85,55 @@ export default function OperatorTasks() {
     setTasks((prev) => prev.filter((x) => x.id !== id));
   };
 
-  const pending = tasks.filter((t) => !t.done).length;
+  const { pending, doneCount, byType } = useMemo(() => {
+    let pending = 0;
+    let doneCount = 0;
+    const byType = { po: 0, datang: 0, kirim: 0 };
+    for (const t of tasks) {
+      if (t.done) doneCount += 1;
+      else {
+        pending += 1;
+        if (byType[t.type] !== undefined) byType[t.type] += 1;
+      }
+    }
+    return { pending, doneCount, byType };
+  }, [tasks]);
+
+  const hasilJadiText = useMemo(() => {
+    if (tasks.length === 0) {
+      return 'Belum ada catatan. Tambahkan konfirmasi PO, kedatangan barang, atau jadwal kirim luar kota untuk mulai memantau hasil operasional harian.';
+    }
+    if (pending === 0) {
+      return `Hasil jadi: seluruh ${doneCount} catatan telah diselesaikan. Status operasional kedatangan & konfirmasi hari ini bersih.`;
+    }
+    const parts = [];
+    if (byType.po > 0) parts.push(`${byType.po} konfirmasi PO`);
+    if (byType.datang > 0) parts.push(`${byType.datang} kedatangan barang`);
+    if (byType.kirim > 0) parts.push(`${byType.kirim} kirim luar kota`);
+    const pendingLabel = parts.length ? parts.join(', ') : `${pending} catatan`;
+    return `Hasil jadi: ${doneCount} selesai · ${pending} masih terbuka (${pendingLabel}). Centang item setelah diverifikasi agar status operasional tetap akurat.`;
+  }, [tasks.length, pending, doneCount, byType]);
 
   return (
-    <section aria-label="Pengingat dan konfirmasi kedatangan" className="mt-4 rounded-[26px] border border-stone-200/80 bg-[#fffdfa] p-4 sm:p-6 shadow-[0_10px_30px_rgba(30,41,59,0.07)] space-y-4">
+    <section
+      aria-label="Pengingat dan konfirmasi kedatangan"
+      className="operator-tasks-card mt-4 rounded-[26px] border p-4 sm:p-6 space-y-4"
+    >
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
-          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-amber-100 text-amber-600">
+          <span className="ot-icon-wrap flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl">
             <BellRing className="h-5 w-5" />
           </span>
           <div className="min-w-0">
-            <h2 className="text-base sm:text-lg font-extrabold tracking-tight text-slate-900">Pengingat &amp; Konfirmasi Kedatangan</h2>
-            <p className="text-xs sm:text-sm text-slate-500">Catatan tugas &amp; verifikasi supplier</p>
+            <h2 className="ot-title text-base sm:text-lg font-extrabold tracking-tight">
+              Pengingat &amp; Konfirmasi Kedatangan
+            </h2>
+            <p className="ot-subtitle text-xs sm:text-sm">
+              Catatan tugas &amp; verifikasi supplier
+            </p>
           </div>
         </div>
-        <span className="shrink-0 rounded-full bg-amber-50 px-3 py-2 text-xs font-extrabold text-amber-700 tabular-nums">
+        <span className="ot-badge shrink-0 rounded-full px-3 py-2 text-xs font-extrabold tabular-nums">
           {pending} Catatan
         </span>
       </div>
@@ -97,10 +144,8 @@ export default function OperatorTasks() {
             key={key}
             type="button"
             onClick={() => setType(key)}
-            className={`px-2.5 py-1 rounded-full text-[10px] font-bold border transition ${
-              type === key
-                ? 'bg-cyan-700 text-white border-cyan-700 shadow-sm'
-                : 'bg-white text-slate-600 border-slate-200 hover:border-cyan-300'
+            className={`ot-type-btn px-2.5 py-1 rounded-full text-[10px] font-bold border transition ${
+              type === key ? 'is-active' : ''
             }`}
           >
             {meta.label}
@@ -122,21 +167,22 @@ export default function OperatorTasks() {
                 ? 'Contoh: Terima 20 pack udang PND…'
                 : 'Contoh: Kirim ke Malang Senin 10:00…'
           }
-          className="flex-1 min-w-0 h-12 rounded-2xl border border-slate-200/80 bg-white px-4 text-sm text-slate-900 font-medium placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-cyan-100"
+          className="ot-input flex-1 min-w-0 h-12 rounded-2xl border px-4 text-sm font-medium focus:outline-none focus:ring-2"
         />
         <button
           type="button"
           onClick={addTask}
-          className="shrink-0 h-12 rounded-2xl bg-cyan-700 px-4 text-white flex items-center justify-center gap-2 font-bold active:scale-95"
+          className="ot-add-btn shrink-0 h-12 rounded-2xl px-4 text-white flex items-center justify-center gap-2 font-bold active:scale-95"
           aria-label="Tambah catatan"
         >
-          <Plus className="w-5 h-5" /><span className="hidden sm:inline">Tambah</span>
+          <Plus className="w-5 h-5" />
+          <span className="hidden sm:inline">Tambah</span>
         </button>
       </div>
 
-      <ul className="space-y-2.5 max-h-72 overflow-y-auto">
+      <ul className="space-y-2.5 max-h-72 overflow-y-auto ot-list">
         {tasks.length === 0 && (
-          <li className="text-[11px] text-slate-400 text-center py-3 font-medium">
+          <li className="ot-empty text-[11px] text-center py-3 font-medium">
             Belum ada catatan. Tambah konfirmasi PO, kedatangan, atau jadwal kirim luar kota.
           </li>
         )}
@@ -146,37 +192,35 @@ export default function OperatorTasks() {
           return (
             <li
               key={task.id}
-              className={`flex items-start gap-3 rounded-2xl border px-3 py-3.5 sm:px-4 ${
-                task.done
-                  ? 'bg-white/70 border-slate-100 opacity-70'
-                  : 'bg-white border-slate-100 shadow-[0_2px_8px_rgba(15,23,42,0.035)]'
+              className={`ot-item flex items-start gap-3 rounded-2xl border px-3 py-3.5 sm:px-4 ${
+                task.done ? 'is-done' : ''
               }`}
             >
               <button
                 type="button"
                 onClick={() => toggle(task.id)}
-                className="mt-0.5 shrink-0 text-cyan-700"
+                className="ot-check mt-0.5 shrink-0"
                 aria-label={task.done ? 'Tandai belum' : 'Tandai selesai'}
               >
-                {task.done ? <CheckCircle2 className="w-6 h-6 text-emerald-600" /> : <Circle className="w-6 h-6 text-slate-400" />}
+                {task.done ? (
+                  <CheckCircle2 className="w-6 h-6 ot-check-done" />
+                ) : (
+                  <Circle className="w-6 h-6 ot-check-open" />
+                )}
               </button>
               <div className="flex-1 min-w-0">
                 <span className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[9px] font-bold ${meta.chip}`}>
                   <Icon className="w-3 h-3" />
                   {meta.label}
                 </span>
-                <p
-                  className={`text-sm font-semibold text-slate-800 mt-1 leading-snug ${
-                    task.done ? 'line-through text-slate-400' : ''
-                  }`}
-                >
+                <p className={`ot-item-text text-sm font-semibold mt-1 leading-snug ${task.done ? 'is-done-text' : ''}`}>
                   {task.text}
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => remove(task.id)}
-                className="shrink-0 p-1 text-slate-400 hover:text-red-500"
+                className="ot-delete shrink-0 p-1"
                 aria-label="Hapus"
               >
                 <Trash2 className="w-4 h-4" />
@@ -185,6 +229,23 @@ export default function OperatorTasks() {
           );
         })}
       </ul>
+
+      {/* Keterangan hasil jadi — di bawah kotak kartu kedatangan barang */}
+      <div className="ot-hasil-jadi rounded-2xl border px-3.5 py-3" role="status" aria-live="polite">
+        <p className="ot-hasil-label text-[10px] font-extrabold uppercase tracking-[0.12em] mb-1">
+          Keterangan hasil jadi
+        </p>
+        <p className="ot-hasil-text text-[12px] leading-snug font-medium">
+          {hasilJadiText}
+        </p>
+        {tasks.length > 0 && (
+          <div className="ot-hasil-stats flex flex-wrap gap-x-3 gap-y-1 mt-2 text-[10px] font-bold tabular-nums">
+            <span className="ot-stat-done">{doneCount} selesai</span>
+            <span className="ot-stat-pending">{pending} terbuka</span>
+            <span className="ot-stat-total">{tasks.length} total</span>
+          </div>
+        )}
+      </div>
     </section>
   );
 }
