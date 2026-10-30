@@ -1,0 +1,129 @@
+
+/* ── OperatorTasks — theme-aware (Soft / Navy / Teal) + keterangan hasil jadi ── */
+.operator-tasks-card {
+  background: var(--bg-elevated);
+  border-color: var(--border);
+  box-shadow: var(--shadow-1);
+  color: var(--text-main);
+}
+.operator-tasks-card .ot-icon-wrap {
+  background: color-mix(in srgb, var(--warning) 18%, transparent);
+  color: var(--warning);
+}
+.operator-tasks-card .ot-title { color: var(--text-main); }
+.operator-tasks-card .ot-subtitle { color: var(--text-muted); }
+.operator-tasks-card .ot-badge {
+  background: color-mix(in srgb, var(--warning) 14%, transparent);
+  color: var(--warning);
+}
+.operator-tasks-card .ot-type-btn {
+  background: var(--bg-elevated);
+  color: var(--text-muted);
+  border-color: var(--border);
+}
+.operator-tasks-card .ot-type-btn.is-active {
+  background: var(--accent-strong);
+  color: var(--text-on-accent);
+  border-color: var(--accent-strong);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--accent-strong) 28%, transparent);
+}
+.operator-tasks-card .ot-input {
+  background: var(--bg-elevated);
+  border-color: var(--border);
+  color: var(--text-main);
+}
+.operator-tasks-card .ot-input::placeholder { color: var(--text-muted); opacity: 0.75; }
+.operator-tasks-card .ot-input:focus {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+  box-shadow: var(--focus-ring);
+}
+.operator-tasks-card .ot-add-btn {
+  background: var(--accent-strong);
+  color: var(--text-on-accent);
+}
+.operator-tasks-card .ot-empty { color: var(--text-muted); }
+.operator-tasks-card .ot-item {
+  background: var(--bg-elevated);
+  border-color: var(--border);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--text-main) 4%, transparent);
+}
+.operator-tasks-card .ot-item.is-done {
+  opacity: 0.72;
+  background: color-mix(in srgb, var(--bg-elevated) 88%, var(--bg-muted));
+}
+.operator-tasks-card .ot-item-text { color: var(--text-main); }
+.operator-tasks-card .ot-item-text.is-done-text {
+  text-decoration: line-through;
+  color: var(--text-muted);
+}
+.operator-tasks-card .ot-check-open { color: var(--text-muted); }
+.operator-tasks-card .ot-check-done { color: var(--success); }
+.operator-tasks-card .ot-delete { color: var(--text-muted); }
+.operator-tasks-card .ot-delete:hover { color: var(--danger); }
+
+.operator-tasks-card .ot-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+.operator-tasks-card .ot-chip-po {
+  background: color-mix(in srgb, #8b5cf6 16%, transparent);
+  color: #7c3aed;
+}
+.operator-tasks-card .ot-chip-datang {
+  background: color-mix(in srgb, var(--success) 16%, transparent);
+  color: var(--success);
+}
+.operator-tasks-card .ot-chip-kirim {
+  background: color-mix(in srgb, var(--warning) 16%, transparent);
+  color: var(--warning);
+}
+
+/* Keterangan hasil jadi */
+.operator-tasks-card .ot-hasil-jadi {
+  background: color-mix(in srgb, var(--success) 8%, var(--bg-elevated));
+  border-color: color-mix(in srgb, var(--success) 22%, var(--border));
+}
+.operator-tasks-card .ot-hasil-label {
+  color: var(--success);
+}
+.operator-tasks-card .ot-hasil-text {
+  color: var(--text-main);
+}
+.operator-tasks-card .ot-stat-done { color: var(--success); }
+.operator-tasks-card .ot-stat-pending { color: var(--warning); }
+.operator-tasks-card .ot-stat-total { color: var(--text-muted); }
+
+/* Navy Dark overrides for chips & contrast */
+html[data-theme="deep_ocean"] .operator-tasks-card .ot-chip-po {
+  background: color-mix(in srgb, #a78bfa 22%, transparent);
+  color: #c4b5fd;
+}
+html[data-theme="deep_ocean"] .operator-tasks-card .ot-type-btn.is-active {
+  background: var(--accent);
+  color: #061018;
+  border-color: var(--accent);
+}
+html[data-theme="deep_ocean"] .operator-tasks-card .ot-add-btn {
+  background: var(--accent);
+  color: #061018;
+}
+html[data-theme="deep_ocean"] .operator-tasks-card .ot-hasil-jadi {
+  background: color-mix(in srgb, var(--success) 12%, var(--bg-elevated));
+  border-color: color-mix(in srgb, var(--success) 28%, var(--border));
+}
+
+/* Teal Soft — slightly stronger glass edge */
+html[data-theme="warm_productive"] .operator-tasks-card {
+  background: color-mix(in srgb, #ffffff 92%, var(--bg-elevated));
+  border-color: color-mix(in srgb, var(--success) 18%, var(--border));
+}
+html[data-theme="warm_productive"] .operator-tasks-card .ot-type-btn.is-active {
+  background: #0d9488;
+  border-color: #0d9488;
+  color: #ffffff;
+}
+html[data-theme="warm_productive"] .operator-tasks-card .ot-add-btn {
+  background: #0d9488;
+  color: #ffffff;
+}
