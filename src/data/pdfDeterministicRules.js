@@ -7,9 +7,18 @@ export function normalizeOcr(s) {
     .replace(/[\u201c\u201d]/g, '"')
     .replace(/\bsomay\b/g, 'siomay')
     // Normalize common PDF/OCR substitutions before deterministic product matching.
-    .replace(/\bf[il1]+e?t\b/g, 'fillet')
+    .replace(/\bf[il1]{1,3}e?t\b/g, 'fillet')
+    .replace(/\bfi+l+e+t\b/g, 'fillet')
     .replace(/\bd[a4]d[a4]\b/g, 'dada')
     .replace(/\bp[a4]h[a4]\b/g, 'paha')
+    // Recover glued OCR tokens common in supplier PDF/OCR output.
+    .replace(/filletdada/g, 'fillet dada')
+    .replace(/filletpaha/g, 'fillet paha')
+    .replace(/dadafillet/g, 'fillet dada')
+    .replace(/pahafillet/g, 'fillet paha')
+    .replace(/ayamfillet/g, 'ayam fillet')
+    .replace(/saos?ayam\s*69/g, 'saos ayam 69')
+    .replace(/saos?\s*ayam69/g, 'saos ayam 69')
     .replace(/\b(?:frozen|beku|chilled|fresh)\b/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
@@ -36,12 +45,18 @@ export function resolvePdfNameDeterministic(entity, rawName, masterList) {
 
   // --- Specific rules (CV vs PT codes differ) ---
   // Keep the two fillet variants explicit so OCR/PDF noise cannot swap them.
-  if (/fillet\s+dada/.test(norm)) {
+  // Accept spaced, glued, and reversed word order from PDF/OCR.
+  if (/(?:ayam\s+)?fillet\s*dada|\bdada\s*fillet\b/.test(norm)) {
     const hit = pick(ent === 'PT' ? 'PT-0001' : 'CV-0001', 'det-ayam-fillet-dada');
     if (hit) return hit;
   }
-  if (/fillet\s+paha/.test(norm)) {
+  if (/(?:ayam\s+)?fillet\s*paha|\bpaha\s*fillet\b/.test(norm)) {
     const hit = pick(ent === 'PT' ? 'PT-0002' : 'CV-0002', 'det-ayam-fillet-paha');
+    if (hit) return hit;
+  }
+  // Saos Ayam 69 — protect brand number 69 from being treated as generic sauce.
+  if (/saos?\s*ayam\s*69/.test(norm)) {
+    const hit = pick(ent === 'PT' ? 'WK-0021' : 'CV-0036', 'det-saos-ayam-69');
     if (hit) return hit;
   }
   // Deterministic mappings for items reported missing in PDF import.
