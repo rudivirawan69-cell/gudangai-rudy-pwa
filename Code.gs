@@ -2027,16 +2027,15 @@ function getAllStock(entitas) {
   if (bbSheet) {
     const bb = getBahanBakuStockMap_();
     if (!bb.success) return { success: false, count: 0, items: [], error: bb.error || 'Gagal membaca "Stock Bahan Baku".' };
-    const lastRow = bbSheet.getLastRow(), lastCol = bbSheet.getLastColumn();
-    const top = lastRow && lastCol ? bbSheet.getRange(1, 1, Math.min(5, lastRow), lastCol).getValues() : [];
-    let headerRow = -1, headers = [], lower = [], cKode = -1;
-    for (let i = 0; i < top.length; i++) {
-      const h = top[i].map(function(v) { return String(v || "").toLowerCase().trim(); });
-      const k = h.findIndex(function(v) { return v.indexOf("kode") >= 0; });
-      if (k >= 0) { headerRow = i + 1; headers = top[i]; lower = h; cKode = k; break; }
-    }
-    if (headerRow < 0) return { success: false, count: 0, items: [], error: 'Header Kode tidak ditemukan di "Stock Bahan Baku".' };
-    const rows = lastRow > headerRow ? bbSheet.getRange(headerRow + 1, 1, lastRow - headerRow, lastCol).getValues() : [];
+    // Gunakan hasil pembacaan yang sama dari getBahanBakuStockMap_(); hindari
+    // membaca header dan 28+ baris bahan baku untuk kedua kalinya pada setiap request.
+    const lastRow = bb.lastRow, lastCol = bb.lastCol;
+    const headerRow = bb.headerRow;
+    const headers = bb.headers || [];
+    const lower = headers.map(function(v) { return String(v || "").toLowerCase().trim(); });
+    const cKode = lower.findIndex(function(v) { return v.indexOf("kode") >= 0; });
+    const rows = bb.rows || [];
+    if (headerRow < 0 || cKode < 0) return { success: false, count: 0, items: [], error: 'Header Kode tidak ditemukan di "Stock Bahan Baku".' };
     rows.forEach(function(row) {
       const kode = String(row[cKode] || "").trim();
       if (!kode || /^total\b/i.test(kode) || !Object.prototype.hasOwnProperty.call(bb.map, kode)) return;
@@ -2430,6 +2429,10 @@ function getBahanBakuStockMap_() {
     success: true,
     sheet: "Stock Bahan Baku",
     headerRow: headerRow,
+    lastRow: lastRow,
+    lastCol: lastCol,
+    headers: top[headerRow - 1],
+    rows: rows,
     count: codes.length,
     codes: codes,
     invalidStockCodes: invalidStockCodes,
@@ -4061,6 +4064,17 @@ function getStatusPO() {
     ? po.getRange(PO_DATA_START_ROW, PO_DATA_START_COL, last - PO_DATA_START_ROW + 1, PO_DATA_NUM_COLS).getDisplayValues()
     : [];
   const allStockForPO_ = getAllStock("ALL").items || [];
+  // Index nama sekali agar lookup kandidat PO O(master + PO), bukan filter master untuk setiap item.
+  const stockByNameCV = Object.create(null);
+  const stockByNamePT = Object.create(null);
+  allStockForPO_.forEach(function(item) {
+    const key = normalizePONameKey_(item.nama);
+    if (!key) return;
+    const target = item.entitas === "CV" ? stockByNameCV : (item.entitas === "PT" ? stockByNamePT : null);
+    if (!target) return;
+    if (!target[key]) target[key] = [];
+    target[key].push(item);
+  });
 
   // Peta kedatangan:
   // 1) Primer: "No : {noPO}[ ITEM : nn ]" di keterangan Barang masuk (paling akurat).
@@ -4119,8 +4133,9 @@ function getStatusPO() {
     if (status === 'SELESAI') { itemSelesai++; totalKonfirmasi++; }
     else if (status === 'SEBAGIAN') { itemSebagian++; totalAktif++; }
     else { itemMenunggu++; totalAktif++; }
-    const cvCandidates = allStockForPO_.filter(function(it) { return it.entitas === "CV" && normalizePONameKey_(it.nama) === normalizePONameKey_(nama); });
-    const ptCandidates = allStockForPO_.filter(function(it) { return it.entitas === "PT" && normalizePONameKey_(it.nama) === normalizePONameKey_(nama); });
+    const nameKey = normalizePONameKey_(nama);
+    const cvCandidates = stockByNameCV[nameKey] || [];
+    const ptCandidates = stockByNamePT[nameKey] || [];
     items.push({
       no: no, nama: nama, totalPO: total, poCV: poCV, poPT: poPT, kodeCV: cvCandidates.length === 1 ? cvCandidates[0].kode : null, kodePT: ptCandidates.length === 1 ? ptCandidates[0].kode : null,
       qtyDatang: datang, qtyBelumDatang: belumDatang, status: status,
