@@ -92,4 +92,36 @@ assert.match(pdf, /return \/\^CV-\//);
 assert.match(pdf, /return \/\^\(\?:PT\|WK\|MM\|BBPT\)-\//);
 assert.match(pdf, /nama bahan baku hanya valid melalui kode BBCV\/BBPT eksplisit/);
 
+
+const apiPath = new URL('../src/data/api.js', import.meta.url);
+const appPath = new URL('../src/App.jsx', import.meta.url);
+const stokPath = new URL('../src/pages/StokPage.jsx', import.meta.url);
+const dashboardPath = new URL('../src/pages/DashboardPage.jsx', import.meta.url);
+const poPath = new URL('../src/pages/POPage.jsx', import.meta.url);
+const queuePath = new URL('../src/pages/SyncQueuePage.jsx', import.meta.url);
+const stockStatusPath = new URL('../src/data/stockStatus.js', import.meta.url);
+const apiSource = readFileSync(apiPath, 'utf8');
+const appSource = readFileSync(appPath, 'utf8');
+const stokSource = readFileSync(stokPath, 'utf8');
+const dashboardSource = readFileSync(dashboardPath, 'utf8');
+const poSource = readFileSync(poPath, 'utf8');
+const queueSource = readFileSync(queuePath, 'utf8');
+const stockStatusSource = readFileSync(stockStatusPath, 'utf8');
+
+assert.match(apiSource, /postJson\(payload,\s*\{\s*retries:\s*1,\s*timeoutMs:\s*BATCH_TIMEOUT_MS\s*\}\)/,
+  'Ambiguous batch writes must not be retried automatically while the first Apps Script request may still be running.');
+assert.match(apiSource, /import \{ classifyStockLevel \} from '\.\/stockStatus'/);
+assert.match(stockStatusSource, /stock < 10/);
+assert.match(stockStatusSource, /stock < 20/);
+assert.match(stokSource, /classifyStockLevel/);
+assert.match(dashboardSource, /classifyStockLevel/);
+assert.match(apiSource, /const cls = classifyStockLevel\(stok\)/);
+assert.match(inputPage, /gudangai_input_draft_v1/);
+assert.match(inputPage, /Draft transaksi dipulihkan/);
+assert.match(poSource, /gudangai_po_draft_v1/);
+assert.match(poSource, /const poDate = localISODate\(\)/);
+assert.match(appSource, /function AppHeader\(\{ user, tab, onOpenSettings, online, status \}\)/);
+assert.match(appSource, /const \[liveTime, setLiveTime\] = useState\('—'\)/);
+assert.doesNotMatch(queueSource, /Math\.random\(\)/, 'Queue item fallback keys must be deterministic.');
+
 console.log('PASS: conservative PDF matching + manual stock sync contracts');
