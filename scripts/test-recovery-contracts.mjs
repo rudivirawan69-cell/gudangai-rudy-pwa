@@ -77,12 +77,12 @@ for (const [input, expected] of [
   ['Ayam F1llet D4da', 'CV-0001'],
   ['Ayam FiIlet P4ha', 'CV-0002'],
 ]) {
-  const hit = resolvePdfNameDeterministic('CV', input, cvMaster);
+  const hit = resolvePdfNameDeterministic('CV', input, cvMaster, normalizeOcr);
   assert.equal(hit?.item?.kode, expected, 'Must resolve product correctly: ' + input);
 }
-const bebekPt = resolvePdfNameDeterministic('PT', 'Bebek (WK-0040)', ptMaster);
+const bebekPt = resolvePdfNameDeterministic('PT', 'Bebek (WK-0040)', ptMaster, normalizeOcr);
 assert.equal(bebekPt?.item?.kode, 'WK-0040', 'Bebek must resolve to PT SKU WK-0040');
-assert.equal(resolvePdfNameDeterministic('CV', 'Bebek (WK-0040)', cvMaster), null,
+assert.equal(resolvePdfNameDeterministic('CV', 'Bebek (WK-0040)', cvMaster, normalizeOcr), null,
   'CV master must not resolve a PT WK SKU');
 
 assert.match(pdf, /upload PDF tidak boleh menghasilkan kode bahan baku/);
