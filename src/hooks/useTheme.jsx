@@ -49,7 +49,14 @@ function applyDomTheme(theme) {
   const t = normalizeTheme(theme);
   const root = document.documentElement;
   root.setAttribute('data-theme', t);
-  root.style.colorScheme = t === 'deep_ocean' ? 'dark' : 'light';
+  root.style.colorScheme = t === 'deep_ocean' || t === 'graphite_titanium' ? 'dark' : 'light';
+  const themeColors = {
+    soft_light: '#247ba8',
+    deep_ocean: '#35b9b0',
+    graphite_titanium: '#d69a48',
+  };
+  const themeColorMeta = document.querySelector('meta[name="theme-color"]');
+  if (themeColorMeta) themeColorMeta.setAttribute('content', themeColors[t] || themeColors.soft_light);
   if (document.body) document.body.setAttribute('data-theme', t);
 }
 
