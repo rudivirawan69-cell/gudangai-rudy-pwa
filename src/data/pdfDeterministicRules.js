@@ -1,19 +1,24 @@
-/** Deterministic PDF name resolver — V6.8.2 (fillet + saos ayam 69 hardened from live PDF lines) */
+/** Deterministic PDF name resolver — V6.8.3 (fillet pipe/bullet cleanup + saos ayam FROZEN) */
 export function normalizeOcr(s) {
   return String(s || '')
     .toLowerCase()
     .normalize('NFKC')
     .replace(/[\u2018\u2019]/g, "'")
     .replace(/[\u201c\u201d]/g, '"')
+    // Strip list/table noise from PDF/paste rekap lines
+    .replace(/^[\s*•\-–—]+/, '')
+    .replace(/[|｜]/g, ' ')
     .replace(/\bsomay\b/g, 'siomay')
     // Sauce spelling variants from supplier PDFs
     .replace(/\bsaus\b/g, 'saos')
     .replace(/\bsaoz\b/g, 'saos')
     // Normalize common PDF/OCR substitutions before deterministic product matching.
-    .replace(/\bf[il1]{1,3}e?t\b/g, 'fillet')
+    // Broad OCR forms: fillet / filet / fil1et / fiilet / flllet
+    .replace(/\bf[il1]{1,4}e?t\b/g, 'fillet')
     .replace(/\bfi+l+e+t\b/g, 'fillet')
     .replace(/\bfilet\b/g, 'fillet')
     .replace(/\bfillette\b/g, 'fillet')
+    .replace(/\bflll?et\b/g, 'fillet')
     .replace(/\bd[a4]d[a4]\b/g, 'dada')
     .replace(/\bp[a4]h[a4]\b/g, 'paha')
     // Recover glued OCR tokens common in supplier PDF/OCR output.
@@ -27,7 +32,9 @@ export function normalizeOcr(s) {
     .replace(/saus?\s*ayam\s*#?\s*69/g, 'saos ayam 69')
     .replace(/saos?\s*ayam\s*#?\s*69/g, 'saos ayam 69')
     .replace(/ayam\s*69\s*saos?/g, 'saos ayam 69')
+    // Drop storage labels and trailing price-like decimals left in the name field
     .replace(/\b(?:frozen|beku|chilled|fresh)\b/g, ' ')
+    .replace(/\b\d+(?:[.,]\d{1,2})\b/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -73,13 +80,15 @@ export function resolvePdfNameDeterministic(entity, rawName, masterList) {
     const hit = pick(ent === 'PT' ? 'PT-0002' : 'CV-0002', 'det-ayam-fillet-paha');
     if (hit) return hit;
   }
-  // Saos Ayam 69 — protect brand number 69 from being treated as generic sauce.
-  // Observed live PDF line: "Saos Ayam 69".
+  // Saos Ayam 69 — brand product (master CV-0036 / WK-0021).
+  // Live PDF variants: "Saos Ayam 69", "Saos Ayam FROZEN 1.00" (69 omitted, frozen label).
+  // Do NOT steal AGM / rica / bakar / lada / manis / masakan / special / nasgor / cah.
   if (
     /saos?\s*ayam\s*#?\s*69/.test(norm) ||
     /saus?\s*ayam\s*#?\s*69/.test(norm) ||
     /ayam\s*69\s*saos?/.test(norm) ||
-    (/\bsaos?\s*69\b/.test(norm) && /ayam/.test(norm))
+    (/\bsaos?\s*69\b/.test(norm) && /ayam/.test(norm)) ||
+    (/saos?\s*ayam\b/.test(norm) && !/(?:agm|rica|bakar|lada|manis|masakan|special|spesial|nasgor|cah|asam)/.test(norm))
   ) {
     const hit = pick(ent === 'PT' ? 'WK-0021' : 'CV-0036', 'det-saos-ayam-69');
     if (hit) return hit;
