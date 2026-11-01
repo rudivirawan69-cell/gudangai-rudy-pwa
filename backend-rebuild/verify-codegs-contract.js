@@ -19,7 +19,7 @@ function occurrences(token) {
   return source.split(token).length - 1;
 }
 
-assert.ok(source.includes('const BACKEND_VERSION = "7.0.0-RECONSTRUCTION-CANDIDATE"'));
+assert.ok(source.includes('const BACKEND_VERSION = "7.0.1-PERFORMANCE-CANDIDATE"'));
 assert.equal(occurrences("function syncDivisionStockLightweight_()"), 1);
 assert.equal(occurrences("function syncDivisionStock(options)"), 1);
 assert.equal(occurrences("function onEdit(e)"), 0);
@@ -82,6 +82,33 @@ assert.ok(bulkWrite.indexOf("writeTouched = true;") <
   "Bulk partial-write exceptions must be classified conservatively as UNKNOWN.");
 assert.ok(bulkWrite.includes("plannedKeteranganHash") && bulkWrite.includes("Fingerprint Keterangan gagal dibuat"));
 
+
+const singleWrite = section("function addTransaction(body)", "function bulkTransaction(body)");
+assert.ok(singleWrite.includes("verifiedReadBack") && singleWrite.includes("getCachedSyncVersions_()"));
+assert.ok(!singleWrite.includes("getCurrentSyncVersions_()"), "Single write must not rescan all stock sheets to rebuild a response version.");
+assert.ok(!singleWrite.includes("syncDivisionStockLightweight_()"), "Single write must not run a full formula audit in the response path.");
+
+const bulkWrite = section("function bulkTransaction(body)", "function normalizeEntityGroup_(");
+assert.ok(bulkWrite.includes("buildIdempotencyIndex_()") && bulkWrite.includes("findIdempotencyRecordInIndex_"));
+assert.ok(!bulkWrite.includes("findIdempotencyRecord_(item.transactionId, item.nonce)"),
+  "Bulk must not rescan the ledger for each item.");
+assert.ok(bulkWrite.includes("verifiedBC = sheet.getRange(startRow, 2, rowsToWrite.length, 2).getValues()"));
+assert.ok(bulkWrite.includes("verifiedFG = sheet.getRange(startRow, 6, rowsToWrite.length, 2).getValues()"));
+assert.ok(!bulkWrite.includes("sheet.getRange(rowNum, 2, 1, 2).getValues()"),
+  "Bulk read-back must be block-based, not per-row.");
+assert.ok(!bulkWrite.includes("syncDivisionStockLightweight_()"),
+  "Bulk write must not run a full formula audit in the response path.");
+
+const onEdit = section("function onEditRouter_(e)", "function clearMasterCache()");
+assert.ok(onEdit.includes("SpreadsheetApp.flush()"));
+assert.ok(!onEdit.includes("syncDivisionStockLightweight_()"),
+  "Manual edit path must not scan all formula cells on every edit.");
+const timestamp = section("function stampVisibleUpdateTimestamp_(formatted)", "function getLastUpdateTimestamp()");
+for (const name of ["Dashboard", "Data Stok Per Divisi", "Config"]) assert.ok(timestamp.includes(name));
+for (const name of ["Barang masuk", "Barang keluar", "Stock CV", "Stock PT", "purchase order"]) {
+  assert.ok(!timestamp.includes(name), "Timestamp writer should not touch non-metadata sheet: " + name);
+}
+
 const functionNames = [...source.matchAll(/^\s*function\s+([A-Za-z_$][\w$]*)\s*\(/gm)].map(m => m[1]);
 const duplicates = functionNames.filter((name, i) => functionNames.indexOf(name) !== i);
 assert.deepEqual([...new Set(duplicates)], [], "Duplicate global function declarations found.");
@@ -94,6 +121,15 @@ vm.runInContext(
   'validateTransactionDate = function() { return { valid:true, normalized:"2026-11-01" }; };',
   context
 );
+
+
+const ledgerIndexFixture = {
+  byTransactionId: { "TX-A": { transactionId: "TX-A", nonce: "N-A", rowNumber: 8 } },
+  byNonce: { "N-A": { transactionId: "TX-A", nonce: "N-A", rowNumber: 8 }, "N-B": { transactionId: "TX-B", nonce: "N-B", rowNumber: 12 } }
+};
+assert.equal(context.findIdempotencyRecordInIndex_(ledgerIndexFixture, "TX-A", "N-A").rowNumber, 8);
+assert.equal(context.findIdempotencyRecordInIndex_(ledgerIndexFixture, "TX-A", "N-B").rowNumber, 12,
+  "If either identity matches, use the latest matching ledger row.");
 
 const entityCases = [
   ["CV", "CV-0001", "CV"],
