@@ -14,7 +14,7 @@ import {
 const THEME_ICONS = {
   soft_light: Sun,
   deep_ocean: Moon,
-  warm_productive: Droplet,
+  graphite_titanium: Droplet,
 };
 
 const AVATAR_SRC = DEFAULT_PROFILE_PHOTO;
@@ -208,12 +208,13 @@ export default function SettingsPage({ onNavigate }) {
                 <span className={`text-[10px] font-bold leading-tight text-center ${active ? 'text-blue-800' : 'text-slate-600'}`}>
                   {t.short}
                 </span>
+                <span className="text-[8px] leading-tight text-center opacity-70">{t.description}</span>
               </button>
             );
           })}
         </div>
         <p className="text-[10px] text-slate-400 leading-relaxed">
-          Soft Light · Deep Ocean · Blue Pro — tersimpan di perangkat.
+          Arctic Professional · Deep Ocean · Graphite Titanium — tersimpan di perangkat.
         </p>
       </div>
 
@@ -292,7 +293,7 @@ export default function SettingsPage({ onNavigate }) {
           <p className="font-semibold text-slate-700">GudangAI RUDY</p>
           <p>Cold Storage Nasi Goreng 69 · CV & PT</p>
           <p>Frontend PWA · Backend Google Apps Script V6.6.5+BULK-STABLE</p>
-          <p>3 mode tampilan: Soft Light · Deep Ocean · Blue Pro</p>
+          <p>3 mode tampilan: Arctic Professional · Deep Ocean · Graphite Titanium</p>
         </div>
       )}
 
