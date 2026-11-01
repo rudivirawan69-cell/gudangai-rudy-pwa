@@ -1001,9 +1001,10 @@ function addTransaction(body) {
           if (!ledgerRecord || Number(ledgerRecord.dataRow) !== Number(targetRow)) {
             throw new Error("Write-ahead ledger tidak dapat dikonfirmasi; jurnal transaksi tidak ditulis.");
           }
+          // Set konservatif sebelum panggilan Sheets: exception pada setValues bisa terjadi setelah write parsial.
+          writeTouched = true;
           // Hanya kolom writable: B:C dan F:G. Kolom D:E tetap terlindungi.
           sheet.getRange(targetRow, 2, 1, 2).setValues([[formattedDate, kode]]);
-          writeTouched = true;
           sheet.getRange(targetRow, 6, 1, 2).setValues([[finalQty, keterangan]]);
           // HARD RULE: transaksi API tidak pernah menulis/mengubah Stock CV/Stock PT.
           // Stock CV/PT adalah MASTER/SOURCE OF TRUTH dan hanya dibaca untuk validasi stok.
@@ -1312,8 +1313,9 @@ function bulkTransaction(body) {
         fgValues.push([planned.qty, planned.ket]);
       }
 
-      sheet.getRange(startRow, 2, rowsToWrite.length, 2).setValues(bcValues);
+      // Set konservatif sebelum panggilan Sheets agar partial-write exception berstatus UNKNOWN.
       writeTouched = true;
+      sheet.getRange(startRow, 2, rowsToWrite.length, 2).setValues(bcValues);
       sheet.getRange(startRow, 6, rowsToWrite.length, 2).setValues(fgValues);
       SpreadsheetApp.flush();
 
