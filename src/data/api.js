@@ -344,7 +344,9 @@ async function submitBatchChunk(action, entity, chunkItems, tanggal) {
     requestId: batchId,
   };
 
-  const data = await postJson(payload, { retries: 2, timeoutMs: 90000 });
+  // Satu request per batch: timeout bersifat ambigu. Jangan kirim ulang saat Apps Script
+  // mungkin masih memproses batch pertama; antrikan identity yang sama untuk rekonsiliasi.
+  const data = await postJson(payload, { retries: 1, timeoutMs: BATCH_TIMEOUT_MS });
   const rawResults = data?.results || data?.data?.results || [];
   // Map identity → clientItemId from normalized (wire intentionally omits clientItemId).
   // Keys: transactionId (TX-CI-...), requestId (CI-...), and bare clientItemId.
