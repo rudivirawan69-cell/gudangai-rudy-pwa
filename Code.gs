@@ -1272,13 +1272,9 @@ function bulkTransaction(body) {
     }
 
     if (rowsToWrite.length > 0) {
-      var startRow = findSafeEmptyRowAdaptively(sheet, config);
-      var needEnd = startRow + rowsToWrite.length - 1;
-      if (sheet.getMaxRows() < needEnd) {
-        try { sheet.insertRowsAfter(sheet.getMaxRows(), needEnd - sheet.getMaxRows() + 10); } catch (insErr) {}
-      }
-      if (!verifyRowStillEmptyPath2(sheet, startRow)) {
-        startRow = findSafeEmptyRowAdaptively(sheet, config);
+      var startRow = findSafeEmptyBlockAdaptively_(sheet, config, rowsToWrite.length);
+      if (!verifyRowsEmptyPath2(sheet, startRow, rowsToWrite.length)) {
+        throw new Error("Blok target bulk tidak kosong setelah alokasi; batalkan batch tanpa menimpa baris lama.");
       }
 
       var bcValues = [];
@@ -1532,6 +1528,59 @@ function verifyRowStillEmptyPath2(sheet, row) {
   const fg = sheet.getRange(row, 6, 1, 2).getValues()[0];
   return (bc[0] === "" || bc[0] === null) && (bc[1] === "" || bc[1] === null) &&
          (fg[0] === "" || fg[0] === null) && (fg[1] === "" || fg[1] === null);
+}
+
+function verifyRowsEmptyPath2(sheet, startRow, rowCount) {
+  var count = Math.max(1, Math.floor(Number(rowCount) || 1));
+  var bc = sheet.getRange(startRow, 2, count, 2).getValues();
+  var fg = sheet.getRange(startRow, 6, count, 2).getValues();
+  for (var i = 0; i < count; i++) {
+    for (var c = 0; c < 2; c++) {
+      if (bc[i][c] !== "" && bc[i][c] != null) return false;
+      if (fg[i][c] !== "" && fg[i][c] != null) return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * Find an append-safe contiguous block for bulk rows. A single empty first row
+ * is not sufficient: every target row must be empty in both B:C and F:G.
+ * Scan starts after the final non-empty item code, so historical gaps are never reused.
+ */
+function findSafeEmptyBlockAdaptively_(sheet, config, rowCount) {
+  var count = Math.max(1, Math.floor(Number(rowCount) || 1));
+  var start = Math.max(config.headerRow + 1, getRealLastDataRow(sheet, config) + 1);
+  var maxRows = sheet.getMaxRows();
+
+  if (start <= maxRows) {
+    var scanCount = maxRows - start + 1;
+    var bc = sheet.getRange(start, 2, scanCount, 2).getValues();
+    var fg = sheet.getRange(start, 6, scanCount, 2).getValues();
+    var emptyRun = 0;
+    for (var i = 0; i < scanCount; i++) {
+      var empty = true;
+      for (var c = 0; c < 2; c++) {
+        if ((bc[i][c] !== "" && bc[i][c] != null) || (fg[i][c] !== "" && fg[i][c] != null)) {
+          empty = false; break;
+        }
+      }
+      emptyRun = empty ? emptyRun + 1 : 0;
+      if (emptyRun >= count) return start + i - count + 1;
+    }
+  }
+
+  var insertAfter = sheet.getMaxRows();
+  var addRows = Math.max(count, SCAN_BUFFER_ROWS);
+  try {
+    sheet.insertRowsAfter(insertAfter, addRows);
+  } catch (insertErr) {
+    try { sheet.insertRows(insertAfter + 1, addRows); }
+    catch (insertErr2) {
+      throw new Error("Gagal menambah blok baris bulk pada '" + sheet.getName() + "': " + insertErr.message);
+    }
+  }
+  return insertAfter + 1;
 }
 
 
