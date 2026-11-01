@@ -2436,21 +2436,53 @@ function divisionStockLookupExpression_(source, codeCell) {
     source.kodeColumn + "$" + source.dataStartRow + ":$" + source.kodeColumn + ",0))";
 }
 
+function divisionFormulaArgumentSeparator_() {
+  // Indonesian Google Sheets locale requires semicolons between formula arguments.
+  var locale = "";
+  try { locale = String(getSS().getSpreadsheetLocale() || "").toLowerCase(); } catch (e) {}
+  return /^(id|de|fr|es|it|pt|nl|ru|tr|pl|sv|da|fi|no|cs|sk|hu|ro|uk|el|he|ar|th|vi|ja|ko|zh)/.test(locale) ? ";" : ",";
+}
+
 function buildDivisionStockFormula_(rowNumber, kode, sources) {
   var codeCell = "$B$" + rowNumber;
   var code = String(kode || "").trim().toUpperCase();
-  if (/^BB(CV|PT)-/.test(code)) {
-    return "=IFERROR(" + divisionStockLookupExpression_(sources.bb, codeCell) + ",0)";
-  }
-  if (/^CV-/.test(code)) {
-    return "=IFERROR(" + divisionStockLookupExpression_(sources.cv, codeCell) + ",0)";
-  }
-  if (/^(PT|WK|MM)-/.test(code)) {
-    return "=IFERROR(" + divisionStockLookupExpression_(sources.pt, codeCell) + ",0)";
-  }
-  // Fail closed: unknown code families never borrow stock from another entity.
+  var sep = divisionFormulaArgumentSeparator_();
+  if (/^BB(CV|PT)-/.test(code)) return "=IFERROR(" + divisionStockLookupExpression_(sources.bb, codeCell) + sep + "0)";
+  if (/^CV-/.test(code)) return "=IFERROR(" + divisionStockLookupExpression_(sources.cv, codeCell) + sep + "0)";
+  if (/^(PT|WK|MM)-/.test(code)) return "=IFERROR(" + divisionStockLookupExpression_(sources.pt, codeCell) + sep + "0)";
   return "=0";
 }
+
+// Repairs only formula cells in column F; does not rebuild or clear the table.
+function repairDivisionStockFormulas() {
+  var ss = getSS();
+  var sh = ss.getSheetByName("Data Stok Per Divisi");
+  if (!sh) return { success:false, error:'Sheet "Data Stok Per Divisi" tidak ditemukan' };
+  var sources = getDivisionStockFormulaSources_();
+  if (!sources.success) return { success:false, error:sources.error };
+  var lastRow = Math.min(sh.getLastRow(), 5000);
+  var codes = sh.getRange(1, 2, lastRow, 1).getDisplayValues();
+  var repaired = 0, failed = [];
+  for (var i = 0; i < lastRow; i++) {
+    var kode = String(codes[i][0] || "").trim();
+    if (!/^[A-Z]{2,6}-[A-Z0-9-]*\\d[A-Z0-9-]*$/i.test(kode)) continue;
+    try {
+      sh.getRange(i + 1, 6).setFormula(buildDivisionStockFormula_(i + 1, kode, sources));
+      repaired++;
+    } catch (e) { failed.push({ row:i + 1, kode:kode, error:String(e.message || e) }); }
+  }
+  SpreadsheetApp.flush();
+  var audit = auditDivisionStockFormulaCells_();
+  updateLastUpdateTimestamp();
+  return {
+    success:failed.length === 0 && audit.success,
+    repaired:repaired, formulaCount:audit.formulaCount, itemCount:audit.itemCount,
+    failed:failed, audit:audit, locale:ss.getSpreadsheetLocale(),
+    separator:divisionFormulaArgumentSeparator_(),
+    message:failed.length ? "Sebagian formula gagal ditulis." : "Formula kolom F ditulis ulang; verifikasi hasil melalui audit."
+  };
+}
+
 function auditDivisionStockFormulaCells_() {
   var ss = getSS();
   var sh = ss.getSheetByName("Data Stok Per Divisi");
