@@ -2313,12 +2313,15 @@ function buildDivisionStockFormula_(rowNumber, kode, sources) {
   if (/^BB(CV|PT)-/.test(code)) {
     return "=IFERROR(" + divisionStockLookupExpression_(sources.bb, codeCell) + ",0)";
   }
-  var first = /^CV-/.test(code) ? sources.cv : (/^(PT|WK|MM)-/.test(code) ? sources.pt : sources.cv);
-  var second = first === sources.cv ? sources.pt : sources.cv;
-  return "=IFERROR(" + divisionStockLookupExpression_(first, codeCell) +
-    ",IFERROR(" + divisionStockLookupExpression_(second, codeCell) + ",0))";
+  if (/^CV-/.test(code)) {
+    return "=IFERROR(" + divisionStockLookupExpression_(sources.cv, codeCell) + ",0)";
+  }
+  if (/^(PT|WK|MM)-/.test(code)) {
+    return "=IFERROR(" + divisionStockLookupExpression_(sources.pt, codeCell) + ",0)";
+  }
+  // Fail closed: unknown code families never borrow stock from another entity.
+  return "=0";
 }
-
 function auditDivisionStockFormulaCells_() {
   var ss = getSS();
   var sh = ss.getSheetByName("Data Stok Per Divisi");
