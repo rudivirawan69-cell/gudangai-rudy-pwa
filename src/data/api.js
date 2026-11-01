@@ -386,19 +386,20 @@ async function submitBatchChunk(action, entity, chunkItems, tanggal) {
   }
   const successCount = results.filter((r) => r.success).length;
   const failCount = results.length - successCount;
-  return { success: successCount === normalized.length, successCount, failCount, results };
+  return { success: successCount === normalized.length, successCount, failCount, results, serverExecMs: Number(data?.execMs) || null };
 }
 function emitProgress(sent, total, chunkResult) {
   try { window.dispatchEvent(new CustomEvent('gudangai-submit-progress', { detail: { sent, total, success: chunkResult?.successCount || 0, failed: chunkResult?.failCount || 0 } })); } catch (_) {}
 }
 async function submitItems(action, entity, items, tanggal, options = {}) {
+  const clientStartedAt = Date.now();
   const list = (items || []).map(ensureClientItemId);
   if (!list.length) return { success: false, error: 'Tidak ada item' };
   if (!navigator.onLine || !getApiUrl()) {
     if (!options.fromQueue) enqueue(action, entity, list, { tanggal });
     const msg = list.length + ' item masuk Antrian Sinkronisasi (offline)';
     pushNotification({ type: 'warning', title: 'Koneksi terputus', body: msg + '. Tidak ada item yang dibuang.' });
-    return { success: false, queued: true, count: 0, queuedCount: list.length, failed: list.length, results: list.map(it => ({ success: false, queued: true, clientItemId: it.clientItemId })) };
+    return { success: false, queued: true, count: 0, queuedCount: list.length, failed: list.length, clientElapsedMs: Date.now() - clientStartedAt, results: list.map(it => ({ success: false, queued: true, clientItemId: it.clientItemId })) };
   }
   // Never silently queue a write while the API is reachable.
   // Verify the exact write-capable backend before attempting any transaction.
@@ -410,15 +411,21 @@ async function submitItems(action, entity, items, tanggal, options = {}) {
     pushNotification({ type: 'error', title: 'Write ditahan', body: msg });
     return {
       success: false, count: 0, failed: list.length, queuedCount: list.length, total: list.length,
+      clientElapsedMs: Date.now() - clientStartedAt,
       results: list.map(it => ({ success: false, queued: true, clientItemId: it.clientItemId, error: msg }))
     };
   }
   const allResults = [];
   let totalSuccess = 0, totalFail = 0, totalQueued = 0;
+  let totalServerExecMs = 0, measuredServerChunks = 0;
   for (let i = 0; i < list.length; i += BATCH_CHUNK_SIZE) {
     const chunk = list.slice(i, i + BATCH_CHUNK_SIZE);
     try {
       const batchRes = await submitBatchChunk(action, entity, chunk, tanggal);
+      if (Number.isFinite(Number(batchRes.serverExecMs)) && Number(batchRes.serverExecMs) > 0) {
+        totalServerExecMs += Number(batchRes.serverExecMs);
+        measuredServerChunks++;
+      }
       const sc = batchRes.successCount || 0;
       const fc = batchRes.failCount || 0;
       totalSuccess += sc; totalFail += fc;
@@ -470,6 +477,8 @@ async function submitItems(action, entity, items, tanggal, options = {}) {
     queuedCount: totalQueued,
     total: list.length,
     results: allResults,
+    serverExecMs: measuredServerChunks ? totalServerExecMs : null,
+    clientElapsedMs: Date.now() - clientStartedAt,
   };
 }
 export async function submitBarangMasuk({ entity, tanggal, items }) { return submitItems('barangMasuk', entity, items, tanggal); }
