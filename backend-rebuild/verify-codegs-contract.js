@@ -60,6 +60,10 @@ assert.ok(singleWrite.includes('writeOccurred: "unknown"') && singleWrite.includ
 assert.ok(singleWrite.indexOf('dataRow: targetRow, writeOccurred: "unknown"') <
   singleWrite.indexOf("sheet.getRange(targetRow, 2, 1, 2).setValues("),
   "Single transaction write intent must persist before journal write.");
+assert.ok(singleWrite.indexOf("writeTouched = true;") <
+  singleWrite.indexOf("sheet.getRange(targetRow, 2, 1, 2).setValues("),
+  "Single write failures must be classified conservatively as UNKNOWN.");
+assert.ok(singleWrite.includes("plannedKeteranganHash") && singleWrite.includes("Fingerprint Keterangan gagal dibuat"));
 const bulkWrite = section("function bulkTransaction(body)", "function normalizeEntityGroup_(");
 assert.ok(bulkWrite.includes('prior.status === "UNKNOWN"') && bulkWrite.includes('"READBACK_REQUIRED"'));
 assert.ok(bulkWrite.includes("dataRow: plannedRow") && bulkWrite.includes('writeOccurred: "unknown"'));
@@ -70,6 +74,10 @@ assert.ok(bulkWrite.includes("findSafeEmptyBlockAdaptively_(sheet, config, rowsT
 assert.ok(bulkWrite.includes("verifyRowsEmptyPath2(sheet, startRow, rowsToWrite.length)"));
 assert.ok(bulkWrite.includes('String(vFG[1] || "") === String(rw.ket || "")'),
   "Bulk read-back must verify the user Keterangan, not only code/date/qty.");
+assert.ok(bulkWrite.indexOf("writeTouched = true;") <
+  bulkWrite.indexOf("sheet.getRange(startRow, 2, rowsToWrite.length, 2).setValues("),
+  "Bulk partial-write exceptions must be classified conservatively as UNKNOWN.");
+assert.ok(bulkWrite.includes("plannedKeteranganHash") && bulkWrite.includes("Fingerprint Keterangan gagal dibuat"));
 
 const functionNames = [...source.matchAll(/^\s*function\s+([A-Za-z_$][\w$]*)\s*\(/gm)].map(m => m[1]);
 const duplicates = functionNames.filter((name, i) => functionNames.indexOf(name) !== i);
@@ -127,6 +135,11 @@ assert.equal(context.normalizeDivision_("DAPUR1"), "DAPUR 1");
 assert.equal(context.normalizeDivision_("DAPUR2"), "DAPUR 2");
 assert.equal(context.appendIdentityMarker_("Barang datang", "TX1", "N1"), "Barang datang");
 assert.ok(!context.appendIdentityMarker_("Barang datang", "TX1", "N1").includes("GUDANGAI_TX="));
+const longNote = "X".repeat(200);
+const holdNote = "Input pending 8 > sisa stock 3 > kurang 5";
+const mergedNote = context.appendTransactionNoteWithinLimit_(longNote, holdNote);
+assert.ok(mergedNote.length <= 200);
+assert.ok(mergedNote.endsWith(holdNote), "Structured HOLD note must remain visible inside the 200-character limit.");
 
 const grid = Array.from({length:12}, () => Array(7).fill(""));
 grid[3][2] = "CV-0001"; // last item code is row 4
