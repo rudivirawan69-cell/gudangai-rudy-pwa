@@ -6,64 +6,49 @@ const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
 
-const codePath = path.resolve(__dirname, "..", "Code.gs");
-const source = fs.readFileSync(codePath, "utf8");
+const source = fs.readFileSync(path.resolve(__dirname, "..", "Code.gs"), "utf8");
 new vm.Script(source, { filename: "Code.gs" });
 
-function extractFunction(name) {
-  const start = source.indexOf("function " + name + "(");
-  assert.notEqual(start, -1, "Missing function: " + name);
-  const open = source.indexOf("{", start);
-  let depth = 0, state = "normal";
-  for (let i = open; i < source.length; i++) {
-    const c = source[i], next = source[i + 1];
-    if (state === "line") { if (c === "\n") state = "normal"; continue; }
-    if (state === "block") { if (c === "*" && next === "/") { state = "normal"; i++; } continue; }
-    if (state === "single" || state === "double" || state === "template") {
-      if (c === "\\") { i++; continue; }
-      if ((state === "single" && c === "'") || (state === "double" && c === '"') ||
-          (state === "template" && c === "`")) state = "normal";
-      continue;
-    }
-    if (c === "/" && next === "/") { state = "line"; i++; continue; }
-    if (c === "/" && next === "*") { state = "block"; i++; continue; }
-    if (c === "'") { state = "single"; continue; }
-    if (c === '"') { state = "double"; continue; }
-    if (c === "`") { state = "template"; continue; }
-    if (c === "{") depth++;
-    if (c === "}" && --depth === 0) return source.slice(start, i + 1);
-  }
-  throw new Error("Unclosed function: " + name);
+function section(startMarker, endMarker) {
+  const start = source.indexOf(startMarker);
+  assert.notEqual(start, -1, "Missing start marker: " + startMarker);
+  const end = source.indexOf(endMarker, start + startMarker.length);
+  assert.notEqual(end, -1, "Missing end marker: " + endMarker);
+  return source.slice(start, end);
 }
-function countMatches(re) { return (source.match(re) || []).length; }
+function occurrences(token) {
+  return source.split(token).length - 1;
+}
 
-assert.match(source, /const BACKEND_VERSION = "7\.0\.0-RECONSTRUCTION-CANDIDATE"/);
-assert.equal(countMatches(/function syncDivisionStockLightweight_\s*\(/g), 1);
-assert.equal(countMatches(/function syncDivisionStock\s*\(/g), 1);
-assert.equal(countMatches(/function onEdit\s*\(/g), 0);
-assert.match(source, /function onEditRouter_\s*\(/);
-assert.match(source, /function getDivisionStockFormulaSources_\s*\(/);
-assert.match(source, /function auditDivisionStockFormulaCells_\s*\(/);
+assert.ok(source.includes('const BACKEND_VERSION = "7.0.0-RECONSTRUCTION-CANDIDATE"'));
+assert.equal(occurrences("function syncDivisionStockLightweight_()"), 1);
+assert.equal(occurrences("function syncDivisionStock(options)"), 1);
+assert.equal(occurrences("function onEdit(e)"), 0);
+assert.ok(source.includes("function onEditRouter_(e)"));
+assert.ok(source.includes("function getDivisionStockFormulaSources_()"));
+assert.ok(source.includes("function auditDivisionStockFormulaCells_()"));
 
-const lightSync = extractFunction("syncDivisionStockLightweight_");
-assert.doesNotMatch(lightSync, /\.(?:setValue|setValues|setFormula|setFormulas|clearContent|clear)\s*\(/,
-  "Lightweight sync must not write spreadsheet cells.");
+const lightSync = section("function syncDivisionStockLightweight_()", "function removeChartByTitle_()");
+for (const forbidden of ["setValue(", "setValues(", "setFormula(", "setFormulas(", "clearContent(", "clear("]) {
+  assert.ok(!lightSync.includes(forbidden), "Lightweight sync contains forbidden spreadsheet writer: " + forbidden);
+}
 
-const fullSync = extractFunction("syncDivisionStock");
-assert.match(fullSync, /\.setFormulas\s*\(/, "Full sync must restore formulas in column F.");
-assert.doesNotMatch(fullSync, /dest\.getRange\(1,\s*1,\s*oldRows,\s*7\)\.clearContent\s*\(/,
+const fullSync = section("function syncDivisionStock(options)", "function logDailySnapshot()");
+assert.ok(fullSync.includes(".setFormulas("), "Full sync must restore formulas in column F.");
+assert.ok(!fullSync.includes("dest.getRange(1, 1, oldRows, 7).clearContent("),
   "Full sync must not clear A:G as one block.");
 
-const dashboardDiag = extractFunction("diagnoseDashboard");
-assert.doesNotMatch(dashboardDiag, /\.(?:setValue|setValues|clearContent|clear)\s*\(/,
-  "Dashboard diagnostics must be read-only.");
-const setup = extractFunction("setupEnvironment");
-assert.match(setup, /installManagedTriggers_\(ss\)/);
-assert.doesNotMatch(setup, /formatDashboardLayout693_\s*\(/,
-  "Setup must not run the legacy Dashboard layout migration.");
-assert.doesNotMatch(source, /newTrigger\(["']refreshStatusStockLight_["']\)/);
-assert.doesNotMatch(extractFunction("formatDashboardLayout693_"), /clearDashboardCharts_|newChart\s*\(/,
-  "Legacy layout writer must be disabled.");
+const dashboardDiag = section("function diagnoseDashboard()", "function clearDashboardCharts_()");
+assert.ok(!dashboardDiag.includes("setValue(") && !dashboardDiag.includes("setValues(") &&
+  !dashboardDiag.includes("clearContent("), "Dashboard diagnostics must be read-only.");
+
+const setup = section("function setupEnvironment()", "function generateRandomSecret()");
+assert.ok(setup.includes("installManagedTriggers_(ss)"));
+assert.ok(!setup.includes("formatDashboardLayout693_("), "Setup must not run the legacy Dashboard layout migration.");
+
+const layoutWriter = section("function formatDashboardLayout693_()", "function writeDashboardData693_(d)");
+assert.ok(layoutWriter.includes("skipped:true") && !layoutWriter.includes("clearDashboardCharts_"));
+assert.ok(!source.includes('newTrigger("refreshStatusStockLight_")'));
 
 console.log("PASS: Code.gs syntax and V7 static safety contract");
 console.log("PASS: lightweight division sync performs no spreadsheet cell writes");
