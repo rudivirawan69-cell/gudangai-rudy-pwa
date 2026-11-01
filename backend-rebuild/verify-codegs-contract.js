@@ -37,7 +37,7 @@ assert.ok(fullSync.includes(".setFormulas("), "Full sync must restore formulas i
 assert.ok(!fullSync.includes("dest.getRange(1, 1, oldRows, 7).clearContent("),
   "Full sync must not clear A:G as one block.");
 
-const dashboardDiag = section("function diagnoseDashboard()", "function clearDashboardCharts_()");
+const dashboardDiag = section("function diagnoseDashboard()", "function clearDashboardCharts_(");
 assert.ok(!dashboardDiag.includes("setValue(") && !dashboardDiag.includes("setValues(") &&
   !dashboardDiag.includes("clearContent("), "Dashboard diagnostics must be read-only.");
 
