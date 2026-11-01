@@ -1312,7 +1312,8 @@ function bulkTransaction(body) {
         var vFG = sheet.getRange(rowNum, 6, 1, 2).getValues()[0];
         var ok = (normalizeTransactionDateKey_(vBC[0]) === normalizeTransactionDateKey_(rw.date) || String(vBC[0]) === String(rw.date))
           && String(vBC[1] || "").trim() === rw.kode
-          && Number(vFG[0]) === Number(rw.qty);
+          && Number(vFG[0]) === Number(rw.qty)
+          && String(vFG[1] || "") === String(rw.ket || "");
 
         if (ok) {
           successCount++;
