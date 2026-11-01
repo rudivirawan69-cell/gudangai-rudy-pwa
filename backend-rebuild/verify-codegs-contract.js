@@ -27,7 +27,7 @@ assert.ok(source.includes("function onEditRouter_(e)"));
 assert.ok(source.includes("function getDivisionStockFormulaSources_()"));
 assert.ok(source.includes("function auditDivisionStockFormulaCells_()"));
 
-const lightSync = section("function syncDivisionStockLightweight_()", "function removeChartByTitle_()");
+const lightSync = section("function syncDivisionStockLightweight_()", "function removeChartByTitle_(");
 for (const forbidden of ["setValue(", "setValues(", "setFormula(", "setFormulas(", "clearContent(", "clear("]) {
   assert.ok(!lightSync.includes(forbidden), "Lightweight sync contains forbidden spreadsheet writer: " + forbidden);
 }
