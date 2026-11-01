@@ -32,9 +32,12 @@ function flattenQueue(queue) {
     const entity = entry.entity || '';
     const tanggal = entry.tanggal || '';
     const entryId = entry.id || '';
-    for (const it of entry.items || []) {
+    const items = entry.items || [];
+    for (let itemIndex = 0; itemIndex < items.length; itemIndex++) {
+      const it = items[itemIndex];
+      const stableFallbackKey = [entryId || type, entity, tanggal, itemIndex, it.kode || 'item'].join('-');
       rows.push({
-        key: it.clientItemId || `${entryId}-${it.kode}-${Math.random()}`,
+        key: it.clientItemId || stableFallbackKey,
         clientItemId: it.clientItemId,
         kode: it.kode || '',
         nama: it.nama || '',
@@ -168,6 +171,7 @@ export default function SyncQueuePage({ onBack }) {
           : `Berhasil: ${succeeded.length} · Gagal / sisa: ${after.length}`,
       });
       if (succeeded.length > 0) {
+        window.dispatchEvent(new Event('gudangai-stock-refresh'));
         pushNotification({ type: 'ok', title: 'Sinkronisasi selesai', body: `${succeeded.length} item berhasil dikirim ke spreadsheet.` });
       }
       if (after.length > 0 && !res.skipped) {

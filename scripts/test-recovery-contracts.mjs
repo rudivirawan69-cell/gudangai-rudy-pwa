@@ -44,7 +44,8 @@ for (const sheet of ['Barang masuk', 'Barang keluar', 'Barang Rusak']) {
 }
 assert.match(onEdit, /const stockImpacting\s*=\s*stockSheets\.indexOf\(sheetName\)\s*>=\s*0\s*\|\|\s*transactionSheets\.indexOf\(sheetName\)\s*>=\s*0/);
 assert.ok(onEdit.indexOf('SpreadsheetApp.flush()') >= 0);
-assert.ok(onEdit.indexOf('SpreadsheetApp.flush()') < onEdit.indexOf('syncDivisionStockLightweight_()'));
+assert.ok(!onEdit.includes('syncDivisionStockLightweight_()'),
+  'Manual edit must not run a full formula audit on every spreadsheet change.');
 assert.equal(gs.includes('function onEdit(e)'), false,
   'V7 must expose only the installable onEditRouter_ handler, not a second simple trigger.');
 const sync = functionBody(gs, 'syncDivisionStockLightweight_');
@@ -91,5 +92,54 @@ assert.match(pdf, /return source\.filter\(\(item\) => \{/);
 assert.match(pdf, /return \/\^CV-\//);
 assert.match(pdf, /return \/\^\(\?:PT\|WK\|MM\|BBPT\)-\//);
 assert.match(pdf, /nama bahan baku hanya valid melalui kode BBCV\/BBPT eksplisit/);
+
+
+const apiPath = new URL('../src/data/api.js', import.meta.url);
+const appPath = new URL('../src/App.jsx', import.meta.url);
+const stokPath = new URL('../src/pages/StokPage.jsx', import.meta.url);
+const dashboardPath = new URL('../src/pages/DashboardPage.jsx', import.meta.url);
+const poPath = new URL('../src/pages/POPage.jsx', import.meta.url);
+const queuePath = new URL('../src/pages/SyncQueuePage.jsx', import.meta.url);
+const stockStatusPath = new URL('../src/data/stockStatus.js', import.meta.url);
+const apiSource = readFileSync(apiPath, 'utf8');
+const appSource = readFileSync(appPath, 'utf8');
+const stokSource = readFileSync(stokPath, 'utf8');
+const dashboardSource = readFileSync(dashboardPath, 'utf8');
+const poSource = readFileSync(poPath, 'utf8');
+const queueSource = readFileSync(queuePath, 'utf8');
+const stockStatusSource = readFileSync(stockStatusPath, 'utf8');
+
+assert.match(apiSource, /postJson\(payload,\s*\{\s*retries:\s*1,\s*timeoutMs:\s*BATCH_TIMEOUT_MS\s*\}\)/,
+  'Ambiguous batch writes must not be retried automatically while the first Apps Script request may still be running.');
+assert.match(apiSource, /import \{ classifyStockLevel \} from '\.\/stockStatus'/);
+assert.match(stockStatusSource, /stock < 10/);
+assert.match(stockStatusSource, /stock < 20/);
+assert.match(stokSource, /classifyStockLevel/);
+assert.match(dashboardSource, /classifyStockLevel/);
+assert.match(apiSource, /const cls = classifyStockLevel\(stok\)/);
+assert.match(inputPage, /gudangai_input_draft_v1/);
+assert.match(inputPage, /Draft transaksi dipulihkan/);
+assert.match(poSource, /gudangai_po_draft_v1/);
+assert.match(poSource, /const poDate = localISODate\(\)/);
+assert.match(appSource, /function AppHeader\(\{ user, tab, onOpenSettings, online, status \}\)/);
+assert.match(appSource, /const \[liveTime, setLiveTime\] = useState\('—'\)/);
+assert.doesNotMatch(queueSource, /Math\.random\(\)/, 'Queue item fallback keys must be deterministic.');
+
+
+const useStockPath = new URL('../src/hooks/useStock.js', import.meta.url);
+const useStockSource = readFileSync(useStockPath, 'utf8');
+assert.match(useStockSource, /gudangai-stock-refresh/);
+assert.match(inputPage, /gudangai-stock-refresh/);
+assert.match(queueSource, /gudangai-stock-refresh/);
+assert.match(apiSource, /serverExecMs: measuredServerChunks \? totalServerExecMs : null/);
+assert.match(apiSource, /clientElapsedMs: Date\.now\(\) - clientStartedAt/);
+const stockStatusMatch = stockStatusSource.match(/export function classifyStockLevel\(value\)\s*\{([\s\S]*?)\n\}/);
+assert.ok(stockStatusMatch, 'Missing shared stock status function');
+const classifyStockLevel = new Function('value', stockStatusMatch[1]);
+assert.equal(classifyStockLevel(0), 'kritis');
+assert.equal(classifyStockLevel(9), 'kritis');
+assert.equal(classifyStockLevel(10), 'waspada');
+assert.equal(classifyStockLevel(19), 'waspada');
+assert.equal(classifyStockLevel(20), 'aman');
 
 console.log('PASS: conservative PDF matching + manual stock sync contracts');

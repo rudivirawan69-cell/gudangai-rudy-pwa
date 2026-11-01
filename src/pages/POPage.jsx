@@ -69,7 +69,7 @@ function formatTglKedatangan(baseDate) {
   if (Number.isNaN(d.getTime())) {
     const f = new Date();
     f.setDate(f.getDate() + 2);
-    return formatTglKedatangan(f.toISOString().slice(0, 10));
+    return formatTglKedatangan(localISODate(f));
   }
   const dd = String(d.getDate()).padStart(2, '0');
   const mon = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()];
@@ -78,7 +78,36 @@ function formatTglKedatangan(baseDate) {
 function defaultTglISO() {
   const d = new Date();
   d.setDate(d.getDate() + 2);
-  return d.toISOString().slice(0, 10);
+  return localISODate(d);
+}
+
+function localISODate(date = new Date()) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+const PO_DRAFT_KEY = 'gudangai_po_draft_v1';
+function loadPODraft() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(PO_DRAFT_KEY) || 'null');
+    if (!raw || raw.version !== 1) return {};
+    const safeItems = (items) => Array.isArray(items) ? items.slice(0, 500).filter((item) => item && item.kode && item.entity).map((item) => ({
+      kode: String(item.kode), nama: String(item.nama || ''), entity: item.entity === 'PT' ? 'PT' : 'CV',
+      satuan: String(item.satuan || 'Pack'), size: String(item.size || ''), sisa: Number(item.sisa) || 0,
+      aman: Number(item.aman) || 0, qty: item.qty == null ? 0 : item.qty,
+      tglKedatangan: String(item.tglKedatangan || ''), divisi: String(item.divisi || ''),
+    })) : [];
+    return {
+      hub: ['generate', 'current', 'previous', 'confirm'].includes(raw.hub) ? raw.hub : null,
+      tab: raw.tab === 'produksi' ? 'produksi' : 'cs',
+      csItems: safeItems(raw.csItems),
+      prodItems: safeItems(raw.prodItems),
+      csGenerated: !!raw.csGenerated,
+      prodGenerated: !!raw.prodGenerated,
+    };
+  } catch (_) { return {}; }
 }
 function formatTglHeader() {
   const d = new Date();
@@ -147,8 +176,9 @@ function ItemCard({ item, onUpdate, onRemove, editable }) {
 }
 
 export default function POPage({ onNavigate }) {
+  const [initialDraft] = useState(loadPODraft);
   const [density, setDensity] = useState(() => localStorage.getItem('gudangai_density') || 'comfortable');
-  const [hub, setHub] = useState(null);
+  const [hub, setHub] = useState(initialDraft.hub ?? null);
   const gapClass = density === 'compact' ? 'space-y-1.5' : 'space-y-2.5';
   const stockCV = useStock('CV');
   const stockPT = useStock('PT');
@@ -158,15 +188,24 @@ export default function POPage({ onNavigate }) {
     stockCV.refresh?.({ force: true });
     stockPT.refresh?.({ force: true });
   }, [bootstrapRevision]);
-  const [tab, setTab] = useState('cs');
-  const [csItems, setCsItems] = useState([]);
-  const [prodItems, setProdItems] = useState([]);
-  const [csGenerated, setCsGenerated] = useState(false);
-  const [prodGenerated, setProdGenerated] = useState(false);
+  const [tab, setTab] = useState(initialDraft.tab || 'cs');
+  const [csItems, setCsItems] = useState(initialDraft.csItems || []);
+  const [prodItems, setProdItems] = useState(initialDraft.prodItems || []);
+  const [csGenerated, setCsGenerated] = useState(!!initialDraft.csGenerated);
+  const [prodGenerated, setProdGenerated] = useState(!!initialDraft.prodGenerated);
   const [copied, setCopied] = useState(false);
   const [poSaved, setPoSaved] = useState(false);
   const [savingPO, setSavingPO] = useState(false);
-  const [poSaveMessage, setPoSaveMessage] = useState('');
+  const [poSaveMessage, setPoSaveMessage] = useState(() => (initialDraft.csGenerated || initialDraft.prodGenerated) ? 'Draft PO dipulihkan dari perangkat.' : '');
+  useEffect(() => {
+    try {
+      localStorage.setItem(PO_DRAFT_KEY, JSON.stringify({
+        version: 1, savedAt: Date.now(), hub, tab, csItems, prodItems, csGenerated, prodGenerated,
+      }));
+    } catch (_) {
+      // Draft persistence is best-effort and must not block PO editing.
+    }
+  }, [hub, tab, csItems, prodItems, csGenerated, prodGenerated]);
   const criticalCS = useMemo(() => {
     const cv = buildCritical(stockCV.items, 'CV', isCS);
     const pt = buildCritical(stockPT.items, 'PT', isCS);
@@ -217,7 +256,8 @@ export default function POPage({ onNavigate }) {
     if (!items.length) { setPoSaveMessage('PO tidak dikirim: qty seluruh item kosong atau nol.'); return; }
     setSavingPO(true); setPoSaveMessage('Mengirim PO ke Spreadsheet utama…');
     try {
-      const res = await submitPO({ items, tanggal: new Date().toISOString().slice(0, 10), noPO: 'PO-' + new Date().toISOString().slice(0, 10) + '-' + (tab === 'cs' ? 'CS' : 'PROD'), deviceId: 'gudangai-rudy-pwa' });
+      const poDate = localISODate();
+      const res = await submitPO({ items, tanggal: poDate, noPO: 'PO-' + poDate + '-' + (tab === 'cs' ? 'CS' : 'PROD'), deviceId: 'gudangai-rudy-pwa' });
       if (res?.success === true && (res.writeOccurred === true || res.status === 'APPLIED' || res.code === 'IDEMPOTENT_REPLAY')) {
         setPoSaveMessage('Tersimpan dan dikonfirmasi backend: ' + (res.count ?? items.length) + ' item ke sheet ' + (res.sheet || 'purchase order') + '.');
         setPoSaved(true); setCopied(false);

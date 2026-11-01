@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { fetchStock } from '../data/api';
+import { classifyStockLevel } from '../data/stockStatus';
 
 /**
  * Stok live — stabil: jangan kosongkan list saat error singkat.
@@ -12,15 +13,18 @@ export function useStock(entity) {
   const [lastRefresh, setLastRefresh] = useState(null);
   const lastOk = useRef([]);
   const fetching = useRef(false);
+  const requestSequence = useRef(0);
 
   const refresh = useCallback(async ({ force = false } = {}) => {
     if (fetching.current && !force) return;
+    const requestId = ++requestSequence.current;
     fetching.current = true;
     // Hanya tampilkan loading penuh jika belum ada data
     if (lastOk.current.length === 0) setLoading(true);
     setError(null);
     try {
       const data = await fetchStock(entity);
+      if (requestId !== requestSequence.current) return;
       if (Array.isArray(data) && data.length > 0) {
         lastOk.current = data;
         setItems(data);
@@ -33,11 +37,14 @@ export function useStock(entity) {
         setItems(Array.isArray(data) ? data : []);
       }
     } catch (err) {
+      if (requestId !== requestSequence.current) return;
       setError(err.message);
       if (lastOk.current.length > 0) setItems(lastOk.current);
     } finally {
-      setLoading(false);
-      fetching.current = false;
+      if (requestId === requestSequence.current) {
+        setLoading(false);
+        fetching.current = false;
+      }
     }
   }, [entity]);
 
@@ -54,23 +61,28 @@ export function useStock(entity) {
         refresh({ force: false });
       }
     };
+    const onOnline = () => refresh({ force: true });
+    const onStockRefresh = () => refresh({ force: true });
     const id = setInterval(() => {
       if (navigator.onLine) refresh({ force: false });
     }, 90000);
     document.addEventListener('visibilitychange', onVis);
-    window.addEventListener('online', () => refresh({ force: true }));
+    window.addEventListener('online', onOnline);
+    window.addEventListener('gudangai-stock-refresh', onStockRefresh);
     return () => {
       clearInterval(id);
       document.removeEventListener('visibilitychange', onVis);
+      window.removeEventListener('online', onOnline);
+      window.removeEventListener('gudangai-stock-refresh', onStockRefresh);
     };
   }, [refresh]);
 
   const getStats = useCallback(() => {
     const total = items.length;
-    const safe = items.filter((i) => i.stok > 20).length;
-    const warning = items.filter((i) => i.stok > 5 && i.stok <= 20).length;
-    const danger = items.filter((i) => i.stok > 0 && i.stok <= 5).length;
-    const zero = items.filter((i) => i.stok === 0).length;
+    const safe = items.filter((i) => classifyStockLevel(i.stok) === 'aman').length;
+    const warning = items.filter((i) => classifyStockLevel(i.stok) === 'waspada').length;
+    const danger = items.filter((i) => classifyStockLevel(i.stok) === 'kritis' && Number(i.stok) > 0).length;
+    const zero = items.filter((i) => Number(i.stok) === 0).length;
     const totalStok = items.reduce((s, i) => s + (i.stok || 0), 0);
     return { total, safe, warning, danger, zero, totalStok };
   }, [items]);
