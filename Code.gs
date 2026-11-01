@@ -2428,7 +2428,7 @@ function syncDivisionStock(options) {
     var row = data[i];
     var kode = String(row[idxKode] || "").trim();
     if (!kode) continue;
-    var div = String(row[idxDivisi] || "").trim().toUpperCase();
+    var div = normalizeDivision_(row[idxDivisi]);
     if (kode.indexOf("BBCV-") === 0 || kode.indexOf("BBPT-") === 0) div = "BAHAN BAKU";
     if (!groups[div]) continue;
     groups[div].push([
