@@ -38,16 +38,25 @@ function functionBody(source, name) {
   const end = source.indexOf('\nfunction ', start + 10);
   return source.slice(start, end > start ? end : source.length);
 }
-const onEdit = functionBody(gs, 'onEdit');
+const onEdit = functionBody(gs, 'onEditRouter_');
 for (const sheet of ['Barang masuk', 'Barang keluar', 'Barang Rusak']) {
   assert.ok(onEdit.includes('"' + sheet + '"'));
 }
 assert.match(onEdit, /const stockImpacting\s*=\s*stockSheets\.indexOf\(sheetName\)\s*>=\s*0\s*\|\|\s*transactionSheets\.indexOf\(sheetName\)\s*>=\s*0/);
 assert.ok(onEdit.indexOf('SpreadsheetApp.flush()') >= 0);
 assert.ok(onEdit.indexOf('SpreadsheetApp.flush()') < onEdit.indexOf('syncDivisionStockLightweight_()'));
+assert.equal(gs.includes('function onEdit(e)'), false,
+  'V7 must expose only the installable onEditRouter_ handler, not a second simple trigger.');
 const sync = functionBody(gs, 'syncDivisionStockLightweight_');
-assert.match(sync, /dest\.getRange\(u\.row,\s*6\)\.setValue\(u\.value\)/);
-assert.doesNotMatch(sync, /(?:sh|src)\.getRange\([^\n]*\)\.set(?:Value|Values)\(/);
+assert.match(sync, /auditDivisionStockFormulaCells_\(\)/);
+assert.doesNotMatch(sync, /\.(?:setValue|setValues|setFormula|setFormulas|clearContent|clear)\s*\(/,
+  'Lightweight stock sync must not write spreadsheet cells.');
+const rebuild = functionBody(gs, 'syncDivisionStock');
+assert.match(rebuild, /\.setFormulas\(/,
+  'The controlled division rebuild must restore formula-driven Sisa Stok cells.');
+assert.match(rebuild, /normalizeDivision_\(row\[idxDivisi\]\)/);
+assert.ok(rebuild.indexOf('dest.getRange(1, 6, oldRows, 1).clearContent()') >= 0);
+assert.match(gs, /function installManagedTriggers_\(spreadsheet\)/);
 
 const resolverPath = new URL('../src/data/pdfDeterministicRules.js', import.meta.url);
 const resolverSource = readFileSync(resolverPath, 'utf8');
@@ -68,12 +77,12 @@ for (const [input, expected] of [
   ['Ayam F1llet D4da', 'CV-0001'],
   ['Ayam FiIlet P4ha', 'CV-0002'],
 ]) {
-  const hit = resolvePdfNameDeterministic('CV', input, cvMaster);
+  const hit = resolvePdfNameDeterministic('CV', input, cvMaster, normalizeOcr);
   assert.equal(hit?.item?.kode, expected, 'Must resolve product correctly: ' + input);
 }
-const bebekPt = resolvePdfNameDeterministic('PT', 'Bebek (WK-0040)', ptMaster);
+const bebekPt = resolvePdfNameDeterministic('PT', 'Bebek (WK-0040)', ptMaster, normalizeOcr);
 assert.equal(bebekPt?.item?.kode, 'WK-0040', 'Bebek must resolve to PT SKU WK-0040');
-assert.equal(resolvePdfNameDeterministic('CV', 'Bebek (WK-0040)', cvMaster), null,
+assert.equal(resolvePdfNameDeterministic('CV', 'Bebek (WK-0040)', cvMaster, normalizeOcr), null,
   'CV master must not resolve a PT WK SKU');
 
 assert.match(pdf, /upload PDF tidak boleh menghasilkan kode bahan baku/);
