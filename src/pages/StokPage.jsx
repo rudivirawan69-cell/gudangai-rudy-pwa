@@ -4,13 +4,14 @@ import {
   Search, RefreshCw, LayoutGrid, Boxes, ShieldAlert, TriangleAlert, ShieldCheck, ChevronDown,
 } from 'lucide-react';
 import { useStock } from '../hooks/useStock';
+import { classifyStockLevel } from '../data/stockStatus';
 
 function levelOf(stok) {
   const n = Number(stok) || 0;
-  if (n === 0) return 'zero';
-  if (n <= 5) return 'danger';
-  if (n <= 20) return 'warning';
-  return 'safe';
+  const status = classifyStockLevel(n);
+  if (status === 'aman') return 'safe';
+  if (status === 'waspada') return 'warning';
+  return n === 0 ? 'zero' : 'danger';
 }
 
 function StockRow({ item }) {
