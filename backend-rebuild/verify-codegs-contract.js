@@ -83,23 +83,23 @@ assert.ok(bulkWrite.indexOf("writeTouched = true;") <
 assert.ok(bulkWrite.includes("plannedKeteranganHash") && bulkWrite.includes("Fingerprint Keterangan gagal dibuat"));
 
 
-const singleWrite = section("function addTransaction(body)", "function bulkTransaction(body)");
-assert.ok(singleWrite.includes("verifiedReadBack") && singleWrite.includes("getCachedSyncVersions_()"));
-assert.ok(!singleWrite.includes("getCurrentSyncVersions_()"), "Single write must not rescan all stock sheets to rebuild a response version.");
-assert.ok(!singleWrite.includes("syncDivisionStockLightweight_()"), "Single write must not run a full formula audit in the response path.");
+const fastSingleWrite = section("function addTransaction(body)", "function bulkTransaction(body)");
+assert.ok(fastSingleWrite.includes("verifiedReadBack") && fastSingleWrite.includes("getCachedSyncVersions_()"));
+assert.ok(!fastSingleWrite.includes("getCurrentSyncVersions_()"), "Single write must not rescan all stock sheets to rebuild a response version.");
+assert.ok(!fastSingleWrite.includes("syncDivisionStockLightweight_()"), "Single write must not run a full formula audit in the response path.");
 
-const bulkWrite = section("function bulkTransaction(body)", "function normalizeEntityGroup_(");
-assert.ok(bulkWrite.includes("buildIdempotencyIndex_()") && bulkWrite.includes("findIdempotencyRecordInIndex_"));
-assert.ok(!bulkWrite.includes("findIdempotencyRecord_(item.transactionId, item.nonce)"),
+const fastBulkWrite = section("function bulkTransaction(body)", "function normalizeEntityGroup_(");
+assert.ok(fastBulkWrite.includes("buildIdempotencyIndex_()") && fastBulkWrite.includes("findIdempotencyRecordInIndex_"));
+assert.ok(!fastBulkWrite.includes("findIdempotencyRecord_(item.transactionId, item.nonce)"),
   "Bulk must not rescan the ledger for each item.");
-assert.ok(bulkWrite.includes("verifiedBC = sheet.getRange(startRow, 2, rowsToWrite.length, 2).getValues()"));
-assert.ok(bulkWrite.includes("verifiedFG = sheet.getRange(startRow, 6, rowsToWrite.length, 2).getValues()"));
-assert.ok(!bulkWrite.includes("sheet.getRange(rowNum, 2, 1, 2).getValues()"),
+assert.ok(fastBulkWrite.includes("verifiedBC = sheet.getRange(startRow, 2, rowsToWrite.length, 2).getValues()"));
+assert.ok(fastBulkWrite.includes("verifiedFG = sheet.getRange(startRow, 6, rowsToWrite.length, 2).getValues()"));
+assert.ok(!fastBulkWrite.includes("sheet.getRange(rowNum, 2, 1, 2).getValues()"),
   "Bulk read-back must be block-based, not per-row.");
-assert.ok(!bulkWrite.includes("syncDivisionStockLightweight_()"),
+assert.ok(!fastBulkWrite.includes("syncDivisionStockLightweight_()"),
   "Bulk write must not run a full formula audit in the response path.");
 
-const onEdit = section("function onEditRouter_(e)", "function clearMasterCache()");
+const onEdit = section("function onEditRouter_(e)", "function markDataDirty_");
 assert.ok(onEdit.includes("SpreadsheetApp.flush()"));
 assert.ok(!onEdit.includes("syncDivisionStockLightweight_()"),
   "Manual edit path must not scan all formula cells on every edit.");
