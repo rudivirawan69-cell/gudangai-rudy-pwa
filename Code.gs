@@ -977,11 +977,13 @@ function addTransaction(body) {
         try {
           targetRow = findSafeEmptyRowAdaptively(sheet, config);
           if (!verifyRowStillEmptyPath2(sheet, targetRow)) throw new Error("Baris target " + targetRow + " terisi proses paralel.");
+          var plannedKeteranganHash = sha256Short_(keterangan);
+          if (!plannedKeteranganHash) throw new Error("Fingerprint Keterangan gagal dibuat; transaksi tidak ditulis.");
           ledgerRecord = updateIdempotencyRecord_(ledgerRecord, {
             status: "IN_PROGRESS", dataRow: targetRow, writeOccurred: "unknown", errorCode: "WRITE_PENDING",
             details: JSON.stringify({
               planned: true, plannedFinalQty: finalQty,
-              keteranganHash: sha256Short_(keterangan), shortage: shortageMode
+              keteranganHash: plannedKeteranganHash, shortage: shortageMode
             })
           });
           if (!ledgerRecord || Number(ledgerRecord.dataRow) !== Number(targetRow)) {
@@ -1286,11 +1288,13 @@ function bulkTransaction(body) {
         var plannedRow = startRow + r;
         var plannedRecord = findIdempotencyRecord_(planned.txId, planned.nonce);
         if (!plannedRecord) throw new Error("Idempotency ledger hilang sebelum bulk write: " + planned.txId);
+        var plannedKeteranganHash = sha256Short_(planned.ket);
+        if (!plannedKeteranganHash) throw new Error("Fingerprint Keterangan gagal dibuat untuk " + planned.txId + "; batch tidak ditulis.");
         var persistedPlan = updateIdempotencyRecord_(plannedRecord, {
           status: "IN_PROGRESS", dataRow: plannedRow, writeOccurred: "unknown", errorCode: "WRITE_PENDING",
           details: JSON.stringify({
             planned: true, plannedFinalQty: planned.qty,
-            keteranganHash: sha256Short_(planned.ket), batchId: batchId
+            keteranganHash: plannedKeteranganHash, batchId: batchId
           })
         });
         if (!persistedPlan || Number(persistedPlan.dataRow) !== Number(plannedRow)) {
