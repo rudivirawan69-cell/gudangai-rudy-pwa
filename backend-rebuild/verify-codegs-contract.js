@@ -97,9 +97,13 @@ const sources = {
   pt:{sheetName:"Stock PT",stockColumn:"F",dataStartRow:4,kodeColumn:"B"},
   bb:{sheetName:"Stock Bahan Baku",stockColumn:"F",dataStartRow:2,kodeColumn:"B"}
 };
-assert.ok(context.buildDivisionStockFormula_(10, "BBPT-0001", sources).includes("'Stock Bahan Baku'!"));
-assert.ok(context.buildDivisionStockFormula_(10, "WK-0012", sources).includes("'Stock PT'!"));
-assert.ok(context.buildDivisionStockFormula_(10, "CV-0001", sources).includes("'Stock CV'!"));
+const bbFormula = context.buildDivisionStockFormula_(10, "BBPT-0001", sources);
+const ptFormula = context.buildDivisionStockFormula_(10, "WK-0012", sources);
+const cvFormula = context.buildDivisionStockFormula_(10, "CV-0001", sources);
+assert.ok(bbFormula.includes("'Stock Bahan Baku'!"));
+assert.ok(ptFormula.includes("'Stock PT'!") && !ptFormula.includes("'Stock CV'!"));
+assert.ok(cvFormula.includes("'Stock CV'!") && !cvFormula.includes("'Stock PT'!"));
+assert.equal(context.buildDivisionStockFormula_(10, "UNKNOWN-0001", sources), "=0");
 assert.equal(context.normalizeDivision_("DAPUR1"), "DAPUR 1");
 assert.equal(context.normalizeDivision_("DAPUR2"), "DAPUR 2");
 assert.equal(context.appendIdentityMarker_("Barang datang", "TX1", "N1"), "Barang datang");
