@@ -18,7 +18,7 @@ jobs:
   build:
     name: Build and lint
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -43,3 +43,9 @@ jobs:
         run: npm run lint
       - name: Production build
         run: npm run build
+      - name: Install Chromium for browser smoke tests
+        run: |
+          npm install --no-save --package-lock=false playwright
+          npx playwright install --with-deps chromium
+      - name: Smoke test all PWA pages and responsive widths
+        run: node scripts/smoke-pwa-pages.mjs
