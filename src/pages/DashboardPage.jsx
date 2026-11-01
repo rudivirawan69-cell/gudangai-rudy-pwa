@@ -9,6 +9,7 @@ import OperatorTasks from '../components/OperatorTasks';
 import {
   AlertTriangle, RefreshCw, FileText, Package, Users, Boxes, ShieldAlert, CheckCircle2, AlertCircle, X,
   CalendarDays, CalendarClock, ClipboardCheck, FilePlus2, Mail, Clock3, Layers3, ArrowUpRight,
+  ChevronDown, BellRing,
 } from 'lucide-react';
 
 function classifyItem(it) {
@@ -1209,15 +1210,25 @@ export default function DashboardPage({ onNavigate }) {
     } catch { return 0; }
   }, [allItems, poData]);
 
-  const hour = Number(new Intl.DateTimeFormat('id-ID', { hour: '2-digit', hourCycle: 'h23', timeZone: 'Asia/Jakarta' }).format(new Date()));
-  let greeting = 'Halo';
-  let reminder = 'Siap bekerja.';
-  if (hour >= 4 && hour < 10) { greeting = 'Selamat pagi'; reminder = 'Cek kedatangan barang hari ini.'; }
-  else if (hour >= 10 && hour < 15) { greeting = 'Selamat siang'; reminder = 'Jangan lupa input barang datang.'; }
-  else if (hour >= 15 && hour < 18) { greeting = 'Selamat sore'; reminder = 'Pastikan pengeluaran sudah diinput.'; }
-  else { greeting = 'Selamat malam'; reminder = 'Pastikan data hari ini sudah lengkap.'; }
-
+  const hour = Number(new Intl.DateTimeFormat('id-ID', {
+    hour: '2-digit', hourCycle: 'h23', timeZone: 'Asia/Jakarta',
+  }).format(new Date()));
+  const greeting = hour >= 4 && hour < 10 ? 'Selamat pagi'
+    : hour >= 10 && hour < 15 ? 'Selamat siang'
+      : hour >= 15 && hour < 18 ? 'Selamat sore' : 'Selamat malam';
   const name = user?.name || user?.nama || 'Rudi';
+
+  // Reminder mengikuti kondisi aktual Beranda, bukan pengingat waktu yang statis.
+  const waitingPO = Number(poData?.summary?.itemMenunggu || 0);
+  const reminder = pending > 0
+    ? `${pending} item menunggu sinkronisasi. Periksa antrean sebelum melanjutkan transaksi.`
+    : stats.kritis > 0
+      ? `${stats.kritis} item berstatus kritis. Prioritaskan pemeriksaan stok.`
+      : waitingPO > 0
+        ? `${waitingPO} item PO belum datang. Periksa jadwal dan konfirmasi kedatangan.`
+        : stats.waspada > 0
+          ? `${stats.waspada} item perlu dipantau. Periksa kebutuhan pengadaan.`
+          : 'Pantau pergerakan stok, status PO, dan catatan tugas operasional.';
   const spreadsheetTimestamp =
     dashboardData?.lastUpdate ?? dashboardData?.lastUpdatedAt ?? dashboardData?.lastUpdated ??
     dashboardData?.updatedAt ?? dashboardData?.updateTime ?? dashboardData?.waktuUpdate ??
@@ -1225,27 +1236,42 @@ export default function DashboardPage({ onNavigate }) {
 
   return (
     <div className="dashboard-shell w-full max-w-6xl mx-auto px-3 sm:px-5 lg:px-7 pt-4 pb-24 space-y-4">
-      <div className="dashboard-header-card dashboard-3d-card rounded-2xl bg-white border border-slate-200 shadow-sm px-4 sm:px-5 py-4">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0 flex-1">
-            <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-cyan-700">{greeting} · GUDANG PUSAT</p>
-            <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 truncate mt-1 leading-tight">Dashboard Operasional</h1>
-            <p className="text-[13px] text-slate-600 mt-1 leading-snug">{reminder} <span className="text-slate-400">· {name}</span></p>
+      <div className="flex items-start gap-2.5">
+        <details className="dashboard-greeting-card group min-w-0 flex-1 rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+          <summary className="list-none cursor-pointer select-none px-3.5 py-3 sm:px-4 sm:py-3.5 [&::-webkit-details-marker]:hidden">
+            <div className="flex items-center gap-3 min-w-0">
+              <span className="dashboard-icon-badge dashboard-icon-cyan h-10 w-10 shrink-0 rounded-xl flex items-center justify-center">
+                <BellRing className="h-4 w-4" aria-hidden="true" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-[9px] font-extrabold uppercase tracking-[0.13em] text-cyan-700">Sapaan & Pengingat · Beranda</span>
+                <span className="block text-[14px] font-extrabold text-slate-900 truncate mt-0.5">{greeting}, {name}</span>
+                <span className="block text-[11px] font-medium text-slate-500 leading-snug mt-0.5 line-clamp-2">{reminder}</span>
+              </span>
+              <ChevronDown className="h-4 w-4 shrink-0 text-slate-400 transition-transform duration-200 group-open:rotate-180" aria-hidden="true" />
+            </div>
+          </summary>
+          <div className="border-t border-slate-100 px-3.5 py-3 sm:px-4 sm:py-4">
+            <div className="mb-3">
+              <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-cyan-700">Dashboard Operasional · Gudang Pusat</p>
+              <p className="text-[12px] text-slate-600 mt-1 leading-relaxed">{reminder}</p>
+            </div>
             <OperatorTasks />
           </div>
-          <button
-            type="button"
-            onClick={() => { refresh?.(); loadPO(); loadDashboardData(); }}
-            className="w-10 h-10 rounded-xl bg-white border border-slate-200 hover:bg-slate-50 flex items-center justify-center text-slate-600 shrink-0 active:scale-95"
-            aria-label="Refresh data"
-          >
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-          </button>
-        </div>
-        {confirmMsg && (
-          <p className="mt-2.5 text-[12px] font-semibold text-emerald-700 bg-emerald-50 rounded-lg px-3 py-1.5">{confirmMsg}</p>
-        )}
+        </details>
+        <button
+          type="button"
+          onClick={() => { refresh?.(); loadPO(); loadDashboardData(); }}
+          className="h-11 w-11 shrink-0 rounded-xl border border-slate-200 bg-white text-slate-600 shadow-sm flex items-center justify-center active:scale-95"
+          aria-label="Refresh data"
+          title="Muat ulang data Beranda"
+        >
+          <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+        </button>
       </div>
+      {confirmMsg && (
+        <p className="rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-[11px] font-semibold text-emerald-700">{confirmMsg}</p>
+      )}
 
       <section className="grid grid-cols-1 xl:grid-cols-2 gap-4" aria-label="Ringkasan operasional">
         <div className="dashboard-panel rounded-2xl bg-white border border-slate-200 shadow-sm p-4 min-w-0">
