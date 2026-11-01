@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   User, Link2, KeyRound, Settings as SettingsIcon, LogOut, Shield,
-  CheckCircle2, XCircle, ChevronRight, Cloud, Palette, Sun, Moon, Droplet,
+  CheckCircle2, XCircle, ChevronRight, Cloud, Palette, Sun, Moon, Layers,
 } from 'lucide-react';
 import { useAuth, DEFAULT_PROFILE_PHOTO } from '../hooks/useAuth';
 import { useBootstrapRevision } from '../hooks/useBootstrapRevision';
@@ -14,7 +14,7 @@ import {
 const THEME_ICONS = {
   soft_light: Sun,
   deep_ocean: Moon,
-  graphite_titanium: Droplet,
+  graphite_titanium: Layers,
 };
 
 const AVATAR_SRC = DEFAULT_PROFILE_PHOTO;
