@@ -5,6 +5,7 @@ import {
   getPendingQueue, getStatusPO, getDashboardData, confirmPOStatus, getLocalHistory, getApiUrl, getApiSecret,
 } from '../data/api';
 import { DIVISIONS } from '../data/master';
+import { classifyStockLevel } from '../data/stockStatus';
 import OperatorTasks from '../components/OperatorTasks';
 import {
   AlertTriangle, RefreshCw, FileText, Package, Users, Boxes, ShieldAlert, CheckCircle2, AlertCircle, X,
@@ -13,13 +14,7 @@ import {
 } from 'lucide-react';
 
 function classifyItem(it) {
-  const stok = Number(it.stok ?? it.stockAkhir ?? 0) || 0;
-  const aman = Number(it.stockAman ?? it.aman ?? it.min ?? 0) || 0;
-  // Dashboard follows the same fixed stock status thresholds used by the PWA:
-  // Aman >= 20, Perhatian 10–19, Kritis < 10.
-  if (stok < 10) return 'kritis';
-  if (stok < 20) return 'waspada';
-  return 'aman';
+  return classifyStockLevel(it.stok ?? it.stockAkhir ?? 0);
 }
 
 function formatSpreadsheetTimestamp(value) {
