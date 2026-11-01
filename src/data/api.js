@@ -22,6 +22,7 @@ let _queueRevision = 0;
 let _batchSupported = null;
 
 import { hydrateQueueBackup, persistQueueBackup } from './offlineStore';
+import { classifyStockLevel } from './stockStatus';
 function emitConn(detail) { try { window.dispatchEvent(new CustomEvent('gudangai-conn', { detail })); } catch (_) {} }
 export function getApiUrl() {
   const stored = (localStorage.getItem('gudangai_api_url') || '').trim();
@@ -231,8 +232,7 @@ function buildDashboardFallbackFromStock(items) {
     if (!map[divisi]) map[divisi] = { divisi, total: 0, aman: 0, waspada: 0, kritis: 0 };
     map[divisi].total += 1;
     const stok = Number(it.stok ?? it.stockAkhir ?? 0) || 0;
-    const min = Number(it.stockAman ?? it.aman ?? it.min ?? 0) || 0;
-    const cls = min > 0 ? ((stok <= 0 || stok <= Math.max(5, Math.floor(min * 0.25))) ? 'kritis' : (stok < min ? 'waspada' : 'aman')) : (stok <= 5 ? 'kritis' : (stok <= 20 ? 'waspada' : 'aman'));
+    const cls = classifyStockLevel(stok);
     map[divisi][cls] += 1;
   }
   return Object.values(map).filter((r) => r.total > 0);
