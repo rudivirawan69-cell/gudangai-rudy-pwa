@@ -57,15 +57,17 @@ assert.ok(readBack.includes("plannedFinalQty") && readBack.includes("keteranganH
 assert.ok(readBack.includes("qtyPresent && Number(r[4]) === Number(ledgerDetails.plannedFinalQty)"));
 const singleWrite = section("function addTransaction(body)", "function bulkTransaction(body)");
 assert.ok(singleWrite.includes('writeOccurred: "unknown"') && singleWrite.includes("dataRow: targetRow"));
-assert.ok(singleWrite.indexOf("updateIdempotencyRecord_(ledgerRecord") <
+assert.ok(singleWrite.indexOf('dataRow: targetRow, writeOccurred: "unknown"') <
   singleWrite.indexOf("sheet.getRange(targetRow, 2, 1, 2).setValues("),
   "Single transaction write intent must persist before journal write.");
 const bulkWrite = section("function bulkTransaction(body)", "function normalizeEntityGroup_(");
 assert.ok(bulkWrite.includes('prior.status === "UNKNOWN"') && bulkWrite.includes('"READBACK_REQUIRED"'));
 assert.ok(bulkWrite.includes("dataRow: plannedRow") && bulkWrite.includes('writeOccurred: "unknown"'));
-assert.ok(bulkWrite.indexOf("updateIdempotencyRecord_(plannedRecord") <
+assert.ok(bulkWrite.indexOf('dataRow: plannedRow, writeOccurred: "unknown"') <
   bulkWrite.indexOf("sheet.getRange(startRow, 2, rowsToWrite.length, 2).setValues("),
   "Bulk write intent must persist before batch journal write.");
+assert.ok(bulkWrite.includes("findSafeEmptyBlockAdaptively_(sheet, config, rowsToWrite.length)"));
+assert.ok(bulkWrite.includes("verifyRowsEmptyPath2(sheet, startRow, rowsToWrite.length)"));
 
 const functionNames = [...source.matchAll(/^\s*function\s+([A-Za-z_$][\w$]*)\s*\(/gm)].map(m => m[1]);
 const duplicates = functionNames.filter((name, i) => functionNames.indexOf(name) !== i);
@@ -123,6 +125,21 @@ assert.equal(context.normalizeDivision_("DAPUR1"), "DAPUR 1");
 assert.equal(context.normalizeDivision_("DAPUR2"), "DAPUR 2");
 assert.equal(context.appendIdentityMarker_("Barang datang", "TX1", "N1"), "Barang datang");
 assert.ok(!context.appendIdentityMarker_("Barang datang", "TX1", "N1").includes("GUDANGAI_TX="));
+
+const grid = Array.from({length:12}, () => Array(7).fill(""));
+grid[3][2] = "CV-0001"; // last item code is row 4
+grid[4][5] = "orphaned note"; // row 5 is not safe even though its code cell is blank
+const fakeSheet = {
+  getMaxRows: () => grid.length,
+  getName: () => "Fixture Journal",
+  getRange: (row, col, rows, cols) => ({
+    getValues: () => grid.slice(row - 1, row - 1 + rows).map(r => r.slice(col - 1, col - 1 + cols))
+  }),
+  insertRowsAfter: () => { throw new Error("unexpected row insertion in fixture"); }
+};
+assert.equal(context.findSafeEmptyBlockAdaptively_(fakeSheet, {headerRow:3,kodeColAbsolute:3}, 2), 6);
+assert.equal(context.verifyRowsEmptyPath2(fakeSheet, 5, 1), false);
+assert.equal(context.verifyRowsEmptyPath2(fakeSheet, 6, 2), true);
 
 console.log("PASS: Code.gs syntax, no duplicate global functions, and V7 static safety contract");
 console.log("PASS: lightweight division sync is read-only; full rebuild restores formula-driven column F");
