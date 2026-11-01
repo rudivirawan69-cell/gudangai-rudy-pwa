@@ -13,15 +13,18 @@ export function useStock(entity) {
   const [lastRefresh, setLastRefresh] = useState(null);
   const lastOk = useRef([]);
   const fetching = useRef(false);
+  const requestSequence = useRef(0);
 
   const refresh = useCallback(async ({ force = false } = {}) => {
     if (fetching.current && !force) return;
+    const requestId = ++requestSequence.current;
     fetching.current = true;
     // Hanya tampilkan loading penuh jika belum ada data
     if (lastOk.current.length === 0) setLoading(true);
     setError(null);
     try {
       const data = await fetchStock(entity);
+      if (requestId !== requestSequence.current) return;
       if (Array.isArray(data) && data.length > 0) {
         lastOk.current = data;
         setItems(data);
@@ -34,11 +37,14 @@ export function useStock(entity) {
         setItems(Array.isArray(data) ? data : []);
       }
     } catch (err) {
+      if (requestId !== requestSequence.current) return;
       setError(err.message);
       if (lastOk.current.length > 0) setItems(lastOk.current);
     } finally {
-      setLoading(false);
-      fetching.current = false;
+      if (requestId === requestSequence.current) {
+        setLoading(false);
+        fetching.current = false;
+      }
     }
   }, [entity]);
 
@@ -55,14 +61,19 @@ export function useStock(entity) {
         refresh({ force: false });
       }
     };
+    const onOnline = () => refresh({ force: true });
+    const onStockRefresh = () => refresh({ force: true });
     const id = setInterval(() => {
       if (navigator.onLine) refresh({ force: false });
     }, 90000);
     document.addEventListener('visibilitychange', onVis);
-    window.addEventListener('online', () => refresh({ force: true }));
+    window.addEventListener('online', onOnline);
+    window.addEventListener('gudangai-stock-refresh', onStockRefresh);
     return () => {
       clearInterval(id);
       document.removeEventListener('visibilitychange', onVis);
+      window.removeEventListener('online', onOnline);
+      window.removeEventListener('gudangai-stock-refresh', onStockRefresh);
     };
   }, [refresh]);
 
