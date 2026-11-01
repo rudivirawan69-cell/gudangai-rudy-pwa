@@ -44,7 +44,8 @@ for (const sheet of ['Barang masuk', 'Barang keluar', 'Barang Rusak']) {
 }
 assert.match(onEdit, /const stockImpacting\s*=\s*stockSheets\.indexOf\(sheetName\)\s*>=\s*0\s*\|\|\s*transactionSheets\.indexOf\(sheetName\)\s*>=\s*0/);
 assert.ok(onEdit.indexOf('SpreadsheetApp.flush()') >= 0);
-assert.ok(onEdit.indexOf('SpreadsheetApp.flush()') < onEdit.indexOf('syncDivisionStockLightweight_()'));
+assert.ok(!onEdit.includes('syncDivisionStockLightweight_()'),
+  'Manual edit must not run a full formula audit on every spreadsheet change.');
 assert.equal(gs.includes('function onEdit(e)'), false,
   'V7 must expose only the installable onEditRouter_ handler, not a second simple trigger.');
 const sync = functionBody(gs, 'syncDivisionStockLightweight_');
