@@ -68,6 +68,8 @@ assert.ok(bulkWrite.indexOf('dataRow: plannedRow, writeOccurred: "unknown"') <
   "Bulk write intent must persist before batch journal write.");
 assert.ok(bulkWrite.includes("findSafeEmptyBlockAdaptively_(sheet, config, rowsToWrite.length)"));
 assert.ok(bulkWrite.includes("verifyRowsEmptyPath2(sheet, startRow, rowsToWrite.length)"));
+assert.ok(bulkWrite.includes('String(vFG[1] || "") === String(rw.ket || "")'),
+  "Bulk read-back must verify the user Keterangan, not only code/date/qty.");
 
 const functionNames = [...source.matchAll(/^\s*function\s+([A-Za-z_$][\w$]*)\s*\(/gm)].map(m => m[1]);
 const duplicates = functionNames.filter((name, i) => functionNames.indexOf(name) !== i);
