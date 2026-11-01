@@ -125,4 +125,21 @@ assert.match(appSource, /function AppHeader\(\{ user, tab, onOpenSettings, onlin
 assert.match(appSource, /const \[liveTime, setLiveTime\] = useState\('—'\)/);
 assert.doesNotMatch(queueSource, /Math\.random\(\)/, 'Queue item fallback keys must be deterministic.');
 
+
+const useStockPath = new URL('../src/hooks/useStock.js', import.meta.url);
+const useStockSource = readFileSync(useStockPath, 'utf8');
+assert.match(useStockSource, /gudangai-stock-refresh/);
+assert.match(inputPage, /gudangai-stock-refresh/);
+assert.match(queueSource, /gudangai-stock-refresh/);
+assert.match(apiSource, /serverExecMs: measuredServerChunks \? totalServerExecMs : null/);
+assert.match(apiSource, /clientElapsedMs: Date\.now\(\) - clientStartedAt/);
+const stockStatusMatch = stockStatusSource.match(/export function classifyStockLevel\(value\)\s*\{([\s\S]*?)\n\}/);
+assert.ok(stockStatusMatch, 'Missing shared stock status function');
+const classifyStockLevel = new Function('value', stockStatusMatch[1]);
+assert.equal(classifyStockLevel(0), 'kritis');
+assert.equal(classifyStockLevel(9), 'kritis');
+assert.equal(classifyStockLevel(10), 'waspada');
+assert.equal(classifyStockLevel(19), 'waspada');
+assert.equal(classifyStockLevel(20), 'aman');
+
 console.log('PASS: conservative PDF matching + manual stock sync contracts');
