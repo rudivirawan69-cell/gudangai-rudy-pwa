@@ -2804,51 +2804,20 @@ function updateLastUpdateTimestamp() {
 function stampVisibleUpdateTimestamp_(formatted) {
   const ss = getSS();
   const stamp = "Update terakhir: " + (formatted || Utilities.formatDate(new Date(), TIMEZONE, "yyyy-MM-dd HH:mm:ss"));
-  const targets = [
-    { name: "Dashboard", range: "A2" },
-    { name: "Data Stok Per Divisi", range: "A2" },
-    { name: "Config", range: null },
-    { name: "purchase order", range: null },
-    { name: "Stock CV", range: null },
-    { name: "Stock PT", range: null },
-    { name: "Barang masuk", range: null },
-    { name: "Barang keluar", range: null },
-    { name: "Barang Rusak", range: null }
-  ];
-  targets.forEach(function(t) {
-    try {
-      const sh = ss.getSheetByName(t.name);
-      if (!sh) return;
-      if (t.name === "Dashboard") {
-        // Dashboard A2 sudah digabung; isi ulang dengan prefix pantauan + waktu.
-        const current = String(sh.getRange("A2").getDisplayValue() || "");
-        if (current.indexOf("Update:") >= 0 || current.indexOf("Update terakhir") >= 0) {
-          sh.getRange("A2").setValue("Pantauan Stok & Aktivitas — Real Time | " + stamp);
-        } else {
-          sh.getRange("A2").setValue("Pantauan Stok & Aktivitas — Real Time | " + stamp);
-        }
-        return;
-      }
-      if (t.name === "Data Stok Per Divisi") {
-        // Baris 2 sudah berisi subtitle; ganti dengan stamp real-time.
-        const row2 = sh.getRange(2, 1);
-        row2.setValue("Sisa Stok = Stock Akhir CV/PT | " + stamp);
-        return;
-      }
-      if (t.name === "Config") {
-        // Config row 2 subtitle
-        try {
-          const r2 = sh.getRange(2, 1);
-          const base = "Konfigurasi sistem • periode aktif • parameter sinkronisasi • " + stamp;
-          r2.setValue(base);
-        } catch (e) {}
-        return;
-      }
-      // Sheet transaksi / master: tulis di pojok kanan atas jika kolom tersedia, atau baris 1 kolom terakhir.
-      // Hindari menimpa header data. Gunakan catatan di Script Properties saja untuk sheet yang dilindungi.
-      // Untuk sheet operasional dengan layout title row 1-2, update subtitle bila ada.
-    } catch (e) {}
-  });
+  // Hanya tiga lokasi metadata yang memang menampilkan waktu update.
+  // Sheet transaksi/master tidak perlu disentuh pada setiap write.
+  try {
+    const dashboard = ss.getSheetByName("Dashboard");
+    if (dashboard) dashboard.getRange("A2").setValue("Pantauan Stok & Aktivitas — Real Time | " + stamp);
+  } catch (e) { console.error("Timestamp Dashboard gagal: " + e.message); }
+  try {
+    const division = ss.getSheetByName("Data Stok Per Divisi");
+    if (division) division.getRange(2, 1).setValue("Sisa Stok = Stock Akhir CV/PT | " + stamp);
+  } catch (e) { console.error("Timestamp Data Stok Per Divisi gagal: " + e.message); }
+  try {
+    const config = ss.getSheetByName("Config");
+    if (config) config.getRange(2, 1).setValue("Konfigurasi sistem • periode aktif • parameter sinkronisasi • " + stamp);
+  } catch (e) { console.error("Timestamp Config gagal: " + e.message); }
 }
 
 function getLastUpdateTimestamp() {
@@ -3703,11 +3672,11 @@ function onEditRouter_(e) {
     markDataDirty_(sheetName);
     updateLastUpdateTimestamp();
     if (stockImpacting) {
-      try {
-        SpreadsheetApp.flush();
-        syncDivisionStockLightweight_();
-      } catch (divErr) {
-        console.error("onEdit sync divisi: " + divErr.message);
+      // Formula Sisa Stok mengikuti perubahan sumber secara native.
+      // Flush dipertahankan sebelum refresh Dashboard; audit formula penuh tidak dijalankan
+      // pada setiap edit agar tidak membebani input manual.
+      try { SpreadsheetApp.flush(); } catch (flushErr) {
+        console.error("onEdit flush: " + flushErr.message);
       }
     }
     try { refreshDashboardDataLight693_(); } catch (dashErr) { console.error("Dashboard refresh ringan gagal: " + dashErr.message); }
