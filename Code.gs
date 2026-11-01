@@ -1368,7 +1368,7 @@ function validateTransactionRequest_(tx, options) {
   if (Object.prototype.hasOwnProperty.call(tx, "namaBarang") || Object.prototype.hasOwnProperty.call(tx, "nama") || Object.prototype.hasOwnProperty.call(tx, "satuan")) {
     return { valid: false, status: "REJECTED", code: "PROTECTED_FIELD", error: "Kolom Nama Barang/Satuan diproteksi; kirim hanya tanggal, kodeBarang, qty, dan keterangan." };
   }
-  const allowed = ["action", "operation", "schemaVersion", "sheet", "entitas", "kodeBarang", "qty", "tanggal", "keterangan", "transactionId", "nonce", "holdTransactionId", "realisasiHoldId", "holdId", "requestId", "queueApproved", "client", "offlineContext", "secret", "_syncMode", "batchId", "deviceId"];
+  const allowed = ["action", "operation", "schemaVersion", "sheet", "entitas", "kodeBarang", "qty", "tanggal", "keterangan", "transactionId", "nonce", "holdTransactionId", "realisasiHoldId", "holdId", "requestId", "clientItemId", "queueApproved", "client", "offlineContext", "secret", "_syncMode", "batchId", "deviceId"];
   const unknown = Object.keys(tx).filter(function(k) { return allowed.indexOf(k) < 0 && k !== "payload"; });
   if (unknown.length) return { valid: false, status: "REJECTED", code: "UNKNOWN_FIELD", error: "Field tidak diizinkan: " + unknown.join(", ") };
   const kode = String(tx.kodeBarang || "").trim();
@@ -1377,7 +1377,7 @@ function validateTransactionRequest_(tx, options) {
   const entitas = entityGroup.valid ? entityGroup.entitas : "";
   if (!kode) return { valid: false, status: "REJECTED", code: "CODE_REQUIRED", error: "kodeBarang wajib diisi" };
   const qty = Number(tx.qty);
-  if (isNaN(qty) || qty < 0 || qty > MAX_QTY) return { valid: false, status: "REJECTED", code: "INVALID_QTY", error: "qty tidak valid" };
+  if (!Number.isFinite(qty) || qty <= 0 || qty > MAX_QTY) return { valid: false, status: "REJECTED", code: "INVALID_QTY", error: "qty harus lebih dari 0 dan tidak boleh melebihi " + MAX_QTY };
   if (opts.requireDate && !tx.tanggal) return { valid: false, status: "REJECTED", code: "DATE_REQUIRED", error: "tanggal wajib diisi untuk sinkronisasi outbox." };
   if (tx.tanggal) {
     const dateCheck = validateTransactionDate(tx.tanggal);
