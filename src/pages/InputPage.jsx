@@ -31,19 +31,51 @@ function todayStr() {
   return `${dd}/${mm}/${d.getFullYear()}`;
 }
 
+const INPUT_DRAFT_KEY = 'gudangai_input_draft_v1';
+
+function loadInputDraft() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(INPUT_DRAFT_KEY) || 'null');
+    if (!raw || raw.version !== 1) return {};
+    const cart = Array.isArray(raw.cart) ? raw.cart.slice(0, 500).map((item, index) => ({
+      kode: String(item?.kode || ''),
+      nama: String(item?.nama || ''),
+      satuan: String(item?.satuan || 'Pack'),
+      qty: item?.qty == null ? 0 : item.qty,
+      keterangan: String(item?.keterangan || ''),
+      unmatched: !!item?.unmatched,
+      pdfReviewId: String(item?.pdfReviewId || ''),
+      pdfSourceIndex: Number(item?.pdfSourceIndex) || 0,
+      clientItemId: String(item?.clientItemId || ('CI-RESTORE-' + Date.now() + '-' + index)),
+    })) : [];
+    return {
+      entity: raw.entity === 'PT' ? 'PT' : 'CV',
+      txType: TX.some((t) => t.id === raw.txType) ? raw.txType : 'keluar',
+      tanggal: typeof raw.tanggal === 'string' && raw.tanggal ? raw.tanggal : todayStr(),
+      accuracy: raw.accuracy && typeof raw.accuracy === 'object' ? raw.accuracy : null,
+      cart,
+      pdfReview: Array.isArray(raw.pdfReview) ? raw.pdfReview.slice(0, 500) : [],
+      reviewSourceLabel: String(raw.reviewSourceLabel || 'PDF'),
+    };
+  } catch (_) {
+    return {};
+  }
+}
+
 export default function InputPage() {
-  const [entity, setEntity] = useState('CV');
-  const [txType, setTxType] = useState('keluar');
-  const [tanggal, setTanggal] = useState(todayStr());
+  const [initialDraft] = useState(loadInputDraft);
+  const [entity, setEntity] = useState(initialDraft.entity || 'CV');
+  const [txType, setTxType] = useState(initialDraft.txType || 'keluar');
+  const [tanggal, setTanggal] = useState(initialDraft.tanggal || todayStr());
   const [query, setQuery] = useState('');
   const [hits, setHits] = useState([]);
   const [stockCatalog, setStockCatalog] = useState([]);
   const [busy, setBusy] = useState(false);
-  const [statusBanner, setStatusBanner] = useState('');
-  const [accuracy, setAccuracy] = useState(null);
-  const [cart, setCart] = useState([]);
-  const [pdfReview, setPdfReview] = useState([]);
-  const [reviewSourceLabel, setReviewSourceLabel] = useState('PDF');
+  const [statusBanner, setStatusBanner] = useState(() => (initialDraft.cart?.length || initialDraft.pdfReview?.length) ? 'Draft transaksi dipulihkan dari perangkat.' : '');
+  const [accuracy, setAccuracy] = useState(initialDraft.accuracy || null);
+  const [cart, setCart] = useState(initialDraft.cart || []);
+  const [pdfReview, setPdfReview] = useState(initialDraft.pdfReview || []);
+  const [reviewSourceLabel, setReviewSourceLabel] = useState(initialDraft.reviewSourceLabel || 'PDF');
   const [showPhotoSource, setShowPhotoSource] = useState(false);
   const [photoCameraOpen, setPhotoCameraOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -65,6 +97,19 @@ export default function InputPage() {
   const cartRef = useRef(null);
   const scanAbortRef = useRef(false);
   const bootstrapRevision = useBootstrapRevision();
+
+  useEffect(() => {
+    try {
+      const draft = {
+        version: 1, savedAt: Date.now(), entity, txType, tanggal, accuracy,
+        cart, pdfReview, reviewSourceLabel,
+      };
+      const serialized = JSON.stringify(draft);
+      if (serialized.length <= 1800000) localStorage.setItem(INPUT_DRAFT_KEY, serialized);
+    } catch (_) {
+      // Draft persistence is best-effort; it must never block input or submission.
+    }
+  }, [entity, txType, tanggal, accuracy, cart, pdfReview, reviewSourceLabel]);
 
   useEffect(() => {
     const refreshUnread = () => setUnread(unreadNotificationCount());
