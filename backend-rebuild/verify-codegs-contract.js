@@ -52,6 +52,21 @@ const layoutWriter = section("function formatDashboardLayout693_()", "function w
 assert.ok(layoutWriter.includes("skipped:true") && !layoutWriter.includes("clearDashboardCharts_"));
 assert.ok(!source.includes('newTrigger("refreshStatusStockLight_")'));
 
+const readBack = section("function readBackTransactionByIdentity_(", "function identityPayloadMatches_(");
+assert.ok(readBack.includes("plannedFinalQty") && readBack.includes("keteranganHash"));
+assert.ok(readBack.includes("qtyPresent && Number(r[4]) === Number(ledgerDetails.plannedFinalQty)"));
+const singleWrite = section("function addTransaction(body)", "function bulkTransaction(body)");
+assert.ok(singleWrite.includes('writeOccurred: "unknown"') && singleWrite.includes("dataRow: targetRow"));
+assert.ok(singleWrite.indexOf("updateIdempotencyRecord_(ledgerRecord") <
+  singleWrite.indexOf("sheet.getRange(targetRow, 2, 1, 2).setValues("),
+  "Single transaction write intent must persist before journal write.");
+const bulkWrite = section("function bulkTransaction(body)", "function normalizeEntityGroup_(");
+assert.ok(bulkWrite.includes('prior.status === "UNKNOWN"') && bulkWrite.includes('"READBACK_REQUIRED"'));
+assert.ok(bulkWrite.includes("dataRow: plannedRow") && bulkWrite.includes('writeOccurred: "unknown"'));
+assert.ok(bulkWrite.indexOf("updateIdempotencyRecord_(plannedRecord") <
+  bulkWrite.indexOf("sheet.getRange(startRow, 2, rowsToWrite.length, 2).setValues("),
+  "Bulk write intent must persist before batch journal write.");
+
 const functionNames = [...source.matchAll(/^\s*function\s+([A-Za-z_$][\w$]*)\s*\(/gm)].map(m => m[1]);
 const duplicates = functionNames.filter((name, i) => functionNames.indexOf(name) !== i);
 assert.deepEqual([...new Set(duplicates)], [], "Duplicate global function declarations found.");
