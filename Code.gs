@@ -650,9 +650,19 @@ function readBackTransactionByIdentity_(identity, preferredSheet) {
       const sh = getSS().getSheetByName(sName);
       if (sh && rowNo > cfg.headerRow && rowNo <= sh.getMaxRows()) {
         const r = sh.getRange(rowNo, 2, 1, 6).getValues()[0];
-        const qtyOk = Number(r[4]) === Number(rec.qty) || Number(r[4]) === 0;
+        var ledgerDetails = {};
+        try { ledgerDetails = JSON.parse(String(rec.details || "")); } catch (e) {}
+        var qtyPresent = r[4] !== "" && r[4] != null;
+        var plannedWrite = ledgerDetails && ledgerDetails.planned === true &&
+          ledgerDetails.plannedFinalQty != null && ledgerDetails.keteranganHash;
+        var qtyOk = plannedWrite
+          ? (qtyPresent && Number(r[4]) === Number(ledgerDetails.plannedFinalQty))
+          : (qtyPresent && (Number(r[4]) === Number(rec.qty) || Number(r[4]) === 0));
+        var noteOk = plannedWrite
+          ? sha256Short_(String(r[5] || "")) === String(ledgerDetails.keteranganHash)
+          : true;
         if (String(r[1] || "").trim() === String(rec.kodeBarang || "").trim() &&
-            normalizeTransactionDateKey_(r[0]) === String(rec.tanggal || "") && qtyOk) {
+            normalizeTransactionDateKey_(r[0]) === String(rec.tanggal || "") && qtyOk && noteOk) {
           return {
             matched: true, sheet: sName, row: rowNo,
             tanggal: normalizeTransactionDateKey_(r[0]), kodeBarang: String(r[1] || "").trim(),
@@ -967,6 +977,16 @@ function addTransaction(body) {
         try {
           targetRow = findSafeEmptyRowAdaptively(sheet, config);
           if (!verifyRowStillEmptyPath2(sheet, targetRow)) throw new Error("Baris target " + targetRow + " terisi proses paralel.");
+          ledgerRecord = updateIdempotencyRecord_(ledgerRecord, {
+            status: "IN_PROGRESS", dataRow: targetRow, writeOccurred: "unknown", errorCode: "WRITE_PENDING",
+            details: JSON.stringify({
+              planned: true, plannedFinalQty: finalQty,
+              keteranganHash: sha256Short_(keterangan), shortage: shortageMode
+            })
+          });
+          if (!ledgerRecord || Number(ledgerRecord.dataRow) !== Number(targetRow)) {
+            throw new Error("Write-ahead ledger tidak dapat dikonfirmasi; jurnal transaksi tidak ditulis.");
+          }
           // Hanya kolom writable: B:C dan F:G. Kolom D:E tetap terlindungi.
           sheet.getRange(targetRow, 2, 1, 2).setValues([[formattedDate, kode]]);
           writeTouched = true;
@@ -1156,6 +1176,20 @@ function bulkTransaction(body) {
         } catch (reconcileErr) {
           console.error("bulkTransaction reconciliation gagal: " + reconcileErr.message);
         }
+        if (prior.status === "UNKNOWN" || String(prior.writeOccurred) === "unknown" || Number(prior.dataRow) > 0) {
+          results.push({
+            success: false, status: "UNKNOWN", code: "READBACK_REQUIRED",
+            batchId: batchId, batchIndex: p + 1,
+            transactionId: item.transactionId, nonce: item.nonce,
+            requestId: item.requestId || "",
+            clientItemId: item.clientItemId || item.requestId || "",
+            sheet: sheetName, kode: item.kodeBarang,
+            writeOccurred: "unknown",
+            error: "Identitas bulk sudah memiliki write intent; read-back belum mengonfirmasi jurnal. Jangan tulis ulang item ini."
+          });
+          failCount++;
+          continue;
+        }
       }
       if (prior && prior.status === "APPLIED") {
         results.push({
@@ -1248,8 +1282,22 @@ function bulkTransaction(body) {
       var bcValues = [];
       var fgValues = [];
       for (var r = 0; r < rowsToWrite.length; r++) {
-        bcValues.push([rowsToWrite[r].date, rowsToWrite[r].kode]);
-        fgValues.push([rowsToWrite[r].qty, rowsToWrite[r].ket]);
+        var planned = rowsToWrite[r];
+        var plannedRow = startRow + r;
+        var plannedRecord = findIdempotencyRecord_(planned.txId, planned.nonce);
+        if (!plannedRecord) throw new Error("Idempotency ledger hilang sebelum bulk write: " + planned.txId);
+        var persistedPlan = updateIdempotencyRecord_(plannedRecord, {
+          status: "IN_PROGRESS", dataRow: plannedRow, writeOccurred: "unknown", errorCode: "WRITE_PENDING",
+          details: JSON.stringify({
+            planned: true, plannedFinalQty: planned.qty,
+            keteranganHash: sha256Short_(planned.ket), batchId: batchId
+          })
+        });
+        if (!persistedPlan || Number(persistedPlan.dataRow) !== Number(plannedRow)) {
+          throw new Error("Write-ahead ledger bulk tidak dapat dikonfirmasi: " + planned.txId);
+        }
+        bcValues.push([planned.date, planned.kode]);
+        fgValues.push([planned.qty, planned.ket]);
       }
 
       sheet.getRange(startRow, 2, rowsToWrite.length, 2).setValues(bcValues);
