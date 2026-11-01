@@ -1191,7 +1191,7 @@ function bulkTransaction(body) {
         } catch (reconcileErr) {
           console.error("bulkTransaction reconciliation gagal: " + reconcileErr.message);
         }
-        if (prior.status === "UNKNOWN" || String(prior.writeOccurred) === "unknown" || Number(prior.dataRow) > 0) {
+        if (prior.status === "UNKNOWN" || String(prior.writeOccurred) === "unknown") {
           results.push({
             success: false, status: "UNKNOWN", code: "READBACK_REQUIRED",
             batchId: batchId, batchIndex: p + 1,
@@ -1379,6 +1379,19 @@ function bulkTransaction(body) {
     try { syncDivisionStockLightweight_(); } catch (divErr) { console.error("syncDivisionStockLightweight_ gagal: " + divErr.message); }
   } catch (outerErr) {
     failCount++;
+    // Resolve every planned ledger record consistently with the conservative write boundary.
+    rowsToWrite.forEach(function(rw) {
+      try {
+        var rec = findIdempotencyRecord_(rw.txId, rw.nonce);
+        if (rec) updateIdempotencyRecord_(rec, {
+          status: writeTouched ? "UNKNOWN" : "FAILED",
+          dataRow: writeTouched ? rec.dataRow : "",
+          writeOccurred: writeTouched ? "unknown" : false,
+          errorCode: writeTouched ? "PARTIAL_WRITE_READBACK_REQUIRED" : "BULK_WRITE_NOT_STARTED",
+          details: String(outerErr.message || outerErr).substring(0, 1000)
+        });
+      } catch (ledgerErr) { console.error("bulk failure ledger reconciliation: " + ledgerErr.message); }
+    });
     try { sendErrorEmailWithCooldown("bulkTransaction", outerErr, { batchId: batchId, sheet: sheetName, count: prepared.length }); } catch (n) {}
     results.push({ success: false, status: writeTouched ? "UNKNOWN" : "FAILED", code: writeTouched ? "PARTIAL_WRITE_READBACK_REQUIRED" : "WRITE_FAILED", batchId: batchId, error: String(outerErr.message || outerErr) });
   } finally {
