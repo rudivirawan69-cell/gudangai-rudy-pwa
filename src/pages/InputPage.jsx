@@ -626,7 +626,11 @@ export default function InputPage() {
           );
         } else if (confirmedItems.length === cart.length) {
           pushNotification({ type: 'success', title: 'Transaksi selesai', body: confirmedItems.length + ' item ' + txType + ' ' + entity + ' terkonfirmasi ditulis backend.' });
-          setStatusBanner('Berhasil dikonfirmasi · ' + confirmedItems.length + ' item');
+          const timingLabel = Number(res.serverExecMs) > 0
+            ? ' · server ' + Math.round(Number(res.serverExecMs)).toLocaleString('id-ID') + ' ms' +
+              (Number(res.clientElapsedMs) > 0 ? ' · total ' + Math.round(Number(res.clientElapsedMs)).toLocaleString('id-ID') + ' ms' : '')
+            : '';
+          setStatusBanner('Berhasil dikonfirmasi · ' + confirmedItems.length + ' item' + timingLabel);
         } else {
           pushNotification({ type: 'error', title: 'Belum ada konfirmasi penulisan', body: 'Tidak ada item yang dinyatakan tertulis per-item oleh backend.' });
           setStatusBanner('Belum terkonfirmasi — item tetap diamankan di antrian');
