@@ -127,15 +127,20 @@ export default function InputPage() {
   }, []);
   useEffect(() => {
     let cancelled = false;
-    (async () => {
+    const loadStockCatalog = async () => {
       try {
         const list = await fetchStock(entity, { allowDemo: true });
         if (!cancelled && Array.isArray(list)) setStockCatalog(list);
       } catch (_) {
         if (!cancelled) setStockCatalog([]);
       }
-    })();
-    return () => { cancelled = true; };
+    };
+    loadStockCatalog();
+    window.addEventListener('gudangai-stock-refresh', loadStockCatalog);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('gudangai-stock-refresh', loadStockCatalog);
+    };
   }, [entity]);
   useEffect(() => {
     if (!query.trim()) { setHits([]); return; }
@@ -634,7 +639,7 @@ export default function InputPage() {
         if (!pendingItems.length) {
           setAccuracy(null); setPdfReview([]); setReviewSourceLabel('PDF');
         }
-        window.dispatchEvent(new Event('gudangai-stock-refresh'));
+        if (confirmedItems.length > 0) window.dispatchEvent(new Event('gudangai-stock-refresh'));
       } else {
         pushNotification({ type: 'error', title: 'Transaksi belum dikirim', body: res?.error || 'Tidak ada data yang dinyatakan berhasil.' });
         setStatusBanner(res?.error || 'Gagal kirim');
