@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { fetchStock } from '../data/api';
+import { classifyStockLevel } from '../data/stockStatus';
 
 /**
  * Stok live — stabil: jangan kosongkan list saat error singkat.
@@ -67,10 +68,10 @@ export function useStock(entity) {
 
   const getStats = useCallback(() => {
     const total = items.length;
-    const safe = items.filter((i) => i.stok > 20).length;
-    const warning = items.filter((i) => i.stok > 5 && i.stok <= 20).length;
-    const danger = items.filter((i) => i.stok > 0 && i.stok <= 5).length;
-    const zero = items.filter((i) => i.stok === 0).length;
+    const safe = items.filter((i) => classifyStockLevel(i.stok) === 'aman').length;
+    const warning = items.filter((i) => classifyStockLevel(i.stok) === 'waspada').length;
+    const danger = items.filter((i) => classifyStockLevel(i.stok) === 'kritis' && Number(i.stok) > 0).length;
+    const zero = items.filter((i) => Number(i.stok) === 0).length;
     const totalStok = items.reduce((s, i) => s + (i.stok || 0), 0);
     return { total, safe, warning, danger, zero, totalStok };
   }, [items]);
