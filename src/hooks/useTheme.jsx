@@ -3,26 +3,26 @@ import { createContext, useContext, useEffect, useMemo, useState, useCallback } 
 const STORAGE_KEY = 'gudangai_theme';
 
 /** Tiga mode: Soft (domain default) + Teal + Navy dari mock centang */
-export const THEME_IDS = ['soft_light', 'deep_ocean', 'warm_productive'];
+export const THEME_IDS = ['soft_light', 'deep_ocean', 'graphite_titanium'];
 
 export const THEME_META = {
   soft_light: {
     id: 'soft_light',
-    label: 'Soft Productive',
-    short: 'Soft',
-    description: 'Cream · kartu putih · 3D halus (default domain)',
+    label: 'Arctic Professional',
+    short: 'Arctic',
+    description: 'Putih · Ice Blue · Navy — bersih dan profesional',
   },
   deep_ocean: {
     id: 'deep_ocean',
-    label: 'Navy Dark',
-    short: 'Navy',
-    description: 'Navy gelap · kontras tinggi · aksen cyan',
+    label: 'Deep Ocean',
+    short: 'Ocean',
+    description: 'Midnight Navy · Teal · Cyan — mode gelap',
   },
-  warm_productive: {
-    id: 'warm_productive',
-    label: 'Teal Soft',
-    short: 'Teal',
-    description: 'Teal solid · kartu kaca · fokus angka',
+  graphite_titanium: {
+    id: 'graphite_titanium',
+    label: 'Graphite Titanium',
+    short: 'Graphite',
+    description: 'Graphite · Titanium · Amber — industrial premium',
   },
 };
 
@@ -31,7 +31,7 @@ const ThemeContext = createContext(null);
 function normalizeTheme(raw) {
   const v = String(raw || '').toLowerCase().trim();
   if (v === 'dark' || v === 'deep_ocean' || v === 'ocean' || v === 'navy') return 'deep_ocean';
-  if (v === 'warm' || v === 'warm_productive' || v === 'productive' || v === 'teal' || v === 'glass') return 'warm_productive';
+  if (v === 'warm' || v === 'warm_productive' || v === 'productive' || v === 'teal' || v === 'glass' || v === 'graphite' || v === 'graphite_titanium') return 'graphite_titanium';
   if (v === 'light' || v === 'soft_light' || v === 'soft') return 'soft_light';
   if (THEME_IDS.includes(v)) return v;
   return 'soft_light';
@@ -49,7 +49,14 @@ function applyDomTheme(theme) {
   const t = normalizeTheme(theme);
   const root = document.documentElement;
   root.setAttribute('data-theme', t);
-  root.style.colorScheme = t === 'deep_ocean' ? 'dark' : 'light';
+  root.style.colorScheme = t === 'deep_ocean' || t === 'graphite_titanium' ? 'dark' : 'light';
+  const themeColors = {
+    soft_light: '#247ba8',
+    deep_ocean: '#35b9b0',
+    graphite_titanium: '#d69a48',
+  };
+  const themeColorMeta = document.querySelector('meta[name="theme-color"]');
+  if (themeColorMeta) themeColorMeta.setAttribute('content', themeColors[t] || themeColors.soft_light);
   if (document.body) document.body.setAttribute('data-theme', t);
 }
 
@@ -85,7 +92,8 @@ export function ThemeProvider({ children }) {
       meta: THEME_META[theme] || THEME_META.soft_light,
       isDark: theme === 'deep_ocean',
       isLight: theme === 'soft_light',
-      isWarm: theme === 'warm_productive',
+      isWarm: theme === 'graphite_titanium',
+      isGraphite: theme === 'graphite_titanium',
       setTheme,
       cycleTheme,
       themes: THEME_IDS.map((id) => THEME_META[id]),
@@ -105,6 +113,7 @@ export function useTheme() {
       isDark: false,
       isLight: true,
       isWarm: false,
+      isGraphite: false,
       setTheme: () => {},
       cycleTheme: () => {},
       themes: THEME_IDS.map((id) => THEME_META[id]),

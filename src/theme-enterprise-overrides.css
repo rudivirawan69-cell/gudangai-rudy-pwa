@@ -1,0 +1,212 @@
+/* GUDANG-AI 69 — enterprise theme system, presentation only.
+   Keeps application structure, data, API, transactions and offline queue unchanged. */
+
+:root,
+html[data-theme="soft_light"] {
+  color-scheme: light;
+  --bg-app: #f1f6fa;
+  --bg-app-grad: linear-gradient(180deg,#f8fbfd 0%,#edf4f8 55%,#e5eef5 100%);
+  --bg-elevated: #ffffff;
+  --bg-muted: #e7eff5;
+  --text-main: #203448;
+  --text-muted: #607487;
+  --text-on-accent: #ffffff;
+  --border: #dce7ef;
+  --accent: #247ba8;
+  --accent-strong: #195f87;
+  --accent-soft: rgba(36,123,168,.12);
+  --success: #16a36a;
+  --warning: #e6a23c;
+  --danger: #dc4545;
+  --stok-aman: #16a36a;
+  --stok-waspada: #e6a23c;
+  --stok-kritis: #dc4545;
+  --po-datang: #16a36a;
+  --po-sebagian: #e6a23c;
+  --po-belum: #94a3b8;
+  --nav-bg: rgba(255,255,255,.97);
+  --focus-ring: 0 0 0 3px rgba(36,123,168,.25);
+  --surface: #fff;
+  --ink: #203448;
+  --chart-line: #247ba8;
+  --chart-fill: rgba(36,123,168,.16);
+  --panel-dark: #18354d;
+  --panel-dark-text: #f8fafc;
+  --field-bg: #f8fbfd;
+  --shadow-1: 0 5px 18px rgba(28,61,83,.07);
+  --shadow-2: 0 10px 26px rgba(28,61,83,.11);
+}
+
+html[data-theme="deep_ocean"] {
+  color-scheme: dark;
+  --bg-app: #101b2d;
+  --bg-app-grad: linear-gradient(165deg,#0c1626 0%,#14243a 52%,#192d43 100%);
+  --bg-elevated: #17283d;
+  --bg-muted: #20364d;
+  --text-main: #f1f5f9;
+  --text-muted: #b7c7d8;
+  --text-on-accent: #071521;
+  --border: rgba(153,178,202,.2);
+  --accent: #35b9b0;
+  --accent-strong: #239b98;
+  --accent-soft: rgba(53,185,176,.16);
+  --success: #2dd4a0;
+  --warning: #f4bd55;
+  --danger: #fb7185;
+  --stok-aman: #2dd4a0;
+  --stok-waspada: #f4bd55;
+  --stok-kritis: #fb7185;
+  --po-datang: #2dd4a0;
+  --po-sebagian: #f4bd55;
+  --po-belum: #94a3b8;
+  --nav-bg: rgba(18,35,54,.97);
+  --focus-ring: 0 0 0 3px rgba(53,185,176,.35);
+  --surface: #17283d;
+  --ink: #f1f5f9;
+  --chart-line: #35b9b0;
+  --chart-fill: rgba(53,185,176,.2);
+  --panel-dark: #0c1726;
+  --panel-dark-text: #f8fafc;
+  --field-bg: #102238;
+  --shadow-1: 0 7px 22px rgba(0,0,0,.2);
+  --shadow-2: 0 12px 30px rgba(0,0,0,.28);
+}
+
+html[data-theme="graphite_titanium"] {
+  color-scheme: dark;
+  --bg-app: #171a20;
+  --bg-app-grad: linear-gradient(165deg,#14171c 0%,#202630 58%,#292f38 100%);
+  --bg-elevated: #252b34;
+  --bg-muted: #303844;
+  --text-main: #f1f3f5;
+  --text-muted: #b4bdc8;
+  --text-on-accent: #171a20;
+  --border: rgba(183,193,205,.2);
+  --accent: #d69a48;
+  --accent-strong: #b77a2e;
+  --accent-soft: rgba(214,154,72,.17);
+  --success: #35b987;
+  --warning: #e3a94f;
+  --danger: #f07171;
+  --stok-aman: #35b987;
+  --stok-waspada: #e3a94f;
+  --stok-kritis: #f07171;
+  --po-datang: #35b987;
+  --po-sebagian: #e3a94f;
+  --po-belum: #9ca6b2;
+  --nav-bg: rgba(31,36,44,.98);
+  --focus-ring: 0 0 0 3px rgba(214,154,72,.35);
+  --surface: #252b34;
+  --ink: #f1f3f5;
+  --chart-line: #d69a48;
+  --chart-fill: rgba(214,154,72,.2);
+  --panel-dark: #171a20;
+  --panel-dark-text: #f1f3f5;
+  --field-bg: #1c222b;
+  --shadow-1: 0 7px 22px rgba(0,0,0,.24);
+  --shadow-2: 0 12px 30px rgba(0,0,0,.32);
+}
+
+/* Shared page shell and all reusable surfaces */
+html[data-theme] body,
+html[data-theme] #root,
+html[data-theme] .app-shell {
+  background: var(--bg-app) !important;
+  color: var(--text-main) !important;
+}
+html[data-theme] .app-bg { background: var(--bg-app-grad) !important; }
+html[data-theme] .app-header-card,
+html[data-theme] .app-top-header .app-header-card {
+  background: var(--bg-elevated) !important;
+  border-color: var(--border) !important;
+  color: var(--text-main) !important;
+  box-shadow: var(--shadow-1) !important;
+}
+html[data-theme] .app-content :is(.card,.surface,.section-card,.stat-tile,.stock-card,
+.dashboard-panel,.dashboard-total-card,.dashboard-po-card,.dashboard-header-card,
+.menu-group,.po-hub-card,.po-item-card,.stock-metric-surface,.division-status-card,
+.info-box,.menu-row,.settings-menu-row) {
+  background: var(--bg-elevated) !important;
+  color: var(--text-main) !important;
+  border-color: var(--border) !important;
+  box-shadow: var(--shadow-1) !important;
+  text-shadow: none !important;
+}
+html[data-theme] .nav-bar {
+  background: var(--nav-bg) !important;
+  border-color: var(--border) !important;
+}
+html[data-theme] .nav-btn { color: var(--text-muted) !important; }
+html[data-theme] .nav-btn.is-active { color: var(--accent) !important; }
+html[data-theme] .nav-btn.is-active .nav-icon-wrap {
+  background: var(--accent-soft) !important;
+  box-shadow: none !important;
+}
+html[data-theme] .nav-underline { background: var(--accent) !important; }
+html[data-theme] .app-content :is(input,select,textarea) {
+  background: var(--field-bg) !important;
+  color: var(--text-main) !important;
+  border-color: var(--border) !important;
+}
+html[data-theme] .app-content :is(input,textarea)::placeholder { color: var(--text-muted) !important; opacity:.75; }
+html[data-theme] .app-content button:focus-visible,
+html[data-theme] .app-content a:focus-visible,
+html[data-theme] .app-content input:focus-visible,
+html[data-theme] .app-content select:focus-visible,
+html[data-theme] .app-content textarea:focus-visible {
+  outline: 2px solid var(--accent) !important;
+  outline-offset: 2px;
+}
+html[data-theme] .app-content :is(button[class*="bg-cyan-700"],button[class*="bg-cyan-600"],
+button[class*="bg-blue-600"],button[class*="bg-\\[\\#0b2a55\\]"]) {
+  background-color: var(--accent-strong) !important;
+  color: var(--text-on-accent) !important;
+}
+html[data-theme] .app-content :is(.text-cyan-700,.text-cyan-800,.text-blue-700,.text-blue-800) {
+  color: var(--accent-strong) !important;
+}
+html[data-theme] .app-content :is(.border-cyan-200,.border-blue-200,.border-blue-300) {
+  border-color: var(--border) !important;
+}
+html[data-theme] .app-content .theme-picker-btn.is-active {
+  border-color: var(--accent) !important;
+  background: var(--accent-soft) !important;
+  box-shadow: 0 0 0 2px var(--accent-soft) !important;
+}
+html[data-theme] .app-content .theme-picker-btn.is-active :is(svg,span) {
+  color: var(--accent-strong) !important;
+}
+
+/* Arctic keeps bright surfaces; dark themes keep every nested card readable. */
+html[data-theme="deep_ocean"] .app-content :is(.dashboard-panel,.dashboard-total-card,.dashboard-po-card,
+.po-shortcut,.po-shortcut-icon,.dashboard-chart-wrap) {
+  background: var(--bg-elevated) !important;
+  color: var(--text-main) !important;
+  border-color: var(--border) !important;
+}
+html[data-theme="graphite_titanium"] .app-content :is(.dashboard-panel,.dashboard-total-card,
+.dashboard-po-card,.po-shortcut,.po-shortcut-icon,.dashboard-chart-wrap) {
+  background: var(--bg-elevated) !important;
+  color: var(--text-main) !important;
+  border-color: var(--border) !important;
+}
+html[data-theme="deep_ocean"] .app-content :is(.po-shortcut-title,.dashboard-panel h1,
+.dashboard-panel h2,.dashboard-panel h3,.dashboard-total-card h1,.dashboard-total-card h2) {
+  color: var(--text-main) !important;
+}
+html[data-theme="graphite_titanium"] .app-content :is(.po-shortcut-title,.dashboard-panel h1,
+.dashboard-panel h2,.dashboard-panel h3,.dashboard-total-card h1,.dashboard-total-card h2) {
+  color: var(--text-main) !important;
+}
+
+/* Fixed status semantics are shared by all three themes. */
+html[data-theme] :is(.status-aman,.stok-aman) { color: var(--stok-aman) !important; }
+html[data-theme] :is(.status-waspada,.stok-waspada) { color: var(--stok-waspada) !important; }
+html[data-theme] :is(.status-kritis,.stok-kritis) { color: var(--stok-kritis) !important; }
+
+@media (prefers-reduced-motion: reduce) {
+  html[data-theme] .app-content :is(.card,.surface,.section-card,.stat-tile,.stock-card,button,a) {
+    transition: none !important;
+    animation: none !important;
+  }
+}
