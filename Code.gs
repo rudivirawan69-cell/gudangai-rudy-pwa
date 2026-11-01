@@ -611,6 +611,18 @@ function appendIdentityMarker_(keterangan, transactionId, nonce) {
   return base.substring(0, MAX_KETERANGAN_LENGTH);
 }
 
+function appendTransactionNoteWithinLimit_(base, suffix) {
+  var max = MAX_KETERANGAN_LENGTH;
+  var userText = String(base || "").trim();
+  var systemText = String(suffix || "").trim();
+  if (!systemText) return userText.substring(0, max);
+  if (systemText.length >= max) return systemText.substring(0, max);
+  var separator = userText ? " | " : "";
+  var allowedUserLength = Math.max(0, max - systemText.length - separator.length);
+  var safeUserText = userText.substring(0, allowedUserLength).trim();
+  return (safeUserText ? safeUserText + separator : "") + systemText;
+}
+
 function readBackTransactionByIdentity_(identity, preferredSheet) {
   const targetId = String(identity && identity.transactionId || "").trim();
   const targetNonce = String(identity && identity.nonce || "").trim();
@@ -962,7 +974,7 @@ function addTransaction(body) {
           shortageMode = true;
           finalQty = 0;
           const structured = "Input pending " + numericQty + " > sisa stock " + sisa + " > kurang " + kekurangan;
-          keterangan = keterangan ? (keterangan + " | " + structured) : structured;
+          keterangan = appendTransactionNoteWithinLimit_(keterangan, structured);
           flags.push("STOCK_KURANG", "STOCK_KURANG_HOLD", "QTY_HOLD_0");
           try {
             MailApp.sendEmail(ADMIN_EMAIL, "[GudangAI][STOCK KURANG] " + kode + " " + (stockInfo.nama || ""),
@@ -1230,7 +1242,7 @@ function bulkTransaction(body) {
           shortageMode = true;
           finalQty = 0;
           var structured = "Input pending " + numericQty + " > sisa stock " + sisa + " > kurang " + kekurangan;
-          keterangan = keterangan ? (keterangan + " | " + structured) : structured;
+          keterangan = appendTransactionNoteWithinLimit_(keterangan, structured);
         }
         if (st) st.stockAkhir = Math.max(0, sisa - (shortageMode ? 0 : finalQty));
       }
