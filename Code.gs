@@ -576,6 +576,68 @@ function findIdempotencyRecord_(transactionId, nonce) {
 }
 
 
+
+function idempotencyRecordValues_(record, updatedAt) {
+  const merged = record || {};
+  const now = updatedAt || new Date().toISOString();
+  return [
+    merged.createdAt || now, now, merged.transactionId || "", merged.nonce || "", merged.requestId || "", merged.deviceId || "",
+    merged.operation || "syncTransaction", merged.sheet || "", merged.entitas || "", merged.kodeBarang || "", merged.qty == null ? "" : merged.qty,
+    merged.tanggal || "", merged.status || "IN_PROGRESS", merged.dataRow || "", merged.writeOccurred == null ? "unknown" : merged.writeOccurred,
+    merged.errorCode || "", redactSensitiveString_(String(merged.details || "")).substring(0, 5000)
+  ];
+}
+
+function flushIdempotencyAppendsIndexed_(index) {
+  if (!index || !index.sheet || !index.pendingAppends || !index.pendingAppends.length) return 0;
+  const pending = index.pendingAppends.slice().sort(function(a, b) { return a.rowNumber - b.rowNumber; });
+  let group = [];
+  let groupStart = 0;
+  let writes = 0;
+  function flushGroup_() {
+    if (!group.length) return;
+    index.sheet.getRange(groupStart, 1, group.length, IDEMPOTENCY_HEADERS.length)
+      .setValues(group.map(function(entry) { return entry.values; }));
+    writes++;
+    group = [];
+  }
+  pending.forEach(function(entry) {
+    if (group.length && entry.rowNumber !== groupStart + group.length) flushGroup_();
+    if (!group.length) groupStart = entry.rowNumber;
+    group.push(entry);
+  });
+  flushGroup_();
+  index.pendingAppends = [];
+  return writes;
+}
+
+function flushIdempotencyUpdatesIndexed_(index) {
+  if (!index || !index.sheet || !index.pendingUpdates) return 0;
+  const rowNumbers = Object.keys(index.pendingUpdates).map(Number).filter(function(n) { return n > 0; }).sort(function(a, b) { return a - b; });
+  if (!rowNumbers.length) return 0;
+  let groupRows = [];
+  let groupStart = 0;
+  let writes = 0;
+  function flushGroup_() {
+    if (!groupRows.length) return;
+    const values = groupRows.map(function(rowNumber) {
+      const record = index.pendingUpdates[rowNumber];
+      return idempotencyRecordValues_(record, record.updatedAt);
+    });
+    index.sheet.getRange(groupStart, 1, groupRows.length, IDEMPOTENCY_HEADERS.length).setValues(values);
+    writes++;
+    groupRows = [];
+  }
+  rowNumbers.forEach(function(rowNumber) {
+    if (groupRows.length && rowNumber !== groupStart + groupRows.length) flushGroup_();
+    if (!groupRows.length) groupStart = rowNumber;
+    groupRows.push(rowNumber);
+  });
+  flushGroup_();
+  index.pendingUpdates = Object.create(null);
+  return writes;
+}
+
 function buildIdempotencyIndex_() {
   const sheet = getIdempotencyLedgerSheet_();
   const lastRow = sheet.getLastRow();
@@ -595,7 +657,9 @@ function buildIdempotencyIndex_() {
     sheet: sheet,
     nextRow: Math.max(OPS_DATA_START_ROW, lastRow + 1),
     byTransactionId: byTransactionId,
-    byNonce: byNonce
+    byNonce: byNonce,
+    pendingAppends: [],
+    pendingUpdates: Object.create(null)
   };
 }
 
@@ -619,22 +683,25 @@ function findIdempotencyRecordInIndex_(index, transactionId, nonce) {
 
 function appendIdempotencyRecordIndexed_(record, index) {
   if (!index || !index.sheet) throw new Error("Idempotency index tidak tersedia.");
-  const now = new Date().toISOString();
-  const values = [[
-    record.createdAt || now, now, record.transactionId || "", record.nonce || "", record.requestId || "", record.deviceId || "",
-    record.operation || "syncTransaction", record.sheet || "", record.entitas || "", record.kodeBarang || "", record.qty == null ? "" : record.qty,
-    record.tanggal || "", record.status || "IN_PROGRESS", record.dataRow || "", record.writeOccurred == null ? "unknown" : record.writeOccurred,
-    record.errorCode || "", redactSensitiveString_(String(record.details || "")).substring(0, 5000)
-  ]];
+  // Stage row in memory; the complete contiguous claim block is flushed once
+  // before any journal write starts.
   const rowNumber = index.nextRow;
-  index.sheet.getRange(rowNumber, 1, 1, IDEMPOTENCY_HEADERS.length).setValues(values);
-  const saved = mapIdempotencyRow_(values[0], rowNumber);
+  const values = idempotencyRecordValues_(record, new Date().toISOString());
+  const saved = mapIdempotencyRow_(values, rowNumber);
+  index.pendingAppends.push({ rowNumber: rowNumber, values: values });
   index.nextRow = rowNumber + 1;
   return rememberIdempotencyRecord_(index, saved);
 }
 
 function updateIdempotencyRecordIndexed_(record, patch, index) {
-  const updated = updateIdempotencyRecord_(record, patch, index && index.sheet);
+  if (!record || !record.rowNumber || !index) return null;
+  const rowNumber = Number(record.rowNumber);
+  const base = index.pendingUpdates[rowNumber] || record;
+  const merged = Object.assign({}, base, patch || {});
+  const now = new Date().toISOString();
+  const values = idempotencyRecordValues_(merged, now);
+  const updated = mapIdempotencyRow_(values, rowNumber);
+  index.pendingUpdates[rowNumber] = updated;
   return rememberIdempotencyRecord_(index, updated);
 }
 
@@ -1349,7 +1416,11 @@ function bulkTransaction(body) {
       });
     }
 
+    // Persist all new claims in one contiguous write before any transaction journal write.
+    flushIdempotencyAppendsIndexed_(ledgerIndex);
+
     if (rowsToWrite.length === 0 && failCount === 0) {
+      flushIdempotencyUpdatesIndexed_(ledgerIndex);
       var replayResp = {
         success: true, status: "COMMITTED", batchId: batchId,
         total: prepared.length, successCount: successCount, failCount: 0,
@@ -1388,6 +1459,9 @@ function bulkTransaction(body) {
         bcValues.push([planned.date, planned.kode]);
         fgValues.push([planned.qty, planned.ket]);
       }
+
+      // Persist write-intent for every item as grouped ledger writes before journal mutation.
+      flushIdempotencyUpdatesIndexed_(ledgerIndex);
 
       // Set konservatif sebelum panggilan Sheets agar partial-write exception berstatus UNKNOWN.
       writeTouched = true;
@@ -1451,6 +1525,9 @@ function bulkTransaction(body) {
       }
     }
 
+    // APPLIED/UNKNOWN ledger states are committed in grouped contiguous writes.
+    flushIdempotencyAppendsIndexed_(ledgerIndex);
+    flushIdempotencyUpdatesIndexed_(ledgerIndex);
     updateLastUpdateTimestamp();
     clearMasterCache();
     // Formula Data Stok Per Divisi menghitung ulang otomatis; audit formula penuh
@@ -1470,6 +1547,12 @@ function bulkTransaction(body) {
         }, ledgerIndex);
       } catch (ledgerErr) { console.error("bulk failure ledger reconciliation: " + ledgerErr.message); }
     });
+    try {
+      flushIdempotencyAppendsIndexed_(ledgerIndex);
+      flushIdempotencyUpdatesIndexed_(ledgerIndex);
+    } catch (ledgerFlushErr) {
+      console.error("bulk failure ledger flush: " + ledgerFlushErr.message);
+    }
     try { sendErrorEmailWithCooldown("bulkTransaction", outerErr, { batchId: batchId, sheet: sheetName, count: prepared.length }); } catch (n) {}
     results.push({ success: false, status: writeTouched ? "UNKNOWN" : "FAILED", code: writeTouched ? "PARTIAL_WRITE_READBACK_REQUIRED" : "WRITE_FAILED", batchId: batchId, error: String(outerErr.message || outerErr) });
   } finally {
