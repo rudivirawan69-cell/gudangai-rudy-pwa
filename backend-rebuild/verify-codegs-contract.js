@@ -1,11 +1,11 @@
-"use strict";
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import vm from "node:vm";
+import { fileURLToPath } from "node:url";
 
-const assert = require("node:assert/strict");
-const fs = require("node:fs");
-const path = require("node:path");
-const vm = require("node:vm");
-
-const source = fs.readFileSync(path.resolve(__dirname, "..", "Code.gs"), "utf8");
+const here = path.dirname(fileURLToPath(import.meta.url));
+const source = fs.readFileSync(path.resolve(here, "..", "Code.gs"), "utf8");
 new vm.Script(source, { filename: "Code.gs" });
 
 function section(startMarker, endMarker) {
