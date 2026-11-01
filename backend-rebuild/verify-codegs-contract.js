@@ -66,6 +66,9 @@ assert.ok(singleWrite.indexOf("writeTouched = true;") <
 assert.ok(singleWrite.includes("plannedKeteranganHash") && singleWrite.includes("Fingerprint Keterangan gagal dibuat"));
 const bulkWrite = section("function bulkTransaction(body)", "function normalizeEntityGroup_(");
 assert.ok(bulkWrite.includes('prior.status === "UNKNOWN"') && bulkWrite.includes('"READBACK_REQUIRED"'));
+assert.ok(bulkWrite.includes('status: writeTouched ? "UNKNOWN" : "FAILED"'));
+assert.ok(bulkWrite.includes('writeOccurred: writeTouched ? "unknown" : false'));
+assert.ok(bulkWrite.includes('"BULK_WRITE_NOT_STARTED"'));
 assert.ok(bulkWrite.includes("dataRow: plannedRow") && bulkWrite.includes('writeOccurred: "unknown"'));
 assert.ok(bulkWrite.indexOf('dataRow: plannedRow, writeOccurred: "unknown"') <
   bulkWrite.indexOf("sheet.getRange(startRow, 2, rowsToWrite.length, 2).setValues("),
