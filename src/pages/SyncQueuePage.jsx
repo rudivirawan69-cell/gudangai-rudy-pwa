@@ -171,6 +171,7 @@ export default function SyncQueuePage({ onBack }) {
           : `Berhasil: ${succeeded.length} · Gagal / sisa: ${after.length}`,
       });
       if (succeeded.length > 0) {
+        window.dispatchEvent(new Event('gudangai-stock-refresh'));
         pushNotification({ type: 'ok', title: 'Sinkronisasi selesai', body: `${succeeded.length} item berhasil dikirim ke spreadsheet.` });
       }
       if (after.length > 0 && !res.skipped) {
