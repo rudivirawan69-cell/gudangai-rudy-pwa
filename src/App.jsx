@@ -96,7 +96,27 @@ function ConnBanner({ online, hasUrl, status, message, syncing }) {
   return null;
 }
 
-function AppHeader({ user, tab, onOpenSettings, online, status, onRefreshClock, liveTime }) {
+function AppHeader({ user, tab, onOpenSettings, online, status }) {
+  const [liveTime, setLiveTime] = useState('—');
+  const tickClock = () => {
+    try {
+      const now = new Date();
+      const dateStr = now.toLocaleDateString('id-ID', {
+        day: '2-digit', month: 'short', year: 'numeric', timeZone: 'Asia/Jakarta',
+      });
+      const timeStr = now.toLocaleTimeString('id-ID', {
+        hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23', timeZone: 'Asia/Jakarta',
+      });
+      setLiveTime(`${dateStr}, ${timeStr} WIB`);
+    } catch (_) {
+      setLiveTime(new Date().toLocaleString('id-ID'));
+    }
+  };
+  useEffect(() => {
+    tickClock();
+    const id = setInterval(tickClock, 1000);
+    return () => clearInterval(id);
+  }, []);
   const photo = (user?.photo && String(user.photo).length > 40) ? user.photo : DEFAULT_PROFILE_PHOTO;
   const connected = online && status !== 'offline' && status !== 'error';
 
@@ -159,7 +179,7 @@ function AppHeader({ user, tab, onOpenSettings, online, status, onRefreshClock, 
 
           <button
             type="button"
-            onClick={onRefreshClock}
+            onClick={tickClock}
             className="shrink-0 w-9 h-9 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center active:scale-95"
             aria-label="Refresh waktu"
             title="Refresh"
@@ -174,28 +194,6 @@ function AppHeader({ user, tab, onOpenSettings, online, status, onRefreshClock, 
 
 function AppShell() {
   const [installPrompt, setInstallPrompt] = useState(null);
-  const [liveTime, setLiveTime] = useState('—');
-
-  const tickClock = () => {
-    try {
-      const now = new Date();
-      const dateStr = now.toLocaleDateString('id-ID', {
-        day: '2-digit', month: 'short', year: 'numeric', timeZone: 'Asia/Jakarta',
-      });
-      const timeStr = now.toLocaleTimeString('id-ID', {
-        hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23', timeZone: 'Asia/Jakarta',
-      });
-      setLiveTime(`${dateStr}, ${timeStr} WIB`);
-    } catch (_) {
-      setLiveTime(new Date().toLocaleString('id-ID'));
-    }
-  };
-
-  useEffect(() => {
-    tickClock();
-    const id = setInterval(tickClock, 1000);
-    return () => clearInterval(id);
-  }, []);
 
   useEffect(() => {
     const onBeforeInstall = (event) => {
@@ -271,8 +269,6 @@ function AppShell() {
         onOpenSettings={() => goTab('settings')}
         online={online}
         status={status}
-        onRefreshClock={tickClock}
-        liveTime={liveTime}
       />
       {installPrompt && (
         <button type="button" onClick={installApp} className="fixed top-3 right-3 z-[60] rounded-full bg-[#0f9f9a] px-4 py-2 text-xs font-extrabold text-white shadow-lg border border-white/30">
