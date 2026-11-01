@@ -98,6 +98,20 @@ assert.ok(!fastBulkWrite.includes("sheet.getRange(rowNum, 2, 1, 2).getValues()")
   "Bulk read-back must be block-based, not per-row.");
 assert.ok(!fastBulkWrite.includes("syncDivisionStockLightweight_()"),
   "Bulk write must not run a full formula audit in the response path.");
+assert.ok(fastBulkWrite.indexOf("flushIdempotencyAppendsIndexed_(ledgerIndex);") <
+  fastBulkWrite.indexOf("sheet.getRange(startRow, 2, rowsToWrite.length, 2).setValues(bcValues)"),
+  "New ledger claims must be flushed before journal writes.");
+const intentFlushAt = fastBulkWrite.indexOf("flushIdempotencyUpdatesIndexed_(ledgerIndex);", fastBulkWrite.indexOf("fgValues.push"));
+assert.ok(intentFlushAt >= 0 && intentFlushAt <
+  fastBulkWrite.indexOf("sheet.getRange(startRow, 2, rowsToWrite.length, 2).setValues(bcValues)"),
+  "All write-intent ledger patches must be flushed before journal writes.");
+assert.ok(fastBulkWrite.includes("flushIdempotencyUpdatesIndexed_(ledgerIndex);"),
+  "Bulk must flush APPLIED/UNKNOWN ledger outcomes before returning.");
+const indexedAppend = section("function appendIdempotencyRecordIndexed_(record, index)", "function updateIdempotencyRecordIndexed_(record, patch, index)");
+assert.ok(!indexedAppend.includes(".setValues("), "Indexed append must stage rows for grouped writes.");
+const indexedUpdate = section("function updateIdempotencyRecordIndexed_(record, patch, index)", "function findIdempotencyRecord_(");
+assert.ok(!indexedUpdate.includes(".setValues("), "Indexed updates must stage patches for grouped writes.");
+
 
 const onEdit = section("function onEditRouter_(e)", "function markDataDirty_");
 assert.ok(onEdit.includes("SpreadsheetApp.flush()"));
@@ -130,6 +144,38 @@ const ledgerIndexFixture = {
 assert.equal(context.findIdempotencyRecordInIndex_(ledgerIndexFixture, "TX-A", "N-A").rowNumber, 8);
 assert.equal(context.findIdempotencyRecordInIndex_(ledgerIndexFixture, "TX-A", "N-B").rowNumber, 12,
   "If either identity matches, use the latest matching ledger row.");
+
+const ledgerColumns = vm.runInContext("IDEMPOTENCY_HEADERS.length", context);
+const ledgerWriteCalls = [];
+const mockLedgerSheet = {
+  getRange: (row, col, rowCount, colCount) => ({
+    setValues: (values) => ledgerWriteCalls.push({ row, col, rowCount, colCount, values })
+  })
+};
+const appendIndex = {
+  sheet: mockLedgerSheet,
+  pendingAppends: [
+    { rowNumber: 4, values: Array(ledgerColumns).fill("a") },
+    { rowNumber: 5, values: Array(ledgerColumns).fill("b") },
+    { rowNumber: 7, values: Array(ledgerColumns).fill("c") }
+  ]
+};
+assert.equal(context.flushIdempotencyAppendsIndexed_(appendIndex), 2);
+assert.deepEqual(ledgerWriteCalls.map(x => [x.row, x.rowCount]), [[4, 2], [7, 1]]);
+assert.equal(appendIndex.pendingAppends.length, 0);
+ledgerWriteCalls.length = 0;
+const updateIndex = {
+  sheet: mockLedgerSheet,
+  pendingUpdates: {
+    4: { rowNumber: 4, createdAt: "c", updatedAt: "u", transactionId: "TX4", nonce: "N4", status: "IN_PROGRESS", details: "d" },
+    5: { rowNumber: 5, createdAt: "c", updatedAt: "u", transactionId: "TX5", nonce: "N5", status: "APPLIED", details: "d" },
+    7: { rowNumber: 7, createdAt: "c", updatedAt: "u", transactionId: "TX7", nonce: "N7", status: "UNKNOWN", details: "d" }
+  }
+};
+assert.equal(context.flushIdempotencyUpdatesIndexed_(updateIndex), 2);
+assert.deepEqual(ledgerWriteCalls.map(x => [x.row, x.rowCount]), [[4, 2], [7, 1]]);
+assert.deepEqual(Object.keys(updateIndex.pendingUpdates), []);
+
 
 const entityCases = [
   ["CV", "CV-0001", "CV"],
