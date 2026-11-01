@@ -2465,7 +2465,7 @@ function repairDivisionStockFormulas() {
   var repaired = 0, failed = [];
   for (var i = 0; i < lastRow; i++) {
     var kode = String(codes[i][0] || "").trim();
-    if (!/^[A-Z]{2,6}-[A-Z0-9-]*\\d[A-Z0-9-]*$/i.test(kode)) continue;
+    if (!/^[A-Z]{2,6}-[A-Z0-9-]*\d[A-Z0-9-]*$/i.test(kode)) continue;
     try {
       sh.getRange(i + 1, 6).setFormula(buildDivisionStockFormula_(i + 1, kode, sources));
       repaired++;
@@ -2488,18 +2488,23 @@ function auditDivisionStockFormulaCells_() {
   var sh = ss.getSheetByName("Data Stok Per Divisi");
   if (!sh) return { success:false, error:'Sheet "Data Stok Per Divisi" tidak ditemukan' };
   var lastRow = Math.min(sh.getLastRow(), 5000);
-  if (lastRow < 1) return { success:false, error:"Data Stok Per Divisi kosong", itemCount:0, formulaCount:0, missing:[] };
+  if (lastRow < 1) return { success:false, error:"Data Stok Per Divisi kosong", itemCount:0, formulaCount:0, missing:[], formulaErrors:[] };
   var codes = sh.getRange(1, 2, lastRow, 1).getDisplayValues();
   var formulas = sh.getRange(1, 6, lastRow, 1).getFormulas();
-  var itemCount = 0, formulaCount = 0, missing = [];
+  var results = sh.getRange(1, 6, lastRow, 1).getDisplayValues();
+  var itemCount = 0, formulaCount = 0, missing = [], formulaErrors = [];
   for (var i = 0; i < lastRow; i++) {
     var kode = String(codes[i][0] || "").trim();
     if (!/^[A-Z]{2,6}-[A-Z0-9-]*\d[A-Z0-9-]*$/i.test(kode)) continue;
     itemCount++;
     if (String(formulas[i][0] || "").charAt(0) === "=") formulaCount++;
     else missing.push({ row:i+1, kode:kode });
+    var shown = String(results[i][0] || "").trim();
+    if (/^#(ERROR!|REF!|VALUE!|N\/A|NAME\?|NUM!|DIV\/0!)/i.test(shown)) {
+      formulaErrors.push({ row:i+1, kode:kode, result:shown, formula:formulas[i][0] || "" });
+    }
   }
-  return { success:missing.length===0, itemCount:itemCount, formulaCount:formulaCount, missing:missing };
+  return { success:missing.length===0 && formulaErrors.length===0, itemCount:itemCount, formulaCount:formulaCount, missing:missing, formulaErrors:formulaErrors };
 }
 
 /**
