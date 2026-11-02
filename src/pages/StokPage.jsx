@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useBootstrapRevision } from '../hooks/useBootstrapRevision';
 import {
   Search, RefreshCw, LayoutGrid, Boxes, ShieldAlert, TriangleAlert, ShieldCheck, ChevronDown, Building2, Package,
+  ChefHat, CookingPot, Snowflake, PackageCheck, Warehouse, Utensils,
 } from 'lucide-react';
 import { useStock } from '../hooks/useStock';
 import { classifyStockLevel } from '../data/stockStatus';
@@ -12,6 +13,17 @@ function levelOf(stok) {
   if (status === 'aman') return 'safe';
   if (status === 'waspada') return 'warning';
   return n === 0 ? 'zero' : 'danger';
+}
+
+function divisionVisual(name) {
+  const key = String(name || '').trim().toUpperCase();
+  if (key.includes('BAHAN')) return { Icon: Package, tone: 'raw' };
+  if (key === 'CS' || key.includes('COLD')) return { Icon: Snowflake, tone: 'cold' };
+  if (key.includes('DAPUR 1')) return { Icon: ChefHat, tone: 'kitchen' };
+  if (key.includes('DAPUR 2')) return { Icon: CookingPot, tone: 'kitchen' };
+  if (key.includes('MIE')) return { Icon: Utensils, tone: 'food' };
+  if (key.includes('PACK')) return { Icon: PackageCheck, tone: 'packing' };
+  return { Icon: Warehouse, tone: 'default' };
 }
 
 function StockRow({ item }) {
@@ -274,7 +286,7 @@ export default function StokPage() {
           return (
             <div
               key={d.name}
-              className={`w-full rounded-2xl bg-white border border-slate-100 shadow-sm overflow-hidden transition ${
+              className={`stock-division-card w-full overflow-hidden transition ${
                 open ? 'ring-2 ring-cyan-400' : ''
               }`}
             >
@@ -284,20 +296,23 @@ export default function StokPage() {
                 aria-expanded={open}
                 className="w-full px-3.5 py-3.5 text-left flex items-center gap-3"
               >
-                <div className="w-10 h-10 rounded-xl bg-cyan-500/10 text-cyan-700 flex items-center justify-center shrink-0">
-                  <LayoutGrid className="w-5 h-5" />
-                </div>
+                <span className={`stock-division-icon stock-division-icon-${divisionVisual(d.name).tone}`}>
+                  {(() => {
+                    const DivisionIcon = divisionVisual(d.name).Icon;
+                    return <DivisionIcon className="w-5 h-5" strokeWidth={2.1} aria-hidden="true" />;
+                  })()}
+                </span>
                 <div className="flex-1 min-w-0">
                   <p className="text-[13px] font-extrabold text-slate-900 uppercase tracking-wide truncate">{d.name}</p>
                   <p className="text-[11px] text-slate-500 font-medium mt-0.5">
                     {d.filteredCount} item
                     {filterStatus !== 'all' ? ` · filter ${filterStatus}` : ''}
                     {' · '}
-                    <span className="text-emerald-600">{d.aman} aman</span>
+                    <span className="stock-status-safe">{d.aman} aman</span>
                     {' · '}
-                    <span className="text-amber-600">{d.waspada} waspada</span>
+                    <span className="stock-status-warning">{d.waspada} waspada</span>
                     {' · '}
-                    <span className="text-red-600">{d.kritis} kritis</span>
+                    <span className="stock-status-critical">{d.kritis} kritis</span>
                   </p>
                 </div>
                 <ChevronDown
