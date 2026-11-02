@@ -4525,12 +4525,13 @@ function opsActivitySheet_() {
     sh.setFrozenRows(1);
     sh.getRange(1, 1, 1, OPS_ACTIVITY_HEADERS.length).setFontWeight("bold").setBackground("#12304a").setFontColor("#ffffff");
   } else {
-    var current = sh.getRange(1, 1, 1, OPS_ACTIVITY_HEADERS.length).getDisplayValues()[0];
-    for (var h = 0; h < OPS_ACTIVITY_HEADERS.length; h++) {
-      if (String(current[h] || "").trim() !== OPS_ACTIVITY_HEADERS[h]) {
-        throw new Error("Header kolom " + (h + 1) + " pada sheet Aktivitas Operasional tidak sesuai; tidak ada data yang diubah.");
-      }
+    var legacyHeaders = sh.getRange(1, 1, 1, 12).getDisplayValues()[0];
+    for (var h = 0; h < 12; h++) {
+      if (String(legacyHeaders[h] || "").trim() !== OPS_ACTIVITY_HEADERS[h]) throw new Error("Header kolom " + (h + 1) + " pada sheet Aktivitas Operasional tidak sesuai; tidak ada data yang diubah.");
     }
+    var detailHeader = sh.getRange(1, 13).getDisplayValue();
+    if (!detailHeader) sh.getRange(1, 13).setValue(OPS_ACTIVITY_HEADERS[12]).setFontWeight("bold").setBackground("#12304a").setFontColor("#ffffff");
+    else if (String(detailHeader).trim() !== OPS_ACTIVITY_HEADERS[12]) throw new Error("Header kolom 13 pada sheet Aktivitas Operasional tidak sesuai; tidak ada data yang diubah.");
   }
   return sh;
 }
@@ -4568,7 +4569,8 @@ function opsFormatActivityRow_(row) {
     description: String(row[3] || ""), owner: String(row[4] || ""), date: dateText,
     time: timeText, status: String(row[7] || "open"), checklist: checklist,
     calendarEventId: String(row[9] || ""), createdAt: row[10] ? new Date(row[10]).toISOString() : "",
-    updatedAt: row[11] ? new Date(row[11]).toISOString() : ""
+    updatedAt: row[11] ? new Date(row[11]).toISOString() : "",
+    details: (function(){ try { var d = row[12]; return typeof d === "string" ? JSON.parse(d || "{}") : (d || {}); } catch(e) { return {}; } })()
   };
 }
 function opsListActivities_() {
@@ -4587,7 +4589,12 @@ function opsSyncCalendarEvent_(activity, existingId) {
   }
   var start = new Date(activity.date + "T" + (activity.time || "09:00") + ":00+07:00");
   if (isNaN(start.getTime())) throw new Error("Tanggal/jam aktivitas tidak valid untuk Google Calendar.");
-  var end = new Date(start.getTime() + 60 * 60 * 1000);\n  if (activity.category === "team" && activity.details && activity.details.endDate) { var ed = String(activity.details.endDate); if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(ed) || ed < activity.date) throw new Error("Tanggal akhir jadwal tim tidak valid."); end = new Date(ed + "T23:59:00+07:00"); }
+  var end = new Date(start.getTime() + 60 * 60 * 1000);
+  if (activity.category === "team" && activity.details && activity.details.endDate) {
+    var ed = String(activity.details.endDate);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(ed) || ed < activity.date) throw new Error("Tanggal akhir jadwal tim tidak valid.");
+    end = new Date(ed + "T23:59:00+07:00");
+  }
   var event = null;
   if (existingId) { try { event = calendar.getEventById(existingId); } catch (e) { event = null; } }
   var categoryLabel = { order:"Tambahan Order", team:"Jadwal Off & Tugas", meeting:"Meeting & Project", logistics:"Kirim Luar Kota" }[activity.category] || activity.category;
@@ -4595,7 +4602,8 @@ function opsSyncCalendarEvent_(activity, existingId) {
   var marker = "GudangAI Activity ID: " + activity.id;
   var description = [activity.description || "", activity.owner ? "Penanggung jawab: " + activity.owner : "",
     "Kategori: " + activity.category, "Status: " + activity.status,
-    "Checklist: " + activity.checklist.filter(function(x) { return x.done; }).length + "/" + activity.checklist.length + " selesai", marker].filter(Boolean).join("\n");
+    "Checklist: " + activity.checklist.filter(function(x) { return x.done; }).length + "/" + activity.checklist.length + " selesai",
+    "Detail kategori: " + JSON.stringify(activity.details || {}), marker].filter(Boolean).join("\n");
   // Recovery guard: avoid duplicate Calendar events if event creation succeeded but the Sheet write timed out.
   if (!event) {
     // Use WIB calendar-day boundaries, independent of the Apps Script project timezone.
@@ -4645,8 +4653,11 @@ function opsSaveActivity_(input) {
       for (var i = 0; i < ids.length; i++) if (String(ids[i][0]) === id) { rowNo = i + 2; break; }
     }
     if (rowNo > 0) existing = sh.getRange(rowNo, 1, 1, OPS_ACTIVITY_HEADERS.length).getValues()[0];
+    var details = data.details && typeof data.details === "object" ? data.details : {};
+    var detailJson = JSON.stringify(details);
+    if (detailJson.length > 12000) throw new Error("Detail kategori terlalu panjang (maksimum 12.000 karakter).");
     var activity = { id:id, category:category, title:title, description:opsSafeText_(data.description,1000),
-      owner:opsSafeText_(data.owner,120), date:date, time:time, status:status, checklist:checklist };
+      owner:opsSafeText_(data.owner,120), date:date, time:time, status:status, checklist:checklist, details:details };
     var now = new Date(), createdAt = existing && existing[10] ? existing[10] : now;
     // Commit the spreadsheet record first: Calendar permission or service failures must
     // never discard an operational task that was successfully submitted by the operator.
