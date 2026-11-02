@@ -45,7 +45,7 @@ function RingChart({ pct, color = '#ef4444', size = 52, stroke = 6 }) {
   const dash = Math.max(0, Math.min(100, pct)) / 100 * c;
   return (
     <svg width={size} height={size} className="shrink-0 -rotate-90">
-      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#f1f5f9" strokeWidth={stroke} />
+      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--ui-chart-grid)" strokeWidth={stroke} />
       <circle
         cx={size / 2} cy={size / 2} r={r} fill="none"
         stroke={color} strokeWidth={stroke} strokeLinecap="round"
@@ -67,9 +67,9 @@ function DonutPO({ complete, progress, pending, size = 140 }) {
   const seg = (pct) => (pct / 100) * circ;
   let offset = 0;
   const parts = [
-    { pct: cPct, color: '#0f9f9a' },
-    { pct: pPct, color: '#f0a23a' },
-    { pct: nPct, color: '#94a3b8' },
+    { pct: cPct, color: 'var(--ui-safe)' },
+    { pct: pPct, color: 'var(--ui-warning)' },
+    { pct: nPct, color: 'var(--ui-muted)' },
   ];
   return (
     <div>
@@ -80,7 +80,7 @@ function DonutPO({ complete, progress, pending, size = 140 }) {
       </div>
       <div className="relative mx-auto" style={{ width: size, height: size }}>
         <svg width={size} height={size} className="-rotate-90" viewBox="0 0 140 140">
-          <circle cx="70" cy="70" r={r} fill="none" stroke="#e8eff0" strokeWidth="18" />
+          <circle cx="70" cy="70" r={r} fill="none" stroke="var(--ui-chart-grid)" strokeWidth="18" />
           {rawTotal > 0 && parts.map((p, i) => {
             const len = seg(p.pct);
             const el = (
@@ -157,7 +157,7 @@ function DivisionStatus3D({ items, sourceRows }) {
         const aPct = r.total ? (r.aman / r.total) * 100 : 0;
         const wPct = r.total ? (r.waspada / r.total) * 100 : 0;
         const kPct = r.total ? (r.kritis / r.total) * 100 : 0;
-        const ringColor = kritisPct >= 50 ? '#ef4444' : kritisPct >= 25 ? '#f59e0b' : '#10b981';
+        const ringColor = kritisPct >= 50 ? 'var(--ui-critical)' : kritisPct >= 25 ? 'var(--ui-warning)' : 'var(--ui-safe)';
         return (
           <div key={r.divisi} className="division-status-card rounded-xl border border-slate-100 bg-white/90 px-3 py-3 flex items-center gap-3 min-w-0">
             <div className="relative shrink-0">
@@ -172,9 +172,9 @@ function DivisionStatus3D({ items, sourceRows }) {
                 <span className="text-[11px] text-slate-400 tabular-nums shrink-0">{r.total} SKU</span>
               </div>
               <div className="h-2 w-full rounded-full bg-slate-100 overflow-hidden flex">
-                <div className="h-full bg-emerald-500" style={{ width: `${aPct}%` }} />
-                <div className="h-full bg-amber-400" style={{ width: `${wPct}%` }} />
-                <div className="h-full bg-red-500" style={{ width: `${kPct}%` }} />
+                <div className="division-meter-safe h-full" style={{ width: `${aPct}%` }} />
+                <div className="division-meter-warning h-full" style={{ width: `${wPct}%` }} />
+                <div className="division-meter-critical h-full" style={{ width: `${kPct}%` }} />
               </div>
               <div className="flex items-center justify-between mt-1">
                 <div className="flex items-center gap-2 text-[10px] tabular-nums">
@@ -548,12 +548,12 @@ function Movement7Days({ history }) {
           <p className="text-sm font-extrabold text-slate-900">Analisa</p>
           <p className="text-[11px] text-slate-500">Pergerakan barang 7 hari terakhir</p>
         </div>
-        <span className="text-[10px] font-bold text-cyan-700 bg-cyan-50 border border-cyan-100 rounded-full px-2 py-1">7 HARI</span>
+        <span className="movement-period-badge text-[10px] font-bold rounded-full px-2 py-1">7 HARI</span>
       </div>
-      <div className="relative h-36 rounded-xl bg-slate-50/80 border border-slate-100 px-2 pt-3 pb-1 overflow-hidden">
-        <div className="absolute inset-x-2 top-8 border-t border-slate-200/80" />
-        <div className="absolute inset-x-2 top-16 border-t border-slate-200/80" />
-        <div className="absolute inset-x-2 top-24 border-t border-slate-200/80" />
+      <div className="movement-chart-plot relative h-36 rounded-xl px-2 pt-3 pb-1 overflow-hidden">
+        <div className="movement-grid-line absolute inset-x-2 top-8 border-t" />
+        <div className="movement-grid-line absolute inset-x-2 top-16 border-t" />
+        <div className="movement-grid-line absolute inset-x-2 top-24 border-t" />
         <div className="relative h-full flex items-end gap-1.5">
           {days.map((d) => {
             const max = Math.max(1, ...days.flatMap((x) => [x.masuk, x.keluar]));
@@ -562,18 +562,18 @@ function Movement7Days({ history }) {
             return (
               <div key={d.label} className="flex-1 h-full flex flex-col justify-end items-center gap-1">
                 <div className="w-full flex items-end justify-center gap-0.5 h-24">
-                  <div className="w-2.5 max-w-[38%] rounded-t-md bg-cyan-500/85" style={{ height: hIn }} title={`Masuk ${d.masuk}`} />
-                  <div className="w-2.5 max-w-[38%] rounded-t-md bg-orange-400/90" style={{ height: hOut }} title={`Keluar ${d.keluar}`} />
+                  <div className="movement-bar-in w-2.5 max-w-[38%] rounded-t-md" style={{ height: hIn }} title={`Masuk ${d.masuk}`} />
+                  <div className="movement-bar-out w-2.5 max-w-[38%] rounded-t-md" style={{ height: hOut }} title={`Keluar ${d.keluar}`} />
                 </div>
-                <span className="text-[9px] font-semibold text-slate-500 uppercase">{d.label}</span>
+                <span className="movement-day-label text-[9px] font-semibold uppercase">{d.label}</span>
               </div>
             );
           })}
         </div>
       </div>
       <div className="flex items-center justify-center gap-4 mt-2">
-        <span className="text-[10px] font-semibold text-cyan-700"><i className="inline-block w-2 h-2 rounded-sm bg-cyan-500 mr-1" />Masuk</span>
-        <span className="text-[10px] font-semibold text-orange-600"><i className="inline-block w-2 h-2 rounded-sm bg-orange-400 mr-1" />Keluar</span>
+        <span className="movement-legend-in text-[10px] font-semibold"><i className="inline-block w-2 h-2 rounded-sm bg-cyan-500 mr-1" />Masuk</span>
+        <span className="movement-legend-out text-[10px] font-semibold"><i className="inline-block w-2 h-2 rounded-sm bg-orange-400 mr-1" />Keluar</span>
       </div>
     </div>
   );
@@ -1024,13 +1024,56 @@ function MeetingProjectNotes() {
 }
 
 function QuickOperationsHub({ onNavigate, onOpenTasks }) {
-  const [meetingOpen, setMeetingOpen] = useState(false);
+  const [activeCard, setActiveCard] = useState(null);
   const cards = [
-    { id: 'order', title: 'Tambahan Order', subtitle: 'Buka input barang masuk / keluar', Icon: ShoppingCart, tone: 'order', action: () => onNavigate?.('input') },
-    { id: 'off', title: 'Jadwal Off & Tugas', subtitle: 'Checklist dan catatan tugas operator', Icon: CalendarOff, tone: 'off', action: () => onOpenTasks?.('off') },
-    { id: 'meeting', title: 'Meeting & Project', subtitle: 'Agenda dan tindak lanjut lokal', Icon: UsersRound, tone: 'meeting', action: () => setMeetingOpen((open) => !open), expanded: meetingOpen },
-    { id: 'delivery', title: 'Kirim Luar Kota', subtitle: 'Buka checklist pengiriman operator', Icon: Truck, tone: 'delivery', action: () => onOpenTasks?.('kirim') },
+    {
+      id: 'order',
+      title: 'Tambahan Order',
+      subtitle: 'Akses input order tambahan',
+      badge: 'AKSES INPUT',
+      note: 'Daftar pending order susulan dan konfirmasi langsung belum tersedia sebagai sumber terpisah di PWA. Kartu ini membuka halaman Input yang sudah ada; tidak membuat transaksi sampai operator mengisi dan mengonfirmasi melalui alur normal.',
+      Icon: ShoppingCart,
+      tone: 'order',
+      actionLabel: 'Buka halaman Input',
+    },
+    {
+      id: 'off',
+      title: 'Jadwal Off & Tugas',
+      subtitle: 'Checklist tugas operator',
+      badge: 'CHECKLIST LOKAL',
+      note: 'Jadwal off atau cuti real-time belum terhubung ke sumber data terpusat. Checklist tugas operator yang sudah tersedia di Beranda dapat dibuka dari sini dan tetap mengikuti penyimpanan lokal aplikasi.',
+      Icon: CalendarOff,
+      tone: 'off',
+      actionLabel: 'Buka checklist tugas',
+    },
+    {
+      id: 'meeting',
+      title: 'Meeting & Project',
+      subtitle: 'Catatan agenda dan tindak lanjut',
+      badge: 'CATATAN LOKAL',
+      note: 'Agenda rapat terjadwal dan progress project belum terhubung ke sumber terpusat. Catatan yang ditambahkan pada panel ini tersimpan di perangkat yang sedang digunakan.',
+      Icon: UsersRound,
+      tone: 'meeting',
+      actionLabel: 'Tutup panel',
+    },
+    {
+      id: 'delivery',
+      title: 'Kirim Luar Kota',
+      subtitle: 'Checklist pengiriman operator',
+      badge: 'CHECKLIST LOKAL',
+      note: 'Rute, driver, nomor manifest, dan ETD real-time belum tersedia sebagai sumber di PWA. Checklist pengiriman operator yang sudah ada dapat dibuka dari panel tugas Beranda.',
+      Icon: Truck,
+      tone: 'delivery',
+      actionLabel: 'Buka checklist pengiriman',
+    },
   ];
+  const active = cards.find((card) => card.id === activeCard);
+  const runAction = () => {
+    if (activeCard === 'order') onNavigate?.('input');
+    if (activeCard === 'off') onOpenTasks?.('off');
+    if (activeCard === 'delivery') onOpenTasks?.('kirim');
+    setActiveCard(null);
+  };
 
   return (
     <section className="ops-hub" aria-label="Akses cepat operasional">
@@ -1042,25 +1085,67 @@ function QuickOperationsHub({ onNavigate, onOpenTasks }) {
         <span className="ops-hub-caption">Akses cepat</span>
       </div>
       <div className="grid grid-cols-2 gap-2.5">
-        {cards.map(({ id, title, subtitle, Icon, tone, action, expanded }) => (
+        {cards.map(({ id, title, subtitle, badge, Icon, tone }) => (
           <button
             key={id}
             type="button"
-            onClick={action}
-            aria-expanded={id === 'meeting' ? expanded : undefined}
+            onClick={() => setActiveCard(id)}
+            aria-haspopup="dialog"
             className={`ops-hub-card ops-hub-${tone} text-left rounded-2xl border p-3 sm:p-3.5 min-w-0`}
           >
-            <span className="ops-hub-icon"><Icon className="h-5 w-5" aria-hidden="true" /></span>
+            <span className="flex items-center justify-between gap-2">
+              <span className="ops-hub-icon"><Icon className="h-5 w-5" aria-hidden="true" /></span>
+              <span className="ops-hub-badge">{badge}</span>
+            </span>
             <span className="mt-2 block text-[12px] sm:text-[13px] font-extrabold leading-tight">{title}</span>
             <span className="ops-hub-subtitle mt-1 block text-[10px] sm:text-[11px] leading-snug">{subtitle}</span>
             <span className="ops-hub-open mt-2.5 flex items-center justify-between text-[9px] font-extrabold uppercase tracking-wide">
-              <span>{id === 'meeting' && expanded ? 'Tutup catatan' : 'Buka'}</span>
+              <span>Buka detail</span>
               <span aria-hidden="true">↗</span>
             </span>
           </button>
         ))}
       </div>
-      {meetingOpen && <MeetingProjectNotes />}
+
+      {active && (
+        <div
+          className="ops-sheet-backdrop"
+          role="presentation"
+          onClick={() => setActiveCard(null)}
+        >
+          <section
+            className={`ops-sheet-panel ops-hub-${active.tone}`}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="ops-sheet-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="ops-sheet-handle" />
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <span className="ops-hub-badge">{active.badge}</span>
+                <h3 id="ops-sheet-title" className="ops-sheet-title mt-2">{active.title}</h3>
+              </div>
+              <button type="button" className="ops-sheet-close shrink-0" onClick={() => setActiveCard(null)} aria-label="Tutup detail">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <p className="ops-sheet-description mt-3">{active.note}</p>
+            {activeCard === 'meeting' ? (
+              <MeetingProjectNotes />
+            ) : (
+              <div className="ops-sheet-note mt-3">
+                Status: fitur menggunakan halaman atau checklist yang sudah tersedia. Tidak ada data live atau aksi transaksi baru yang dibuat dari panel ini.
+              </div>
+            )}
+            {activeCard !== 'meeting' && (
+              <button type="button" className="ops-sheet-primary w-full mt-4" onClick={runAction}>
+                {active.actionLabel}
+              </button>
+            )}
+          </section>
+        </div>
+      )}
     </section>
   );
 }
