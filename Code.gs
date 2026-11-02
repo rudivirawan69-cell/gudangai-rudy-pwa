@@ -4546,10 +4546,23 @@ function opsParseChecklist_(value) {
 function opsFormatActivityRow_(row) {
   var checklist = [];
   try { checklist = opsParseChecklist_(row[8]); } catch (e) {}
+  var dateValue = row[5], timeValue = row[6];
+  var dateText = "";
+  if (dateValue instanceof Date && !isNaN(dateValue.getTime())) {
+    dateText = Utilities.formatDate(dateValue, "Asia/Jakarta", "yyyy-MM-dd");
+  } else {
+    dateText = String(dateValue || "").trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateText) && dateText) {
+      var parsedDate = new Date(dateText);
+      dateText = isNaN(parsedDate.getTime()) ? "" : Utilities.formatDate(parsedDate, "Asia/Jakarta", "yyyy-MM-dd");
+    }
+  }
+  var timeText = timeValue instanceof Date && !isNaN(timeValue.getTime())
+    ? Utilities.formatDate(timeValue, "Asia/Jakarta", "HH:mm") : String(timeValue || "");
   return {
     id: String(row[0] || ""), category: String(row[1] || "order"), title: String(row[2] || ""),
-    description: String(row[3] || ""), owner: String(row[4] || ""), date: String(row[5] || ""),
-    time: String(row[6] || ""), status: String(row[7] || "open"), checklist: checklist,
+    description: String(row[3] || ""), owner: String(row[4] || ""), date: dateText,
+    time: timeText, status: String(row[7] || "open"), checklist: checklist,
     calendarEventId: String(row[9] || ""), createdAt: row[10] ? new Date(row[10]).toISOString() : "",
     updatedAt: row[11] ? new Date(row[11]).toISOString() : ""
   };
@@ -4607,7 +4620,14 @@ function opsSaveActivity_(input) {
     var title = opsSafeText_(data.title, 160);
     if (!title) throw new Error("Judul aktivitas wajib diisi.");
     var date = opsSafeText_(data.date, 10);
-    if (date && !/^20\d{2}-\d{2}-\d{2}$/.test(date)) throw new Error("Tanggal harus berformat YYYY-MM-DD.");
+    if (date) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error("Tanggal harus berformat YYYY-MM-DD.");
+      var dateParts = date.split("-").map(Number);
+      var dateCheck = new Date(Date.UTC(dateParts[0], dateParts[1] - 1, dateParts[2]));
+      if (dateCheck.getUTCFullYear() !== dateParts[0] || dateCheck.getUTCMonth() !== dateParts[1] - 1 || dateCheck.getUTCDate() !== dateParts[2]) {
+        throw new Error("Tanggal kalender tidak valid.");
+      }
+    }
     var time = opsSafeText_(data.time || "09:00", 5);
     if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) throw new Error("Jam harus berformat HH:mm.");
     var status = data.status === "done" ? "done" : "open";
