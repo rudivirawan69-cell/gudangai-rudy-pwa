@@ -10,7 +10,7 @@ import OperatorTasks from '../components/OperatorTasks';
 import {
   AlertTriangle, RefreshCw, FileText, Package, Users, Boxes, ShieldAlert, CheckCircle2, AlertCircle, X,
   CalendarDays, CalendarClock, ClipboardCheck, FilePlus2, Mail, Clock3, Layers3, ArrowUpRight,
-  ChevronDown, BellRing, ShoppingCart, CalendarOff, UsersRound, Truck, Plus, Trash2, CheckCircle2, Circle,
+  ChevronDown, BellRing, ShoppingCart, CalendarOff, UsersRound, Truck, Plus, Trash2, Circle,
 } from 'lucide-react';
 
 function classifyItem(it) {
