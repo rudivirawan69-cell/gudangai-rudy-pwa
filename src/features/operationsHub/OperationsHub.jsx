@@ -11,13 +11,20 @@ const CARD_META = {
 };
 const todayKey = () => new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Jakarta',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
 const EMPTY_FORM = { id:'',category:'order',title:'',description:'',owner:'',date:todayKey(),time:'09:00',status:'open',checklist:[] };
-const makeId = () => globalThis.crypto?.randomUUID?.() || 'ops-' + Date.now() + '-' + Math.random().toString(36).slice(2,8);
+const OPS_DETAIL_FIELDS = {"order":[["supplier","Supplier / pemasok","text"],["item","Nama barang / SKU","text"],["quantity","Jumlah","number"],["unit","Satuan","text"],["confirmationDeadline","Batas konfirmasi","datetime-local"]],"team":[["personName","Nama personel","text"],["activityType","Jenis agenda","select",["Jadwal Off","Tugas Harian","Pengganti Shift","Lainnya"]],["endDate","Tanggal akhir / kembali","date"],["shift","Shift / jam kerja","text"],["replacement","Personel pengganti","text"]],"meeting":[["location","Lokasi / media meeting","text"],["participants","Peserta","text"],["agenda","Agenda pembahasan","textarea"],["decision","Keputusan / hasil","textarea"],["followUp","Tindak lanjut","textarea"]],"logistics":[["destination","Kota / alamat tujuan","text"],["departureTime","Jam berangkat","time"],["arrivalEstimate","Estimasi tiba","text"],["vehicle","Kendaraan / armada","text"],["driver","Nama pengemudi","text"],["cargo","Barang / muatan","text"],["quantity","Jumlah muatan","number"]]};
+function OperationalCategoryFields({category,details,onChange}) {
+ return <div className="oh-category-fields"><strong>Detail khusus {CARD_META[category].title}</strong><div className="oh-category-grid">
+ {(OPS_DETAIL_FIELDS[category]||[]).map(([key,label,type,options])=><label key={key}>{label}
+ {type==='select'?<select value={details[key]||options[0]} onChange={e=>onChange(key,e.target.value)}>{options.map(x=><option key={x}>{x}</option>)}</select>:type==='textarea'?<textarea rows={2} maxLength={1000} value={details[key]||''} onChange={e=>onChange(key,e.target.value)}/>:<input type={type} min={type==='number'?'0':undefined} step={type==='number'?'any':undefined} value={details[key]||''} onChange={e=>onChange(key,e.target.value)}/>}
+ </label>)}</div></div>;
+}
+\nconst makeId = () => globalThis.crypto?.randomUUID?.() || 'ops-' + Date.now() + '-' + Math.random().toString(36).slice(2,8);
 const fmtDate = value => { if(!value)return 'Tanggal belum ditentukan';const d=new Date(value+'T00:00:00');return Number.isNaN(d.getTime())?value:new Intl.DateTimeFormat('id-ID',{day:'2-digit',month:'short',year:'numeric'}).format(d); };
 
 function ActivityModal({category,initial,onClose,onSave,onDelete,saving}) {
- const [form,setForm]=useState(()=>initial?{...initial,checklist:initial.checklist||[]}:{...EMPTY_FORM,id:makeId(),category});
+ const [form,setForm]=useState(()=>initial?{...initial,details:initial.details||{},checklist:initial.checklist||[]}:{...EMPTY_FORM,id:makeId(),category});
  const [checkText,setCheckText]=useState('');
- const update=(key,value)=>setForm(old=>({...old,[key]:value}));
+ const update=(key,value)=>setForm(old=>({...old,[key]:value}));\n const updateDetail=(key,value)=>setForm(old=>({...old,details:{...(old.details||{}),[key]:value}}));
  const addChecklist=()=>{const value=checkText.trim();if(!value)return;setForm(old=>({...old,checklist:[...old.checklist,{id:makeId(),text:value,done:false}]}));setCheckText('');};
  const toggleChecklist=id=>setForm(old=>({...old,checklist:old.checklist.map(x=>x.id===id?{...x,done:!x.done}:x)}));
  const removeChecklist=id=>setForm(old=>({...old,checklist:old.checklist.filter(x=>x.id!==id)}));
@@ -29,7 +36,7 @@ function ActivityModal({category,initial,onClose,onSave,onDelete,saving}) {
     <label>Judul aktivitas<input required maxLength={160} value={form.title} onChange={e=>update('title',e.target.value)} placeholder="Contoh: Konfirmasi tambahan order ayam fillet"/></label>
     <div className="oh-form-grid"><label>Tanggal<input type="date" value={form.date} onChange={e=>update('date',e.target.value)}/></label><label>Jam<input type="time" value={form.time} onChange={e=>update('time',e.target.value)}/></label></div>
     <label>Penanggung jawab<input maxLength={120} value={form.owner} onChange={e=>update('owner',e.target.value)} placeholder="Nama personel"/></label>
-    <label>Catatan / detail<textarea rows={3} maxLength={1000} value={form.description} onChange={e=>update('description',e.target.value)} placeholder="Detail, lokasi, supplier, armada, atau agenda…"/></label>
+    <OperationalCategoryFields category={category} details={form.details||{}} onChange={updateDetail}/>\n    <label>Catatan / detail<textarea rows={3} maxLength={1000} value={form.description} onChange={e=>update('description',e.target.value)} placeholder="Detail, lokasi, supplier, armada, atau agenda…"/></label>
     <div className="oh-checklist-box"><div className="oh-check-head"><strong>Checklist tugas</strong><span>{form.checklist.filter(x=>x.done).length}/{form.checklist.length} selesai</span></div>
      <div className="oh-add-check"><input value={checkText} onChange={e=>setCheckText(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();addChecklist();}}} placeholder="Tambah langkah kerja…"/><button type="button" onClick={addChecklist} aria-label="Tambah checklist"><Plus size={17}/></button></div>
      {form.checklist.length===0?<p className="oh-muted">Belum ada langkah checklist.</p>:<ul>{form.checklist.map(item=><li key={item.id}><label className={item.done?'is-done':''}><input type="checkbox" checked={!!item.done} onChange={()=>toggleChecklist(item.id)}/><span>{item.text}</span></label><button type="button" onClick={()=>removeChecklist(item.id)} aria-label="Hapus langkah"><Trash2 size={14}/></button></li>)}</ul>}
