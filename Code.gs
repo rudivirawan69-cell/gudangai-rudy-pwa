@@ -4514,7 +4514,7 @@ function cleanDashboardPORows39to45() {
  * Dedicated sheet: Aktivitas Operasional. Calendar operations run server-side.
  * ============================================================ */
 var OPS_ACTIVITY_SHEET = "Aktivitas Operasional";
-var OPS_ACTIVITY_HEADERS = ["ID Aktivitas","Kategori","Judul","Deskripsi","Penanggung Jawab","Tanggal","Jam","Status","Checklist JSON","Calendar Event ID","Dibuat","Update Terakhir"];
+var OPS_ACTIVITY_HEADERS = ["ID Aktivitas","Kategori","Judul","Deskripsi","Penanggung Jawab","Tanggal","Jam","Status","Checklist JSON","Calendar Event ID","Dibuat","Update Terakhir","Detail Kategori JSON"];
 
 function opsActivitySheet_() {
   var ss = getSS();
@@ -4587,7 +4587,7 @@ function opsSyncCalendarEvent_(activity, existingId) {
   }
   var start = new Date(activity.date + "T" + (activity.time || "09:00") + ":00+07:00");
   if (isNaN(start.getTime())) throw new Error("Tanggal/jam aktivitas tidak valid untuk Google Calendar.");
-  var end = new Date(start.getTime() + 60 * 60 * 1000);
+  var end = new Date(start.getTime() + 60 * 60 * 1000);\n  if (activity.category === "team" && activity.details && activity.details.endDate) { var ed = String(activity.details.endDate); if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(ed) || ed < activity.date) throw new Error("Tanggal akhir jadwal tim tidak valid."); end = new Date(ed + "T23:59:00+07:00"); }
   var event = null;
   if (existingId) { try { event = calendar.getEventById(existingId); } catch (e) { event = null; } }
   var categoryLabel = { order:"Tambahan Order", team:"Jadwal Off & Tugas", meeting:"Meeting & Project", logistics:"Kirim Luar Kota" }[activity.category] || activity.category;
@@ -4651,7 +4651,7 @@ function opsSaveActivity_(input) {
     // Commit the spreadsheet record first: Calendar permission or service failures must
     // never discard an operational task that was successfully submitted by the operator.
     var calendarId = existing ? String(existing[9] || "") : "";
-    var row = [id,category,title,activity.description,activity.owner,date,time,status,JSON.stringify(checklist),calendarId,createdAt,now];
+    var row = [id,category,title,activity.description,activity.owner,date,time,status,JSON.stringify(checklist),calendarId,createdAt,now,detailJson];
     if (rowNo > 0) sh.getRange(rowNo, 1, 1, row.length).setValues([row]);
     else { sh.appendRow(row); rowNo = sh.getLastRow(); }
     var calendarSynced = false, calendarError = "";
