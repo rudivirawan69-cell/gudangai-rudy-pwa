@@ -10,7 +10,9 @@
     "preview": "vite preview",
     "write-icons": "node scripts/write-icons.mjs",
     "predev": "node scripts/assemble-api.mjs && node scripts/write-icons.mjs",
-    "assemble-api": "node scripts/assemble-api.mjs"
+    "assemble-api": "node scripts/assemble-api.mjs",
+    "deploy:cloudflare": "npx wrangler deploy",
+    "preview:cloudflare": "npx wrangler preview"
   },
   "dependencies": {
     "@vercel/speed-insights": "^2.0.0",

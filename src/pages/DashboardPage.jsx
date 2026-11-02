@@ -1264,6 +1264,16 @@ export default function DashboardPage({ onNavigate }) {
           <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
         </button>
       </div>
+      {stats.kritis > 0 && (
+        <section className="home-critical-banner" aria-live="polite">
+          <span className="critical-icon"><ShieldAlert className="h-5 w-5" /></span>
+          <span className="min-w-0 flex-1">
+            <span className="critical-title block">Status Stok Kritis</span>
+            <span className="critical-copy block mt-0.5"><strong>{stats.kritis.toLocaleString('id-ID')} item</strong> perlu tindak lanjut segera.</span>
+          </span>
+          <button type="button" onClick={() => onNavigate?.('stok')}>Cek Stok</button>
+        </section>
+      )}
       {confirmMsg && (
         <p className="rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-[11px] font-semibold text-emerald-700">{confirmMsg}</p>
       )}
