@@ -1470,6 +1470,8 @@ function bulkTransaction(body) {
           throw new Error("Write-ahead ledger bulk tidak dapat dikonfirmasi: " + rw.txId);
         }
       });
+      // Flush the write-ahead plan before any transaction row can be written.
+      SpreadsheetApp.flush();
 
       // Set konservatif sebelum panggilan Sheets agar partial-write exception berstatus UNKNOWN.
       writeTouched = true;
