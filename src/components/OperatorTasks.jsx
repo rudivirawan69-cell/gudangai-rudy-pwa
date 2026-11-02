@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
-import { Plus, Trash2, CheckCircle2, Circle, Truck, PackageCheck, ClipboardCheck, BellRing } from 'lucide-react';
+import { Plus, Trash2, CheckCircle2, Circle, Truck, PackageCheck, ClipboardCheck, BellRing, CalendarOff } from 'lucide-react';
 
 const STORAGE_KEY = 'gudangai_operator_tasks_v1';
 
@@ -18,6 +18,11 @@ const TYPE_META = {
     label: 'Kirim luar kota',
     Icon: Truck,
     chip: 'ot-chip ot-chip-kirim',
+  },
+  off: {
+    label: 'Jadwal off & tugas',
+    Icon: CalendarOff,
+    chip: 'ot-chip ot-chip-off',
   },
 };
 
@@ -52,10 +57,14 @@ function uid() {
  * Bisa ditambah, dicentang selesai/belum, dihapus. Tersimpan lokal perangkat.
  * Mendukung Soft Productive / Navy Dark / Teal Soft.
  */
-export default function OperatorTasks() {
+export default function OperatorTasks({ initialType = 'po' } = {}) {
   const [tasks, setTasks] = useState(() => loadTasks());
   const [text, setText] = useState('');
-  const [type, setType] = useState('po');
+  const [type, setType] = useState(initialType);
+
+  useEffect(() => {
+    if (TYPE_META[initialType]) setType(initialType);
+  }, [initialType]);
 
   useEffect(() => {
     saveTasks(tasks);
@@ -88,7 +97,7 @@ export default function OperatorTasks() {
   const { pending, doneCount, byType } = useMemo(() => {
     let pending = 0;
     let doneCount = 0;
-    const byType = { po: 0, datang: 0, kirim: 0 };
+    const byType = { po: 0, datang: 0, kirim: 0, off: 0 };
     for (const t of tasks) {
       if (t.done) doneCount += 1;
       else {
@@ -109,14 +118,15 @@ export default function OperatorTasks() {
     const parts = [];
     if (byType.po > 0) parts.push(`${byType.po} konfirmasi PO`);
     if (byType.datang > 0) parts.push(`${byType.datang} kedatangan barang`);
-    if (byType.kirim > 0) parts.push(`${byType.kirim} kirim luar kota`);
+    if (byType.kirim > 0) parts.push(`${byType.kirim} kirim luar kota`);\n    if (byType.off > 0) parts.push(`${byType.off} jadwal off/tugas`);
     const pendingLabel = parts.length ? parts.join(', ') : `${pending} catatan`;
     return `Hasil jadi: ${doneCount} selesai · ${pending} masih terbuka (${pendingLabel}). Centang item setelah diverifikasi agar status operasional tetap akurat.`;
   }, [tasks.length, pending, doneCount, byType]);
 
   return (
     <section
-      aria-label="Pengingat dan konfirmasi kedatangan"
+      id="operator-tasks-panel"
+      aria-label="Pengingat, konfirmasi kedatangan, dan tugas operator"
       className="operator-tasks-card mt-4 rounded-[26px] border p-4 sm:p-6 space-y-4"
     >
       <div className="flex items-center justify-between gap-3">
@@ -183,7 +193,7 @@ export default function OperatorTasks() {
       <ul className="space-y-2.5 max-h-72 overflow-y-auto ot-list">
         {tasks.length === 0 && (
           <li className="ot-empty text-[11px] text-center py-3 font-medium">
-            Belum ada catatan. Tambah konfirmasi PO, kedatangan, atau jadwal kirim luar kota.
+            Belum ada catatan. Tambahkan konfirmasi PO, kedatangan, jadwal off, atau pengiriman luar kota.
           </li>
         )}
         {tasks.map((task) => {
