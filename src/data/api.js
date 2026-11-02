@@ -517,9 +517,10 @@ export async function syncPendingQueue() {
     }));
     const groups = new Map();
     const conflictingIds = new Set();
+    const identitySignatures = new Map();
 
     // Combine outbox entries that target the same transaction sheet/entity/date.
-    // This replaces many serial POSTs with a bounded number of batch requests.
+    // A clientItemId reused with a different operation, entity, date, or payload is held.
     for (const entry of queue) {
       const type = entry.type || 'masuk';
       const entity = String(entry.entity || '').toUpperCase();
@@ -530,6 +531,10 @@ export async function syncPendingQueue() {
       for (const item of entry.items) {
         const id = String(item.clientItemId || '');
         if (!id) continue;
+        const signature = JSON.stringify([type, entity, tanggal, item.kode, item.qty, item.keterangan]);
+        const globalPrior = identitySignatures.get(id);
+        if (globalPrior && globalPrior !== signature) conflictingIds.add(id);
+        else identitySignatures.set(id, signature);
         const prior = group.itemsById.get(id);
         if (!prior) group.itemsById.set(id, item);
         else if (JSON.stringify([prior.kode, prior.qty, prior.keterangan]) !== JSON.stringify([item.kode, item.qty, item.keterangan])) {
@@ -543,8 +548,9 @@ export async function syncPendingQueue() {
     for (const group of groups.values()) {
       const items = Array.from(group.itemsById.values()).filter((item) => !conflictingIds.has(String(item.clientItemId)));
       if (!items.length) continue;
+      const needsWrite = items.filter((item) => !isApplied(item.clientItemId));
       const res = await submitItems(group.type, group.entity, items, group.tanggal, { fromQueue: true });
-      requests += Math.ceil(items.length / BATCH_CHUNK_SIZE);
+      requests += Math.ceil(needsWrite.length / BATCH_CHUNK_SIZE);
       for (const result of res.results || []) {
         if (result.clientItemId && (result.success === true || result.skipped === true)) confirmedIds.add(result.clientItemId);
       }
