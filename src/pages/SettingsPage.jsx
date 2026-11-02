@@ -185,7 +185,7 @@ export default function SettingsPage({ onNavigate }) {
           </span>
           <div className="min-w-0 flex-1">
             <p className="text-sm font-semibold text-slate-800">Mode Tampilan</p>
-            <p className="text-[11px] text-slate-400 truncate">Aktif: {meta?.label || 'Soft Light'}</p>
+            <p className="text-[11px] text-slate-400 truncate">Aktif: {meta?.label || 'Ocean Light'}</p>
           </div>
         </div>
         <div className="grid grid-cols-3 gap-2">
@@ -214,7 +214,7 @@ export default function SettingsPage({ onNavigate }) {
           })}
         </div>
         <p className="text-[10px] text-slate-400 leading-relaxed">
-          Soft Light · Deep Ocean · Blue Glass — tersimpan di perangkat.
+          Ocean Light · Ocean Dark · Sunset Amber — tersimpan di perangkat.
         </p>
       </div>
 
