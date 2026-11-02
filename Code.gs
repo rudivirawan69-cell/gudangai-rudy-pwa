@@ -4651,7 +4651,12 @@ function opsDeleteActivity_(id) {
     for (var i=0;i<rows.length;i++) {
       if (String(rows[i][0]) !== activityId) continue;
       var eventId = String(rows[i][9] || "");
-      if (eventId) { try { var ev = CalendarApp.getDefaultCalendar().getEventById(eventId); if (ev) ev.deleteEvent(); } catch (e) {} }
+      if (eventId) {
+        var ev = null;
+        try { ev = CalendarApp.getDefaultCalendar().getEventById(eventId); }
+        catch (calendarErr) { throw new Error("Google Calendar tidak dapat diakses; aktivitas di Spreadsheet tidak dihapus. " + (calendarErr.message || calendarErr)); }
+        if (ev) ev.deleteEvent();
+      }
       sh.deleteRow(i + 2);
       return { success:true, deletedId:activityId, calendarDeleted:!!eventId };
     }
