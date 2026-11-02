@@ -15,7 +15,7 @@ const makeId = () => globalThis.crypto?.randomUUID?.() || 'ops-' + Date.now() + 
 const fmtDate = value => { if(!value)return 'Tanggal belum ditentukan';const d=new Date(value+'T00:00:00');return Number.isNaN(d.getTime())?value:new Intl.DateTimeFormat('id-ID',{day:'2-digit',month:'short',year:'numeric'}).format(d); };
 
 function ActivityModal({category,initial,onClose,onSave,onDelete,saving}) {
- const [form,setForm]=useState(()=>initial?{...initial,checklist:initial.checklist||[]}:{...EMPTY_FORM,category});
+ const [form,setForm]=useState(()=>initial?{...initial,checklist:initial.checklist||[]}:{...EMPTY_FORM,id:makeId(),category});
  const [checkText,setCheckText]=useState('');
  const update=(key,value)=>setForm(old=>({...old,[key]:value}));
  const addChecklist=()=>{const value=checkText.trim();if(!value)return;setForm(old=>({...old,checklist:[...old.checklist,{id:makeId(),text:value,done:false}]}));setCheckText('');};
