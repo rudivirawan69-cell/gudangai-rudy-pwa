@@ -627,3 +627,21 @@ export async function submitPO(payload) {
   try { return await postJson({ action: 'submitPO', ...(payload || {}), requestId: newIds().requestId }); }
   catch (err) { return { success: false, error: err.message }; }
 }
+
+
+/* OPERATIONS HUB — separate operational activity API; stock/PO write paths remain unchanged. */
+export async function listOperationalActivities() {
+  const result = await postJson({ action: 'opsListActivities', requestId: newIds().requestId });
+  if (!result || result.success !== true) throw new Error(result?.error || 'Gagal memuat aktivitas operasional');
+  return Array.isArray(result.items) ? result.items : [];
+}
+export async function saveOperationalActivity(activity) {
+  const result = await postJson({ action: 'opsSaveActivity', activity, requestId: newIds().requestId }, { retries: 1, timeoutMs: 30000 });
+  if (!result || result.success !== true) throw new Error(result?.error || 'Gagal menyimpan aktivitas operasional');
+  return result.item;
+}
+export async function deleteOperationalActivity(id) {
+  const result = await postJson({ action: 'opsDeleteActivity', id: String(id || ''), requestId: newIds().requestId }, { retries: 1, timeoutMs: 30000 });
+  if (!result || result.success !== true) throw new Error(result?.error || 'Gagal menghapus aktivitas operasional');
+  return result;
+}
