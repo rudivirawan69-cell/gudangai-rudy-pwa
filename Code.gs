@@ -4592,7 +4592,9 @@ function opsSyncCalendarEvent_(activity, existingId) {
   var end = new Date(start.getTime() + 60 * 60 * 1000);
   if (activity.category === "team" && activity.details && activity.details.endDate) {
     var ed = String(activity.details.endDate);
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(ed) || ed < activity.date) throw new Error("Tanggal akhir jadwal tim tidak valid.");
+    var edParts = ed.split("-").map(Number);
+    var edCheck = new Date(Date.UTC(edParts[0], edParts[1] - 1, edParts[2]));
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(ed) || edCheck.getUTCFullYear() !== edParts[0] || edCheck.getUTCMonth() !== edParts[1] - 1 || edCheck.getUTCDate() !== edParts[2] || ed < activity.date) throw new Error("Tanggal akhir jadwal tim tidak valid.");
     end = new Date(ed + "T23:59:00+07:00");
   }
   var event = null;
