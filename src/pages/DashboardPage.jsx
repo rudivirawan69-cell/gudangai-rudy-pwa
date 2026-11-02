@@ -10,7 +10,7 @@ import OperatorTasks from '../components/OperatorTasks';
 import {
   AlertTriangle, RefreshCw, FileText, Package, Users, Boxes, ShieldAlert, CheckCircle2, AlertCircle, X,
   CalendarDays, CalendarClock, ClipboardCheck, FilePlus2, Mail, Clock3, Layers3, ArrowUpRight,
-  ChevronDown, BellRing,
+  ChevronDown, BellRing, ShoppingCart, CalendarOff, UsersRound, Truck, Plus, Trash2, Circle,
 } from 'lucide-react';
 
 function classifyItem(it) {
@@ -579,47 +579,6 @@ function Movement7Days({ history }) {
   );
 }
 
-function StockComparison({ cv, pt }) {
-  const total = Math.max(1, (cv?.unit || 0) + (pt?.unit || 0));
-  const cvPct = Math.round(((cv?.unit || 0) / total) * 100);
-  const ptPct = 100 - cvPct;
-  return (
-    <div>
-      <div className="flex items-start justify-between mb-3">
-        <div>
-          <p className="text-sm font-extrabold text-slate-900">Perbandingan Stok</p>
-          <p className="text-[11px] text-slate-500">Komposisi stok berdasarkan entitas</p>
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-[9px] font-semibold text-slate-500">
-            <span><i className="inline-block w-2 h-2 rounded-full bg-cyan-500 mr-1" />CV</span>
-            <span><i className="inline-block w-2 h-2 rounded-full bg-orange-400 mr-1" />PT</span>
-            <span className="text-slate-400">Angka = persentase dari total</span>
-          </div>
-        </div>
-        <Package className="w-4 h-4 text-cyan-600 shrink-0 mt-0.5" />
-      </div>
-      <div className="grid grid-cols-2 gap-3">
-        <div className="rounded-xl bg-cyan-50 border border-cyan-100 p-3 text-center">
-          <div className="mx-auto w-16 h-16 rounded-full p-[6px]" style={{ background: `conic-gradient(#06b6d4 ${cvPct * 3.6}deg, #dbeafe 0deg)` }}>
-            <div className="w-full h-full rounded-full bg-white flex items-center justify-center">
-              <span className="text-base font-extrabold text-cyan-700 tabular-nums">{cvPct}%</span>
-            </div>
-          </div>
-          <p className="text-xs font-extrabold text-slate-800 mt-2">CV</p>
-          <p className="text-[10px] text-slate-500 tabular-nums">{(cv?.unit || 0).toLocaleString('id-ID')} unit</p>
-        </div>
-        <div className="rounded-xl bg-orange-50 border border-orange-100 p-3 text-center">
-          <div className="mx-auto w-16 h-16 rounded-full p-[6px]" style={{ background: `conic-gradient(#f59e0b ${ptPct * 3.6}deg, #ffedd5 0deg)` }}>
-            <div className="w-full h-full rounded-full bg-white flex items-center justify-center">
-              <span className="text-base font-extrabold text-orange-700 tabular-nums">{ptPct}%</span>
-            </div>
-          </div>
-          <p className="text-xs font-extrabold text-slate-800 mt-2">PT</p>
-          <p className="text-[10px] text-slate-500 tabular-nums">{(pt?.unit || 0).toLocaleString('id-ID')} unit</p>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 function DashboardTotals({ totalItem }) {
   const itemCount = totalItem || 191;
@@ -996,8 +955,127 @@ function StatusPOCard({ data, loading, error, onRefresh, onConfirm, confirmingId
   );
 }
 
+
+const MEETING_NOTES_KEY = 'gudangai_meeting_project_notes_v1';
+
+function MeetingProjectNotes() {
+  const [notes, setNotes] = useState(() => {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(MEETING_NOTES_KEY) || '[]');
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  });
+  const [draft, setDraft] = useState('');
+
+  useEffect(() => {
+    try { localStorage.setItem(MEETING_NOTES_KEY, JSON.stringify(notes)); } catch { /* local storage unavailable */ }
+  }, [notes]);
+
+  const addNote = () => {
+    const value = draft.trim();
+    if (!value) return;
+    setNotes((current) => [{ id: `meeting_${Date.now().toString(36)}`, text: value, done: false, createdAt: new Date().toISOString() }, ...current]);
+    setDraft('');
+  };
+
+  return (
+    <section className="ops-local-notes mt-3 rounded-2xl border p-3 sm:p-4" aria-label="Catatan Meeting dan Project lokal">
+      <div className="flex items-center justify-between gap-2 mb-2">
+        <div>
+          <h3 className="text-sm font-extrabold">Catatan Meeting &amp; Project</h3>
+          <p className="text-[10px] ops-local-muted">Tersimpan di perangkat ini saja</p>
+        </div>
+        <span className="ops-local-tag">Lokal</span>
+      </div>
+      <div className="flex gap-2">
+        <input
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+          onKeyDown={(event) => { if (event.key === 'Enter') addNote(); }}
+          placeholder="Tulis agenda, keputusan, atau tindak lanjut…"
+          aria-label="Isi catatan meeting atau project"
+          className="min-w-0 flex-1 rounded-xl border px-3 py-2.5 text-xs"
+        />
+        <button type="button" onClick={addNote} disabled={!draft.trim()} className="ops-local-add rounded-xl px-3" aria-label="Simpan catatan">
+          <Plus className="h-4 w-4" />
+        </button>
+      </div>
+      {notes.length === 0 ? (
+        <p className="ops-local-empty mt-3 rounded-xl px-3 py-3 text-center text-[11px]">Belum ada catatan agenda. Tambahkan poin meeting atau project bila diperlukan.</p>
+      ) : (
+        <ul className="mt-3 space-y-2">
+          {notes.map((note) => (
+            <li key={note.id} className={`ops-local-note flex items-start gap-2 rounded-xl border px-3 py-2.5 ${note.done ? 'is-done' : ''}`}>
+              <button type="button" onClick={() => setNotes((current) => current.map((item) => item.id === note.id ? { ...item, done: !item.done } : item))} aria-label={note.done ? 'Tandai belum selesai' : 'Tandai selesai'} className="mt-0.5 shrink-0">
+                {note.done ? <CheckCircle2 className="h-4 w-4" /> : <Circle className="h-4 w-4" />}
+              </button>
+              <span className={`min-w-0 flex-1 text-xs leading-relaxed ${note.done ? 'line-through opacity-60' : ''}`}>{note.text}</span>
+              <button type="button" onClick={() => setNotes((current) => current.filter((item) => item.id !== note.id))} aria-label="Hapus catatan" className="shrink-0 opacity-65">
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+function QuickOperationsHub({ onNavigate, onOpenTasks }) {
+  const [meetingOpen, setMeetingOpen] = useState(false);
+  const cards = [
+    { id: 'order', title: 'Tambahan Order', subtitle: 'Buka input barang masuk / keluar', Icon: ShoppingCart, tone: 'order', action: () => onNavigate?.('input') },
+    { id: 'off', title: 'Jadwal Off & Tugas', subtitle: 'Checklist dan catatan tugas operator', Icon: CalendarOff, tone: 'off', action: () => onOpenTasks?.('off') },
+    { id: 'meeting', title: 'Meeting & Project', subtitle: 'Agenda dan tindak lanjut lokal', Icon: UsersRound, tone: 'meeting', action: () => setMeetingOpen((open) => !open), expanded: meetingOpen },
+    { id: 'delivery', title: 'Kirim Luar Kota', subtitle: 'Buka checklist pengiriman operator', Icon: Truck, tone: 'delivery', action: () => onOpenTasks?.('kirim') },
+  ];
+
+  return (
+    <section className="ops-hub" aria-label="Akses cepat operasional">
+      <div className="flex items-end justify-between gap-3 mb-2.5 px-0.5">
+        <div>
+          <p className="ops-hub-eyebrow">Pusat aktivitas</p>
+          <h2 className="text-[15px] font-extrabold tracking-tight">Operasional Gudang</h2>
+        </div>
+        <span className="ops-hub-caption">Akses cepat</span>
+      </div>
+      <div className="grid grid-cols-2 gap-2.5">
+        {cards.map(({ id, title, subtitle, Icon, tone, action, expanded }) => (
+          <button
+            key={id}
+            type="button"
+            onClick={action}
+            aria-expanded={id === 'meeting' ? expanded : undefined}
+            className={`ops-hub-card ops-hub-${tone} text-left rounded-2xl border p-3 sm:p-3.5 min-w-0`}
+          >
+            <span className="ops-hub-icon"><Icon className="h-5 w-5" aria-hidden="true" /></span>
+            <span className="mt-2 block text-[12px] sm:text-[13px] font-extrabold leading-tight">{title}</span>
+            <span className="ops-hub-subtitle mt-1 block text-[10px] sm:text-[11px] leading-snug">{subtitle}</span>
+            <span className="ops-hub-open mt-2.5 flex items-center justify-between text-[9px] font-extrabold uppercase tracking-wide">
+              <span>{id === 'meeting' && expanded ? 'Tutup catatan' : 'Buka'}</span>
+              <span aria-hidden="true">↗</span>
+            </span>
+          </button>
+        ))}
+      </div>
+      {meetingOpen && <MeetingProjectNotes />}
+    </section>
+  );
+}
+
 export default function DashboardPage({ onNavigate }) {
   const { user } = useAuth();
+  const [taskFocusType, setTaskFocusType] = useState('po');
+  const reminderDetailsRef = useRef(null);
+  const openOperatorTasks = useCallback((type) => {
+    setTaskFocusType(type);
+    if (reminderDetailsRef.current) {
+      reminderDetailsRef.current.open = true;
+      reminderDetailsRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, []);
 
   // DASHBOARD MASTER SOURCE:
   // CV + PT tetap menjadi sumber utama masing-masing entitas.
@@ -1232,7 +1310,7 @@ export default function DashboardPage({ onNavigate }) {
   return (
     <div className="dashboard-shell w-full max-w-6xl mx-auto px-3 sm:px-5 lg:px-7 pt-4 pb-24 space-y-4">
       <div className="flex items-start gap-2.5">
-        <details className="dashboard-greeting-card group min-w-0 flex-1 rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+        <details ref={reminderDetailsRef} className="dashboard-greeting-card group min-w-0 flex-1 rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
           <summary className="list-none cursor-pointer select-none px-3.5 py-3 sm:px-4 sm:py-3.5 [&::-webkit-details-marker]:hidden">
             <div className="flex items-center gap-3 min-w-0">
               <span className="dashboard-icon-badge dashboard-icon-cyan h-10 w-10 shrink-0 rounded-xl flex items-center justify-center">
@@ -1251,7 +1329,7 @@ export default function DashboardPage({ onNavigate }) {
               <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-cyan-700">Dashboard Operasional · Gudang Pusat</p>
               <p className="text-[12px] text-slate-600 mt-1 leading-relaxed">{reminder}</p>
             </div>
-            <OperatorTasks />
+            <OperatorTasks initialType={taskFocusType} />
           </div>
         </details>
         <button
@@ -1264,6 +1342,8 @@ export default function DashboardPage({ onNavigate }) {
           <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
         </button>
       </div>
+      <QuickOperationsHub onNavigate={onNavigate} onOpenTasks={openOperatorTasks} />
+
       {confirmMsg && (
         <p className="rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-[11px] font-semibold text-emerald-700">{confirmMsg}</p>
       )}
@@ -1271,9 +1351,6 @@ export default function DashboardPage({ onNavigate }) {
       <section className="grid grid-cols-1 xl:grid-cols-2 gap-4" aria-label="Ringkasan operasional">
         <div className="dashboard-panel rounded-2xl bg-white border border-slate-200 shadow-sm p-4 min-w-0">
           <Movement7Days history={history} />
-        </div>
-        <div className="dashboard-panel rounded-2xl bg-white border border-slate-200 shadow-sm p-4 min-w-0">
-          <StockComparison cv={stats.cv} pt={stats.pt} />
         </div>
         <div className="xl:col-span-2"><DashboardTotals totalItem={dashboardTotalItem} /></div>
       </section>

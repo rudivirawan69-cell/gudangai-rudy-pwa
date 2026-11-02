@@ -1,7 +1,7 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useBootstrapRevision } from '../hooks/useBootstrapRevision';
 import {
-  Search, RefreshCw, LayoutGrid, Boxes, ShieldAlert, TriangleAlert, ShieldCheck, ChevronDown,
+  Search, RefreshCw, LayoutGrid, Boxes, ShieldAlert, TriangleAlert, ShieldCheck, ChevronDown, Building2, Package,
 } from 'lucide-react';
 import { useStock } from '../hooks/useStock';
 import { classifyStockLevel } from '../data/stockStatus';
@@ -53,12 +53,35 @@ function StockRow({ item }) {
 
 export default function StokPage() {
   const [entity, setEntity] = useState('CV');
-  const { items, loading, error, refresh } = useStock(entity);
+  const {
+    items: cvItems, loading: cvLoading, error: cvError, refresh: refreshCV,
+  } = useStock('CV');
+  const {
+    items: ptItems, loading: ptLoading, error: ptError, refresh: refreshPT,
+  } = useStock('PT');
   const bootstrapRevision = useBootstrapRevision();
 
+  const refresh = useCallback((options = { force: true }) => {
+    refreshCV?.(options);
+    refreshPT?.(options);
+  }, [refreshCV, refreshPT]);
+
   useEffect(() => {
-    refresh?.({ force: true });
+    refresh({ force: true });
   }, [bootstrapRevision, refresh]);
+  const items = entity === 'CV' ? cvItems : ptItems;
+  const loading = entity === 'CV' ? cvLoading : ptLoading;
+  const error = entity === 'CV' ? cvError : ptError;
+  const cvSummary = useMemo(() => ({
+    items: cvItems || [],
+    sku: (cvItems || []).length,
+    units: (cvItems || []).reduce((sum, item) => sum + (Number(item.stok ?? item.stockAkhir ?? 0) || 0), 0),
+  }), [cvItems]);
+  const ptSummary = useMemo(() => ({
+    items: ptItems || [],
+    sku: (ptItems || []).length,
+    units: (ptItems || []).reduce((sum, item) => sum + (Number(item.stok ?? item.stockAkhir ?? 0) || 0), 0),
+  }), [ptItems]);
 
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
@@ -128,10 +151,12 @@ export default function StokPage() {
   }, [entityItems, search, filterStatus]);
 
   const topStats = [
-    { key: 'all', label: 'TOTAL ITEM', value: stats.total, color: 'text-slate-900', filter: 'all', ring: 'ring-slate-300', icon: Boxes, iconClass: 'stock-metric-icon-cyan' },
-    { key: 'kritis', label: 'KRITIS', value: stats.kritis, color: 'text-red-600', filter: 'kritis', ring: 'ring-red-300', icon: ShieldAlert, iconClass: 'stock-metric-icon-red' },
-    { key: 'menipis', label: 'WASPADA', value: stats.waspada, color: 'text-amber-600', filter: 'menipis', ring: 'ring-amber-300', icon: TriangleAlert, iconClass: 'stock-metric-icon-amber' },
-    { key: 'aman', label: 'AMAN', value: stats.aman, color: 'text-emerald-600', filter: 'aman', ring: 'ring-emerald-300', icon: ShieldCheck, iconClass: 'stock-metric-icon-green' },
+    { key: 'all', label: 'TOTAL ITEM', value: stats.total, detail: 'SKU pada entitas aktif', color: 'text-slate-900', filter: 'all', ring: 'ring-slate-300', icon: Boxes, iconClass: 'stock-metric-icon-cyan', kind: 'filter' },
+    { key: 'cv', label: 'STOCK CV', value: cvSummary.units, detail: `${cvSummary.sku.toLocaleString('id-ID')} SKU · total unit`, color: 'text-cyan-700', icon: Building2, iconClass: 'stock-metric-icon-cyan', kind: 'entity' },
+    { key: 'pt', label: 'STOCK PT', value: ptSummary.units, detail: `${ptSummary.sku.toLocaleString('id-ID')} SKU · total unit`, color: 'text-orange-700', icon: Building2, iconClass: 'stock-metric-icon-amber', kind: 'entity' },
+    { key: 'aman', label: 'AMAN', value: stats.aman, detail: 'item', color: 'text-emerald-600', filter: 'aman', ring: 'ring-emerald-300', icon: ShieldCheck, iconClass: 'stock-metric-icon-green', kind: 'filter' },
+    { key: 'menipis', label: 'WASPADA', value: stats.waspada, detail: 'item', color: 'text-amber-600', filter: 'menipis', ring: 'ring-amber-300', icon: TriangleAlert, iconClass: 'stock-metric-icon-amber', kind: 'filter' },
+    { key: 'kritis', label: 'KRITIS', value: stats.kritis, detail: 'item', color: 'text-red-600', filter: 'kritis', ring: 'ring-red-300', icon: ShieldAlert, iconClass: 'stock-metric-icon-red', kind: 'filter' },
   ];
 
   function toggleDivisi(name) {
@@ -141,7 +166,10 @@ export default function StokPage() {
   return (
     <div className="w-full max-w-full box-border space-y-3 pb-28 animate-fade-in overflow-x-hidden">
       <div className="flex items-center justify-between gap-2">
-        <h1 className="text-xl font-extrabold text-slate-900">Stok</h1>
+        <div className="min-w-0">
+          <h1 className="text-xl font-extrabold text-slate-900">Data Stock</h1>
+          <p className="text-[11px] text-slate-500 font-medium mt-0.5">Ringkasan dan kondisi stok seluruh divisi</p>
+        </div>
         <button
           type="button"
           onClick={() => refresh?.({ force: true })}
@@ -171,35 +199,46 @@ export default function StokPage() {
         ))}
       </div>
 
-      {/* Status — grid 2x2, tanpa scroll samping */}
-      <div className="grid grid-cols-2 gap-2.5 w-full">
-        {topStats.map((s) => {
-          const selected = filterStatus === s.filter;
-          const Icon = s.icon;
+      {/* Enam kartu ringkasan: angka entitas CV/PT + status stok entitas yang sedang dipilih */}
+      <section className="stock-overview-grid grid grid-cols-2 gap-2 w-full" aria-label="Ringkasan Data Stock">
+        {topStats.map((card) => {
+          const Icon = card.icon;
+          const selected = card.kind === 'filter' && filterStatus === card.filter;
+          const content = (
+            <>
+              <div className="flex items-center justify-between gap-2">
+                <span className={`stock-metric-icon ${card.iconClass} h-8 w-8 rounded-xl flex items-center justify-center`}>
+                  <Icon className="w-4 h-4" aria-hidden="true" />
+                </span>
+                <span className="text-[8px] font-extrabold uppercase tracking-wider text-slate-400">
+                  {card.kind === 'entity' ? 'ENTITAS' : 'STATUS'}
+                </span>
+              </div>
+              <p className="text-[9px] sm:text-[10px] font-extrabold text-slate-500 uppercase tracking-wide mt-2">{card.label}</p>
+              <p className={`text-xl sm:text-2xl font-extrabold tabular-nums leading-none mt-1 ${card.color}`}>
+                {Number(card.value || 0).toLocaleString('id-ID')}
+              </p>
+              <p className="text-[9px] text-slate-400 mt-1 font-medium leading-tight">{card.detail}</p>
+            </>
+          );
+          if (card.kind === 'entity') {
+            return <div key={card.key} className={`stock-entity-card stock-entity-${card.key} rounded-xl border px-3 py-2.5 text-left min-w-0`}>{content}</div>;
+          }
           return (
             <button
-              key={s.key}
+              key={card.key}
               type="button"
-              onClick={() => {
-                setFilterStatus(s.filter);
-                setOpenDivisi(null);
-              }}
+              onClick={() => { setFilterStatus(card.filter); setOpenDivisi(null); }}
               aria-pressed={selected}
-              className={`stock-metric-surface rounded-2xl bg-white border border-slate-100 shadow-sm px-3 py-3 text-left transition ${
-                selected ? `ring-2 ${s.ring} is-selected` : ''
+              className={`stock-metric-surface rounded-xl bg-white border border-slate-100 shadow-sm px-3 py-2.5 text-left transition min-w-0 ${
+                selected ? `ring-2 ${card.ring} is-selected` : ''
               }`}
             >
-              <div className="flex items-center justify-between">
-                <span className={`stock-metric-icon ${s.iconClass}`}><Icon className="w-5 h-5" /></span>
-                <span className="text-[9px] font-extrabold text-slate-400">STATUS</span>
-              </div>
-              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wide mt-2">{s.label}</p>
-              <p className={`text-2xl font-extrabold tabular-nums leading-none mt-1 ${s.color}`}>{s.value}</p>
-              <p className="text-[11px] text-slate-400 mt-1 font-medium">item</p>
+              {content}
             </button>
           );
         })}
-      </div>
+      </section>
 
       <div className="relative w-full">
         <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
