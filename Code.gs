@@ -4656,6 +4656,12 @@ function opsSaveActivity_(input) {
     }
     if (rowNo > 0) existing = sh.getRange(rowNo, 1, 1, OPS_ACTIVITY_HEADERS.length).getValues()[0];
     var details = data.details && typeof data.details === "object" ? data.details : {};
+    if (category === "team" && details.endDate) {
+      var endDateText = opsSafeText_(details.endDate, 10);
+      var endParts = endDateText.split("-").map(Number);
+      var endCheck = new Date(Date.UTC(endParts[0], endParts[1] - 1, endParts[2]));
+      if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(endDateText) || endCheck.getUTCFullYear() !== endParts[0] || endCheck.getUTCMonth() !== endParts[1] - 1 || endCheck.getUTCDate() !== endParts[2] || endDateText < date) throw new Error("Tanggal akhir jadwal tim tidak valid.");
+    }
     var detailJson = JSON.stringify(details);
     if (detailJson.length > 12000) throw new Error("Detail kategori terlalu panjang (maksimum 12.000 karakter).");
     var activity = { id:id, category:category, title:title, description:opsSafeText_(data.description,1000),
