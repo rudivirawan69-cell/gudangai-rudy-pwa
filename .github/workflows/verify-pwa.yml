@@ -4,7 +4,7 @@ on:
   pull_request:
     branches: [main]
   push:
-    branches: [main, release/beranda-po-3d-cloudflare-20261013]
+    branches: [main, release/beranda-po-3d-cloudflare-20261013, feature/operations-hub-calendar-sheets]
   workflow_dispatch:
 
 permissions:
