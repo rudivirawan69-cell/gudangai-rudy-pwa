@@ -1,0 +1,219 @@
+/* GudangAI RUDY — Visual Refresh 2026-11
+   Presentation-only layer. No component state, data, API, transaction, queue,
+   spreadsheet, calendar, authentication, or navigation behavior is changed. */
+
+:root {
+  --ui-page: #edf3f8;
+  --ui-surface: #ffffff;
+  --ui-surface-soft: #f5f8fc;
+  --ui-ink: #15283d;
+  --ui-muted: #63778d;
+  --ui-line: #dce6f0;
+  --ui-accent: #12b8c5;
+  --ui-accent-strong: #087f91;
+  --ui-shadow: 0 10px 28px rgba(20, 48, 76, .075), 0 2px 6px rgba(20, 48, 76, .04);
+  --ui-shadow-raised: 0 15px 34px rgba(20, 48, 76, .12), 0 4px 10px rgba(20, 48, 76, .05);
+  --ui-radius: 20px;
+  --ui-radius-sm: 14px;
+}
+
+html[data-theme="soft_light"] {
+  color-scheme: light;
+  --ui-page: #eef4f8;
+  --ui-surface: #ffffff;
+  --ui-surface-soft: #f5f9fc;
+  --ui-ink: #172b40;
+  --ui-muted: #60758a;
+  --ui-line: #dce7ef;
+  --ui-accent: #19a9c0;
+  --ui-accent-strong: #087e99;
+  --ui-shadow: 0 10px 28px rgba(29, 62, 88, .075), 0 2px 6px rgba(29, 62, 88, .04);
+  --ui-shadow-raised: 0 15px 34px rgba(29, 62, 88, .12), 0 4px 10px rgba(29, 62, 88, .05);
+}
+html[data-theme="deep_ocean"] {
+  color-scheme: dark;
+  --ui-page: #071525;
+  --ui-surface: #10243a;
+  --ui-surface-soft: #152d46;
+  --ui-ink: #f1f7fc;
+  --ui-muted: #a9bfd2;
+  --ui-line: rgba(159, 190, 217, .19);
+  --ui-accent: #35c8cf;
+  --ui-accent-strong: #69dce0;
+  --ui-shadow: 0 12px 30px rgba(0, 0, 0, .22), 0 2px 8px rgba(0, 0, 0, .14);
+  --ui-shadow-raised: 0 17px 38px rgba(0, 0, 0, .30), 0 5px 12px rgba(0, 0, 0, .18);
+}
+html[data-theme="graphite_titanium"] {
+  color-scheme: dark;
+  --ui-page: #0d1b2d;
+  --ui-surface: #142a42;
+  --ui-surface-soft: #1a3552;
+  --ui-ink: #eff7ff;
+  --ui-muted: #b1c6db;
+  --ui-line: rgba(129, 184, 224, .24);
+  --ui-accent: #5db8ff;
+  --ui-accent-strong: #8acbff;
+  --ui-shadow: 0 12px 30px rgba(0, 0, 0, .24), 0 2px 8px rgba(0, 0, 0, .16);
+  --ui-shadow-raised: 0 17px 38px rgba(0, 0, 0, .32), 0 5px 12px rgba(0, 0, 0, .20);
+}
+
+/* Global canvas and phone-first content width */
+html, body, #root { min-width: 0; }
+html[data-theme] body,
+html[data-theme] #root,
+html[data-theme] .app-shell { background: var(--ui-page) !important; color: var(--ui-ink) !important; }
+html[data-theme] .app-bg {
+  background:
+    radial-gradient(ellipse at 92% 0%, color-mix(in srgb, var(--ui-accent) 12%, transparent), transparent 34%),
+    linear-gradient(180deg, var(--ui-page), var(--ui-page)) !important;
+}
+.app-shell { min-height: 100dvh; }
+.app-content, .page-content { width: 100%; max-width: 430px; margin-left: auto; margin-right: auto; }
+.page-content { padding: .55rem .75rem calc(7.8rem + env(safe-area-inset-bottom, 0px)); }
+.app-content { color: var(--ui-ink); }
+.app-content h1, .app-content h2, .app-content h3, .app-content h4 { color: var(--ui-ink); letter-spacing: -.02em; }
+.app-content p { line-height: 1.45; }
+.app-content :is(.page-title, .metric-value, [data-metric]) { font-variant-numeric: tabular-nums lining-nums; }
+
+/* Sticky profile header — dark navy identity anchor across all themes */
+.app-top-header { padding: .55rem .65rem .45rem; background: transparent; }
+.app-top-header .app-header-card {
+  max-width: 430px;
+  border: 1px solid rgba(145, 191, 220, .24) !important;
+  border-radius: 21px !important;
+  color: #f4f9ff !important;
+  background: linear-gradient(135deg, #0a1b31 0%, #102c49 58%, #123d58 100%) !important;
+  box-shadow: 0 12px 28px rgba(5, 21, 39, .22), inset 0 1px 0 rgba(255,255,255,.10) !important;
+  backdrop-filter: blur(18px);
+}
+.app-top-header .app-header-card :is(h1,p,span,strong,a) { color: #e8f4ff; }
+.app-top-header .app-header-card h1 { color: #ffffff !important; letter-spacing: .045em; }
+.app-top-header .app-header-card a { color: #8ee6f0 !important; }
+.app-top-header .app-header-card button { background: rgba(255,255,255,.10); border-color: rgba(255,255,255,.18); }
+.app-top-header .app-header-card img { border-radius: 13px; }
+.app-top-header .app-header-card .text-slate-500 { color: #b7c9dc !important; }
+
+/* Reusable surfaces: crisp hierarchy, consistent geometry and restrained depth */
+html[data-theme] .app-content :is(
+  .card, .surface, .section-card, .stat-tile, .stock-card, .dashboard-panel,
+  .dashboard-total-card, .dashboard-po-card, .dashboard-header-card,
+  .menu-group, .po-hub-card, .po-item-card, .stock-metric-surface,
+  .division-status-card, .info-box, .operator-tasks-card
+) {
+  color: var(--ui-ink) !important;
+  background: var(--ui-surface) !important;
+  border: 1px solid var(--ui-line) !important;
+  border-radius: var(--ui-radius) !important;
+  box-shadow: var(--ui-shadow) !important;
+}
+html[data-theme] .app-content :is(.card, .surface, .section-card, .stat-tile, .stock-card, .dashboard-panel, .dashboard-total-card, .dashboard-po-card):hover {
+  box-shadow: var(--ui-shadow-raised) !important;
+}
+html[data-theme] .app-content :is(.card, .surface, .section-card, .stat-tile, .stock-card, .dashboard-panel, .dashboard-total-card, .dashboard-po-card) {
+  transition: box-shadow .2s ease, border-color .2s ease, transform .2s ease, background-color .2s ease;
+}
+html[data-theme] .app-content :is(.card, .surface, .section-card, .stat-tile, .stock-card)::before { opacity: .08; }
+html[data-theme] .app-content :is(.card, .surface, .section-card, .stat-tile, .stock-card) :is(.text-slate-900,.text-slate-800,.text-slate-700) { color: var(--ui-ink) !important; }
+html[data-theme] .app-content :is(.card, .surface, .section-card, .stat-tile, .stock-card) :is(.text-slate-600,.text-slate-500,.text-slate-400) { color: var(--ui-muted) !important; }
+html[data-theme] .app-content :is(.card, .surface, .section-card, .stat-tile, .stock-card) :is(.bg-white,.bg-white\/95,.bg-white\/90) { background: var(--ui-surface-soft) !important; }
+
+/* Dashboard: summary cards, PO status and division information */
+.dashboard-total-card { min-height: 96px; padding: .9rem !important; }
+.dashboard-total-card .metric-value { font-size: clamp(1.35rem, 5vw, 1.75rem); font-weight: 900; letter-spacing: -.04em; }
+.dashboard-panel, .dashboard-po-card { padding: 1rem !important; }
+.dashboard-chart-wrap { border-radius: 16px; background: var(--ui-surface-soft); border: 1px solid var(--ui-line); padding: .65rem; }
+.po-shortcut { min-height: 132px; border-radius: 17px; border-color: var(--ui-line); box-shadow: var(--ui-shadow); }
+.po-shortcut-title { color: var(--ui-ink); font-size: .78rem; }
+.po-shortcut-subtitle { color: var(--ui-muted); }
+.division-status-card { border-radius: 16px !important; padding: .8rem !important; }
+
+/* Stock: metrics, filters, search and division/item cards */
+.app-content .stock-card { border-left-width: 3px; }
+.app-content .stat-tile { min-height: 76px; padding: .75rem; }
+.app-content .chip-btn, .app-content button[class*="rounded-full"] {
+  min-height: 34px;
+}
+.app-content input, .app-content select, .app-content textarea {
+  min-height: 44px;
+  border-radius: 13px;
+  border-color: var(--ui-line) !important;
+  background: var(--ui-surface-soft) !important;
+  color: var(--ui-ink) !important;
+  box-shadow: inset 0 1px 2px rgba(10,30,50,.035);
+}
+.app-content input::placeholder, .app-content textarea::placeholder { color: var(--ui-muted) !important; opacity: .72; }
+.app-content :is(button,a,input,select,textarea):focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--ui-accent) 42%, transparent);
+  outline-offset: 2px;
+}
+
+/* Input, PO, history and queue: consistent touch controls and clear hierarchy */
+.app-content button:not(.nav-btn) { touch-action: manipulation; }
+.app-content button[class*="bg-cyan-700"],
+.app-content button[class*="bg-cyan-600"],
+.app-content button[class*="bg-blue-600"] {
+  border-radius: 13px;
+  box-shadow: 0 5px 13px color-mix(in srgb, var(--ui-accent) 18%, transparent);
+}
+.app-content .po-item-card { border-radius: 15px !important; }
+.app-content table { border-collapse: separate; border-spacing: 0; overflow: hidden; border-radius: 14px; }
+.app-content th { font-weight: 800; letter-spacing: .025em; }
+.app-content td, .app-content th { padding-top: .6rem; padding-bottom: .6rem; }
+.app-content .skeleton { border-radius: 12px; }
+
+/* Operator reminder card and semantic status colors */
+.operator-tasks-card { padding: 1rem !important; }
+html[data-theme] .status-pill { border-radius: 999px; font-weight: 800; letter-spacing: .01em; }
+html[data-theme] .nav-bar {
+  background: color-mix(in srgb, var(--ui-surface) 94%, transparent) !important;
+  border-top: 1px solid var(--ui-line) !important;
+  box-shadow: 0 -8px 28px rgba(7, 25, 44, .10) !important;
+  backdrop-filter: blur(22px) saturate(1.2);
+}
+.nav-bar > div { max-width: 430px; min-height: 68px; margin: 0 auto; }
+.nav-btn { min-height: 66px; gap: 2px; color: var(--ui-muted); }
+.nav-btn.is-active { color: var(--ui-accent-strong); }
+.nav-btn.is-active .nav-icon-wrap {
+  width: 38px; height: 34px; border-radius: 12px;
+  background: color-mix(in srgb, var(--ui-accent) 15%, var(--ui-surface)) !important;
+}
+.nav-label { font-size: 10px; font-weight: 800; letter-spacing: -.01em; }
+
+/* Dark themes: neutralize legacy light utility colors inside content surfaces */
+html[data-theme="deep_ocean"] .app-content :is(.card,.surface,.section-card,.stat-tile,.stock-card,.dashboard-panel,.dashboard-total-card,.dashboard-po-card,.menu-group,.division-status-card,.po-hub-card,.po-item-card,.operator-tasks-card) :is(.text-slate-900,.text-slate-800,.text-slate-700,.text-slate-600,.text-slate-500,.text-slate-400) {
+  color: var(--ui-ink) !important;
+}
+html[data-theme="graphite_titanium"] .app-content :is(.card,.surface,.section-card,.stat-tile,.stock-card,.dashboard-panel,.dashboard-total-card,.dashboard-po-card,.menu-group,.division-status-card,.po-hub-card,.po-item-card,.operator-tasks-card) :is(.text-slate-900,.text-slate-800,.text-slate-700,.text-slate-600,.text-slate-500,.text-slate-400) {
+  color: var(--ui-ink) !important;
+}
+html[data-theme="deep_ocean"] .app-content :is(.card,.surface,.section-card,.stat-tile,.stock-card,.dashboard-panel,.dashboard-total-card,.dashboard-po-card,.menu-group,.division-status-card,.po-hub-card,.po-item-card,.operator-tasks-card) :is(.bg-white,.bg-white\/95,.bg-white\/90,.bg-slate-50,.bg-slate-100) {
+  background: var(--ui-surface-soft) !important;
+}
+html[data-theme="graphite_titanium"] .app-content :is(.card,.surface,.section-card,.stat-tile,.stock-card,.dashboard-panel,.dashboard-total-card,.dashboard-po-card,.menu-group,.division-status-card,.po-hub-card,.po-item-card,.operator-tasks-card) :is(.bg-white,.bg-white\/95,.bg-white\/90,.bg-slate-50,.bg-slate-100) {
+  background: var(--ui-surface-soft) !important;
+}
+html[data-theme="deep_ocean"] .app-content :is(input,select,textarea) { color-scheme: dark; }
+html[data-theme="graphite_titanium"] .app-content :is(input,select,textarea) { color-scheme: dark; }
+
+/* Responsive refinements */
+@media (max-width: 360px) {
+  .app-top-header { padding: .4rem .45rem; }
+  .app-top-header .app-header-card { padding: .55rem .65rem; }
+  .page-content { padding-left: .6rem; padding-right: .6rem; }
+  .dashboard-total-card { padding: .7rem !important; min-height: 86px; }
+  .nav-bar > div { min-height: 64px; }
+  .nav-btn { min-height: 62px; }
+  .nav-label { font-size: 9px; }
+}
+@media (min-width: 600px) {
+  .app-top-header .app-header-card { max-width: 430px; }
+  .page-content { padding-left: .9rem; padding-right: .9rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html[data-theme] .app-content *, html[data-theme] .nav-bar * {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
