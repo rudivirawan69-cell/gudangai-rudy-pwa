@@ -7,6 +7,7 @@ import {
 import { DIVISIONS } from '../data/master';
 import { classifyStockLevel } from '../data/stockStatus';
 import OperatorTasks from '../components/OperatorTasks';
+import OperationsHub from '../features/operationsHub/OperationsHub';
 import {
   AlertTriangle, RefreshCw, FileText, Package, Users, Boxes, ShieldAlert, CheckCircle2, AlertCircle, X,
   CalendarDays, CalendarClock, ClipboardCheck, FilePlus2, Mail, Clock3, Layers3, ArrowUpRight,
@@ -1267,6 +1268,8 @@ export default function DashboardPage({ onNavigate }) {
       {confirmMsg && (
         <p className="rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-[11px] font-semibold text-emerald-700">{confirmMsg}</p>
       )}
+
+      <OperationsHub />
 
       <section className="grid grid-cols-1 xl:grid-cols-2 gap-4" aria-label="Ringkasan operasional">
         <div className="dashboard-panel rounded-2xl bg-white border border-slate-200 shadow-sm p-4 min-w-0">
