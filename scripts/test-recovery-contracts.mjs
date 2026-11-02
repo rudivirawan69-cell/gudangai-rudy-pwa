@@ -136,7 +136,7 @@ assert.match(apiSource, /clientElapsedMs: Date\.now\(\) - clientStartedAt/);
 assert.match(apiSource, /const groups = new Map\(\)/, 'Queue reconciliation must combine compatible outbox entries into batches.');
 assert.match(apiSource, /const conflictingIds = new Set\(\)/, 'Reused clientItemId with conflicting payloads must remain pending.');
 assert.match(apiSource, /const alreadyApplied = originalList\.filter/, 'Locally confirmed APPLIED items must not be submitted again.');
-assert.match(apiSource, /7\\\.0\\\.\\d\+\|PERFORMANCE\[-_\]\?CANDIDATE\|RECONSTRUCTION/,
+assert.ok(apiSource.includes(String.raw`7\.0\.\d+|PERFORMANCE[-_]?CANDIDATE|RECONSTRUCTION`),
   'Trusted 7.0 performance/reconstruction backend versions must remain write-compatible.');
 const bulkSource = gs.slice(gs.indexOf('function bulkTransaction(body) {'), gs.indexOf('\nfunction ', gs.indexOf('function bulkTransaction(body) {') + 10));
 assert.match(gs, /function appendIdempotencyRecordsIndexed_\(/);
