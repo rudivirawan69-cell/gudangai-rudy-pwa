@@ -638,7 +638,7 @@ export async function listOperationalActivities() {
 export async function saveOperationalActivity(activity) {
   const result = await postJson({ action: 'opsSaveActivity', activity, requestId: newIds().requestId }, { retries: 1, timeoutMs: 30000 });
   if (!result || result.success !== true) throw new Error(result?.error || 'Gagal menyimpan aktivitas operasional');
-  return result.item;
+  return result;
 }
 export async function deleteOperationalActivity(id) {
   const result = await postJson({ action: 'opsDeleteActivity', id: String(id || ''), requestId: newIds().requestId }, { retries: 1, timeoutMs: 30000 });
