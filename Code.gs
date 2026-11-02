@@ -4573,10 +4573,19 @@ function opsSyncCalendarEvent_(activity, existingId) {
   var end = new Date(start.getTime() + 60 * 60 * 1000);
   var event = null;
   if (existingId) { try { event = calendar.getEventById(existingId); } catch (e) { event = null; } }
+  var marker = "GudangAI Activity ID: " + activity.id;
   var description = [activity.description || "", activity.owner ? "Penanggung jawab: " + activity.owner : "",
     "Kategori: " + activity.category, "Status: " + activity.status,
-    "Checklist: " + activity.checklist.filter(function(x) { return x.done; }).length + "/" + activity.checklist.length + " selesai",
-    "GudangAI Activity ID: " + activity.id].filter(Boolean).join("\n");
+    "Checklist: " + activity.checklist.filter(function(x) { return x.done; }).length + "/" + activity.checklist.length + " selesai", marker].filter(Boolean).join("\n");
+  // Recovery guard: avoid duplicate Calendar events if event creation succeeded but the Sheet write timed out.
+  if (!event) {
+    var dayStart = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+    var dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
+    var candidates = calendar.getEvents(dayStart, dayEnd);
+    for (var ci = 0; ci < candidates.length; ci++) {
+      if (String(candidates[ci].getDescription() || "").indexOf(marker) >= 0) { event = candidates[ci]; break; }
+    }
+  }
   if (event) {
     event.setTitle("[GudangAI] " + activity.title);
     event.setTime(start, end);
