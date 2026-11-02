@@ -579,47 +579,6 @@ function Movement7Days({ history }) {
   );
 }
 
-function StockComparison({ cv, pt }) {
-  const total = Math.max(1, (cv?.unit || 0) + (pt?.unit || 0));
-  const cvPct = Math.round(((cv?.unit || 0) / total) * 100);
-  const ptPct = 100 - cvPct;
-  return (
-    <div>
-      <div className="flex items-start justify-between mb-3">
-        <div>
-          <p className="text-sm font-extrabold text-slate-900">Perbandingan Stok</p>
-          <p className="text-[11px] text-slate-500">Komposisi stok berdasarkan entitas</p>
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-[9px] font-semibold text-slate-500">
-            <span><i className="inline-block w-2 h-2 rounded-full bg-cyan-500 mr-1" />CV</span>
-            <span><i className="inline-block w-2 h-2 rounded-full bg-orange-400 mr-1" />PT</span>
-            <span className="text-slate-400">Angka = persentase dari total</span>
-          </div>
-        </div>
-        <Package className="w-4 h-4 text-cyan-600 shrink-0 mt-0.5" />
-      </div>
-      <div className="grid grid-cols-2 gap-3">
-        <div className="rounded-xl bg-cyan-50 border border-cyan-100 p-3 text-center">
-          <div className="mx-auto w-16 h-16 rounded-full p-[6px]" style={{ background: `conic-gradient(#06b6d4 ${cvPct * 3.6}deg, #dbeafe 0deg)` }}>
-            <div className="w-full h-full rounded-full bg-white flex items-center justify-center">
-              <span className="text-base font-extrabold text-cyan-700 tabular-nums">{cvPct}%</span>
-            </div>
-          </div>
-          <p className="text-xs font-extrabold text-slate-800 mt-2">CV</p>
-          <p className="text-[10px] text-slate-500 tabular-nums">{(cv?.unit || 0).toLocaleString('id-ID')} unit</p>
-        </div>
-        <div className="rounded-xl bg-orange-50 border border-orange-100 p-3 text-center">
-          <div className="mx-auto w-16 h-16 rounded-full p-[6px]" style={{ background: `conic-gradient(#f59e0b ${ptPct * 3.6}deg, #ffedd5 0deg)` }}>
-            <div className="w-full h-full rounded-full bg-white flex items-center justify-center">
-              <span className="text-base font-extrabold text-orange-700 tabular-nums">{ptPct}%</span>
-            </div>
-          </div>
-          <p className="text-xs font-extrabold text-slate-800 mt-2">PT</p>
-          <p className="text-[10px] text-slate-500 tabular-nums">{(pt?.unit || 0).toLocaleString('id-ID')} unit</p>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 function DashboardTotals({ totalItem }) {
   const itemCount = totalItem || 191;
@@ -1392,9 +1351,6 @@ export default function DashboardPage({ onNavigate }) {
       <section className="grid grid-cols-1 xl:grid-cols-2 gap-4" aria-label="Ringkasan operasional">
         <div className="dashboard-panel rounded-2xl bg-white border border-slate-200 shadow-sm p-4 min-w-0">
           <Movement7Days history={history} />
-        </div>
-        <div className="dashboard-panel rounded-2xl bg-white border border-slate-200 shadow-sm p-4 min-w-0">
-          <StockComparison cv={stats.cv} pt={stats.pt} />
         </div>
         <div className="xl:col-span-2"><DashboardTotals totalItem={dashboardTotalItem} /></div>
       </section>
