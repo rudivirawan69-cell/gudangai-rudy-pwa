@@ -283,11 +283,13 @@ export default function StokPage() {
 
         {divisionCards.map((d) => {
           const open = openDivisi === d.name;
+          const visual = divisionVisual(d.name);
+          const DivisionIcon = visual.Icon;
           return (
             <div
               key={d.name}
               className={`stock-division-card w-full overflow-hidden transition ${
-                open ? 'ring-2 ring-cyan-400' : ''
+                open ? 'is-open ring-2 ring-cyan-400' : ''
               }`}
             >
               <button
@@ -296,11 +298,8 @@ export default function StokPage() {
                 aria-expanded={open}
                 className="w-full px-3.5 py-3.5 text-left flex items-center gap-3"
               >
-                <span className={`stock-division-icon stock-division-icon-${divisionVisual(d.name).tone}`}>
-                  {(() => {
-                    const DivisionIcon = divisionVisual(d.name).Icon;
-                    return <DivisionIcon className="w-5 h-5" strokeWidth={2.1} aria-hidden="true" />;
-                  })()}
+                <span className={`stock-division-icon stock-division-icon-${visual.tone}`}>
+                  <DivisionIcon className="w-5 h-5" strokeWidth={2.1} aria-hidden="true" />
                 </span>
                 <div className="flex-1 min-w-0">
                   <p className="text-[13px] font-extrabold text-slate-900 uppercase tracking-wide truncate">{d.name}</p>
