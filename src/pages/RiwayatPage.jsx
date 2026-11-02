@@ -26,7 +26,7 @@ export default function RiwayatPage({ onNavigate }) {
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState('all');
   const [filterEntity, setFilterEntity] = useState('all');
-  const [dense, setDense] = useState(true);
+  const [dense, setDense] = useState(() => { try { return localStorage.getItem('gudangai_riwayat_density') !== 'comfortable'; } catch (_) { return true; } });
   const [expandedId, setExpandedId] = useState(null);
   const history = getLocalHistory();
 
@@ -87,9 +87,14 @@ export default function RiwayatPage({ onNavigate }) {
             className="text-[10px] font-bold px-2.5 py-1.5 rounded-lg bg-amber-50 text-amber-700 border border-amber-200">
             Antrian
           </button>
-          <button type="button" onClick={() => setDense((v) => !v)}
-            className="text-[10px] font-bold px-2.5 py-1.5 rounded-lg bg-white text-slate-600 border border-slate-200">
-            {dense ? 'Grid padat' : 'List'}
+          <button type="button" onClick={() => setDense((v) => {
+              const next = !v;
+              try { localStorage.setItem('gudangai_riwayat_density', next ? 'compact' : 'comfortable'); } catch (_) {}
+              return next;
+            })}
+            className="text-[10px] font-bold px-2.5 py-1.5 rounded-lg bg-white text-slate-600 border border-slate-200"
+            aria-pressed={dense}>
+            {dense ? 'Tampilan nyaman' : 'Tampilan ringkas'}
           </button>
         </div>
       </div>
@@ -159,13 +164,13 @@ export default function RiwayatPage({ onNavigate }) {
                 <button
                   type="button"
                   onClick={() => setExpandedId(open ? null : id)}
-                  className="w-full px-3 py-3 flex items-center gap-3 text-left"
+                  className={'w-full flex items-center gap-3 text-left ' + (dense ? 'px-3 py-2' : 'px-3 py-3')}
                 >
-                  <span className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${meta.bg} ${meta.color}`}>
+                  <span className={(dense ? 'w-8 h-8' : 'w-9 h-9') + ' rounded-xl flex items-center justify-center shrink-0 ' + meta.bg + ' ' + meta.color}>
                     <Icon className="w-4 h-4" />
                   </span>
                   <div className="flex-1 min-w-0">
-                    <p className="text-[13px] font-bold text-slate-900 truncate">
+                    <p className={(dense ? 'text-[12px]' : 'text-[13px]') + ' font-bold text-slate-900 truncate'}>
                       {meta.label} · {h.entity || '—'} · {h.items?.length || 0} item
                     </p>
                     <p className="text-[11px] text-slate-500 mt-0.5">
@@ -175,7 +180,7 @@ export default function RiwayatPage({ onNavigate }) {
                   <span className="text-slate-400 text-lg font-bold">{open ? '−' : '+'}</span>
                 </button>
                 {open && (
-                  <div className="px-3 pb-3 border-t border-slate-100 space-y-1.5 pt-2">
+                  <div className={'px-3 border-t border-slate-100 space-y-1.5 ' + (dense ? 'pb-2 pt-1.5' : 'pb-3 pt-2')}>
                     {(h.items || []).map((it, i) => (
                       <div key={i} className="flex items-center justify-between gap-2 text-[12px]">
                         <div className="min-w-0">

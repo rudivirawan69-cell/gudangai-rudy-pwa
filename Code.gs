@@ -1215,24 +1215,26 @@ function bulkTransaction(body) {
   // Ini mencegah 1 item invalid menggagalkan seluruh bulkTransaction.
   var preflightResults = validationErrors.slice();
 
-  // Load stok 1x (untuk shortage HOLD pada keluar)
-  var stockMap = {};
-  try {
-    var allStock = getAllStock(entitas);
-    if (allStock && allStock.success && allStock.items) {
-      allStock.items.forEach(function(it) {
-        stockMap[String(it.kode || "").trim()] = {
-          stockAkhir: clampStockToZero_(it.stockAkhir),
-          nama: it.nama || "",
-          entitas: it.entitas || entitas
-        };
-      });
-    }
-  } catch (eStock) {
-    console.error("bulkTransaction stock load: " + eStock.message);
-  }
-
+  // Pembacaan seluruh master stok hanya diperlukan untuk validasi shortage Barang keluar.
+  // Masuk/Rusak tidak memakai stockMap, jadi jangan membebani request dengan scan master 191 item.
   var isKeluar = sheetName === "Barang keluar";
+  var stockMap = {};
+  if (isKeluar) {
+    try {
+      var allStock = getAllStock(entitas);
+      if (allStock && allStock.success && allStock.items) {
+        allStock.items.forEach(function(it) {
+          stockMap[String(it.kode || "").trim()] = {
+            stockAkhir: clampStockToZero_(it.stockAkhir),
+            nama: it.nama || "",
+            entitas: it.entitas || entitas
+          };
+        });
+      }
+    } catch (eStock) {
+      console.error("bulkTransaction stock load: " + eStock.message);
+    }
+  }
   var lock = LockService.getScriptLock();
   if (!lock.tryLock(30000)) {
     return { success: false, status: "UNKNOWN", code: "LOCK_TIMEOUT", batchId: batchId, writeOccurred: "unknown", error: "Lock backend tidak tersedia; lakukan read-back sebelum retry." };
@@ -1582,9 +1584,14 @@ function resolveKodeFromNama(namaInput) {
 // ============================================================
 function getRealLastDataRow(sheet, config) {
   const startRow = config.headerRow + 1;
-  const totalRows = sheet.getMaxRows();
-  if (totalRows < startRow) return startRow - 1;
-  const numRows = totalRows - startRow + 1;
+  // getMaxRows() mencakup seluruh baris kosong/berformat sampai batas sheet.
+  // Membaca satu kolom sampai batas itu pada setiap transaksi membuang waktu.
+  // getLastRow() adalah batas konten aktual; seluruh data di kolom kode pasti
+  // berada di dalam batas ini, termasuk bila ada data yatim di kolom lain.
+  const contentEndRow = (typeof sheet.getLastRow === "function") ? sheet.getLastRow() : sheet.getMaxRows();
+  const lastContentRow = Math.min(sheet.getMaxRows(), Math.max(startRow - 1, contentEndRow));
+  if (lastContentRow < startRow) return startRow - 1;
+  const numRows = lastContentRow - startRow + 1;
   const kodeColValues = sheet.getRange(startRow, config.kodeColAbsolute, numRows, 1).getValues();
   for (let i = kodeColValues.length - 1; i >= 0; i--) {
     if (kodeColValues[i][0] !== "" && kodeColValues[i][0] !== null) {
@@ -1598,7 +1605,11 @@ function findSafeEmptyRowAdaptively(sheet, config) {
   const realLastRow = getRealLastDataRow(sheet, config);
   const startRow = Math.max(config.headerRow + 1, realLastRow - SCAN_BUFFER_ROWS);
   const maxRows = sheet.getMaxRows();
-  const scanEndRow = Math.min(maxRows, realLastRow + SCAN_BUFFER_ROWS);
+  // Jangan berhenti di realLastRow + buffer: kolom B:C/F:G bisa memiliki data
+  // yatim setelah kolom kode. getLastRow() melindungi data tersebut agar tidak tertimpa.
+  const contentEndRow = (typeof sheet.getLastRow === "function") ? sheet.getLastRow() : sheet.getMaxRows();
+  const lastContentRow = Math.max(realLastRow, contentEndRow);
+  const scanEndRow = Math.min(maxRows, Math.max(lastContentRow, realLastRow + SCAN_BUFFER_ROWS));
   const numRowsToScan = Math.max(1, scanEndRow - startRow + 1);
   const bcValues = sheet.getRange(startRow, 2, numRowsToScan, 2).getValues();
   const fgValues = sheet.getRange(startRow, 6, numRowsToScan, 2).getValues();
@@ -1607,7 +1618,7 @@ function findSafeEmptyRowAdaptively(sheet, config) {
     const rightEmpty = fgValues[i].every(function(cell) { return cell === "" || cell === null || cell === undefined; });
     if (leftEmpty && rightEmpty) return startRow + i;
   }
-  const appendRow = realLastRow + 1;
+  const appendRow = lastContentRow + 1;
   if (appendRow > maxRows) {
     try {
       sheet.insertRowsAfter(maxRows, 100);
@@ -1660,7 +1671,13 @@ function findSafeEmptyBlockAdaptively_(sheet, config, rowCount) {
   var maxRows = sheet.getMaxRows();
 
   if (start <= maxRows) {
-    var scanCount = maxRows - start + 1;
+    // Scan hanya sampai konten aktual + buffer yang cukup untuk satu batch.
+    // Tidak perlu membaca semua baris kosong/berformat hingga sheet.getMaxRows().
+    // Batas getLastRow() tetap menjaga data yatim pada B:C/F:G agar tidak tertimpa.
+    var contentEndRow = (typeof sheet.getLastRow === "function") ? sheet.getLastRow() : maxRows;
+    var lastContentRow = Math.max(start - 1, contentEndRow);
+    var scanEndRow = Math.min(maxRows, Math.max(lastContentRow, start + count + SCAN_BUFFER_ROWS - 1));
+    var scanCount = Math.max(count, scanEndRow - start + 1);
     var bc = sheet.getRange(start, 2, scanCount, 2).getValues();
     var fg = sheet.getRange(start, 6, scanCount, 2).getValues();
     var emptyRun = 0;
