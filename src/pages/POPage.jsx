@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useBootstrapRevision } from '../hooks/useBootstrapRevision';
 import { useStock } from '../hooks/useStock';
 import {
@@ -89,6 +89,14 @@ function localISODate(date = new Date()) {
 }
 
 const PO_DRAFT_KEY = 'gudangai_po_draft_v1';
+
+function persistPODraft(draft) {
+  if (!draft) return;
+  try { localStorage.setItem(PO_DRAFT_KEY, JSON.stringify(draft)); } catch (_) {
+    // Draft persistence is best-effort and must not block PO editing.
+  }
+}
+
 function loadPODraft() {
   try {
     const raw = JSON.parse(localStorage.getItem(PO_DRAFT_KEY) || 'null');
@@ -197,15 +205,29 @@ export default function POPage({ onNavigate }) {
   const [poSaved, setPoSaved] = useState(false);
   const [savingPO, setSavingPO] = useState(false);
   const [poSaveMessage, setPoSaveMessage] = useState(() => (initialDraft.csGenerated || initialDraft.prodGenerated) ? 'Draft PO dipulihkan dari perangkat.' : '');
+  const poDraftSnapshotRef = useRef(null);
   useEffect(() => {
-    try {
-      localStorage.setItem(PO_DRAFT_KEY, JSON.stringify({
-        version: 1, savedAt: Date.now(), hub, tab, csItems, prodItems, csGenerated, prodGenerated,
-      }));
-    } catch (_) {
-      // Draft persistence is best-effort and must not block PO editing.
-    }
+    const draft = {
+      version: 1, savedAt: Date.now(), hub, tab, csItems, prodItems, csGenerated, prodGenerated,
+    };
+    poDraftSnapshotRef.current = draft;
+    const timer = setTimeout(() => persistPODraft(draft), 200);
+    return () => clearTimeout(timer);
   }, [hub, tab, csItems, prodItems, csGenerated, prodGenerated]);
+
+  useEffect(() => {
+    const flushDraft = () => persistPODraft(poDraftSnapshotRef.current);
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') flushDraft();
+    };
+    window.addEventListener('pagehide', flushDraft);
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => {
+      window.removeEventListener('pagehide', flushDraft);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      flushDraft();
+    };
+  }, []);
   const criticalCS = useMemo(() => {
     const cv = buildCritical(stockCV.items, 'CV', isCS);
     const pt = buildCritical(stockPT.items, 'PT', isCS);

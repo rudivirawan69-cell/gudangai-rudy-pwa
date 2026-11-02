@@ -133,6 +133,22 @@ assert.match(inputPage, /gudangai-stock-refresh/);
 assert.match(queueSource, /gudangai-stock-refresh/);
 assert.match(apiSource, /serverExecMs: measuredServerChunks \? totalServerExecMs : null/);
 assert.match(apiSource, /clientElapsedMs: Date\.now\(\) - clientStartedAt/);
+assert.match(apiSource, /const groups = new Map\(\)/, 'Queue reconciliation must combine compatible outbox entries into batches.');
+assert.match(apiSource, /const conflictingIds = new Set\(\)/, 'Reused clientItemId with conflicting payloads must remain pending.');
+assert.match(apiSource, /const alreadyApplied = originalList\.filter/, 'Locally confirmed APPLIED items must not be submitted again.');
+assert.ok(apiSource.includes(String.raw`7\.0\.\d+|PERFORMANCE[-_]?CANDIDATE|RECONSTRUCTION`),
+  'Trusted 7.0 performance/reconstruction backend versions must remain write-compatible.');
+const bulkSource = gs.slice(gs.indexOf('function bulkTransaction(body) {'), gs.indexOf('\nfunction ', gs.indexOf('function bulkTransaction(body) {') + 10));
+assert.match(gs, /function appendIdempotencyRecordsIndexed_\(/);
+assert.match(gs, /function writeIdempotencyRecordsByRow_\(/);
+assert.match(bulkSource, /appendIdempotencyRecordsIndexed_\(pendingNewClaims/);
+assert.match(bulkSource, /writeIdempotencyRecordsByRow_\(plannedLedgerUpdates/);
+const planWriteIndex = bulkSource.indexOf('writeIdempotencyRecordsByRow_(plannedLedgerUpdates');
+const planFlushIndex = bulkSource.indexOf('SpreadsheetApp.flush();', planWriteIndex);
+const transactionWriteIndex = bulkSource.indexOf('sheet.getRange(startRow, 2', planFlushIndex);
+assert.ok(planWriteIndex >= 0 && planFlushIndex > planWriteIndex && transactionWriteIndex > planFlushIndex,
+  'Write-ahead ledger plan must be flushed before transaction sheet writes.');
+assert.match(bulkSource, /writeIdempotencyRecordsByRow_\(finalLedgerUpdates/);
 const stockStatusMatch = stockStatusSource.match(/export function classifyStockLevel\(value\)\s*\{([\s\S]*?)\n\}/);
 assert.ok(stockStatusMatch, 'Missing shared stock status function');
 const classifyStockLevel = new Function('value', stockStatusMatch[1]);
