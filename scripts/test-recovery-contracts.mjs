@@ -143,6 +143,11 @@ assert.match(gs, /function appendIdempotencyRecordsIndexed_\(/);
 assert.match(gs, /function writeIdempotencyRecordsByRow_\(/);
 assert.match(bulkSource, /appendIdempotencyRecordsIndexed_\(pendingNewClaims/);
 assert.match(bulkSource, /writeIdempotencyRecordsByRow_\(plannedLedgerUpdates/);
+const planWriteIndex = bulkSource.indexOf('writeIdempotencyRecordsByRow_(plannedLedgerUpdates');
+const planFlushIndex = bulkSource.indexOf('SpreadsheetApp.flush();', planWriteIndex);
+const transactionWriteIndex = bulkSource.indexOf('sheet.getRange(startRow, 2', planFlushIndex);
+assert.ok(planWriteIndex >= 0 && planFlushIndex > planWriteIndex && transactionWriteIndex > planFlushIndex,
+  'Write-ahead ledger plan must be flushed before transaction sheet writes.');
 assert.match(bulkSource, /writeIdempotencyRecordsByRow_\(finalLedgerUpdates/);
 const stockStatusMatch = stockStatusSource.match(/export function classifyStockLevel\(value\)\s*\{([\s\S]*?)\n\}/);
 assert.ok(stockStatusMatch, 'Missing shared stock status function');
