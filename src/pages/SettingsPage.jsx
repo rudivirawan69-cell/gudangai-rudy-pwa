@@ -1,14 +1,14 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   User, Link2, KeyRound, Settings as SettingsIcon, LogOut, Shield,
-  CheckCircle2, XCircle, ChevronRight, Cloud, Palette, Sun, Moon, Layers,
+  CheckCircle2, XCircle, ChevronRight, Palette, Sun, Moon, Layers,
 } from 'lucide-react';
 import { useAuth, DEFAULT_PROFILE_PHOTO } from '../hooks/useAuth';
 import { useBootstrapRevision } from '../hooks/useBootstrapRevision';
 import { useTheme } from '../hooks/useTheme';
 import {
   getApiUrl, setApiUrl, getApiSecret, setApiSecret, healthCheck,
-  getPendingQueue, clearSyncedQueue,
+  getPendingQueue,
 } from '../data/api';
 
 const THEME_ICONS = {
