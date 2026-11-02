@@ -87,7 +87,7 @@ export default function StokPage() {
   const cvSummary = useMemo(() => ({
     items: cvItems || [],
     sku: (cvItems || []).length,
-    units: (cvItems || []).reduce((sum, item) => sum + (Number(item.stok ?? item.stockAkhir ?? 0) || 0), 0),
+    units: (cvItems || []).reduce((sum, item) => sum + (Number(item.stok ?? item.stockAkhir ?? item.sisa ?? 0) || 0), 0),
   }), [cvItems]);
   const ptSummary = useMemo(() => ({
     items: ptItems || [],
