@@ -346,10 +346,10 @@ html[data-theme] .app-content :is(h1,h2,h3,h4,.text-slate-900,.text-slate-800,.t
 html[data-theme] .app-content :is(.text-slate-600,.text-slate-500,.text-slate-400) {
   color: var(--ui-muted) !important;
 }
-html[data-theme] .app-content :is(.bg-white,.bg-white\\/95,.bg-white\\/90) {
+html[data-theme] .app-content :is(.bg-white,.bg-white\/95,.bg-white\/90) {
   background: var(--ui-surface) !important;
 }
-html[data-theme] .app-content :is(.bg-slate-50,.bg-slate-50\\/80,.bg-slate-100) {
+html[data-theme] .app-content :is(.bg-slate-50,.bg-slate-50\/80,.bg-slate-100) {
   background: var(--ui-surface-soft) !important;
 }
 html[data-theme] .app-content :is(.border-slate-100,.border-slate-200,.border-slate-300) {
