@@ -14,7 +14,7 @@ const EMPTY_FORM = { id:'',category:'order',title:'',description:'',owner:'',dat
 const makeId = () => globalThis.crypto?.randomUUID?.() || 'ops-' + Date.now() + '-' + Math.random().toString(36).slice(2,8);
 const fmtDate = value => { if(!value)return 'Tanggal belum ditentukan';const d=new Date(value+'T00:00:00');return Number.isNaN(d.getTime())?value:new Intl.DateTimeFormat('id-ID',{day:'2-digit',month:'short',year:'numeric'}).format(d); };
 
-function ActivityModal({category,initial,onClose,onSave,saving}) {
+function ActivityModal({category,initial,onClose,onSave,onDelete,saving}) {
  const [form,setForm]=useState(()=>initial?{...initial,checklist:initial.checklist||[]}:{...EMPTY_FORM,category});
  const [checkText,setCheckText]=useState('');
  const update=(key,value)=>setForm(old=>({...old,[key]:value}));
@@ -36,7 +36,7 @@ function ActivityModal({category,initial,onClose,onSave,saving}) {
     </div>
     <label>Status<select value={form.status} onChange={e=>update('status',e.target.value)}><option value="open">Belum selesai</option><option value="done">Selesai</option></select></label>
     <p className="oh-calendar-note"><CalendarDays size={15}/> Simpan memperbarui tab Aktivitas Operasional dan Google Calendar. Event yang sama diperbarui, bukan digandakan.</p>
-    <footer className="oh-modal-actions"><button type="button" className="oh-secondary" onClick={onClose}>Batal</button><button type="submit" className="oh-primary" disabled={saving}>{saving?<><Loader2 className="oh-spin" size={16}/>Menyimpan…</>:<><Check size={16}/>Simpan aktivitas</>}</button></footer>
+    <footer className="oh-modal-actions">{form.id&&<button type="button" className="oh-secondary" onClick={onDelete} disabled={saving}><Trash2 size={15}/>Hapus</button>}<button type="button" className="oh-secondary" onClick={onClose}>Batal</button><button type="submit" className="oh-primary" disabled={saving}>{saving?<><Loader2 className="oh-spin" size={16}/>Menyimpan…</>:<><Check size={16}/>Simpan aktivitas</>}</button></footer>
    </form>
   </section>
  </div>;
@@ -63,6 +63,6 @@ export default function OperationsHub() {
    <div className="oh-card-actions"><button type="button" className="oh-card-add" onClick={()=>openNew(key)}><Plus size={16}/>{meta.action}</button><button type="button" className="oh-card-calendar" onClick={()=>window.open(calendarSearch(meta.title),'_blank','noopener,noreferrer')}><CalendarDays size={15}/>Calendar</button></div>
   </article>;})}</div>
   <p className="oh-sync-caption"><CheckCircle2 size={14}/> Aktivitas disimpan terpisah dari data stok dan transaksi gudang.</p>
-  {(activeCategory||editing)&&<ActivityModal category={activeCategory} initial={editing} onClose={()=>{setActiveCategory('');setEditing(null);}} onSave={save} saving={saving}/>}
+  {(activeCategory||editing)&&<ActivityModal category={activeCategory} initial={editing} onClose={()=>{setActiveCategory('');setEditing(null);}} onSave={save} onDelete={()=>remove(editing)} saving={saving}/>}
  </section>;
 }
