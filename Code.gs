@@ -638,6 +638,61 @@ function updateIdempotencyRecordIndexed_(record, patch, index) {
   return rememberIdempotencyRecord_(index, updated);
 }
 
+// Serialize and persist ledger records in contiguous blocks. Bulk transaction paths
+// must not issue one Spreadsheet service call per item for claim/plan/APPLIED updates.
+function idempotencyRecordValues_(record, now) {
+  const merged = record || {};
+  return [
+    merged.createdAt || now, now, merged.transactionId || "", merged.nonce || "", merged.requestId || "", merged.deviceId || "",
+    merged.operation || "syncTransaction", merged.sheet || "", merged.entitas || "", merged.kodeBarang || "", merged.qty == null ? "" : merged.qty,
+    merged.tanggal || "", merged.status || "IN_PROGRESS", merged.dataRow || "", merged.writeOccurred == null ? "unknown" : merged.writeOccurred,
+    merged.errorCode || "", redactSensitiveString_(String(merged.details || "")).substring(0, 5000)
+  ];
+}
+
+function appendIdempotencyRecordsIndexed_(records, index) {
+  if (!records || !records.length) return [];
+  if (!index || !index.sheet) throw new Error("Idempotency index tidak tersedia.");
+  const startRow = index.nextRow;
+  const now = new Date().toISOString();
+  const values = records.map(function(record) { return idempotencyRecordValues_(record, now); });
+  index.sheet.getRange(startRow, 1, values.length, IDEMPOTENCY_HEADERS.length).setValues(values);
+  const saved = values.map(function(row, offset) {
+    return rememberIdempotencyRecord_(index, mapIdempotencyRow_(row, startRow + offset));
+  });
+  index.nextRow = startRow + values.length;
+  return saved;
+}
+
+function writeIdempotencyRecordsByRow_(records, index) {
+  if (!records || !records.length) return [];
+  if (!index || !index.sheet) throw new Error("Idempotency index tidak tersedia.");
+  const latestByRow = Object.create(null);
+  records.forEach(function(record) {
+    if (record && Number(record.rowNumber) >= OPS_DATA_START_ROW) latestByRow[Number(record.rowNumber)] = record;
+  });
+  const rows = Object.keys(latestByRow).map(Number).sort(function(a, b) { return a - b; });
+  if (!rows.length) return [];
+  const now = new Date().toISOString();
+  const saved = [];
+  let offset = 0;
+  while (offset < rows.length) {
+    const startRow = rows[offset];
+    let end = offset + 1;
+    while (end < rows.length && rows[end] === rows[end - 1] + 1) end++;
+    const blockRows = rows.slice(offset, end);
+    const values = blockRows.map(function(rowNumber) {
+      return idempotencyRecordValues_(latestByRow[rowNumber], now);
+    });
+    index.sheet.getRange(startRow, 1, values.length, IDEMPOTENCY_HEADERS.length).setValues(values);
+    for (let i = 0; i < values.length; i++) {
+      saved.push(rememberIdempotencyRecord_(index, mapIdempotencyRow_(values[i], startRow + i)));
+    }
+    offset = end;
+  }
+  return saved;
+}
+
 function appendIdempotencyRecord_(record) {
   const sheet = getIdempotencyLedgerSheet_();
   const now = new Date().toISOString();
@@ -1246,6 +1301,9 @@ function bulkTransaction(body) {
   var writeTouched = false;
   var rowsToWrite = [];
   var ledgerIndex = null;
+  var pendingNewClaims = [];
+  var pendingExistingClaims = [];
+  var pendingReconciledUpdates = [];
 
   try {
     // Snapshot ledger satu kali per batch, bukan scan 2.000 baris untuk setiap item.
@@ -1259,7 +1317,7 @@ function bulkTransaction(body) {
         try {
           var priorReadBack = readBackTransactionByIdentity_({ transactionId: item.transactionId, nonce: item.nonce }, sheetName);
           if (priorReadBack && priorReadBack.matched) {
-            updateIdempotencyRecordIndexed_(prior, { status: "APPLIED", dataRow: priorReadBack.row, writeOccurred: true, errorCode: "" }, ledgerIndex);
+            pendingReconciledUpdates.push(Object.assign({}, prior, { status: "APPLIED", dataRow: priorReadBack.row, writeOccurred: true, errorCode: "" }));
             results.push({ success: true, status: "APPLIED", code: "READBACK_CONFIRMED", batchId: batchId, batchIndex: p + 1, transactionId: item.transactionId, nonce: item.nonce, requestId: item.requestId || "", clientItemId: item.clientItemId || item.requestId || "", sheet: sheetName, row: priorReadBack.row, kode: priorReadBack.kodeBarang, qty: priorReadBack.qty, replayed: true, writeOccurred: true });
             successCount++;
             continue;
@@ -1327,19 +1385,22 @@ function bulkTransaction(body) {
       keterangan = appendIdentityMarker_(keterangan, item.transactionId, item.nonce);
 
       var claimedRecord = null;
-      try {
-        if (prior) {
-          claimedRecord = updateIdempotencyRecordIndexed_(prior, { status: "IN_PROGRESS", requestId: item.requestId || batchId, writeOccurred: false }, ledgerIndex);
-        } else {
-          claimedRecord = appendIdempotencyRecordIndexed_({
-            transactionId: item.transactionId, nonce: item.nonce,
-            requestId: item.requestId || batchId, deviceId: (item.client && item.client.deviceId) || "",
-            operation: "bulkTransaction", sheet: sheetName, entitas: entitas,
-            kodeBarang: item.kodeBarang, qty: numericQty, tanggal: normalizeTransactionDateKey_(formattedDate),
-            status: "IN_PROGRESS", writeOccurred: false, details: "Batch claim " + batchId
-          }, ledgerIndex);
-        }
-      } catch (ledErr) { console.error("ledger claim: " + ledErr.message); }
+      var claimData = {
+        transactionId: item.transactionId, nonce: item.nonce,
+        requestId: item.requestId || batchId, deviceId: (item.client && item.client.deviceId) || (prior && prior.deviceId) || "",
+        operation: "bulkTransaction", sheet: sheetName, entitas: entitas,
+        kodeBarang: item.kodeBarang, qty: numericQty, tanggal: normalizeTransactionDateKey_(formattedDate),
+        status: "IN_PROGRESS", dataRow: prior ? prior.dataRow : "", writeOccurred: false,
+        errorCode: "", details: "Batch claim " + batchId,
+        createdAt: prior && prior.createdAt || new Date().toISOString()
+      };
+      if (prior) {
+        claimedRecord = Object.assign({}, prior, claimData, { rowNumber: prior.rowNumber });
+        pendingExistingClaims.push(claimedRecord);
+      } else {
+        claimedRecord = Object.assign({}, claimData, { rowNumber: ledgerIndex.nextRow + pendingNewClaims.length });
+        pendingNewClaims.push(claimedRecord);
+      }
 
       rowsToWrite.push({
         index: p, date: formattedDate, kode: item.kodeBarang,
@@ -1350,6 +1411,18 @@ function bulkTransaction(body) {
         shortage: shortageMode, availableQty: availableQty, ledgerRecord: claimedRecord
       });
     }
+
+    // Persist all reconciled/new/existing claims in grouped ranges before touching transaction rows.
+    var persistedClaims = [];
+    if (pendingNewClaims.length) persistedClaims = persistedClaims.concat(appendIdempotencyRecordsIndexed_(pendingNewClaims, ledgerIndex));
+    if (pendingExistingClaims.length) persistedClaims = persistedClaims.concat(writeIdempotencyRecordsByRow_(pendingExistingClaims, ledgerIndex));
+    if (pendingReconciledUpdates.length) persistedClaims = persistedClaims.concat(writeIdempotencyRecordsByRow_(pendingReconciledUpdates, ledgerIndex));
+    var persistedByRow = Object.create(null);
+    persistedClaims.forEach(function(record) { persistedByRow[record.rowNumber] = record; });
+    rowsToWrite.forEach(function(rw) {
+      if (rw.ledgerRecord && persistedByRow[rw.ledgerRecord.rowNumber]) rw.ledgerRecord = persistedByRow[rw.ledgerRecord.rowNumber];
+      if (!rw.ledgerRecord || rw.ledgerRecord.status !== "IN_PROGRESS") throw new Error("Write-ahead ledger claim tidak terkonfirmasi: " + rw.txId);
+    });
 
     if (rowsToWrite.length === 0 && failCount === 0) {
       var replayResp = {
@@ -1369,6 +1442,7 @@ function bulkTransaction(body) {
 
       var bcValues = [];
       var fgValues = [];
+      var plannedLedgerUpdates = [];
       for (var r = 0; r < rowsToWrite.length; r++) {
         var planned = rowsToWrite[r];
         var plannedRow = startRow + r;
@@ -1376,20 +1450,22 @@ function bulkTransaction(body) {
         if (!plannedRecord) throw new Error("Idempotency ledger hilang sebelum bulk write: " + planned.txId);
         var plannedKeteranganHash = sha256Short_(planned.ket);
         if (!plannedKeteranganHash) throw new Error("Fingerprint Keterangan gagal dibuat untuk " + planned.txId + "; batch tidak ditulis.");
-        var persistedPlan = updateIdempotencyRecordIndexed_(plannedRecord, {
+        plannedLedgerUpdates.push(Object.assign({}, plannedRecord, {
           status: "IN_PROGRESS", dataRow: plannedRow, writeOccurred: "unknown", errorCode: "WRITE_PENDING",
-          details: JSON.stringify({
-            planned: true, plannedFinalQty: planned.qty,
-            keteranganHash: plannedKeteranganHash, batchId: batchId
-          })
-        }, ledgerIndex);
-        planned.ledgerRecord = persistedPlan;
-        if (!persistedPlan || Number(persistedPlan.dataRow) !== Number(plannedRow)) {
-          throw new Error("Write-ahead ledger bulk tidak dapat dikonfirmasi: " + planned.txId);
-        }
+          details: JSON.stringify({ planned: true, plannedFinalQty: planned.qty, keteranganHash: plannedKeteranganHash, batchId: batchId })
+        }));
         bcValues.push([planned.date, planned.kode]);
         fgValues.push([planned.qty, planned.ket]);
       }
+      var persistedPlans = writeIdempotencyRecordsByRow_(plannedLedgerUpdates, ledgerIndex);
+      var plansByRow = Object.create(null);
+      persistedPlans.forEach(function(record) { plansByRow[record.rowNumber] = record; });
+      rowsToWrite.forEach(function(rw, idx) {
+        rw.ledgerRecord = plansByRow[rw.ledgerRecord.rowNumber] || rw.ledgerRecord;
+        if (!rw.ledgerRecord || Number(rw.ledgerRecord.dataRow) !== Number(startRow + idx) || rw.ledgerRecord.errorCode !== "WRITE_PENDING") {
+          throw new Error("Write-ahead ledger bulk tidak dapat dikonfirmasi: " + rw.txId);
+        }
+      });
 
       // Set konservatif sebelum panggilan Sheets agar partial-write exception berstatus UNKNOWN.
       writeTouched = true;
@@ -1412,9 +1488,6 @@ function bulkTransaction(body) {
 
         if (ok) {
           successCount++;
-          try {
-            if (rw.ledgerRecord) rw.ledgerRecord = updateIdempotencyRecordIndexed_(rw.ledgerRecord, { status: "APPLIED", dataRow: rowNum, writeOccurred: true, errorCode: "" }, ledgerIndex);
-          } catch (uErr) {}
           results.push({
             success: true, status: "APPLIED", code: "TRANSACTION_APPLIED",
             batchId: batchId, batchIndex: rw.index + 1,
@@ -1435,9 +1508,6 @@ function bulkTransaction(body) {
           }
         } else {
           failCount++;
-          try {
-            if (rw.ledgerRecord) rw.ledgerRecord = updateIdempotencyRecordIndexed_(rw.ledgerRecord, { status: "UNKNOWN", dataRow: rowNum, writeOccurred: "unknown", errorCode: "VERIFY_FAILED" }, ledgerIndex);
-          } catch (u2) {}
             results.push({
               success: false, status: "UNKNOWN", code: "VERIFY_FAILED",
               batchId: batchId, batchIndex: rw.index + 1,
@@ -1451,6 +1521,17 @@ function bulkTransaction(body) {
             continue;
         }
       }
+      // One grouped ledger update after the entire transaction block has been read back.
+      var finalLedgerUpdates = rowsToWrite.map(function(rw, idx) {
+        var rowNum = startRow + idx;
+        var verified = results.some(function(result) {
+          return String(result.transactionId || "") === String(rw.txId) && result.success === true;
+        });
+        return Object.assign({}, rw.ledgerRecord, verified
+          ? { status: "APPLIED", dataRow: rowNum, writeOccurred: true, errorCode: "" }
+          : { status: "UNKNOWN", dataRow: rowNum, writeOccurred: "unknown", errorCode: "VERIFY_FAILED" });
+      });
+      writeIdempotencyRecordsByRow_(finalLedgerUpdates, ledgerIndex);
     }
 
     updateLastUpdateTimestamp();
@@ -1460,18 +1541,19 @@ function bulkTransaction(body) {
   } catch (outerErr) {
     failCount++;
     // Resolve every planned ledger record consistently with the conservative write boundary.
-    rowsToWrite.forEach(function(rw) {
-      try {
+    try {
+      var failureLedgerUpdates = rowsToWrite.filter(function(rw) { return !!rw.ledgerRecord; }).map(function(rw) {
         var rec = rw.ledgerRecord;
-        if (rec) rw.ledgerRecord = updateIdempotencyRecordIndexed_(rec, {
+        return Object.assign({}, rec, {
           status: writeTouched ? "UNKNOWN" : "FAILED",
           dataRow: writeTouched ? rec.dataRow : "",
           writeOccurred: writeTouched ? "unknown" : false,
           errorCode: writeTouched ? "PARTIAL_WRITE_READBACK_REQUIRED" : "BULK_WRITE_NOT_STARTED",
           details: String(outerErr.message || outerErr).substring(0, 1000)
-        }, ledgerIndex);
-      } catch (ledgerErr) { console.error("bulk failure ledger reconciliation: " + ledgerErr.message); }
-    });
+        });
+      });
+      if (failureLedgerUpdates.length) writeIdempotencyRecordsByRow_(failureLedgerUpdates, ledgerIndex);
+    } catch (ledgerErr) { console.error("bulk failure ledger reconciliation: " + ledgerErr.message); }
     try { sendErrorEmailWithCooldown("bulkTransaction", outerErr, { batchId: batchId, sheet: sheetName, count: prepared.length }); } catch (n) {}
     results.push({ success: false, status: writeTouched ? "UNKNOWN" : "FAILED", code: writeTouched ? "PARTIAL_WRITE_READBACK_REQUIRED" : "WRITE_FAILED", batchId: batchId, error: String(outerErr.message || outerErr) });
   } finally {
