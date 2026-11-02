@@ -741,10 +741,12 @@ function appendTransactionNoteWithinLimit_(base, suffix) {
   return (safeUserText ? safeUserText + separator : "") + systemText;
 }
 
-function readBackTransactionByIdentity_(identity, preferredSheet) {
+function readBackTransactionByIdentity_(identity, preferredSheet, ledgerIndex) {
   const targetId = String(identity && identity.transactionId || "").trim();
   const targetNonce = String(identity && identity.nonce || "").trim();
-  const sheetNames = preferredSheet ? [preferredSheet] : Object.keys(SHEET_CONFIG);
+  // Legacy marker scan is only needed for old rows. Current transactions keep identity
+  // in the ledger; bulk reconciliation can jump directly to the ledger's recorded row.
+  const sheetNames = ledgerIndex ? [] : (preferredSheet ? [preferredSheet] : Object.keys(SHEET_CONFIG));
   for (let s = 0; s < sheetNames.length; s++) {
     const sheetName = sheetNames[s];
     if (!(sheetName in SHEET_CONFIG)) continue;
@@ -771,7 +773,9 @@ function readBackTransactionByIdentity_(identity, preferredSheet) {
   // Fallback ledger: marker GUDANGAI_TX tidak lagi ditulis ke Keterangan (lihat appendIdentityMarker_),
   // sehingga verifikasi memakai baris yang tercatat di Idempotency Ledger.
   try {
-    const rec = findIdempotencyRecord_(targetId, targetNonce);
+    const rec = ledgerIndex
+      ? findIdempotencyRecordInIndex_(ledgerIndex, targetId, targetNonce)
+      : findIdempotencyRecord_(targetId, targetNonce);
     const rowNo = rec ? Number(rec.dataRow) : 0;
     const sName = preferredSheet || (rec ? rec.sheet : "");
     const eligible = rec && (rec.status === "APPLIED" || rec.status === "UNKNOWN" || String(rec.writeOccurred) === "unknown");
@@ -1315,7 +1319,7 @@ function bulkTransaction(body) {
       // request actually committed but the client timed out before receiving the response.
       if (prior && prior.status !== "APPLIED") {
         try {
-          var priorReadBack = readBackTransactionByIdentity_({ transactionId: item.transactionId, nonce: item.nonce }, sheetName);
+          var priorReadBack = readBackTransactionByIdentity_({ transactionId: item.transactionId, nonce: item.nonce }, sheetName, ledgerIndex);
           if (priorReadBack && priorReadBack.matched) {
             pendingReconciledUpdates.push(Object.assign({}, prior, { status: "APPLIED", dataRow: priorReadBack.row, writeOccurred: true, errorCode: "" }));
             results.push({ success: true, status: "APPLIED", code: "READBACK_CONFIRMED", batchId: batchId, batchIndex: p + 1, transactionId: item.transactionId, nonce: item.nonce, requestId: item.requestId || "", clientItemId: item.clientItemId || item.requestId || "", sheet: sheetName, row: priorReadBack.row, kode: priorReadBack.kodeBarang, qty: priorReadBack.qty, replayed: true, writeOccurred: true });
