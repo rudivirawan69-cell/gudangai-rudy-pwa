@@ -4,18 +4,13 @@ import { useAuth } from '../hooks/useAuth';
 import {
   getPendingQueue, getStatusPO, getDashboardData, confirmPOStatus, getLocalHistory, getApiUrl, getApiSecret,
 } from '../data/api';
-import { DIVISIONS } from '../data/master';
-import { classifyStockLevel } from '../data/stockStatus';
 import OperatorTasks from '../components/OperatorTasks';
 import {
-  AlertTriangle, RefreshCw, FileText, Package, Users, Boxes, ShieldAlert, CheckCircle2, AlertCircle, X,
-  CalendarDays, CalendarClock, ClipboardCheck, FilePlus2, Mail, Clock3, Layers3, ArrowUpRight,
+  RefreshCw, FileText, CheckCircle2, X,
+  CalendarDays, CalendarClock, ClipboardCheck, FilePlus2, Mail, Layers3, ArrowUpRight,
   ChevronDown, BellRing, ShoppingCart, CalendarOff, UsersRound, Truck, Plus, Trash2, Circle,
 } from 'lucide-react';
 
-function classifyItem(it) {
-  return classifyStockLevel(it.stok ?? it.stockAkhir ?? 0);
-}
 
 function formatSpreadsheetTimestamp(value) {
   if (value === undefined || value === null || value === '') return 'Belum dikirim oleh API spreadsheet';
@@ -39,21 +34,6 @@ function formatSpreadsheetTimestamp(value) {
   }
 }
 
-function RingChart({ pct, color = '#ef4444', size = 52, stroke = 6 }) {
-  const r = (size - stroke) / 2;
-  const c = 2 * Math.PI * r;
-  const dash = Math.max(0, Math.min(100, pct)) / 100 * c;
-  return (
-    <svg width={size} height={size} className="shrink-0 -rotate-90">
-      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--ui-chart-grid)" strokeWidth={stroke} />
-      <circle
-        cx={size / 2} cy={size / 2} r={r} fill="none"
-        stroke={color} strokeWidth={stroke} strokeLinecap="round"
-        strokeDasharray={`${dash} ${c - dash}`}
-      />
-    </svg>
-  );
-}
 
 function DonutPO({ complete, progress, pending, size = 140 }) {
   const rawTotal = complete + progress + pending;
@@ -108,89 +88,6 @@ function DonutPO({ complete, progress, pending, size = 140 }) {
   );
 }
 
-function DivisionStatus3D({ items, sourceRows }) {
-  const rows = useMemo(() => {
-    // Spreadsheet aggregate is preferred, but never let a stale/empty aggregate
-    // blank the PWA chart. Merge it with the live CV+PT stock source.
-    const localMap = {};
-    DIVISIONS.forEach((d) => { localMap[d] = { divisi: d, total: 0, aman: 0, waspada: 0, kritis: 0 }; });
-    (items || []).forEach((it) => {
-      const d = String(it.divisi || 'LAINNYA').trim() || 'LAINNYA';
-      if (!localMap[d]) localMap[d] = { divisi: d, total: 0, aman: 0, waspada: 0, kritis: 0 };
-      localMap[d].total += 1;
-      const cls = classifyItem(it);
-      localMap[d][cls] += 1;
-    });
-
-    const remoteMap = {};
-    (Array.isArray(sourceRows) ? sourceRows : []).forEach((r) => {
-      const d = String(r.divisi || r.division || 'LAINNYA').trim() || 'LAINNYA';
-      remoteMap[d] = {
-        divisi: d,
-        total: Number(r.total || r.totalItem || 0) || 0,
-        aman: Number(r.aman || 0) || 0,
-        waspada: Number(r.waspada || 0) || 0,
-        kritis: Number(r.kritis || 0) || 0,
-      };
-    });
-
-    const names = new Set([...Object.keys(localMap), ...Object.keys(remoteMap)]);
-    return [...names]
-      .map((d) => {
-        const remote = remoteMap[d];
-        const local = localMap[d];
-        if (remote && remote.total > 0) return remote;
-        return local || { divisi: d, total: 0, aman: 0, waspada: 0, kritis: 0 };
-      })
-      .filter((r) => r.total > 0)
-      .sort((a, b) => (b.kritis / b.total) - (a.kritis / a.total) || b.total - a.total);
-  }, [items, sourceRows]);
-
-  if (rows.length === 0) {
-    return <p className="text-[12px] text-slate-400 text-center py-4">Belum ada data divisi</p>;
-  }
-
-  return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-      {rows.map((r) => {
-        const kritisPct = r.total ? Math.round((r.kritis / r.total) * 100) : 0;
-        const aPct = r.total ? (r.aman / r.total) * 100 : 0;
-        const wPct = r.total ? (r.waspada / r.total) * 100 : 0;
-        const kPct = r.total ? (r.kritis / r.total) * 100 : 0;
-        const ringColor = kritisPct >= 50 ? 'var(--ui-critical)' : kritisPct >= 25 ? 'var(--ui-warning)' : 'var(--ui-safe)';
-        return (
-          <div key={r.divisi} className="division-status-card rounded-xl border border-slate-100 bg-white/90 px-3 py-3 flex items-center gap-3 min-w-0">
-            <div className="relative shrink-0">
-              <RingChart pct={kritisPct || 1} color={ringColor} size={44} stroke={5} />
-              <span className="absolute inset-0 flex items-center justify-center text-[11px] font-extrabold text-slate-800 tabular-nums">
-                {kritisPct}%
-              </span>
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center justify-between gap-2 mb-1">
-                <span className="text-[13px] font-bold text-slate-800 uppercase tracking-wide truncate">{r.divisi}</span>
-                <span className="text-[11px] text-slate-400 tabular-nums shrink-0">{r.total} SKU</span>
-              </div>
-              <div className="h-2 w-full rounded-full bg-slate-100 overflow-hidden flex">
-                <div className="division-meter-safe h-full" style={{ width: `${aPct}%` }} />
-                <div className="division-meter-warning h-full" style={{ width: `${wPct}%` }} />
-                <div className="division-meter-critical h-full" style={{ width: `${kPct}%` }} />
-              </div>
-              <div className="flex items-center justify-between mt-1">
-                <div className="flex items-center gap-2 text-[10px] tabular-nums">
-                  <span className="text-emerald-600">● {r.aman}</span>
-                  <span className="text-amber-500">● {r.waspada}</span>
-                  <span className="text-red-500">● {r.kritis}</span>
-                </div>
-                <span className="text-[10px] font-semibold text-red-600 tabular-nums">{kritisPct}% kritis</span>
-              </div>
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
 
 function normalizeMatch(value) {
   return String(value || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '');
@@ -579,26 +476,6 @@ function Movement7Days({ history }) {
   );
 }
 
-
-function DashboardTotals({ totalItem }) {
-  const itemCount = totalItem || 191;
-  return (
-    <div className="grid grid-cols-2 gap-3">
-      <div className="dashboard-total-card border-cyan-100">
-        <div className="flex items-start justify-between gap-2"><span className="dashboard-icon-badge dashboard-icon-cyan"><Package className="w-4 h-4" /></span><span className="text-[9px] font-extrabold text-slate-400">MASTER</span></div>
-        <p className="text-[10px] font-bold uppercase tracking-wider text-cyan-700 mt-2">Total Item</p>
-        <p className="text-2xl font-extrabold text-slate-900 tabular-nums mt-1">{itemCount}</p>
-        <p className="text-[10px] text-slate-500 mt-0.5">SKU aktif</p>
-      </div>
-      <div className="dashboard-total-card border-orange-100">
-        <div className="flex items-start justify-between gap-2"><span className="dashboard-icon-badge dashboard-icon-orange"><Users className="w-4 h-4" /></span><span className="text-[9px] font-extrabold text-slate-400">JARINGAN</span></div>
-        <p className="text-[10px] font-bold uppercase tracking-wider text-orange-700 mt-2">Total Outlet</p>
-        <p className="text-2xl font-extrabold text-slate-900 tabular-nums mt-1">45</p>
-        <p className="text-[10px] text-slate-500 mt-0.5">Outlet terlayani</p>
-      </div>
-    </div>
-  );
-}
 
 function POQuickActions({ onNavigate, onSelect, activeView, currentCount = 0, previousCount = 0, confirmCount = 0 }) {
   const actions = [
@@ -1345,10 +1222,6 @@ export default function DashboardPage({ onNavigate }) {
     }
   }, [loadPO, poData?.noPO, stockAll.refresh, stockCV.refresh, stockPT.refresh]);
 
-  // 191-item contract: show the backend master count, while keeping a safe
-  // local fallback if an older cached deployment temporarily returns less.
-  const dashboardTotalItem = Number(dashboardData?.totalItemAktif ?? dashboardData?.totalItem ?? allItems.length) || allItems.length;
-
   const pending = useMemo(() => {
     try {
       const q = getPendingQueue() || [];
@@ -1420,39 +1293,9 @@ export default function DashboardPage({ onNavigate }) {
         <p className="rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-[11px] font-semibold text-emerald-700">{confirmMsg}</p>
       )}
 
-      <section className="grid grid-cols-1 xl:grid-cols-2 gap-4" aria-label="Ringkasan operasional">
-        <div className="dashboard-panel rounded-2xl bg-white border border-slate-200 shadow-sm p-4 min-w-0">
-          <Movement7Days history={history} />
-        </div>
-        <div className="xl:col-span-2"><DashboardTotals totalItem={dashboardTotalItem} /></div>
-      </section>
+      <Movement7Days history={history} />
 
-      <details className="dashboard-greeting-card group rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-        <summary className="list-none cursor-pointer select-none px-3.5 py-3 sm:px-4 sm:py-3.5 [&::-webkit-details-marker]:hidden">
-          <div className="flex items-center gap-3 min-w-0">
-            <span className="dashboard-icon-badge dashboard-icon-cyan h-10 w-10 shrink-0 rounded-xl flex items-center justify-center">
-              <Layers3 className="h-4 w-4" aria-hidden="true" />
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block text-[9px] font-extrabold uppercase tracking-[0.13em] text-cyan-700">Status Stok · per Divisi</span>
-              <span className="block text-[14px] font-extrabold text-slate-900 truncate mt-0.5">Status Stok per Divisi</span>
-              <span className="block text-[11px] font-medium text-slate-500 leading-snug mt-0.5">Ringkas kondisi item di setiap divisi · ketuk untuk membuka</span>
-            </span>
-            <ChevronDown className="h-4 w-4 shrink-0 text-slate-400 transition-transform duration-200 group-open:rotate-180" aria-hidden="true" />
-          </div>
-        </summary>
-        <div className="border-t border-slate-100 px-3.5 py-3 sm:px-4 sm:py-4">
-          <div className="mb-3">
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[9px] font-semibold">
-              <span className="text-emerald-600"><i className="inline-block w-2 h-2 rounded-full bg-emerald-500 mr-1" />Aman</span>
-              <span className="text-amber-600"><i className="inline-block w-2 h-2 rounded-full bg-amber-400 mr-1" />Waspada</span>
-              <span className="text-red-600"><i className="inline-block w-2 h-2 rounded-full bg-red-500 mr-1" />Kritis</span>
-              <span className="text-slate-400">Ring = % kritis</span>
-            </div>
-          </div>
-          <DivisionStatus3D items={allItems} sourceRows={dashboardData?.statusPerDivisi} />
-        </div>
-      </details>
+      
 
       <details className="dashboard-greeting-card group scroll-mt-4 rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
         <summary className="list-none cursor-pointer select-none px-3.5 py-3 sm:px-4 sm:py-3.5 [&::-webkit-details-marker]:hidden">
