@@ -534,7 +534,7 @@ html[data-theme] .app-content button:not(.nav-btn) { touch-action: manipulation;
   box-shadow: var(--ui-shadow) !important;
   transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
 }
-.stock-division-card[aria-expanded="true"] { border-color: var(--ui-accent) !important; box-shadow: var(--ui-shadow-raised) !important; }
+.stock-division-card.is-open { border-color: var(--ui-accent) !important; box-shadow: var(--ui-shadow-raised) !important; }
 .stock-division-icon {
   width: 44px; height: 44px; flex: 0 0 auto;
   display: grid; place-items: center;
@@ -618,3 +618,19 @@ html[data-theme="graphite_titanium"] .ops-hub-card { background: var(--ui-surfac
 @media (prefers-reduced-motion: reduce) {
   .ops-hub-card,.stock-division-card { transition: none !important; }
 }
+
+/* Theme picker is itself a themed surface, not a fixed light-blue tile. */
+.theme-picker-btn {
+  color: var(--ui-ink) !important;
+  background: var(--ui-surface-soft) !important;
+  border-color: var(--ui-line) !important;
+}
+.theme-picker-btn.is-active {
+  color: var(--ui-accent-strong) !important;
+  background: color-mix(in srgb, var(--ui-accent) 13%, var(--ui-surface)) !important;
+  border-color: var(--ui-accent) !important;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ui-accent) 20%, transparent) !important;
+}
+.theme-picker-btn :is(svg,span) { color: inherit; }
+html[data-theme] .app-content .text-teal-700 { color: var(--ui-safe) !important; }
+html[data-theme] .app-content .text-amber-700 { color: var(--ui-warning) !important; }
