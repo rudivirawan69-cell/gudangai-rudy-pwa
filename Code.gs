@@ -4590,6 +4590,8 @@ function opsSyncCalendarEvent_(activity, existingId) {
   var end = new Date(start.getTime() + 60 * 60 * 1000);
   var event = null;
   if (existingId) { try { event = calendar.getEventById(existingId); } catch (e) { event = null; } }
+  var categoryLabel = { order:"Tambahan Order", team:"Jadwal Off & Tugas", meeting:"Meeting & Project", logistics:"Kirim Luar Kota" }[activity.category] || activity.category;
+  var eventTitle = "[GudangAI] [" + categoryLabel + "] " + activity.title;
   var marker = "GudangAI Activity ID: " + activity.id;
   var description = [activity.description || "", activity.owner ? "Penanggung jawab: " + activity.owner : "",
     "Kategori: " + activity.category, "Status: " + activity.status,
@@ -4605,11 +4607,11 @@ function opsSyncCalendarEvent_(activity, existingId) {
     }
   }
   if (event) {
-    event.setTitle("[GudangAI] " + activity.title);
+    event.setTitle(eventTitle);
     event.setTime(start, end);
     event.setDescription(description);
   } else {
-    event = calendar.createEvent("[GudangAI] " + activity.title, start, end, { description: description });
+    event = calendar.createEvent(eventTitle, start, end, { description: description });
     try { event.addPopupReminder(30); } catch (e) {}
   }
   return event.getId();
