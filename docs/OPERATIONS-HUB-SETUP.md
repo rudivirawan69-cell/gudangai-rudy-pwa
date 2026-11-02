@@ -15,7 +15,7 @@ This feature is additive. It uses a dedicated `Aktivitas Operasional` sheet and 
 1. Open the Apps Script project currently deployed as the GudangAI Web App.
 2. Copy the updated `Code.gs` from this branch into that Apps Script project. Keep the existing script properties, especially `API_SECRET` and `SPREADSHEET_ID`.
 3. In the Apps Script editor, select and run `setupOperationsHubCalendarAuthorization` once.
-4. Approve the Google Calendar permission prompt. This function creates/validates only the `Aktivitas Operasional` tab and checks access to the default Calendar.
+4. Approve the Google Calendar permission prompt. This function creates/validates only the `Aktivitas Operasional` tab and checks access to the default Calendar. Events are created in the default Calendar of the Google account that owns/runs the Apps Script Web App; use a shared calendar instead if the team needs a centrally shared calendar.
 5. Deploy a **new version** of the existing Web App when you are ready. Keep the existing Web App URL and the same API secret; the PWA already calls that URL.
 6. After backend authorization and deployment, build and publish the PWA from this branch using the intended hosting target. This branch has not been merged or deployed by this implementation.
 
