@@ -4620,12 +4620,23 @@ function opsSaveActivity_(input) {
     if (rowNo > 0) existing = sh.getRange(rowNo, 1, 1, OPS_ACTIVITY_HEADERS.length).getValues()[0];
     var activity = { id:id, category:category, title:title, description:opsSafeText_(data.description,1000),
       owner:opsSafeText_(data.owner,120), date:date, time:time, status:status, checklist:checklist };
-    var calendarId = opsSyncCalendarEvent_(activity, existing ? String(existing[9] || "") : "");
     var now = new Date(), createdAt = existing && existing[10] ? existing[10] : now;
+    // Commit the spreadsheet record first: Calendar permission or service failures must
+    // never discard an operational task that was successfully submitted by the operator.
+    var calendarId = existing ? String(existing[9] || "") : "";
     var row = [id,category,title,activity.description,activity.owner,date,time,status,JSON.stringify(checklist),calendarId,createdAt,now];
     if (rowNo > 0) sh.getRange(rowNo, 1, 1, row.length).setValues([row]);
     else { sh.appendRow(row); rowNo = sh.getLastRow(); }
-    return { success:true, item:opsFormatActivityRow_(row), calendarSynced:!!calendarId, updatedAt:now.toISOString() };
+    var calendarSynced = false, calendarError = "";
+    try {
+      calendarId = opsSyncCalendarEvent_(activity, calendarId);
+      sh.getRange(rowNo, 10, 1, 3).setValues([[calendarId,createdAt,new Date()]]);
+      row[9] = calendarId; row[11] = new Date(); calendarSynced = !date || !!calendarId;
+    } catch (calendarErr) {
+      calendarError = String(calendarErr && calendarErr.message || calendarErr).substring(0, 500);
+    }
+    return { success:true, item:opsFormatActivityRow_(row), calendarSynced:calendarSynced,
+      calendarError:calendarError, updatedAt:new Date().toISOString() };
   } finally { lock.releaseLock(); }
 }
 function opsDeleteActivity_(id) {
@@ -4646,4 +4657,16 @@ function opsDeleteActivity_(id) {
     }
     return { success:false, error:"Aktivitas tidak ditemukan." };
   } finally { lock.releaseLock(); }
+}
+
+
+/**
+ * Jalankan satu kali dari Apps Script Editor untuk membuat tab aktivitas
+ * dan meminta otorisasi Google Calendar. Tidak menyentuh sheet stok/transaksi.
+ */
+function setupOperationsHubCalendarAuthorization() {
+  var sh = opsActivitySheet_();
+  var calendar = CalendarApp.getDefaultCalendar();
+  return { success:true, sheet:sh.getName(), calendarName:calendar.getName(), calendarId:calendar.getId(),
+    message:"Tab Aktivitas Operasional siap dan akses Google Calendar telah diotorisasi." };
 }
