@@ -34,7 +34,7 @@ The backend creates the following columns automatically on first use:
 9. Checklist JSON
 10. Calendar Event ID
 11. Dibuat
-12. Update Terakhir
+12. Update Terakhir\n13. Detail Kategori JSON (otomatis ditambahkan ke tab lama tanpa mengubah 12 kolom sebelumnya)
 
 Categories are `order`, `team`, `meeting`, and `logistics`.
 
@@ -44,9 +44,9 @@ Categories are `order`, `team`, `meeting`, and `logistics`.
 - The Spreadsheet record is saved first. Calendar failures are reported separately; they do not discard the activity.
 - Calendar events are updated by stored event ID. A stable activity marker is also searched on the event date to recover from an interrupted save without creating duplicates.
 - Deleting an activity removes its Calendar event first. If Calendar cannot be accessed, the Spreadsheet row is retained and the API reports the error.
-- Checklist state, owner, date/time, status, and description are stored in the dedicated activity row.
+- Checklist, owner, date/time, status, description, and category-specific fields are stored in the dedicated activity row. Existing 12-column tabs are upgraded by adding column 13 only.
 - All write actions require the existing authenticated POST flow. GET remains read-only.
 
-## Validation boundary
+## Category-specific fields\n\n- **Tambahan Order:** supplier, item/SKU, quantity, unit, confirmation deadline.\n- **Jadwal Off & Tugas:** personel, jenis agenda, end/return date, shift, replacement. Calendar events span through 23:59 WIB on the selected end date.\n- **Meeting & Project:** location/link, participants, agenda, decision, follow-up.\n- **Kirim Luar Kota:** destination, departure time, arrival estimate, vehicle, driver, cargo, quantity.\n\nFields are stored as structured JSON in the dedicated activity sheet, not in stock or PO sheets.\n\n## Validation boundary
 
 The Apps Script source parses successfully with a JavaScript syntax check. A full Vite build has not been verified in this branch. GitHub's automatic Vercel checks for the branch reported build-rate-limit failures; no successful Vercel build or deployment is claimed.
