@@ -1023,7 +1023,7 @@ function MeetingProjectNotes() {
   );
 }
 
-function QuickOperationsHub({ onNavigate, onOpenTasks }) {
+function QuickOperationsHub({ onNavigate }) {
   const [activeCard, setActiveCard] = useState(null);
   const cards = [
     {
@@ -1044,7 +1044,6 @@ function QuickOperationsHub({ onNavigate, onOpenTasks }) {
       note: 'Jadwal off atau cuti real-time belum terhubung ke sumber data terpusat. Checklist tugas operator yang sudah tersedia di Beranda dapat dibuka dari sini dan tetap mengikuti penyimpanan lokal aplikasi.',
       Icon: CalendarOff,
       tone: 'off',
-      actionLabel: 'Buka checklist tugas',
     },
     {
       id: 'meeting',
@@ -1064,14 +1063,11 @@ function QuickOperationsHub({ onNavigate, onOpenTasks }) {
       note: 'Rute, driver, nomor manifest, dan ETD real-time belum tersedia sebagai sumber di PWA. Checklist pengiriman operator yang sudah ada dapat dibuka dari panel tugas Beranda.',
       Icon: Truck,
       tone: 'delivery',
-      actionLabel: 'Buka checklist pengiriman',
     },
   ];
   const active = cards.find((card) => card.id === activeCard);
   const runAction = () => {
     if (activeCard === 'order') onNavigate?.('input');
-    if (activeCard === 'off') onOpenTasks?.('off');
-    if (activeCard === 'delivery') onOpenTasks?.('kirim');
     setActiveCard(null);
   };
 
@@ -1131,17 +1127,18 @@ function QuickOperationsHub({ onNavigate, onOpenTasks }) {
               </button>
             </div>
             <p className="ops-sheet-description mt-3">{active.note}</p>
-            {activeCard === 'meeting' ? (
-              <MeetingProjectNotes />
-            ) : (
-              <div className="ops-sheet-note mt-3">
-                Status: fitur menggunakan halaman atau checklist yang sudah tersedia. Tidak ada data live atau aksi transaksi baru yang dibuat dari panel ini.
-              </div>
-            )}
-            {activeCard !== 'meeting' && (
-              <button type="button" className="ops-sheet-primary w-full mt-4" onClick={runAction}>
-                {active.actionLabel}
-              </button>
+            {activeCard === 'meeting' && <MeetingProjectNotes />}
+            {activeCard === 'off' && <OperatorTasks initialType="off" />}
+            {activeCard === 'delivery' && <OperatorTasks initialType="kirim" />}
+            {activeCard === 'order' && (
+              <>
+                <div className="ops-sheet-note mt-3">
+                  Belum ada daftar pending order susulan yang terhubung sebagai sumber terpisah. Gunakan alur Input yang sudah tersedia; tidak ada transaksi dibuat sebelum operator mengisi dan mengonfirmasi.
+                </div>
+                <button type="button" className="ops-sheet-primary w-full mt-4" onClick={runAction}>
+                  Buka halaman Input
+                </button>
+              </>
             )}
           </section>
         </div>
@@ -1152,15 +1149,6 @@ function QuickOperationsHub({ onNavigate, onOpenTasks }) {
 
 export default function DashboardPage({ onNavigate }) {
   const { user } = useAuth();
-  const [taskFocusType, setTaskFocusType] = useState('po');
-  const reminderDetailsRef = useRef(null);
-  const openOperatorTasks = useCallback((type) => {
-    setTaskFocusType(type);
-    if (reminderDetailsRef.current) {
-      reminderDetailsRef.current.open = true;
-      reminderDetailsRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
-  }, []);
 
   // DASHBOARD MASTER SOURCE:
   // CV + PT tetap menjadi sumber utama masing-masing entitas.
@@ -1395,7 +1383,7 @@ export default function DashboardPage({ onNavigate }) {
   return (
     <div className="dashboard-shell w-full max-w-6xl mx-auto px-3 sm:px-5 lg:px-7 pt-4 pb-24 space-y-4">
       <div className="flex items-start gap-2.5">
-        <details ref={reminderDetailsRef} className="dashboard-greeting-card group min-w-0 flex-1 rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+        <details className="dashboard-greeting-card group min-w-0 flex-1 rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
           <summary className="list-none cursor-pointer select-none px-3.5 py-3 sm:px-4 sm:py-3.5 [&::-webkit-details-marker]:hidden">
             <div className="flex items-center gap-3 min-w-0">
               <span className="dashboard-icon-badge dashboard-icon-cyan h-10 w-10 shrink-0 rounded-xl flex items-center justify-center">
@@ -1414,7 +1402,6 @@ export default function DashboardPage({ onNavigate }) {
               <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-cyan-700">Dashboard Operasional · Gudang Pusat</p>
               <p className="text-[12px] text-slate-600 mt-1 leading-relaxed">{reminder}</p>
             </div>
-            <OperatorTasks initialType={taskFocusType} />
           </div>
         </details>
         <button
@@ -1427,7 +1414,7 @@ export default function DashboardPage({ onNavigate }) {
           <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
         </button>
       </div>
-      <QuickOperationsHub onNavigate={onNavigate} onOpenTasks={openOperatorTasks} />
+      <QuickOperationsHub onNavigate={onNavigate} />
 
       {confirmMsg && (
         <p className="rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-[11px] font-semibold text-emerald-700">{confirmMsg}</p>
