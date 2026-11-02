@@ -424,6 +424,9 @@ function doPost(e) {
       case "getPORequestStatus": return jsonResponse(getPORequestStatus(body));
       case "refreshDashboardPO": return jsonResponse(refreshDashboardPOSection_());
       case "getSyncMetrics": return jsonResponse(getSyncMetrics());
+      case "opsListActivities": return jsonResponse(opsListActivities_());
+      case "opsSaveActivity": return jsonResponse(opsSaveActivity_(body.activity || {}));
+      case "opsDeleteActivity": return jsonResponse(opsDeleteActivity_(body.id));
       default: return jsonResponse({ success: false, error: "Action tidak dikenali: " + action });
     }
   } catch (err) {
@@ -446,7 +449,7 @@ function doGet(e) {
   // terpanggil oleh browser prefetch, crawler, atau pembukaan ulang URL.
   const blocked = ["addTransaction", "syncTransaction", "bulkTransaction", "writePO", "writePORecommendations", "writePurchaseOrder", "submitPO", "sendPO",
     "refreshDashboard", "refreshAllData", "syncDivision", "syncDivisionStock", "logDailySnapshot",
-    "setupConfig", "setActivePeriod", "setupNewPeriod"];
+    "setupConfig", "setActivePeriod", "setupNewPeriod", "opsSaveActivity", "opsDeleteActivity"];
   if (blocked.indexOf(action) >= 0) {
     return jsonResponse({ success: false, status: "REJECTED", code: "GET_WRITE_BLOCKED", error: "Operasi write/admin harus menggunakan POST terautentikasi." });
   }
@@ -4503,4 +4506,135 @@ function cleanDashboardPORows39to45() {
     success:false, skipped:true, readOnly:true,
     reason:"Pembersihan baris Dashboard 39:45 dinonaktifkan sampai pemilik layout mengonfirmasi area tersebut."
   };
+}
+
+
+/* ============================================================
+ * OPERATIONS HUB — additive module, isolated from stock/PO sheets.
+ * Dedicated sheet: Aktivitas Operasional. Calendar operations run server-side.
+ * ============================================================ */
+var OPS_ACTIVITY_SHEET = "Aktivitas Operasional";
+var OPS_ACTIVITY_HEADERS = ["ID Aktivitas","Kategori","Judul","Deskripsi","Penanggung Jawab","Tanggal","Jam","Status","Checklist JSON","Calendar Event ID","Dibuat","Update Terakhir"];
+
+function opsActivitySheet_() {
+  var ss = getSS();
+  var sh = ss.getSheetByName(OPS_ACTIVITY_SHEET);
+  if (!sh) sh = ss.insertSheet(OPS_ACTIVITY_SHEET);
+  if (sh.getLastRow() === 0) {
+    sh.getRange(1, 1, 1, OPS_ACTIVITY_HEADERS.length).setValues([OPS_ACTIVITY_HEADERS]);
+    sh.setFrozenRows(1);
+    sh.getRange(1, 1, 1, OPS_ACTIVITY_HEADERS.length).setFontWeight("bold").setBackground("#12304a").setFontColor("#ffffff");
+  } else {
+    var current = sh.getRange(1, 1, 1, OPS_ACTIVITY_HEADERS.length).getDisplayValues()[0];
+    if (String(current[0] || "") !== OPS_ACTIVITY_HEADERS[0]) throw new Error("Header sheet Aktivitas Operasional tidak sesuai; data tidak diubah.");
+  }
+  return sh;
+}
+function opsSafeText_(value, max) {
+  var s = String(value == null ? "" : value).trim();
+  if (s.length > max) throw new Error("Teks melebihi batas " + max + " karakter.");
+  return s;
+}
+function opsParseChecklist_(value) {
+  var raw = value;
+  if (typeof raw === "string") { try { raw = JSON.parse(raw || "[]"); } catch (e) { raw = []; } }
+  if (!Array.isArray(raw)) raw = [];
+  return raw.slice(0, 100).map(function(x, i) {
+    return { id: opsSafeText_(x && x.id || ("c" + i), 80), text: opsSafeText_(x && x.text, 240), done: !!(x && x.done) };
+  }).filter(function(x) { return !!x.text; });
+}
+function opsFormatActivityRow_(row) {
+  var checklist = [];
+  try { checklist = opsParseChecklist_(row[8]); } catch (e) {}
+  return {
+    id: String(row[0] || ""), category: String(row[1] || "order"), title: String(row[2] || ""),
+    description: String(row[3] || ""), owner: String(row[4] || ""), date: String(row[5] || ""),
+    time: String(row[6] || ""), status: String(row[7] || "open"), checklist: checklist,
+    calendarEventId: String(row[9] || ""), createdAt: row[10] ? new Date(row[10]).toISOString() : "",
+    updatedAt: row[11] ? new Date(row[11]).toISOString() : ""
+  };
+}
+function opsListActivities_() {
+  var sh = opsActivitySheet_(), last = sh.getLastRow();
+  if (last < 2) return { success: true, items: [], sheet: OPS_ACTIVITY_SHEET, timestamp: new Date().toISOString() };
+  var rows = sh.getRange(2, 1, last - 1, OPS_ACTIVITY_HEADERS.length).getValues();
+  var items = rows.filter(function(r) { return String(r[0] || "").trim(); }).map(opsFormatActivityRow_);
+  items.sort(function(a,b) { return (a.date + a.time).localeCompare(b.date + b.time); });
+  return { success: true, items: items, sheet: OPS_ACTIVITY_SHEET, timestamp: new Date().toISOString() };
+}
+function opsSyncCalendarEvent_(activity, existingId) {
+  var calendar = CalendarApp.getDefaultCalendar();
+  if (!activity.date) {
+    if (existingId) { try { var oldEvent = calendar.getEventById(existingId); if (oldEvent) oldEvent.deleteEvent(); } catch (e) {} }
+    return "";
+  }
+  var start = new Date(activity.date + "T" + (activity.time || "09:00") + ":00+07:00");
+  if (isNaN(start.getTime())) throw new Error("Tanggal/jam aktivitas tidak valid untuk Google Calendar.");
+  var end = new Date(start.getTime() + 60 * 60 * 1000);
+  var event = null;
+  if (existingId) { try { event = calendar.getEventById(existingId); } catch (e) { event = null; } }
+  var description = [activity.description || "", activity.owner ? "Penanggung jawab: " + activity.owner : "",
+    "Kategori: " + activity.category, "Status: " + activity.status,
+    "Checklist: " + activity.checklist.filter(function(x) { return x.done; }).length + "/" + activity.checklist.length + " selesai",
+    "GudangAI Activity ID: " + activity.id].filter(Boolean).join("\n");
+  if (event) {
+    event.setTitle("[GudangAI] " + activity.title);
+    event.setTime(start, end);
+    event.setDescription(description);
+  } else {
+    event = calendar.createEvent("[GudangAI] " + activity.title, start, end, { description: description });
+    try { event.addPopupReminder(30); } catch (e) {}
+  }
+  return event.getId();
+}
+function opsSaveActivity_(input) {
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(10000)) return { success: false, error: "Aktivitas sedang diproses. Coba kembali." };
+  try {
+    var sh = opsActivitySheet_(), data = input || {};
+    var id = opsSafeText_(data.id, 80) || Utilities.getUuid();
+    var category = opsSafeText_(data.category || "order", 40);
+    if (["order","team","meeting","logistics"].indexOf(category) < 0) throw new Error("Kategori aktivitas tidak dikenal.");
+    var title = opsSafeText_(data.title, 160);
+    if (!title) throw new Error("Judul aktivitas wajib diisi.");
+    var date = opsSafeText_(data.date, 10);
+    if (date && !/^20\d{2}-\d{2}-\d{2}$/.test(date)) throw new Error("Tanggal harus berformat YYYY-MM-DD.");
+    var time = opsSafeText_(data.time || "09:00", 5);
+    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) throw new Error("Jam harus berformat HH:mm.");
+    var status = data.status === "done" ? "done" : "open";
+    var checklist = opsParseChecklist_(data.checklist);
+    var last = sh.getLastRow(), rowNo = -1, existing = null;
+    if (last >= 2) {
+      var ids = sh.getRange(2, 1, last - 1, 1).getDisplayValues();
+      for (var i = 0; i < ids.length; i++) if (String(ids[i][0]) === id) { rowNo = i + 2; break; }
+    }
+    if (rowNo > 0) existing = sh.getRange(rowNo, 1, 1, OPS_ACTIVITY_HEADERS.length).getValues()[0];
+    var activity = { id:id, category:category, title:title, description:opsSafeText_(data.description,1000),
+      owner:opsSafeText_(data.owner,120), date:date, time:time, status:status, checklist:checklist };
+    var calendarId = opsSyncCalendarEvent_(activity, existing ? String(existing[9] || "") : "");
+    var now = new Date(), createdAt = existing && existing[10] ? existing[10] : now;
+    var row = [id,category,title,activity.description,activity.owner,date,time,status,JSON.stringify(checklist),calendarId,createdAt,now];
+    if (rowNo > 0) sh.getRange(rowNo, 1, 1, row.length).setValues([row]);
+    else { sh.appendRow(row); rowNo = sh.getLastRow(); }
+    return { success:true, item:opsFormatActivityRow_(row), calendarSynced:!!calendarId, updatedAt:now.toISOString() };
+  } finally { lock.releaseLock(); }
+}
+function opsDeleteActivity_(id) {
+  var activityId = opsSafeText_(id, 80);
+  if (!activityId) throw new Error("ID aktivitas wajib diisi.");
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(10000)) return { success:false, error:"Aktivitas sedang diproses. Coba kembali." };
+  try {
+    var sh = opsActivitySheet_(), last = sh.getLastRow();
+    if (last < 2) return { success:false, error:"Aktivitas tidak ditemukan." };
+    var rows = sh.getRange(2, 1, last - 1, OPS_ACTIVITY_HEADERS.length).getValues();
+    for (var i=0;i<rows.length;i++) {
+      if (String(rows[i][0]) !== activityId) continue;
+      var eventId = String(rows[i][9] || "");
+      if (eventId) { try { var ev = CalendarApp.getDefaultCalendar().getEventById(eventId); if (ev) ev.deleteEvent(); } catch (e) {} }
+      sh.deleteRow(i + 2);
+      return { success:true, deletedId:activityId, calendarDeleted:!!eventId };
+    }
+    return { success:false, error:"Aktivitas tidak ditemukan." };
+  } finally { lock.releaseLock(); }
 }
