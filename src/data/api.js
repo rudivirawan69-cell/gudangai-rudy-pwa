@@ -510,7 +510,11 @@ export async function syncPendingQueue() {
   _syncLock = true;
   let synced = 0, failed = 0;
   try {
-    const queue = getPendingQueue();
+    const queue = getPendingQueue().map((entry) => ({ ...entry, items: (entry.items || []).map(ensureClientItemId) }));
+    // Upgrade entri outbox lama sekali agar clientItemId tetap stabil di seluruh percobaan.
+    if (queue.some((entry, index) => (entry.items || []).some((item, itemIndex) => item.clientItemId !== getPendingQueue()[index]?.items?.[itemIndex]?.clientItemId))) {
+      commitQueueLocal(queue);
+    }
     const groups = new Map();
     // Satukan beberapa entri outbox dengan operasi, entitas, dan tanggal yang sama.
     // Item ID tetap utuh; backend menerima batch yang lebih besar dengan jumlah request lebih sedikit.
