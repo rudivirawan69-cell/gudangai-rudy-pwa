@@ -52,7 +52,9 @@ function newIds() {
   return { requestId: 'REQ-' + uuid, transactionId: 'TX-RUDY-' + uuid };
 }
 function normalizeTanggal(raw) {
-  if (!raw) return new Date().toISOString().slice(0, 10);
+  const now = new Date();
+  const localToday = [now.getFullYear(), String(now.getMonth() + 1).padStart(2, '0'), String(now.getDate()).padStart(2, '0')].join('-');
+  if (!raw) return localToday;
   const s = String(raw).trim();
   if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
   const m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
@@ -68,7 +70,7 @@ function normalizeTanggal(raw) {
     const da = String(d.getDate()).padStart(2, '0');
     return y + '-' + mo + '-' + da;
   }
-  return new Date().toISOString().slice(0, 10);
+  return localToday;
 }
 async function fetchWithRetry(url, options = {}, retries = RETRY_COUNT, timeoutMs = REQUEST_TIMEOUT_MS) {
   let lastError;
@@ -393,16 +395,30 @@ function emitProgress(sent, total, chunkResult) {
 }
 async function submitItems(action, entity, items, tanggal, options = {}) {
   const clientStartedAt = Date.now();
-  const list = (items || []).map(ensureClientItemId);
-  if (!list.length) return { success: false, error: 'Tidak ada item' };
+  const originalList = (items || []).map(ensureClientItemId);
+  if (!originalList.length) return { success: false, error: 'Tidak ada item' };
+
+  // Batch/outbox dapat berisi item yang sebelumnya sudah dikonfirmasi APPLIED.
+  // Jangan kirim ulang item tersebut ke Apps Script; pertahankan hasil per-item
+  // agar rekonsiliasi queue dapat menghapusnya dengan aman.
+  const alreadyApplied = originalList.filter((it) => isApplied(it.clientItemId));
+  const list = originalList.filter((it) => !isApplied(it.clientItemId));
+  const confirmedResults = alreadyApplied.map((it) => ({ success: true, skipped: true, status: 'APPLIED', clientItemId: it.clientItemId }));
+  if (!list.length) {
+    return {
+      success: true, count: originalList.length, failed: 0, queuedCount: 0, total: originalList.length,
+      results: confirmedResults, clientElapsedMs: Date.now() - clientStartedAt,
+    };
+  }
+
   if (!navigator.onLine || !getApiUrl()) {
     if (!options.fromQueue) enqueue(action, entity, list, { tanggal });
     const msg = list.length + ' item masuk Antrian Sinkronisasi (offline)';
     pushNotification({ type: 'warning', title: 'Koneksi terputus', body: msg + '. Tidak ada item yang dibuang.' });
-    return { success: false, queued: true, count: 0, queuedCount: list.length, failed: list.length, clientElapsedMs: Date.now() - clientStartedAt, results: list.map(it => ({ success: false, queued: true, clientItemId: it.clientItemId })) };
+    return { success: false, queued: true, count: alreadyApplied.length, queuedCount: list.length, failed: list.length, total: originalList.length, clientElapsedMs: Date.now() - clientStartedAt, results: [...confirmedResults, ...list.map(it => ({ success: false, queued: true, clientItemId: it.clientItemId }))] };
   }
-  // Never silently queue a write while the API is reachable.
-  // Verify the exact write-capable backend before attempting any transaction.
+
+  // Verifikasi versi backend hanya dilakukan jika masih ada item yang benar-benar perlu ditulis.
   try {
     await assertSafeWriteBackend();
   } catch (err) {
@@ -410,13 +426,14 @@ async function submitItems(action, entity, items, tanggal, options = {}) {
     const msg = err?.message || 'Backend write belum terverifikasi';
     pushNotification({ type: 'error', title: 'Write ditahan', body: msg });
     return {
-      success: false, count: 0, failed: list.length, queuedCount: list.length, total: list.length,
+      success: false, count: alreadyApplied.length, failed: list.length, queuedCount: list.length, total: originalList.length,
       clientElapsedMs: Date.now() - clientStartedAt,
-      results: list.map(it => ({ success: false, queued: true, clientItemId: it.clientItemId, error: msg }))
+      results: [...confirmedResults, ...list.map(it => ({ success: false, queued: true, clientItemId: it.clientItemId, error: msg }))],
     };
   }
-  const allResults = [];
-  let totalSuccess = 0, totalFail = 0, totalQueued = 0;
+
+  const allResults = [...confirmedResults];
+  let totalSuccess = alreadyApplied.length, totalFail = 0, totalQueued = 0;
   let totalServerExecMs = 0, measuredServerChunks = 0;
   for (let i = 0; i < list.length; i += BATCH_CHUNK_SIZE) {
     const chunk = list.slice(i, i + BATCH_CHUNK_SIZE);
@@ -442,18 +459,12 @@ async function submitItems(action, entity, items, tanggal, options = {}) {
     } catch (err) {
       const msg = String(err?.message || 'Gagal menulis batch');
       const remainingItems = list.slice(i);
-      // HARD RULE: timeout/unknown tidak boleh diubah menjadi serial retry.
-      // Retry hanya boleh memakai identity/batch yang sama setelah read-back/status
-      // backend terverifikasi; jangan mengubah timeout menjadi write serial.
+      // Timeout tidak pernah berubah menjadi serial retry. Identitas tetap sama di outbox.
       if (!options.fromQueue) enqueue(action, entity, remainingItems, { tanggal });
       totalQueued += remainingItems.length;
       totalFail += remainingItems.length;
       allResults.push(...remainingItems.map(it => ({
-        success: false,
-        queued: true,
-        uncertain: true,
-        clientItemId: it.clientItemId,
-        error: msg,
+        success: false, queued: true, uncertain: true, clientItemId: it.clientItemId, error: msg,
       })));
       emitProgress(list.length, list.length, { successCount: totalSuccess, failCount: totalFail });
       pushNotification({
@@ -470,12 +481,12 @@ async function submitItems(action, entity, items, tanggal, options = {}) {
     pushNotification({ type: 'success', title: 'Transaksi selesai', body: totalSuccess + ' item berhasil ditulis tanpa antrian.' });
   }
   return {
-    success: totalSuccess === list.length,
-    partial: totalSuccess > 0 && totalSuccess < list.length,
+    success: totalSuccess === originalList.length,
+    partial: totalSuccess > 0 && totalSuccess < originalList.length,
     count: totalSuccess,
     failed: totalFail,
     queuedCount: totalQueued,
-    total: list.length,
+    total: originalList.length,
     results: allResults,
     serverExecMs: measuredServerChunks ? totalServerExecMs : null,
     clientElapsedMs: Date.now() - clientStartedAt,
@@ -500,20 +511,32 @@ export async function syncPendingQueue() {
   let synced = 0, failed = 0;
   try {
     const queue = getPendingQueue();
+    const groups = new Map();
+    // Satukan beberapa entri outbox dengan operasi, entitas, dan tanggal yang sama.
+    // Item ID tetap utuh; backend menerima batch yang lebih besar dengan jumlah request lebih sedikit.
+    for (const entry of queue) {
+      const key = [entry.type || 'masuk', String(entry.entity || '').toUpperCase(), normalizeTanggal(entry.tanggal)].join('|');
+      if (!groups.has(key)) groups.set(key, { type: entry.type || 'masuk', entity: entry.entity || '', tanggal: entry.tanggal, items: [] });
+      groups.get(key).items.push(...(entry.items || []).map(ensureClientItemId));
+    }
+
+    const confirmedIds = new Set();
+    for (const group of groups.values()) {
+      const res = await submitItems(group.type, group.entity, group.items, group.tanggal, { fromQueue: true });
+      for (const result of res.results || []) {
+        if (result.clientItemId && (result.success || result.skipped)) confirmedIds.add(result.clientItemId);
+      }
+    }
+
     const remaining = [];
     for (const entry of queue) {
-      const res = await submitItems(entry.type, entry.entity, entry.items, entry.tanggal, { fromQueue: true });
-      const resultMap = new Map((res.results || []).filter(r => r.clientItemId).map(r => [r.clientItemId, r]));
-      const remainingItems = (entry.items || []).filter(it => {
-        const r = resultMap.get(it.clientItemId);
-        return !r || (!r.success && !r.skipped);
-      });
+      const remainingItems = (entry.items || []).filter(it => !confirmedIds.has(it.clientItemId) && !isApplied(it.clientItemId));
       const doneCount = (entry.items || []).length - remainingItems.length;
       synced += doneCount;
       if (remainingItems.length) { failed += remainingItems.length; remaining.push({ ...entry, items: remainingItems }); }
     }
     commitQueueLocal(remaining);
-    return { synced, failed };
+    return { synced, failed, groups: groups.size, entries: queue.length };
   } finally { _syncLock = false; }
 }
 const HISTORY_KEY = 'gudangai_history';
