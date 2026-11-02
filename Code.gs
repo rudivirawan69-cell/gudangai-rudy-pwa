@@ -4651,12 +4651,12 @@ function opsSaveActivity_(input) {
     try {
       calendarId = opsSyncCalendarEvent_(activity, calendarId);
       sh.getRange(rowNo, 10, 1, 3).setValues([[calendarId,createdAt,new Date()]]);
-      row[9] = calendarId; row[11] = new Date(); calendarSynced = !date || !!calendarId;
+      row[9] = calendarId; row[11] = new Date(); calendarSynced = !!date && !!calendarId;
     } catch (calendarErr) {
       calendarError = String(calendarErr && calendarErr.message || calendarErr).substring(0, 500);
     }
     return { success:true, item:opsFormatActivityRow_(row), calendarSynced:calendarSynced,
-      calendarError:calendarError, updatedAt:new Date().toISOString() };
+      calendarError:calendarError, calendarSkipped:!date, updatedAt:new Date().toISOString() };
   } finally { lock.releaseLock(); }
 }
 function opsDeleteActivity_(id) {
