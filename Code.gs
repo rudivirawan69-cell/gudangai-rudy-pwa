@@ -4565,7 +4565,7 @@ function opsListActivities_() {
 function opsSyncCalendarEvent_(activity, existingId) {
   var calendar = CalendarApp.getDefaultCalendar();
   if (!activity.date) {
-    if (existingId) { try { var oldEvent = calendar.getEventById(existingId); if (oldEvent) oldEvent.deleteEvent(); } catch (e) {} }
+    if (existingId) { try { var oldEvent = calendar.getEventById(existingId); if (oldEvent) oldEvent.deleteEvent(); } catch (e) { throw new Error("Gagal menghapus event Calendar lama: " + (e.message || e)); } }
     return "";
   }
   var start = new Date(activity.date + "T" + (activity.time || "09:00") + ":00+07:00");
