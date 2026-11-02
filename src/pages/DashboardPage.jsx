@@ -7,7 +7,7 @@ import {
 import OperatorTasks from '../components/OperatorTasks';
 import {
   RefreshCw, FileText, CheckCircle2, X,
-  CalendarDays, CalendarClock, ClipboardCheck, FilePlus2, Mail, Layers3, ArrowUpRight,
+  CalendarDays, CalendarClock, ClipboardCheck, FilePlus2, ArrowUpRight,
   ChevronDown, BellRing, ShoppingCart, CalendarOff, UsersRound, Truck, Plus, Trash2, Circle,
 } from 'lucide-react';
 
