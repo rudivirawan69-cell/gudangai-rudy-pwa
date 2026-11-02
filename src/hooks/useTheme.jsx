@@ -2,27 +2,27 @@ import { createContext, useContext, useEffect, useMemo, useState, useCallback } 
 
 const STORAGE_KEY = 'gudangai_theme';
 
-/** Tiga mode: Soft (domain default) + Teal + Navy dari mock centang */
+/** Tiga mode visual: Ocean Glass Light, Deep Ocean Dark, Graphite / Midnight */
 export const THEME_IDS = ['soft_light', 'deep_ocean', 'graphite_titanium'];
 
 export const THEME_META = {
   soft_light: {
     id: 'soft_light',
-    label: 'Ocean Light',
-    short: 'Soft',
-    description: 'Putih bersih · biru laut · kontras jelas',
+    label: 'Ocean Glass Light',
+    short: 'Ocean Light',
+    description: 'Putih glass · cyan/teal · kontras tinggi',
   },
   deep_ocean: {
     id: 'deep_ocean',
-    label: 'Ocean Dark',
-    short: 'Ocean',
-    description: 'Navy gelap · teal · cyan — mode gelap',
+    label: 'Deep Ocean Dark',
+    short: 'Ocean Dark',
+    description: 'Navy gelap · surface slate · cyan terang',
   },
   graphite_titanium: {
     id: 'graphite_titanium',
-    label: 'Sunset Amber',
-    short: 'Glass',
-    description: 'Krem hangat · amber · cokelat gelap — nyaman dibaca',
+    label: 'Graphite / Midnight',
+    short: 'Graphite',
+    description: 'Graphite gelap · cyan · aksen indigo',
   },
 };
 
@@ -49,11 +49,11 @@ function applyDomTheme(theme) {
   const t = normalizeTheme(theme);
   const root = document.documentElement;
   root.setAttribute('data-theme', t);
-  root.style.colorScheme = t === 'deep_ocean' ? 'dark' : 'light';
+  root.style.colorScheme = t === 'soft_light' ? 'light' : 'dark';
   const themeColors = {
     soft_light: '#247ba8',
     deep_ocean: '#35b9b0',
-    graphite_titanium: '#d69a48',
+    graphite_titanium: '#111827',
   };
   const themeColorMeta = document.querySelector('meta[name="theme-color"]');
   if (themeColorMeta) themeColorMeta.setAttribute('content', themeColors[t] || themeColors.soft_light);
@@ -90,9 +90,9 @@ export function ThemeProvider({ children }) {
     () => ({
       theme,
       meta: THEME_META[theme] || THEME_META.soft_light,
-      isDark: theme === 'deep_ocean',
+      isDark: theme === 'deep_ocean' || theme === 'graphite_titanium',
       isLight: theme === 'soft_light',
-      isWarm: theme === 'graphite_titanium',
+      isWarm: false,
       isGraphite: theme === 'graphite_titanium',
       setTheme,
       cycleTheme,
