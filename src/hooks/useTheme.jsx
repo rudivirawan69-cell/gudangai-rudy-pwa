@@ -8,21 +8,21 @@ export const THEME_IDS = ['soft_light', 'deep_ocean', 'graphite_titanium'];
 export const THEME_META = {
   soft_light: {
     id: 'soft_light',
-    label: 'Soft Light',
+    label: 'Ocean Light',
     short: 'Soft',
-    description: 'Putih bersih · biru lembut · kontras nyaman',
+    description: 'Putih bersih · biru laut · kontras jelas',
   },
   deep_ocean: {
     id: 'deep_ocean',
-    label: 'Deep Ocean',
+    label: 'Ocean Dark',
     short: 'Ocean',
-    description: 'Midnight Navy · Teal · Cyan — mode gelap',
+    description: 'Navy gelap · teal · cyan — mode gelap',
   },
   graphite_titanium: {
     id: 'graphite_titanium',
-    label: 'Blue Glass',
+    label: 'Sunset Amber',
     short: 'Glass',
-    description: 'Midnight Blue · Cyan · Glass — modern dan fokus',
+    description: 'Krem hangat · amber · cokelat gelap — nyaman dibaca',
   },
 };
 
@@ -49,7 +49,7 @@ function applyDomTheme(theme) {
   const t = normalizeTheme(theme);
   const root = document.documentElement;
   root.setAttribute('data-theme', t);
-  root.style.colorScheme = t === 'deep_ocean' || t === 'graphite_titanium' ? 'dark' : 'light';
+  root.style.colorScheme = t === 'deep_ocean' ? 'dark' : 'light';
   const themeColors = {
     soft_light: '#247ba8',
     deep_ocean: '#35b9b0',
