@@ -3,7 +3,7 @@
 const RETRY_COUNT = 2;
 const RETRY_BASE_MS = 400;
 const REQUEST_TIMEOUT_MS = 15000;
-/** Chunk aman agar Apps Script + spreadsheet selesai < timeout (anti-antrian). 20 item per POST. */
+/** Chunk 35 item; jangan dinaikkan tanpa pengukuran latency dan validasi read-back di produksi. */
 const BATCH_CHUNK_SIZE = 35;
 const BATCH_TIMEOUT_MS = 120000;
 const SINGLE_TIMEOUT_MS = 60000;
@@ -53,7 +53,11 @@ function newIds() {
 }
 function normalizeTanggal(raw) {
   const now = new Date();
-  const localToday = [now.getFullYear(), String(now.getMonth() + 1).padStart(2, '0'), String(now.getDate()).padStart(2, '0')].join('-');
+  const wibParts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Jakarta', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(now);
+  const wib = Object.fromEntries(wibParts.map((part) => [part.type, part.value]));
+  const localToday = [wib.year, wib.month, wib.day].join('-');
   if (!raw) return localToday;
   const s = String(raw).trim();
   if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
