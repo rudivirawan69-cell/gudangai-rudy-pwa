@@ -33,6 +33,16 @@ function todayStr() {
 
 const INPUT_DRAFT_KEY = 'gudangai_input_draft_v1';
 
+function persistInputDraft(draft) {
+  if (!draft) return;
+  try {
+    const serialized = JSON.stringify(draft);
+    if (serialized.length <= 1800000) localStorage.setItem(INPUT_DRAFT_KEY, serialized);
+  } catch (_) {
+    // Draft persistence is best-effort; it must never block input or submission.
+  }
+}
+
 function loadInputDraft() {
   try {
     const raw = JSON.parse(localStorage.getItem(INPUT_DRAFT_KEY) || 'null');
@@ -98,18 +108,32 @@ export default function InputPage() {
   const scanAbortRef = useRef(false);
   const bootstrapRevision = useBootstrapRevision();
 
+  const draftSnapshotRef = useRef(null);
   useEffect(() => {
-    try {
-      const draft = {
-        version: 1, savedAt: Date.now(), entity, txType, tanggal, accuracy,
-        cart, pdfReview, reviewSourceLabel,
-      };
-      const serialized = JSON.stringify(draft);
-      if (serialized.length <= 1800000) localStorage.setItem(INPUT_DRAFT_KEY, serialized);
-    } catch (_) {
-      // Draft persistence is best-effort; it must never block input or submission.
-    }
+    const draft = {
+      version: 1, savedAt: Date.now(), entity, txType, tanggal, accuracy,
+      cart, pdfReview, reviewSourceLabel,
+    };
+    draftSnapshotRef.current = draft;
+    // Avoid synchronous JSON/localStorage work on every cart edit or server response.
+    const timer = setTimeout(() => persistInputDraft(draft), 250);
+    return () => clearTimeout(timer);
   }, [entity, txType, tanggal, accuracy, cart, pdfReview, reviewSourceLabel]);
+
+  useEffect(() => {
+    const flushDraft = () => persistInputDraft(draftSnapshotRef.current);
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') flushDraft();
+    };
+    window.addEventListener('pagehide', flushDraft);
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => {
+      window.removeEventListener('pagehide', flushDraft);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      // Page navigation unmounts the screen; flush the newest draft before leaving.
+      flushDraft();
+    };
+  }, []);
 
   useEffect(() => {
     const refreshUnread = () => setUnread(unreadNotificationCount());
