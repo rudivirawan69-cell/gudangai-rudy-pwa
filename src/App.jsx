@@ -60,16 +60,6 @@ const TAB_ACCENT = {
   settings: 'from-slate-400 to-slate-600',
 };
 
-const TAB_SUBTITLE = {
-  dashboard: 'STATUS UPDATE REAL TIME',
-  stok: 'MONITORING STOK RAK',
-  input: 'PENERIMAAN & PENGELUARAN',
-  po: 'PURCHASE ORDER SYSTEM',
-  riwayat: 'LOG AUDIT TRANSAKSI',
-  settings: 'PENGATURAN SYSTEM',
-  sync: 'ANTRIAN SINKRONISASI',
-};
-
 function ConnBanner({ online, hasUrl, status, message, syncing }) {
   if (!hasUrl) return null;
   if (syncing || status === 'syncing') {
@@ -96,7 +86,7 @@ function ConnBanner({ online, hasUrl, status, message, syncing }) {
   return null;
 }
 
-function AppHeader({ user, tab, onOpenSettings, online, status }) {
+function AppHeader({ user, onOpenSettings, online, status }) {
   const [liveTime, setLiveTime] = useState('—');
   const tickClock = () => {
     try {
@@ -158,9 +148,6 @@ function AppHeader({ user, tab, onOpenSettings, online, status }) {
                 {connected ? 'Terhubung' : 'Cek koneksi'}
               </span>
             </div>
-            <p className="text-[9px] font-bold text-slate-500 tracking-wide mt-0.5 truncate">
-              {TAB_SUBTITLE[tab] || 'STATUS UPDATE REAL TIME'}
-            </p>
             <div className="mt-1 flex flex-col gap-0.5 text-[10px] font-medium text-slate-600 dark:text-slate-300">
               <div className="flex items-center gap-1.5 min-w-0">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
@@ -265,7 +252,6 @@ function AppShell() {
       <ConnBanner online={online} hasUrl={hasUrl} status={status} message={message} syncing={syncing} />
       <AppHeader
         user={user}
-        tab={tab}
         onOpenSettings={() => goTab('settings')}
         online={online}
         status={status}
