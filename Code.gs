@@ -4526,7 +4526,11 @@ function opsActivitySheet_() {
     sh.getRange(1, 1, 1, OPS_ACTIVITY_HEADERS.length).setFontWeight("bold").setBackground("#12304a").setFontColor("#ffffff");
   } else {
     var current = sh.getRange(1, 1, 1, OPS_ACTIVITY_HEADERS.length).getDisplayValues()[0];
-    if (String(current[0] || "") !== OPS_ACTIVITY_HEADERS[0]) throw new Error("Header sheet Aktivitas Operasional tidak sesuai; data tidak diubah.");
+    for (var h = 0; h < OPS_ACTIVITY_HEADERS.length; h++) {
+      if (String(current[h] || "").trim() !== OPS_ACTIVITY_HEADERS[h]) {
+        throw new Error("Header kolom " + (h + 1) + " pada sheet Aktivitas Operasional tidak sesuai; tidak ada data yang diubah.");
+      }
+    }
   }
   return sh;
 }
@@ -4592,7 +4596,8 @@ function opsSyncCalendarEvent_(activity, existingId) {
     "Checklist: " + activity.checklist.filter(function(x) { return x.done; }).length + "/" + activity.checklist.length + " selesai", marker].filter(Boolean).join("\n");
   // Recovery guard: avoid duplicate Calendar events if event creation succeeded but the Sheet write timed out.
   if (!event) {
-    var dayStart = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+    // Use WIB calendar-day boundaries, independent of the Apps Script project timezone.
+    var dayStart = new Date(activity.date + "T00:00:00+07:00");
     var dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
     var candidates = calendar.getEvents(dayStart, dayEnd);
     for (var ci = 0; ci < candidates.length; ci++) {
