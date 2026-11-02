@@ -634,3 +634,34 @@ html[data-theme="graphite_titanium"] .ops-hub-card { background: var(--ui-surfac
 .theme-picker-btn :is(svg,span) { color: inherit; }
 html[data-theme] .app-content .text-teal-700 { color: var(--ui-safe) !important; }
 html[data-theme] .app-content .text-amber-700 { color: var(--ui-warning) !important; }
+
+/* Semantic utility aliases keep legacy icon and badge classes readable in every palette. */
+html[data-theme] .app-content .bg-emerald-50 { background: var(--ui-safe-soft) !important; }
+html[data-theme] .app-content .bg-amber-50 { background: var(--ui-warning-soft) !important; }
+html[data-theme] .app-content .bg-red-50 { background: var(--ui-critical-soft) !important; }
+html[data-theme] .app-content .bg-orange-50 { background: var(--ui-orange-soft) !important; }
+html[data-theme] .app-content .bg-blue-50 { background: var(--ui-blue-soft) !important; }
+html[data-theme] .app-content .bg-indigo-50,
+html[data-theme] .app-content .bg-violet-50,
+html[data-theme] .app-content .bg-purple-50 { background: var(--ui-purple-soft) !important; }
+html[data-theme] .app-content .bg-cyan-50 { background: color-mix(in srgb, var(--ui-accent) 14%, var(--ui-surface-soft)) !important; }
+html[data-theme] .app-content .bg-teal-50 { background: var(--ui-green-soft) !important; }
+html[data-theme] .app-content .text-blue-600,
+html[data-theme] .app-content .text-blue-700,
+html[data-theme] .app-content .text-blue-800 { color: var(--ui-blue) !important; }
+html[data-theme] .app-content .text-indigo-600,
+html[data-theme] .app-content .text-violet-600,
+html[data-theme] .app-content .text-purple-600 { color: var(--ui-purple) !important; }
+html[data-theme] .app-content .text-teal-600,
+html[data-theme] .app-content .text-teal-700 { color: var(--ui-safe) !important; }
+html[data-theme] .app-content .border-emerald-100,
+html[data-theme] .app-content .border-amber-100,
+html[data-theme] .app-content .border-red-100,
+html[data-theme] .app-content .border-blue-100,
+html[data-theme] .app-content .border-cyan-100,
+html[data-theme] .app-content .border-violet-100 { border-color: var(--ui-line) !important; }
+.dashboard-icon-cyan { color: var(--ui-accent-strong) !important; background: color-mix(in srgb, var(--ui-accent) 15%, var(--ui-surface-soft)) !important; }
+.dashboard-icon-orange { color: var(--ui-orange) !important; background: var(--ui-orange-soft) !important; }
+.dashboard-icon-green { color: var(--ui-green) !important; background: var(--ui-green-soft) !important; }
+.dashboard-icon-purple { color: var(--ui-purple) !important; background: var(--ui-purple-soft) !important; }
+.dashboard-icon-blue { color: var(--ui-blue) !important; background: var(--ui-blue-soft) !important; }
