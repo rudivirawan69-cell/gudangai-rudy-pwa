@@ -110,7 +110,7 @@ export default function OperatorTasks({ initialType = 'po' } = {}) {
 
   const hasilJadiText = useMemo(() => {
     if (tasks.length === 0) {
-      return 'Belum ada catatan. Tambahkan konfirmasi PO, kedatangan barang, atau jadwal kirim luar kota untuk mulai memantau hasil operasional harian.';
+      return 'Belum ada catatan. Tambahkan konfirmasi PO, kedatangan barang, jadwal off, atau pengiriman luar kota untuk mulai memantau hasil operasional harian.';
     }
     if (pending === 0) {
       return `Hasil jadi: seluruh ${doneCount} catatan telah diselesaikan. Status operasional kedatangan & konfirmasi hari ini bersih.`;
@@ -176,7 +176,9 @@ export default function OperatorTasks({ initialType = 'po' } = {}) {
               ? 'Contoh: Konfirmasi PO ayam fillet…'
               : type === 'datang'
                 ? 'Contoh: Terima 20 pack udang PND…'
-                : 'Contoh: Kirim ke Malang Senin 10:00…'
+                : type === 'kirim'
+                  ? 'Contoh: Kirim ke Malang Senin 10:00…'
+                  : 'Contoh: Jadwal off atau tugas operator hari ini…'
           }
           className="ot-input flex-1 min-w-0 h-12 rounded-2xl border px-4 text-sm font-medium focus:outline-none focus:ring-2"
         />
