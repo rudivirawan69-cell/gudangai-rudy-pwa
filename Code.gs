@@ -1215,24 +1215,26 @@ function bulkTransaction(body) {
   // Ini mencegah 1 item invalid menggagalkan seluruh bulkTransaction.
   var preflightResults = validationErrors.slice();
 
-  // Load stok 1x (untuk shortage HOLD pada keluar)
-  var stockMap = {};
-  try {
-    var allStock = getAllStock(entitas);
-    if (allStock && allStock.success && allStock.items) {
-      allStock.items.forEach(function(it) {
-        stockMap[String(it.kode || "").trim()] = {
-          stockAkhir: clampStockToZero_(it.stockAkhir),
-          nama: it.nama || "",
-          entitas: it.entitas || entitas
-        };
-      });
-    }
-  } catch (eStock) {
-    console.error("bulkTransaction stock load: " + eStock.message);
-  }
-
+  // Pembacaan seluruh master stok hanya diperlukan untuk validasi shortage Barang keluar.
+  // Masuk/Rusak tidak memakai stockMap, jadi jangan membebani request dengan scan master 191 item.
   var isKeluar = sheetName === "Barang keluar";
+  var stockMap = {};
+  if (isKeluar) {
+    try {
+      var allStock = getAllStock(entitas);
+      if (allStock && allStock.success && allStock.items) {
+        allStock.items.forEach(function(it) {
+          stockMap[String(it.kode || "").trim()] = {
+            stockAkhir: clampStockToZero_(it.stockAkhir),
+            nama: it.nama || "",
+            entitas: it.entitas || entitas
+          };
+        });
+      }
+    } catch (eStock) {
+      console.error("bulkTransaction stock load: " + eStock.message);
+    }
+  }
   var lock = LockService.getScriptLock();
   if (!lock.tryLock(30000)) {
     return { success: false, status: "UNKNOWN", code: "LOCK_TIMEOUT", batchId: batchId, writeOccurred: "unknown", error: "Lock backend tidak tersedia; lakukan read-back sebelum retry." };
