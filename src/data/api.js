@@ -282,12 +282,15 @@ function getAppliedMap() {
   } catch { return {}; }
 }
 function isApplied(clientItemId) { return !!(clientItemId && getAppliedMap()[clientItemId]); }
-function markApplied(clientItemId) {
-  if (!clientItemId) return;
+function markAppliedMany(clientItemIds) {
+  const ids = Array.from(new Set((clientItemIds || []).map((id) => String(id || '').trim()).filter(Boolean)));
+  if (!ids.length) return;
   const map = getAppliedMap();
-  map[clientItemId] = Date.now();
+  const now = Date.now();
+  ids.forEach((id) => { map[id] = now; });
   try { localStorage.setItem(APPLIED_KEY, JSON.stringify(map)); } catch (_) {}
 }
+function markApplied(clientItemId) { markAppliedMany([clientItemId]); }
 export function markItemApplied(clientItemId) { markApplied(clientItemId); }
 function ensureClientItemId(it) {
   if (it.clientItemId) return it;
@@ -387,9 +390,8 @@ async function submitBatchChunk(action, entity, chunkItems, tanggal) {
     throw new Error(detail || 'Backend tidak mengonfirmasi seluruh batch');
   }
 
-  for (const r of results) {
-    if (r.success && r.clientItemId) markApplied(r.clientItemId);
-  }
+  // Persist all successful item IDs in one localStorage write, not one write per item.
+  markAppliedMany(results.filter((r) => r.success && r.clientItemId).map((r) => r.clientItemId));
   const successCount = results.filter((r) => r.success).length;
   const failCount = results.length - successCount;
   return { success: successCount === normalized.length, successCount, failCount, results, serverExecMs: Number(data?.execMs) || null };
@@ -402,9 +404,10 @@ async function submitItems(action, entity, items, tanggal, options = {}) {
   const originalList = (items || []).map(ensureClientItemId);
   if (!originalList.length) return { success: false, error: 'Tidak ada item' };
 
-  // Local APPLIED ledger prevents an already-confirmed item from being sent again.
-  const alreadyApplied = originalList.filter((it) => isApplied(it.clientItemId));
-  const list = originalList.filter((it) => !isApplied(it.clientItemId));
+  // Read the local APPLIED map once; avoid parsing the full localStorage value per item.
+  const appliedAtStart = getAppliedMap();
+  const alreadyApplied = originalList.filter((it) => !!appliedAtStart[it.clientItemId]);
+  const list = originalList.filter((it) => !appliedAtStart[it.clientItemId]);
   const confirmedResults = alreadyApplied.map((it) => ({
     success: true, skipped: true, status: 'APPLIED', clientItemId: it.clientItemId,
   }));
@@ -458,7 +461,7 @@ async function submitItems(action, entity, items, tanggal, options = {}) {
       emitProgress(Math.min(i + chunk.length, originalList.length), originalList.length, { successCount: totalSuccess, failCount: totalFail });
       const failedIds = new Set((batchRes.results || []).filter(r => !r.success && !r.skipped && r.clientItemId).map(r => r.clientItemId));
       const knownIds = new Set((batchRes.results || []).map(r => r.clientItemId).filter(Boolean));
-      const queueItems = chunk.filter(it => failedIds.has(it.clientItemId) || (!knownIds.has(it.clientItemId) && !isApplied(it.clientItemId)));
+      const queueItems = chunk.filter(it => failedIds.has(it.clientItemId) || !knownIds.has(it.clientItemId));
       if (queueItems.length) {
         if (!options.fromQueue) enqueue(action, entity, queueItems, { tanggal });
         totalQueued += queueItems.length;
@@ -552,7 +555,8 @@ export async function syncPendingQueue() {
     for (const group of groups.values()) {
       const items = Array.from(group.itemsById.values()).filter((item) => !conflictingIds.has(String(item.clientItemId)));
       if (!items.length) continue;
-      const needsWrite = items.filter((item) => !isApplied(item.clientItemId));
+      const appliedBeforeGroup = getAppliedMap();
+      const needsWrite = items.filter((item) => !appliedBeforeGroup[item.clientItemId]);
       const res = await submitItems(group.type, group.entity, items, group.tanggal, { fromQueue: true });
       requests += Math.ceil(needsWrite.length / BATCH_CHUNK_SIZE);
       for (const result of res.results || []) {
@@ -562,8 +566,9 @@ export async function syncPendingQueue() {
 
     const remaining = [];
     let synced = 0, failed = 0;
+    const appliedAfterSync = getAppliedMap();
     for (const entry of queue) {
-      const remainingItems = entry.items.filter((item) => !confirmedIds.has(item.clientItemId) && !isApplied(item.clientItemId));
+      const remainingItems = entry.items.filter((item) => !confirmedIds.has(item.clientItemId) && !appliedAfterSync[item.clientItemId]);
       synced += entry.items.length - remainingItems.length;
       if (remainingItems.length) {
         failed += remainingItems.length;
