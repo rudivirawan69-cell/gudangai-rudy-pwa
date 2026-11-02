@@ -511,7 +511,7 @@ html[data-theme] .app-content button:not(.nav-btn) { touch-action: manipulation;
 
 /* Data Stock: six compact summary cards and unmistakable division identity. */
 .stock-overview-grid { gap: 8px !important; }
-.stock-overview-grid > * { min-height: 88px; border-radius: 17px !important; }
+.stock-overview-grid > * { min-height: 88px; border-radius: 20px !important; }
 .stock-overview-grid .stock-metric-icon {
   width: 34px; height: 34px; border-radius: 11px;
   display: flex; align-items: center; justify-content: center;
@@ -530,7 +530,7 @@ html[data-theme] .app-content button:not(.nav-btn) { touch-action: manipulation;
   overflow: hidden;
   border: 1px solid var(--ui-line) !important;
   background: var(--ui-surface) !important;
-  border-radius: 19px !important;
+  border-radius: 20px !important;
   box-shadow: var(--ui-shadow) !important;
   transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
 }
