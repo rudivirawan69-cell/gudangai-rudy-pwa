@@ -36,7 +36,7 @@ function ActivityModal({category,initial,onClose,onSave,onDelete,saving}) {
     </div>
     <label>Status<select value={form.status} onChange={e=>update('status',e.target.value)}><option value="open">Belum selesai</option><option value="done">Selesai</option></select></label>
     <p className="oh-calendar-note"><CalendarDays size={15}/> Simpan memperbarui tab Aktivitas Operasional dan Google Calendar. Event yang sama diperbarui, bukan digandakan.</p>
-    <footer className="oh-modal-actions">{form.id&&<button type="button" className="oh-secondary" onClick={onDelete} disabled={saving}><Trash2 size={15}/>Hapus</button>}<button type="button" className="oh-secondary" onClick={onClose}>Batal</button><button type="submit" className="oh-primary" disabled={saving}>{saving?<><Loader2 className="oh-spin" size={16}/>Menyimpan…</>:<><Check size={16}/>Simpan aktivitas</>}</button></footer>
+    <footer className="oh-modal-actions">{initial?.id&&<button type="button" className="oh-secondary" onClick={onDelete} disabled={saving}><Trash2 size={15}/>Hapus</button>}<button type="button" className="oh-secondary" onClick={onClose}>Batal</button><button type="submit" className="oh-primary" disabled={saving}>{saving?<><Loader2 className="oh-spin" size={16}/>Menyimpan…</>:<><Check size={16}/>Simpan aktivitas</>}</button></footer>
    </form>
   </section>
  </div>;
@@ -49,7 +49,7 @@ export default function OperationsHub() {
  const grouped=useMemo(()=>Object.fromEntries(Object.keys(CARD_META).map(key=>{const rows=items.filter(x=>x.category===key);return [key,{rows,pending:rows.filter(x=>x.status!=='done').length,today:rows.filter(x=>x.date===today&&x.status!=='done').length,next:rows.filter(x=>x.status!=='done').slice(0,2)}];})),[items,today]);
  const openNew=category=>{setEditing(null);setActiveCategory(category);};
  const openEdit=item=>{setActiveCategory(item.category);setEditing(item);};
- const save=async form=>{setSaving(true);setError('');setNotice('');try{const saved=await saveOperationalActivity(form);setNotice(saved?.calendarSynced?'Aktivitas tersimpan. Google Sheets dan Calendar diperbarui.':('Aktivitas tersimpan di Google Sheets. Calendar belum tersinkron: '+(saved?.calendarError||'perlu otorisasi Google Calendar.')));setActiveCategory('');setEditing(null);await load();}catch(e){setError(e?.message||'Gagal menyimpan aktivitas');}finally{setSaving(false);}};
+ const save=async form=>{setSaving(true);setError('');setNotice('');try{const saved=await saveOperationalActivity(form);setNotice(saved?.calendarSynced?'Aktivitas tersimpan. Google Sheets dan Calendar diperbarui.':(saved?.calendarSkipped?'Aktivitas tersimpan di Google Sheets. Event Calendar tidak dibuat karena tanggal kosong.':'Aktivitas tersimpan di Google Sheets. Calendar belum tersinkron: '+(saved?.calendarError||'perlu otorisasi Google Calendar.')));setActiveCategory('');setEditing(null);await load();}catch(e){setError(e?.message||'Gagal menyimpan aktivitas');}finally{setSaving(false);}};
  const remove=async item=>{if(!window.confirm('Hapus aktivitas ini dan event Google Calendar terkait?'))return;setError('');setNotice('');try{await deleteOperationalActivity(item.id);setNotice('Aktivitas dan event terkait dihapus.');setActiveCategory('');setEditing(null);await load();}catch(e){setError(e?.message||'Gagal menghapus aktivitas');}};
  const calendarSearch=title=>'https://calendar.google.com/calendar/u/0/r/search?q='+encodeURIComponent(title);
  return <section className="oh-hub" aria-label="Pusat aktivitas operasional">
