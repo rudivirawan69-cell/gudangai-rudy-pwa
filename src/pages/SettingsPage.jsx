@@ -231,7 +231,7 @@ export default function SettingsPage({ onNavigate }) {
           <MenuRow icon={KeyRound} iconBg="bg-amber-50 text-amber-700" title="Ganti PIN" subtitle="Keamanan login 4–6 digit" onClick={() => setPanel(panel === 'pin' ? null : 'pin')} />
         </div>
         <div className="card overflow-hidden">
-          <MenuRow icon={SettingsIcon} iconBg="bg-slate-100 text-slate-600" title="Tentang Aplikasi" subtitle="GudangAI · Backend V6.6.5+BULK-STABLE" onClick={() => setPanel(panel === 'about' ? null : 'about')} />
+          <MenuRow icon={SettingsIcon} iconBg="bg-slate-100 text-slate-600" title="Tentang Aplikasi" subtitle="GudangAI · Frontend PWA & Google Apps Script" onClick={() => setPanel(panel === 'about' ? null : 'about')} />
         </div>
       </div>
 
@@ -292,8 +292,8 @@ export default function SettingsPage({ onNavigate }) {
         <div className="info-box p-4 text-[11px] leading-relaxed space-y-1">
           <p className="font-semibold text-slate-700">GudangAI RUDY</p>
           <p>Cold Storage Nasi Goreng 69 · CV & PT</p>
-          <p>Frontend PWA · Backend Google Apps Script V6.6.5+BULK-STABLE</p>
-          <p>3 mode tampilan: Ocean Light · Ocean Dark · Sunset Amber</p>
+          <p>Frontend PWA · Backend Google Apps Script (versi ditampilkan setelah uji koneksi)</p>
+          <p>3 mode tampilan: Ocean Glass Light · Deep Ocean Dark · Graphite / Midnight</p>
         </div>
       )}
 
