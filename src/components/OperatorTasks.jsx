@@ -118,7 +118,8 @@ export default function OperatorTasks({ initialType = 'po' } = {}) {
     const parts = [];
     if (byType.po > 0) parts.push(`${byType.po} konfirmasi PO`);
     if (byType.datang > 0) parts.push(`${byType.datang} kedatangan barang`);
-    if (byType.kirim > 0) parts.push(`${byType.kirim} kirim luar kota`);\n    if (byType.off > 0) parts.push(`${byType.off} jadwal off/tugas`);
+    if (byType.kirim > 0) parts.push(`${byType.kirim} kirim luar kota`);
+    if (byType.off > 0) parts.push(`${byType.off} jadwal off/tugas`);
     const pendingLabel = parts.length ? parts.join(', ') : `${pending} catatan`;
     return `Hasil jadi: ${doneCount} selesai · ${pending} masih terbuka (${pendingLabel}). Centang item setelah diverifikasi agar status operasional tetap akurat.`;
   }, [tasks.length, pending, doneCount, byType]);
