@@ -1586,7 +1586,8 @@ function getRealLastDataRow(sheet, config) {
   // Membaca satu kolom sampai batas itu pada setiap transaksi membuang waktu.
   // getLastRow() adalah batas konten aktual; seluruh data di kolom kode pasti
   // berada di dalam batas ini, termasuk bila ada data yatim di kolom lain.
-  const lastContentRow = Math.min(sheet.getMaxRows(), Math.max(startRow - 1, sheet.getLastRow()));
+  const contentEndRow = (typeof sheet.getLastRow === "function") ? sheet.getLastRow() : sheet.getMaxRows();
+  const lastContentRow = Math.min(sheet.getMaxRows(), Math.max(startRow - 1, contentEndRow));
   if (lastContentRow < startRow) return startRow - 1;
   const numRows = lastContentRow - startRow + 1;
   const kodeColValues = sheet.getRange(startRow, config.kodeColAbsolute, numRows, 1).getValues();
@@ -1604,7 +1605,8 @@ function findSafeEmptyRowAdaptively(sheet, config) {
   const maxRows = sheet.getMaxRows();
   // Jangan berhenti di realLastRow + buffer: kolom B:C/F:G bisa memiliki data
   // yatim setelah kolom kode. getLastRow() melindungi data tersebut agar tidak tertimpa.
-  const lastContentRow = Math.max(realLastRow, sheet.getLastRow());
+  const contentEndRow = (typeof sheet.getLastRow === "function") ? sheet.getLastRow() : sheet.getMaxRows();
+  const lastContentRow = Math.max(realLastRow, contentEndRow);
   const scanEndRow = Math.min(maxRows, Math.max(lastContentRow, realLastRow + SCAN_BUFFER_ROWS));
   const numRowsToScan = Math.max(1, scanEndRow - startRow + 1);
   const bcValues = sheet.getRange(startRow, 2, numRowsToScan, 2).getValues();
@@ -1670,7 +1672,8 @@ function findSafeEmptyBlockAdaptively_(sheet, config, rowCount) {
     // Scan hanya sampai konten aktual + buffer yang cukup untuk satu batch.
     // Tidak perlu membaca semua baris kosong/berformat hingga sheet.getMaxRows().
     // Batas getLastRow() tetap menjaga data yatim pada B:C/F:G agar tidak tertimpa.
-    var lastContentRow = Math.max(start - 1, sheet.getLastRow());
+    var contentEndRow = (typeof sheet.getLastRow === "function") ? sheet.getLastRow() : maxRows;
+    var lastContentRow = Math.max(start - 1, contentEndRow);
     var scanEndRow = Math.min(maxRows, Math.max(lastContentRow, start + count + SCAN_BUFFER_ROWS - 1));
     var scanCount = Math.max(count, scanEndRow - start + 1);
     var bc = sheet.getRange(start, 2, scanCount, 2).getValues();
