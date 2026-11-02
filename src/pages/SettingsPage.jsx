@@ -214,7 +214,7 @@ export default function SettingsPage({ onNavigate }) {
           })}
         </div>
         <p className="text-[10px] text-slate-400 leading-relaxed">
-          Ocean Light · Ocean Dark · Sunset Amber — tersimpan di perangkat.
+          Ocean Glass Light · Deep Ocean Dark · Graphite / Midnight — tersimpan di perangkat.
         </p>
       </div>
 
