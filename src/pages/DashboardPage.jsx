@@ -1108,6 +1108,15 @@ function QuickOperationsHub({ onNavigate, onOpenTasks }) {
 
 export default function DashboardPage({ onNavigate }) {
   const { user } = useAuth();
+  const [taskFocusType, setTaskFocusType] = useState('po');
+  const reminderDetailsRef = useRef(null);
+  const openOperatorTasks = useCallback((type) => {
+    setTaskFocusType(type);
+    if (reminderDetailsRef.current) {
+      reminderDetailsRef.current.open = true;
+      reminderDetailsRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, []);
 
   // DASHBOARD MASTER SOURCE:
   // CV + PT tetap menjadi sumber utama masing-masing entitas.
@@ -1374,7 +1383,9 @@ export default function DashboardPage({ onNavigate }) {
           <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
         </button>
       </div>
-      <QuickOperationsHub onNavigate={onNavigate} onOpenTasks={openOperatorTasks} />\n\n      {confirmMsg && (
+      <QuickOperationsHub onNavigate={onNavigate} onOpenTasks={openOperatorTasks} />
+
+      {confirmMsg && (
         <p className="rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-[11px] font-semibold text-emerald-700">{confirmMsg}</p>
       )}
 
