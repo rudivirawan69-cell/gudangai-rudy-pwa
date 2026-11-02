@@ -8,9 +8,9 @@ export const THEME_IDS = ['soft_light', 'deep_ocean', 'graphite_titanium'];
 export const THEME_META = {
   soft_light: {
     id: 'soft_light',
-    label: 'Arctic Professional',
-    short: 'Arctic',
-    description: 'Putih · Ice Blue · Navy — bersih dan profesional',
+    label: 'Soft Light',
+    short: 'Soft',
+    description: 'Putih bersih · biru lembut · kontras nyaman',
   },
   deep_ocean: {
     id: 'deep_ocean',
@@ -20,9 +20,9 @@ export const THEME_META = {
   },
   graphite_titanium: {
     id: 'graphite_titanium',
-    label: 'Graphite Titanium',
-    short: 'Graphite',
-    description: 'Graphite · Titanium · Amber — industrial premium',
+    label: 'Blue Glass',
+    short: 'Glass',
+    description: 'Midnight Blue · Cyan · Glass — modern dan fokus',
   },
 };
 
