@@ -137,3 +137,140 @@ html[data-theme="graphite_titanium"] .nav-bar { box-shadow:0 -8px 26px rgba(0,24
 @media (prefers-reduced-motion:reduce) {
   html[data-theme="soft_light"] *,html[data-theme="graphite_titanium"] * { animation:none!important; transition:none!important; }
 }
+
+
+/* ------------------------------------------------------------------
+   Theme-aware card typography & icon contrast — v2
+   Every mode owns its own card title, value, supporting text and icon
+   palette. Status colors remain semantic and are not flattened.
+------------------------------------------------------------------- */
+html[data-theme="soft_light"] {
+  --card-title: #12365b;
+  --card-value: #075ea8;
+  --card-copy: #496985;
+  --card-kicker: #1766a8;
+  --card-icon: #0879c9;
+  --card-icon-surface: rgba(8,121,201,.12);
+  --card-number-glow: 0 1px 0 rgba(255,255,255,.85);
+  --card-divider: rgba(23,102,168,.16);
+  --metric-safe: #087c59;
+  --metric-warning: #a65c05;
+  --metric-critical: #bd263b;
+}
+html[data-theme="deep_ocean"] {
+  --card-title: #e7f2ff;
+  --card-value: #7dd3fc;
+  --card-copy: #b5c8dc;
+  --card-kicker: #8ecdf2;
+  --card-icon: #67c8f4;
+  --card-icon-surface: rgba(86,184,237,.15);
+  --card-number-glow: 0 0 18px rgba(86,184,237,.12);
+  --card-divider: rgba(142,174,205,.22);
+  --metric-safe: #55d6aa;
+  --metric-warning: #ffd166;
+  --metric-critical: #ff8c9c;
+}
+html[data-theme="graphite_titanium"] {
+  --card-title: #123f40;
+  --card-value: #087e78;
+  --card-copy: #4d7372;
+  --card-kicker: #08776f;
+  --card-icon: #078d84;
+  --card-icon-surface: rgba(13,155,145,.13);
+  --card-number-glow: 0 1px 0 rgba(255,255,255,.9);
+  --card-divider: rgba(8,119,111,.18);
+  --metric-safe: #087c59;
+  --metric-warning: #a65c05;
+  --metric-critical: #bd263b;
+}
+
+/* Consistent hierarchy on every reusable card, without changing markup. */
+html[data-theme] .page-content :is(
+  .card,.surface,.section-card,.stat-tile,.stock-card,.dashboard-panel,
+  .dashboard-total-card,.dashboard-po-card,.dashboard-header-card,
+  .menu-group,.po-hub-card,.po-item-card,.stock-metric-surface,
+  .division-status-card,.info-box,.ops-card,.ops-notes-card,
+  .operator-tasks-card,.menu-row,.settings-menu-row
+) {
+  color: var(--card-copy) !important;
+  border-color: var(--card-divider) !important;
+}
+html[data-theme] .page-content :is(
+  .card,.surface,.section-card,.stat-tile,.stock-card,.dashboard-panel,
+  .dashboard-total-card,.dashboard-po-card,.dashboard-header-card,
+  .menu-group,.po-hub-card,.po-item-card,.stock-metric-surface,
+  .division-status-card,.info-box,.ops-card,.ops-notes-card,
+  .operator-tasks-card,.menu-row,.settings-menu-row
+) :is(h1,h2,h3,h4,.page-title,.ops-card-title,.po-shortcut-title,
+.settings-menu-title,.font-bold,.font-extrabold,.font-black) {
+  color: var(--card-title) !important;
+}
+html[data-theme] .page-content :is(
+  .card,.surface,.section-card,.stat-tile,.stock-card,.dashboard-panel,
+  .dashboard-total-card,.dashboard-po-card,.stock-metric-surface,
+  .division-status-card,.po-hub-card,.po-item-card,.ops-card
+) :is(.metric-value,[data-metric],.tabular-nums,.text-2xl,.text-xl,.text-lg) {
+  color: var(--card-value) !important;
+  text-shadow: var(--card-number-glow);
+  font-variant-numeric: tabular-nums lining-nums;
+}
+html[data-theme] .page-content :is(
+  .card,.surface,.section-card,.stat-tile,.stock-card,.dashboard-panel,
+  .dashboard-total-card,.dashboard-po-card,.menu-group,.po-hub-card,
+  .po-item-card,.division-status-card,.info-box,.ops-card,
+  .operator-tasks-card,.menu-row,.settings-menu-row
+) :is(.text-slate-400,.text-slate-500,.text-slate-600,.text-gray-500,.text-gray-600,
+.text-muted,.page-subtitle,.ops-card-sub,.settings-menu-sub) {
+  color: var(--card-copy) !important;
+  opacity: 1;
+}
+html[data-theme] .page-content :is(
+  .card,.surface,.section-card,.stat-tile,.stock-card,.dashboard-panel,
+  .dashboard-total-card,.dashboard-po-card,.stock-metric-surface,
+  .division-status-card,.po-hub-card,.po-item-card,.ops-card
+) :is(.page-kicker,.card-kicker,.section-label) {
+  color: var(--card-kicker) !important;
+}
+
+/* Icon chips follow the active theme; semantic status icons keep their meaning. */
+html[data-theme] .page-content :is(
+  .card,.surface,.section-card,.stat-tile,.stock-card,.dashboard-panel,
+  .dashboard-total-card,.dashboard-po-card,.stock-metric-surface,
+  .division-status-card,.po-hub-card,.po-item-card,.ops-card,
+  .operator-tasks-card,.menu-row,.settings-menu-row
+) :is(.icon-wrap,.card-icon,.stat-icon,.metric-icon,.settings-menu-icon) {
+  color: var(--card-icon) !important;
+  background-color: var(--card-icon-surface) !important;
+  border-color: var(--card-divider) !important;
+}
+html[data-theme] .page-content :is(
+  .card,.surface,.section-card,.stat-tile,.stock-card,.dashboard-panel,
+  .dashboard-total-card,.dashboard-po-card,.stock-metric-surface,
+  .division-status-card,.po-hub-card,.po-item-card,.ops-card,
+  .operator-tasks-card,.menu-row,.settings-menu-row
+) svg:not(.status-icon):not([data-status]) {
+  color: var(--card-icon);
+}
+html[data-theme] .page-content :is(.status-aman,.stok-aman,.status-waspada,
+.stok-waspada,.status-kritis,.stok-kritis) {
+  color: inherit !important;
+}
+html[data-theme] .page-content :is(.status-aman,.stok-aman) { color: var(--metric-safe) !important; }
+html[data-theme] .page-content :is(.status-waspada,.stok-waspada) { color: var(--metric-warning) !important; }
+html[data-theme] .page-content :is(.status-kritis,.stok-kritis) { color: var(--metric-critical) !important; }
+
+/* Preserve each experience's visual identity rather than merely recoloring it. */
+html[data-theme="soft_light"] .page-content :is(.card,.surface,.section-card,.stat-tile,.stock-card) {
+  backdrop-filter: blur(16px) saturate(1.16);
+  -webkit-backdrop-filter: blur(16px) saturate(1.16);
+}
+html[data-theme="deep_ocean"] .page-content :is(.card,.surface,.section-card,.stat-tile,.stock-card) {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow: 0 4px 12px rgba(0,0,0,.16);
+}
+html[data-theme="graphite_titanium"] .page-content :is(.card,.surface,.section-card,.stat-tile,.stock-card) {
+  backdrop-filter: blur(12px) saturate(1.12);
+  -webkit-backdrop-filter: blur(12px) saturate(1.12);
+  box-shadow: 0 10px 24px rgba(0,26,28,.16), inset 0 1px 0 rgba(255,255,255,.62);
+}
