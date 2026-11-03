@@ -188,6 +188,9 @@ export function AuthProvider({ children }) {
     } catch (_) {
       // Local session is still cleared if the network is unavailable.
     } finally {
+      if (!token) {
+        try { localStorage.removeItem('gudangai_user'); } catch (_) { /* ignore */ }
+      }
       setSession(null);
       setUser(null);
       setAuthStatus('signed_out');
