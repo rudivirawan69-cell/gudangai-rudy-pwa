@@ -153,14 +153,14 @@ export default {
               try {
                 for await (const chunk of aiResponse) {
                   const text = chunk?.delta || chunk?.response || chunk?.text || "";
-                  if (text) controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text })}\\n\\n`));
+                  if (text) controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text })}\n\n`));
                 }
-                controller.enqueue(encoder.encode("data: [DONE]\\n\\n"));
+                controller.enqueue(encoder.encode("data: [DONE]\n\n"));
                 controller.close();
               } catch (error) {
                 try {
-                  controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: "Generasi jawaban terhenti." })}\\n\\n`));
-                  controller.enqueue(encoder.encode("data: [DONE]\\n\\n"));
+                  controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: "Generasi jawaban terhenti." })}\n\n`));
+                  controller.enqueue(encoder.encode("data: [DONE]\n\n"));
                   controller.close();
                 } catch (_) { /* client disconnected */ }
                 console.error("GudangAI stream error:", error?.message || "unknown");
