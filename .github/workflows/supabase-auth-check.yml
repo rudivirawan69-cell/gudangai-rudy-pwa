@@ -33,5 +33,7 @@ jobs:
         run: node --check cloudflare/worker-supabase-auth.js
       - name: Check Supabase Auth client syntax
         run: node --check src/data/supabaseAuth.js
+      - name: Test Worker auth contract
+        run: node scripts/test-worker-auth.mjs
       - name: Build PWA
         run: npm run build
