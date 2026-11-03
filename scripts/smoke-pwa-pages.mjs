@@ -82,7 +82,7 @@ try {
   await page.locator('nav.nav-bar').waitFor({ state: 'visible', timeout: 15000 });
 
   const tabs = [
-    ['Beranda', 'Status Stok per Divisi'],
+    ['Beranda', 'Status per Divisi'],
     ['Stok', 'TOTAL ITEM'],
     ['Input', 'Draft transaksi dipulihkan'],
     ['PO', 'Draft PO dipulihkan'],
