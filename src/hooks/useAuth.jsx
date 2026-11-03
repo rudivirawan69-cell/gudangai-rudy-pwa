@@ -1,5 +1,6 @@
 import { useState, useEffect, createContext, useContext, useCallback } from 'react';
 import { DEFAULT_PROFILE_PHOTO } from '../data/defaultProfile';
+import { isSupabaseConfigured } from '../data/supabaseAuth';
 import {
   clearStoredSession,
   readStoredSession,
@@ -11,6 +12,7 @@ import {
 
 const AuthContext = createContext(null);
 const PROFILE_KEY = 'gudangai_profile';
+const DEFAULT_PIN = '6969';
 
 export { DEFAULT_PROFILE_PHOTO };
 
@@ -63,6 +65,25 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     let active = true;
     const cached = readStoredSession();
+    if (!isSupabaseConfigured()) {
+      let localUser = null;
+      try { localUser = JSON.parse(localStorage.getItem('gudangai_user') || 'null'); } catch (_) { /* ignore */ }
+      if (active && localUser) {
+        setUser({
+          id: null,
+          email: '',
+          name: localUser.name || 'Operator',
+          photo: localUser.photo || DEFAULT_PROFILE_PHOTO,
+          role: 'local_owner',
+          appMetadata: {},
+        });
+        setAuthStatus('legacy_local');
+      } else if (active) {
+        setAuthStatus('signed_out');
+      }
+      if (active) setLoading(false);
+      return () => { active = false; };
+    }
     restoreSupabaseSession()
       .then((restored) => {
         if (active) applySession(restored, restored ? 'authenticated' : 'signed_out');
@@ -142,6 +163,24 @@ export function AuthProvider({ children }) {
     return true;
   }, [applySession]);
 
+  const loginLocal = useCallback((pin) => {
+    if (isSupabaseConfigured()) return false;
+    const expected = localStorage.getItem('gudangai_pin') || DEFAULT_PIN;
+    if (String(pin || '') !== String(expected)) return false;
+    const savedPhoto = localStorage.getItem('gudangai_photo');
+    const localUser = {
+      name: localStorage.getItem('gudangai_username') || 'Rudi Virawan',
+      photo: savedPhoto && savedPhoto.length > 100 ? savedPhoto : DEFAULT_PROFILE_PHOTO,
+      role: 'local_owner',
+      loginAt: new Date().toISOString(),
+    };
+    localStorage.setItem('gudangai_user', JSON.stringify(localUser));
+    setSession(null);
+    setUser({ ...localUser, id: null, email: '', appMetadata: {} });
+    setAuthStatus('legacy_local');
+    return true;
+  }, []);
+
   const logout = useCallback(async () => {
     const token = session?.access_token;
     try {
@@ -186,6 +225,7 @@ export function AuthProvider({ children }) {
       loading,
       authStatus,
       login,
+      loginLocal,
       logout,
       updateProfile,
       changePin,
