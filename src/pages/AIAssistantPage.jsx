@@ -4,15 +4,6 @@ import { useAuth } from '../hooks/useAuth';
 
 const AI_API_BASE = (import.meta.env.VITE_GUDANGAI_AI_API_BASE || 'https://gudangai-rudy-pwa69.rudivirawan69.workers.dev').replace(/\/$/, '');
 const DEFAULT_MODEL = 'anthropic/claude-sonnet-5.5';
-const SYSTEM_PROMPT = [
-  'Kamu adalah asisten AI GudangAI RUDY dan menjawab dalam bahasa Indonesia.',
-  'Bantu pengguna memahami operasional gudang, persediaan, purchasing, cold storage, dan penggunaan aplikasi.',
-  'Jangan pernah mengarang angka stok, transaksi, status PO, jadwal, atau data perusahaan.',
-  'Dalam versi ini kamu belum diberi akses langsung ke Google Sheets atau backend transaksi. Jika ditanya data aktual, jelaskan bahwa data belum terhubung dan jangan menebak.',
-  'Jangan meminta pengguna mengirim API key, password, PIN, secret, atau data rahasia.',
-  'Jangan mengklaim telah mengubah spreadsheet, membuat PO, atau mengirim transaksi.',
-].join(' ');
-
 function extractText(payload) {
   if (typeof payload === 'string') return payload;
   if (!payload || typeof payload !== 'object') return '';
@@ -35,7 +26,7 @@ function parseModels(payload) {
 }
 
 export default function AIAssistantPage() {
-  const { user } = useAuth();
+  const { user, accessToken, authStatus } = useAuth();
   const [model, setModel] = useState(DEFAULT_MODEL);
   const [models, setModels] = useState([DEFAULT_MODEL, 'anthropic/claude-haiku-5.5', 'anthropic/claude-opus-5.5']);
   const [messages, setMessages] = useState([]);
@@ -68,7 +59,7 @@ export default function AIAssistantPage() {
 
   useEffect(() => {
     const controller = new AbortController();
-    fetch(`${AI_API_BASE}/api/models`, { signal: controller.signal, credentials: 'omit' })
+    fetch(`${AI_API_BASE}/api/models`, { signal: controller.signal, credentials: 'omit', headers: { Authorization: `Bearer ${accessToken}` } })
       .then(async (res) => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return res.json();
@@ -86,7 +77,7 @@ export default function AIAssistantPage() {
         if (err.name !== 'AbortError') setModelsStatus('Katalog belum dapat dibaca; menggunakan model default');
       });
     return () => controller.abort();
-  }, []);
+  }, [accessToken]);
 
   const stopGeneration = useCallback(() => {
     abortRef.current?.abort();
@@ -121,13 +112,12 @@ export default function AIAssistantPage() {
     try {
       const response = await fetch(`${AI_API_BASE}/api/chat`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream' },
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream', Authorization: `Bearer ${accessToken}` },
         credentials: 'omit',
         signal: controller.signal,
         body: JSON.stringify({
           model,
           stream: true,
-          system: SYSTEM_PROMPT,
           max_tokens: 2048,
           messages: nextMessages,
         }),
@@ -198,7 +188,7 @@ export default function AIAssistantPage() {
       if (mountedRef.current) setLoading(false);
       abortRef.current = null;
     }
-  }, [loading, online, messages, model]);
+  }, [loading, online, messages, model, accessToken]);
 
   const quickPrompts = [
     'Jelaskan cara membaca laporan stok gudang.',
@@ -221,7 +211,7 @@ export default function AIAssistantPage() {
             <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Asisten operasional AI · {user?.name || 'Operator'}</p>
             <div className="mt-2 flex items-center gap-1.5 text-[10px] text-slate-500">
               {online ? <Wifi className="h-3 w-3 text-emerald-600" /> : <WifiOff className="h-3 w-3 text-amber-600" />}
-              <span>{online ? modelsStatus : 'Perangkat sedang offline'}</span>
+              <span>{online ? (authStatus === 'offline' ? 'Sesi tersimpan · verifikasi ulang saat online' : modelsStatus) : 'Perangkat sedang offline'}</span>
             </div>
           </div>
           <button type="button" onClick={() => { if (!loading) { setMessages([]); setError(''); } }} disabled={loading || !messages.length} className="rounded-xl border border-slate-200 p-2 text-slate-500 disabled:opacity-40 dark:border-slate-700" aria-label="Hapus percakapan" title="Hapus percakapan">
