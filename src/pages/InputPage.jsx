@@ -810,7 +810,7 @@ export default function InputPage() {
       </div>
 
       {hits.length > 0 && (
-        <div className="rounded-xl border border-slate-200 bg-white shadow-sm max-h-64 overflow-y-auto divide-y divide-slate-100">
+        <div data-testid="input-search-results" className="rounded-xl border border-slate-200 bg-white shadow-sm max-h-64 overflow-y-auto divide-y divide-slate-100">
           {hits.map((h) => (
             <button key={h.kode} type="button" onClick={() => { addToCart(h, 1); setQuery(''); setHits([]); }}
               className="w-full text-left px-3 py-2.5 hover:bg-cyan-50 flex items-center justify-between gap-2">
