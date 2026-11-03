@@ -173,9 +173,9 @@ export default function SettingsPage({ onNavigate }) {
         <Avatar name={user?.name || 'Rudi'} photo={user?.photo} size="lg" />
         <div className="flex-1 min-w-0">
           <p className="text-base font-extrabold text-slate-900 truncate">{user?.name || 'Rudi'}</p>
-          <p className="text-[11px] text-slate-600 font-medium">Akun Supabase · sesi terverifikasi</p>
+          <p className="text-[11px] text-slate-600 font-medium">{user?.email || 'Mode lokal · AI nonaktif'}</p>
         </div>
-        <span className="status-pill status-pill-neutral shrink-0">Supabase</span>
+        <span className="status-pill status-pill-neutral shrink-0">{user?.email ? "Supabase" : "Lokal"}</span>
       </div>
 
       <div className="card p-3.5 space-y-3">
@@ -298,19 +298,19 @@ export default function SettingsPage({ onNavigate }) {
       )}
 
       <div className="card overflow-hidden">
-        <MenuRow icon={LogOut} iconBg="bg-red-50 text-red-600" title="Keluar" subtitle="Masuk kembali dengan email & password Supabase" onClick={() => setShowLogout(true)} danger />
+        <MenuRow icon={LogOut} iconBg="bg-red-50 text-red-600" title="Keluar" subtitle="Masuk kembali dengan metode autentikasi yang aktif" onClick={() => setShowLogout(true)} danger />
       </div>
 
       <div className="info-box px-3 py-2.5 flex items-start gap-2">
         <Shield className="w-3.5 h-3.5 text-slate-300 shrink-0 mt-0.5" />
-        <p className="text-[10px] text-slate-400 leading-relaxed">Sesi operator diverifikasi oleh Supabase. PIN lokal tidak memberi hak akses server. Jangan bagikan API Secret.</p>
+        <p className="text-[10px] text-slate-400 leading-relaxed">{user?.email ? 'Sesi operator diverifikasi oleh Supabase.' : 'Mode lokal hanya untuk kompatibilitas PWA lama.'} PIN lokal tidak memberi hak akses server atau AI. Jangan bagikan API Secret.</p>
       </div>
 
       {showLogout && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="bg-white rounded-2xl p-5 w-full max-w-sm space-y-3 shadow-xl">
             <p className="font-semibold text-slate-800">Keluar dari aplikasi?</p>
-            <p className="text-xs text-slate-500">Anda perlu masuk kembali dengan akun Supabase.</p>
+            <p className="text-xs text-slate-500">Anda perlu masuk kembali dengan metode autentikasi yang aktif.</p>
             <div className="flex gap-2">
               <button type="button" onClick={() => setShowLogout(false)} className="flex-1 py-2.5 rounded-xl bg-slate-100 text-slate-700 text-sm font-semibold">Batal</button>
               <button type="button" onClick={() => { setShowLogout(false); logout(); }} className="flex-1 py-2.5 rounded-xl bg-red-600 text-white text-sm font-semibold">Keluar</button>
