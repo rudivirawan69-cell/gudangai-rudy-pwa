@@ -1,4 +1,19 @@
 /* Three primary pages: theme-aware contrast and card surfaces. Visual-only. */
+html[data-theme] .app-content .dashboard-shell {
+  color: var(--text-main);
+}
+html[data-theme] .app-content .dashboard-shell :is(.dashboard-panel,.dashboard-total-card,.dashboard-po-card) {
+  background: var(--bg-elevated) !important;
+  border-color: var(--border) !important;
+  box-shadow: var(--shadow-1) !important;
+  color: var(--text-main) !important;
+}
+html[data-theme] .app-content .dashboard-shell :is(.text-slate-900,.text-slate-800,.text-slate-700) {
+  color: var(--text-main) !important;
+}
+html[data-theme] .app-content .dashboard-shell :is(.text-slate-600,.text-slate-500,.text-slate-400) {
+  color: var(--text-muted) !important;
+}
 html[data-theme] .app-content .stock-page,
 html[data-theme] .app-content .input-page {
   color: var(--text-main);
