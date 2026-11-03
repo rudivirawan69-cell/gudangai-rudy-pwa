@@ -119,6 +119,23 @@ export function AuthProvider({ children }) {
     };
   }, [session, applySession]);
 
+
+  useEffect(() => {
+    const onStorage = (event) => {
+      if (event.key !== 'gudangai_supabase_session_v1') return;
+      const sharedSession = readStoredSession();
+      if (!sharedSession) {
+        applySession(null, 'signed_out');
+        return;
+      }
+      if (sharedSession.access_token !== session?.access_token) {
+        applySession(sharedSession, 'authenticated');
+      }
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, [session?.access_token, applySession]);
+
   const login = useCallback(async (email, password) => {
     const nextSession = await signInWithPassword(email, password);
     applySession(nextSession, 'authenticated');
@@ -129,6 +146,8 @@ export function AuthProvider({ children }) {
     const token = session?.access_token;
     try {
       await signOutSupabase(token);
+    } catch (_) {
+      // Local session is still cleared if the network is unavailable.
     } finally {
       setSession(null);
       setUser(null);
