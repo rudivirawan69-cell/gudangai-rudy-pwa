@@ -3,9 +3,9 @@ import {
   getPendingQueue,
   syncPendingQueue,
   removePendingByClientIds,
+  verifyPendingItem,
   saveToHistory,
   pushNotification,
-  markItemApplied,
   getWriteCircuitState,
 } from '../data/api';
 import {
@@ -115,9 +115,18 @@ export default function SyncQueuePage({ onBack }) {
     setError(null);
   };
 
-  const handleMarkSuccess = (row) => {
+  const handleMarkSuccess = async (row) => {
     if (!row?.clientItemId) return;
-    markItemApplied(row.clientItemId);
+    setError(null);
+    setResult(null);
+    setSyncing(true);
+    const verification = await verifyPendingItem(row);
+    if (!verification.success) {
+      setSyncing(false);
+      setError(verification.error || 'Server belum mengonfirmasi transaksi. Item tetap di antrean.');
+      setResult({ synced: 0, failed: 1, message: 'Belum terkonfirmasi — item tetap di antrean.' });
+      return;
+    }
     removePendingByClientIds([row.clientItemId]);
     saveToHistory({
       type: row.type,
@@ -127,17 +136,19 @@ export default function SyncQueuePage({ onBack }) {
       qty: row.qty,
       keterangan: row.keterangan || '',
       tanggal: row.tanggal,
-      source: 'queue-manual-success',
+      source: 'queue-readback-confirmed',
       clientItemId: row.clientItemId,
       status: 'sukses',
+      transactionId: verification.transactionId || `TX-${row.clientItemId}`,
+      readBack: verification.readBack || null,
     });
     setRows((prev) => prev.filter((r) => r.clientItemId !== row.clientItemId));
-    setResult({ synced: 1, failed: 0, message: `${row.nama || row.kode} ditandai sukses · masuk Riwayat` });
-    setError(null);
+    setSyncing(false);
+    setResult({ synced: 1, failed: 0, message: `${row.nama || row.kode} terverifikasi dari server · masuk Riwayat` });
     pushNotification({
       type: 'ok',
-      title: 'Ditandai sukses',
-      body: `${row.nama || row.kode} dihapus dari antrian (sudah di sheet).`,
+      title: 'Read-back terverifikasi',
+      body: `${row.nama || row.kode} dikonfirmasi APPLIED oleh server dan dihapus dari antrian.`,
     });
   };
 
@@ -212,7 +223,7 @@ export default function SyncQueuePage({ onBack }) {
         <div className="rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-[11px] text-amber-900 leading-relaxed">
           <p className="font-semibold">Cek spreadsheet terlebih dahulu.</p>
           <p className="mt-0.5 text-amber-800/90">
-            Jika item sudah tertulis di sheet, tekan <b>Sukses</b>. Jangan tekan Kirim ulang agar tidak dobel.
+            Jika item sudah tertulis di sheet, tekan <b>Verifikasi server</b>. Jangan hapus atau kirim ulang tanpa konfirmasi read-back.
           </p>
         </div>
       )}
@@ -262,9 +273,9 @@ export default function SyncQueuePage({ onBack }) {
                       {row.keterangan ? ' · ' + row.keterangan : ''}
                     </p>
                     <div className="mt-2 flex gap-2">
-                      <button type="button" onClick={() => handleMarkSuccess(row)}
+                      <button type="button" onClick={() => handleMarkSuccess(row)} disabled={syncing}
                         className="px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-[11px] font-bold">
-                        Sukses
+                        Verifikasi server
                       </button>
                       <button type="button" onClick={() => handleRemove(row.clientItemId)}
                         className="px-2.5 py-1 rounded-lg bg-red-50 border border-red-200 text-red-600 text-[11px] font-bold">

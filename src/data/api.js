@@ -505,6 +505,39 @@ export async function submitBarangMasuk({ entity, tanggal, items }) { return sub
 export async function submitBarangKeluar({ entity, tanggal, items }) { return submitItems('barangKeluar', entity, items, tanggal); }
 export async function submitBarangRusak({ entity, tanggal, items }) { return submitItems('barangRusak', entity, items, tanggal); }
 export function getPendingQueue() { return readQueueLocal().queue; }
+function queueItemIdentity(item) {
+  const clientItemId = String(item?.clientItemId || '').trim();
+  if (!clientItemId) return { transactionId: '', nonce: '' };
+  return { transactionId: 'TX-' + clientItemId, nonce: 'NC-' + clientItemId };
+}
+function queueItemSheet(item) {
+  return ({ masuk: 'Barang masuk', keluar: 'Barang keluar', rusak: 'Barang Rusak' })[item?.type] || '';
+}
+/** Read-only reconciliation; local removal is allowed only after APPLIED/read-back confirmation. */
+export async function verifyPendingItem(item) {
+  const identity = queueItemIdentity(item);
+  const sheet = queueItemSheet(item);
+  if (!identity.transactionId || !sheet) {
+    return { success: false, status: 'REJECTED', code: 'QUEUE_IDENTITY_REQUIRED', error: 'Identitas antrean atau sheet tidak valid.' };
+  }
+  if (!navigator.onLine || !getApiUrl()) {
+    return { success: false, status: 'OFFLINE', code: 'READBACK_OFFLINE', error: 'Perangkat sedang offline; item tetap di antrean.' };
+  }
+  try {
+    const data = await getJson('getTransactionStatus', {
+      transactionId: identity.transactionId,
+      nonce: identity.nonce,
+      sheet,
+    });
+    const applied = data?.success === true &&
+      (data?.status === 'APPLIED' || data?.code === 'READBACK_CONFIRMED' || data?.code === 'READBACK_FOUND');
+    return applied
+      ? { ...data, success: true, status: 'APPLIED', clientItemId: item.clientItemId, sheet }
+      : { ...data, success: false, clientItemId: item.clientItemId, sheet, error: data?.error || 'Server belum mengonfirmasi transaksi.' };
+  } catch (err) {
+    return { success: false, status: 'UNKNOWN', code: 'READBACK_FAILED', clientItemId: item.clientItemId, sheet, error: err?.message || 'Gagal membaca status transaksi.' };
+  }
+}
 export function removePendingByClientIds(ids) {
   const set = new Set(ids || []);
   const q = getPendingQueue().map((e) => ({ ...e, items: (e.items || []).filter((it) => !set.has(it.clientItemId)) })).filter((e) => e.items.length);
