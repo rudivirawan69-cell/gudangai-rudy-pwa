@@ -3850,7 +3850,11 @@ function installManagedTriggers_(spreadsheet) {
     "sendWeeklyPOReport","refreshDashboard","refreshAllData","refreshDashboardDataLight693_",
     "refreshStatusStockLight_","refreshDashboardFinal_","refreshDashboardOperationalV68_",
     "refreshDashboardPODataOnly_","refreshWeeklyPODashboard","buildMasterExecutiveDashboardV69",
-    "onEdit","onEditRouter_"
+    "onEdit","onEditRouter_",
+    "dashboardSyncPatchTick_","refreshDashboardOperationalV68_",
+    "refreshDashboardFinal_","refreshDashboardPODataOnly_",
+    "refreshWeeklyPODashboard","buildMasterExecutiveDashboardV69",
+    "rebuildDashboardChartsV68_","refreshDashboardCharts"
   ];
   var removed = 0;
   ScriptApp.getProjectTriggers().forEach(function(t) {
@@ -4503,4 +4507,66 @@ function cleanDashboardPORows39to45() {
     success:false, skipped:true, readOnly:true,
     reason:"Pembersihan baris Dashboard 39:45 dinonaktifkan sampai pemilik layout mengonfirmasi area tersebut."
   };
+}
+
+
+// ============================================================
+// SAFE LEGACY DASHBOARD TRIGGER SHUTDOWN — 7.0.1
+// Jalankan manual SATU KALI dari Apps Script editor.
+// Hanya menghapus trigger Dashboard lama; tidak menghapus fungsi,
+// tidak menyentuh data/sheet, dan mempertahankan trigger operasional.
+// ============================================================
+function disableLegacyDashboardTriggersOnly() {
+  const ss = getSS();
+  const legacyHandlers = [
+    "refreshAllData",
+    "refreshDashboard",
+    "refreshDashboardPOSection_",
+    "refreshDashboardOperationalV68_",
+    "refreshDashboardFinal_",
+    "refreshDashboardPODataOnly_",
+    "refreshWeeklyPODashboard",
+    "buildMasterExecutiveDashboardV69",
+    "rebuildDashboardChartsV68_",
+    "refreshDashboardCharts",
+    "dashboardSyncPatchTick_"
+  ];
+  const before = ScriptApp.getProjectTriggers();
+  const removed = [];
+  before.forEach(function(trigger) {
+    const handler = trigger.getHandlerFunction();
+    if (legacyHandlers.indexOf(handler) >= 0) {
+      ScriptApp.deleteTrigger(trigger);
+      removed.push(handler);
+    }
+  });
+  const after = ScriptApp.getProjectTriggers();
+  const remainingLegacy = after
+    .map(function(trigger) { return trigger.getHandlerFunction(); })
+    .filter(function(handler) { return legacyHandlers.indexOf(handler) >= 0; });
+  const approved = after
+    .map(function(trigger) { return trigger.getHandlerFunction(); })
+    .filter(function(handler) {
+      return [
+        "sendDailyStockReport",
+        "weeklyPOAutomation",
+        "logDailySnapshot",
+        "refreshDashboardDataLight693_",
+        "onEditRouter_"
+      ].indexOf(handler) >= 0;
+    });
+  const result = {
+    success: remainingLegacy.length === 0,
+    spreadsheet: ss.getName(),
+    spreadsheetId: ss.getId(),
+    removedCount: removed.length,
+    removedHandlers: removed,
+    remainingLegacyHandlers: remainingLegacy,
+    approvedHandlersStillInstalled: approved,
+    dashboardRefreshHandler: "refreshDashboardDataLight693_ (10-minute trigger)",
+    note: "Tidak ada sheet atau data yang diubah. Trigger operasional dan onEditRouter_ dipertahankan."
+  };
+  console.log(JSON.stringify(result));
+  if (!result.success) throw new Error("Masih ada trigger Dashboard lama: " + remainingLegacy.join(", "));
+  return result;
 }
