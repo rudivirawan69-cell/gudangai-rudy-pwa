@@ -29,6 +29,11 @@ const SYSTEM_PROMPT = [
 
 function isRateLimited(key) {
   const now = Date.now();
+  if (requestCounts.size > 5000) {
+    for (const [storedKey, storedValue] of requestCounts) {
+      if (now - storedValue.start >= RATE_LIMIT_WINDOW_MS) requestCounts.delete(storedKey);
+    }
+  }
   const entry = requestCounts.get(key);
   if (!entry || now - entry.start >= RATE_LIMIT_WINDOW_MS) {
     requestCounts.set(key, { start: now, count: 1 });
@@ -49,6 +54,7 @@ function corsHeaders(origin) {
   const headers = {
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
     "Access-Control-Allow-Headers": "Authorization, Content-Type, Accept",
+    "Access-Control-Expose-Headers": "Retry-After",
     "Access-Control-Max-Age": "86400",
     "Vary": "Origin",
   };
@@ -135,7 +141,8 @@ export default {
         try { body = JSON.parse(rawBody); } catch (_) {
           return jsonResponse({ error: "JSON permintaan tidak valid." }, 400, cors);
         }
-        const validated = validateMessages(body || {});
+        if (!body || typeof body !== "object" || Array.isArray(body)) body = {};
+        const validated = validateMessages(body);
         if (validated.error) return jsonResponse({ error: validated.error }, 400, cors);
 
         const model = ALLOWED_MODELS.has(body.model) ? body.model : MODELS[0].id;
