@@ -2,16 +2,28 @@
 
 ## Authentication flow
 
-The PWA signs operators in with Supabase Auth and sends the access token to the existing Worker in the Authorization: Bearer header. The Worker verifies it by requesting GET {SUPABASE_URL}/auth/v1/user with the publishable key in apikey and the user token in Authorization.
+The PWA signs operators in with Supabase Auth and sends the access token to the existing Worker in the Authorization: Bearer header. The Worker verifies it by requesting GET {SUPABASE_URL}/auth/v1/user with the publishable key in apikey and the user token in Authorization. The browser never supplies the identity or role that the Worker trusts.
 
-The Worker must never trust a user ID, email, role, or system prompt supplied in the browser request body.
+The PWA currently calls Supabase Auth's documented HTTP endpoints directly (password sign-in, refresh-token grant, user lookup, and logout). This avoids adding an unpinned dependency while the repository's package lock remains stable. Session refresh is automatic and synchronized across tabs through browser storage events. A future migration to the official supabase-js client should preserve the same session contract and Worker bearer-token contract.
+
+## PWA build variables
+
+Set these as build-time variables in the environment that builds the PWA:
+
+- VITE_SUPABASE_URL: URL of the active Supabase project.
+- VITE_SUPABASE_PUBLISHABLE_KEY: publishable key (sb_publishable_...) or enabled legacy anon key.
+- VITE_GUDANGAI_AI_API_BASE: existing Cloudflare Worker API origin.
+
+For GitHub Actions, use repository Variables for the URL and publishable key; these are public client configuration, not secrets. For Cloudflare Pages, add the same variables to the build environment. Never place a service-role key in a VITE_ variable or browser bundle.
 
 ## Required Worker variables
 
-- SUPABASE_URL: URL of the active Supabase project.
-- SUPABASE_PUBLISHABLE_KEY: the project's publishable key (sb_publishable_...) or an enabled legacy anon key.
+Set these in the Cloudflare Worker environment (not in GitHub source):
 
-No service-role key is needed for this authentication flow. Never put a service-role key in the PWA.
+- SUPABASE_URL: URL of the active Supabase project.
+- SUPABASE_PUBLISHABLE_KEY: the project's publishable key or enabled legacy anon key.
+
+No service-role key is needed for this authentication flow.
 
 ## Source file
 
