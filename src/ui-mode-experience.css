@@ -310,3 +310,12 @@ html[data-theme="graphite_titanium"] .app-top-header .app-header-card :is(h1,p,s
 html[data-theme="graphite_titanium"] .app-top-header .app-header-card a { color: #99f6e4 !important; }
 html[data-theme="graphite_titanium"] .nav-btn.is-active { color: #99f6e4 !important; }
 html[data-theme="graphite_titanium"] .nav-btn.is-inactive { color: #c5e7df !important; }
+
+
+/* Page-level heading and heading icon use the same theme identity. */
+html[data-theme] .page-content :is(h1,h2,h3,.page-title,.page-heading) {
+  color: var(--card-title);
+}
+html[data-theme] .page-content :is(.page-title,.page-heading) svg {
+  color: var(--card-icon);
+}
