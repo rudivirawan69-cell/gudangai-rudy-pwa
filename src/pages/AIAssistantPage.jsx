@@ -58,6 +58,10 @@ export default function AIAssistantPage() {
   }, [messages, loading]);
 
   useEffect(() => {
+    if (!accessToken) {
+      setModelsStatus('Login Supabase diperlukan untuk menggunakan Claude.');
+      return undefined;
+    }
     const controller = new AbortController();
     fetch(`${AI_API_BASE}/api/models`, { signal: controller.signal, credentials: 'omit', headers: { Authorization: `Bearer ${accessToken}` } })
       .then(async (res) => {
@@ -87,6 +91,10 @@ export default function AIAssistantPage() {
 
   const sendMessage = useCallback(async (rawText) => {
     const text = String(rawText || '').trim();
+    if (!accessToken) {
+      setError('Login dengan akun Supabase diperlukan untuk mengakses Claude.');
+      return;
+    }
     if (!text || loading || !online) return;
     setError('');
     setDraft('');
@@ -237,7 +245,7 @@ export default function AIAssistantPage() {
             <p className="mt-1 text-xs leading-relaxed text-slate-500">Tanyakan prosedur gudang, audit, purchasing, atau minta bantuan menyusun laporan.</p>
             <div className="mt-4 flex flex-col gap-2">
               {quickPrompts.map((prompt) => (
-                <button key={prompt} type="button" onClick={() => sendMessage(prompt)} disabled={loading || !online} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-left text-xs font-medium text-slate-700 hover:border-orange-300 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">{prompt}</button>
+                <button key={prompt} type="button" onClick={() => sendMessage(prompt)} disabled={loading || !online || !accessToken} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-left text-xs font-medium text-slate-700 hover:border-orange-300 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">{prompt}</button>
               ))}
             </div>
           </div>
@@ -257,11 +265,11 @@ export default function AIAssistantPage() {
       <form onSubmit={(event) => { event.preventDefault(); sendMessage(draft); }} className="sticky bottom-20 rounded-2xl border border-slate-200 bg-white p-2 shadow-lg dark:border-slate-700 dark:bg-slate-900">
         <label htmlFor="gudangai-ai-message" className="sr-only">Pesan untuk Claude</label>
         <div className="flex items-end gap-2">
-          <textarea id="gudangai-ai-message" rows={2} maxLength={6000} value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); sendMessage(draft); } }} placeholder="Tulis pertanyaan operasional…" disabled={loading || !online} className="max-h-36 min-h-[48px] flex-1 resize-y rounded-xl bg-slate-50 px-3 py-3 text-sm text-slate-800 outline-none placeholder:text-slate-400 focus:ring-2 focus:ring-orange-300 disabled:opacity-50 dark:bg-slate-800 dark:text-white" />
+          <textarea id="gudangai-ai-message" rows={2} maxLength={6000} value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); sendMessage(draft); } }} placeholder="Tulis pertanyaan operasional…" disabled={loading || !online || !accessToken} className="max-h-36 min-h-[48px] flex-1 resize-y rounded-xl bg-slate-50 px-3 py-3 text-sm text-slate-800 outline-none placeholder:text-slate-400 focus:ring-2 focus:ring-orange-300 disabled:opacity-50 dark:bg-slate-800 dark:text-white" />
           {loading ? (
             <button type="button" onClick={stopGeneration} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-rose-600 text-white" aria-label="Hentikan jawaban"><Square className="h-4 w-4" /></button>
           ) : (
-            <button type="submit" disabled={!draft.trim() || !online} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#0b2a55] text-white disabled:opacity-40" aria-label="Kirim pesan"><Send className="h-4 w-4" /></button>
+            <button type="submit" disabled={!draft.trim() || !online || !accessToken} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#0b2a55] text-white disabled:opacity-40" aria-label="Kirim pesan"><Send className="h-4 w-4" /></button>
           )}
         </div>
         <p className="px-2 pt-1.5 text-[9px] text-slate-400">Percakapan hanya tersimpan selama halaman ini terbuka. Jangan kirim PIN, password, API key, atau data rahasia.</p>
