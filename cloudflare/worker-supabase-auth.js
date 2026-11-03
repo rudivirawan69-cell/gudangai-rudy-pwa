@@ -58,10 +58,10 @@ function corsHeaders(origin) {
 
 async function authenticate(request, env) {
   const authorization = request.headers.get("Authorization") || "";
-  if (!/^Bearer\\s+\\S+$/i.test(authorization)) return null;
+  if (!/^Bearer\s+\S+$/i.test(authorization)) return null;
   if (!env.SUPABASE_URL || !env.SUPABASE_PUBLISHABLE_KEY) throw new Error("AUTH_CONFIGURATION_MISSING");
 
-  const base = String(env.SUPABASE_URL).replace(/\\/+$/, "");
+  const base = String(env.SUPABASE_URL).replace(/\/+$/, "");
   const response = await fetch(`${base}/auth/v1/user`, {
     method: "GET",
     headers: { apikey: env.SUPABASE_PUBLISHABLE_KEY, Authorization: authorization },
