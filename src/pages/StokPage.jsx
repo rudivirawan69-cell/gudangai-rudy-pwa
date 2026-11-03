@@ -139,7 +139,7 @@ export default function StokPage() {
   }
 
   return (
-    <div className="w-full max-w-full box-border space-y-3 pb-28 animate-fade-in overflow-x-hidden">
+    <div className="stock-page w-full max-w-full box-border space-y-3 pb-28 animate-fade-in overflow-x-hidden">
       <div className="flex items-center justify-between gap-2">
         <h1 className="text-xl font-extrabold text-slate-900">Stok</h1>
         <button
