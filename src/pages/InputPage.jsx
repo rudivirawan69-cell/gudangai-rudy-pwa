@@ -679,7 +679,7 @@ export default function InputPage() {
   const openNotif = () => { setNotifs(getNotifications()); markNotificationsRead(); setUnread(0); setShowNotif((v) => !v); };
 
   return (
-    <div className="pb-28 space-y-4 overflow-x-hidden w-full max-w-full box-border">
+    <div className="input-page pb-28 space-y-4 overflow-x-hidden w-full max-w-full box-border">
       <div className="flex items-center justify-between gap-2">
         <h1 className="text-xl font-extrabold flex items-center gap-2 text-slate-900">
           <PackagePlus className="w-6 h-6 text-cyan-300" /> Input
