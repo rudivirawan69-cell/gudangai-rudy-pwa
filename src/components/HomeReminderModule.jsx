@@ -68,7 +68,7 @@ export default function HomeReminderModule({ onNavigate }) {
   const deleteNote = (id) => setNotes((current) => current.filter((item) => item.id !== id));
 
   return (
-    <section className="space-y-3" aria-label="Pengingat dan catatan operasional">
+    <section className="home-reminder-module space-y-3" aria-label="Pengingat dan catatan operasional">
       <div className="overflow-hidden rounded-[24px] border border-slate-200/90 bg-white shadow-sm">
         <button
           type="button"
