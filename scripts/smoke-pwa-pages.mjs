@@ -82,7 +82,7 @@ try {
   await page.locator('nav.nav-bar').waitFor({ state: 'visible', timeout: 15000 });
 
   const tabs = [
-    ['Beranda', 'Status Stok per Divisi'],
+    ['Beranda', 'Status per Divisi'],
     ['Stok', 'TOTAL ITEM'],
     ['Input', 'Draft transaksi dipulihkan'],
     ['PO', 'Draft PO dipulihkan'],
@@ -129,6 +129,31 @@ try {
     await page.evaluate(() => window.dispatchEvent(new CustomEvent('gudangai-navigate', { detail: { tab: 'sync' } })));
     await page.getByText('Antrian Sinkronisasi', { exact: false }).first().waitFor({ state: 'visible', timeout: 10000 });
     await assertNoHorizontalOverflow('Antrian Sinkronisasi', viewport);
+  }
+
+
+  // Verify all three supported themes on the three requested primary pages.
+  for (const theme of ['soft_light', 'deep_ocean', 'graphite_titanium']) {
+    await page.evaluate((value) => {
+      localStorage.setItem('gudangai_theme', value);
+    }, theme);
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.locator('nav.nav-bar').waitFor({ state: 'visible', timeout: 15000 });
+    for (const [label, marker] of [['Beranda', 'Status per Divisi'], ['Stok', 'TOTAL ITEM'], ['Input', 'Draft transaksi dipulihkan']]) {
+      await page.locator('nav.nav-bar button').filter({ hasText: label }).first().click();
+      await page.getByText(marker, { exact: false }).first().waitFor({ state: 'visible', timeout: 10000 });
+      const themeState = await page.evaluate(() => ({
+        id: document.documentElement.getAttribute('data-theme'),
+        surface: getComputedStyle(document.documentElement).getPropertyValue('--bg-elevated').trim(),
+        text: getComputedStyle(document.documentElement).getPropertyValue('--text-main').trim(),
+      }));
+      assert.equal(themeState.id, theme, `Theme mismatch on ${label}: ${JSON.stringify(themeState)}`);
+      assert.ok(themeState.surface && themeState.text, `Theme tokens missing on ${label} in ${theme}`);
+      if (label === 'Input') {
+        assert.equal(await page.locator('[data-testid="input-search-results"]').count(), 0,
+          'Input search results must remain hidden when the search field is empty.');
+      }
+    }
   }
 
   // Drafts must survive page unmount/remount caused by bottom navigation.

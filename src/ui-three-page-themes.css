@@ -1,0 +1,57 @@
+/* Three primary pages: theme-aware contrast and card surfaces. Visual-only. */
+html[data-theme] .app-content .dashboard-shell {
+  color: var(--text-main);
+}
+html[data-theme] .app-content .dashboard-shell :is(.dashboard-panel,.dashboard-total-card,.dashboard-po-card) {
+  background: var(--bg-elevated) !important;
+  border-color: var(--border) !important;
+  box-shadow: var(--shadow-1) !important;
+  color: var(--text-main) !important;
+}
+html[data-theme] .app-content .dashboard-shell :is(.text-slate-900,.text-slate-800,.text-slate-700) {
+  color: var(--text-main) !important;
+}
+html[data-theme] .app-content .dashboard-shell :is(.text-slate-600,.text-slate-500,.text-slate-400) {
+  color: var(--text-muted) !important;
+}
+html[data-theme] .app-content .stock-page,
+html[data-theme] .app-content .input-page {
+  color: var(--text-main);
+}
+html[data-theme] .app-content .stock-page :is(.stock-card,.stock-metric-surface) {
+  background: var(--bg-elevated) !important;
+  border-color: var(--border) !important;
+  box-shadow: var(--shadow-1) !important;
+  color: var(--text-main) !important;
+}
+html[data-theme] .app-content .stock-page :is(.text-slate-900,.text-slate-800,.text-slate-700) {
+  color: var(--text-main) !important;
+}
+html[data-theme] .app-content .stock-page :is(.text-slate-600,.text-slate-500,.text-slate-400) {
+  color: var(--text-muted) !important;
+}
+html[data-theme] .app-content .input-page :is(.rounded-xl.bg-white,.rounded-2xl.bg-white,.rounded-lg.bg-white) {
+  background-color: var(--bg-elevated);
+  border-color: var(--border);
+  color: var(--text-main);
+}
+html[data-theme] .app-content .input-page :is(.text-slate-900,.text-slate-800,.text-slate-700) {
+  color: var(--text-main) !important;
+}
+html[data-theme] .app-content .input-page :is(.text-slate-600,.text-slate-500,.text-slate-400) {
+  color: var(--text-muted) !important;
+}
+html[data-theme] .app-content .input-page :is(input,textarea,select) {
+  background: var(--field-bg) !important;
+  color: var(--text-main) !important;
+  border-color: var(--border) !important;
+}
+html[data-theme] .app-content .input-page :is(input,textarea,select)::placeholder {
+  color: var(--text-muted) !important;
+  opacity: .78;
+}
+html[data-theme] .app-content .stock-page button:focus-visible,
+html[data-theme] .app-content .input-page button:focus-visible {
+  outline: 2px solid var(--accent) !important;
+  outline-offset: 2px;
+}

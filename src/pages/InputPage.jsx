@@ -679,7 +679,7 @@ export default function InputPage() {
   const openNotif = () => { setNotifs(getNotifications()); markNotificationsRead(); setUnread(0); setShowNotif((v) => !v); };
 
   return (
-    <div className="pb-28 space-y-4 overflow-x-hidden w-full max-w-full box-border">
+    <div className="input-page pb-28 space-y-4 overflow-x-hidden w-full max-w-full box-border">
       <div className="flex items-center justify-between gap-2">
         <h1 className="text-xl font-extrabold flex items-center gap-2 text-slate-900">
           <PackagePlus className="w-6 h-6 text-cyan-300" /> Input
@@ -810,7 +810,7 @@ export default function InputPage() {
       </div>
 
       {hits.length > 0 && (
-        <div className="rounded-xl border border-slate-200 bg-white shadow-sm max-h-64 overflow-y-auto divide-y divide-slate-100">
+        <div data-testid="input-search-results" className="rounded-xl border border-slate-200 bg-white shadow-sm max-h-64 overflow-y-auto divide-y divide-slate-100">
           {hits.map((h) => (
             <button key={h.kode} type="button" onClick={() => { addToCart(h, 1); setQuery(''); setHits([]); }}
               className="w-full text-left px-3 py-2.5 hover:bg-cyan-50 flex items-center justify-between gap-2">

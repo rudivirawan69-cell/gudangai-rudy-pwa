@@ -1,0 +1,25 @@
+/* Home reminder module — surfaces and typography follow the active GudangAI theme. */
+.home-reminder-module { color: var(--text-main); }
+.home-reminder-module .bg-white { background-color: var(--bg-elevated) !important; }
+.home-reminder-module .bg-slate-50,
+.home-reminder-module [class~="bg-slate-50/80"] { background-color: var(--bg-muted) !important; }
+.home-reminder-module .text-slate-800,
+.home-reminder-module .text-slate-700 { color: var(--text-main) !important; }
+.home-reminder-module .text-slate-600,
+.home-reminder-module .text-slate-500,
+.home-reminder-module .text-slate-400 { color: var(--text-muted) !important; }
+.home-reminder-module .border-slate-200,
+.home-reminder-module [class~="border-slate-200/90"],
+.home-reminder-module .border-slate-100 { border-color: var(--border) !important; }
+.home-reminder-module textarea { background: var(--bg-muted); color: var(--text-main); border-color: var(--border); }
+.home-reminder-module textarea::placeholder { color: var(--text-muted); opacity: .8; }
+.home-reminder-module textarea:focus { border-color: var(--accent); box-shadow: var(--focus-ring); }
+.home-reminder-module .bg-slate-900 { background: var(--accent-strong) !important; color: var(--text-on-accent) !important; }
+.home-reminder-module [class~="hover:bg-slate-800"]:hover { filter: brightness(.96); }
+.home-reminder-module .shadow-sm { box-shadow: var(--shadow-1); }
+html[data-theme="deep_ocean"] .home-reminder-module .bg-slate-50,
+html[data-theme="deep_ocean"] .home-reminder-module [class~="bg-slate-50/80"] { background: rgba(12, 28, 48, .86) !important; }
+html[data-theme="deep_ocean"] .home-reminder-module .border-slate-200,
+html[data-theme="deep_ocean"] .home-reminder-module [class~="border-slate-200/90"],
+html[data-theme="deep_ocean"] .home-reminder-module .border-slate-100 { border-color: rgba(148, 163, 184, .22) !important; }
+html[data-theme="warm_productive"] .home-reminder-module .bg-white { background: rgba(255,255,255,.96) !important; }
