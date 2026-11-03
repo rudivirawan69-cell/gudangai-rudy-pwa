@@ -1,18 +1,24 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { isSupabaseConfigured } from '../data/supabaseAuth';
 
+const DEFAULT_PIN = '6969';
+
 export default function LoginPage() {
-  const { login } = useAuth();
+  const { login, loginLocal } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [pin, setPin] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
-
   const configured = isSupabaseConfigured();
+  const pinLength = useMemo(() => {
+    const stored = localStorage.getItem('gudangai_pin') || DEFAULT_PIN;
+    return Math.min(6, Math.max(4, String(stored).length || 4));
+  }, []);
 
-  const handleSubmit = async (event) => {
+  const handleSupabaseSubmit = async (event) => {
     event.preventDefault();
     if (!configured || submitting) return;
     setError('');
@@ -24,6 +30,13 @@ export default function LoginPage() {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handleLocalSubmit = (event) => {
+    event.preventDefault();
+    if (loginLocal(pin)) return;
+    setError('PIN lokal salah.');
+    setPin('');
   };
 
   return (
@@ -42,45 +55,33 @@ export default function LoginPage() {
             <p className="text-white/75 text-xs mt-1">Cold Storage Control System</p>
           </div>
 
-          {!configured ? (
-            <div role="alert" className="rounded-xl border border-amber-300/40 bg-amber-400/10 p-3 text-xs leading-relaxed text-amber-100">
-              Konfigurasi Supabase belum tersedia. Tambahkan <strong>VITE_SUPABASE_URL</strong> dan <strong>VITE_SUPABASE_PUBLISHABLE_KEY</strong> pada environment build PWA.
-            </div>
-          ) : (
-            <form onSubmit={handleSubmit} className="space-y-3">
+          {configured ? (
+            <form onSubmit={handleSupabaseSubmit} className="space-y-3">
               <label className="block">
                 <span className="mb-1.5 block text-xs font-semibold text-white/85">Email operator</span>
-                <input
-                  type="email"
-                  autoComplete="username"
-                  required
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
-                  placeholder="nama@perusahaan.com"
-                  className="w-full rounded-xl border border-white/20 bg-slate-950/35 px-3.5 py-3 text-sm text-white outline-none placeholder:text-white/40 focus:border-cyan-300"
-                />
+                <input type="email" autoComplete="username" required value={email} onChange={(event) => setEmail(event.target.value)} placeholder="nama@perusahaan.com" className="w-full rounded-xl border border-white/20 bg-slate-950/35 px-3.5 py-3 text-sm text-white outline-none placeholder:text-white/40 focus:border-cyan-300" />
               </label>
               <label className="block">
                 <span className="mb-1.5 block text-xs font-semibold text-white/85">Password</span>
                 <div className="flex gap-2">
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    autoComplete="current-password"
-                    required
-                    value={password}
-                    onChange={(event) => setPassword(event.target.value)}
-                    placeholder="Password akun Supabase"
-                    className="min-w-0 flex-1 rounded-xl border border-white/20 bg-slate-950/35 px-3.5 py-3 text-sm text-white outline-none placeholder:text-white/40 focus:border-cyan-300"
-                  />
-                  <button type="button" onClick={() => setShowPassword((value) => !value)} className="rounded-xl border border-white/20 px-3 text-xs font-semibold text-white/80">
-                    {showPassword ? 'Sembunyi' : 'Lihat'}
-                  </button>
+                  <input type={showPassword ? 'text' : 'password'} autoComplete="current-password" required value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Password akun Supabase" className="min-w-0 flex-1 rounded-xl border border-white/20 bg-slate-950/35 px-3.5 py-3 text-sm text-white outline-none placeholder:text-white/40 focus:border-cyan-300" />
+                  <button type="button" onClick={() => setShowPassword((value) => !value)} className="rounded-xl border border-white/20 px-3 text-xs font-semibold text-white/80">{showPassword ? 'Sembunyi' : 'Lihat'}</button>
                 </div>
               </label>
               {error && <p role="alert" className="rounded-xl border border-rose-300/40 bg-rose-500/10 p-3 text-xs text-rose-100">{error}</p>}
-              <button type="submit" disabled={submitting || !email.trim() || !password} className="w-full rounded-xl bg-cyan-500 py-3 text-sm font-extrabold text-slate-950 shadow-lg disabled:opacity-50">
-                {submitting ? 'Memverifikasi akun…' : 'Masuk dengan Supabase'}
-              </button>
+              <button type="submit" disabled={submitting || !email.trim() || !password} className="w-full rounded-xl bg-cyan-500 py-3 text-sm font-extrabold text-slate-950 shadow-lg disabled:opacity-50">{submitting ? 'Memverifikasi akun…' : 'Masuk dengan Supabase'}</button>
+            </form>
+          ) : (
+            <form onSubmit={handleLocalSubmit} className="space-y-3">
+              <div className="rounded-xl border border-amber-300/40 bg-amber-400/10 p-3 text-xs leading-relaxed text-amber-100">
+                Mode kompatibilitas lokal. Fitur PWA lama tetap dapat digunakan, tetapi Claude dan endpoint AI terkunci sampai Supabase dikonfigurasi. PIN lokal bukan autentikasi server.
+              </div>
+              <label className="block">
+                <span className="mb-1.5 block text-xs font-semibold text-white/85">PIN perangkat ({pinLength} digit)</span>
+                <input type="password" inputMode="numeric" autoComplete="current-password" maxLength={pinLength} required value={pin} onChange={(event) => { setPin(event.target.value.replace(/\D/g, '').slice(0, pinLength)); setError(''); }} placeholder="Masukkan PIN lokal" className="w-full rounded-xl border border-white/20 bg-slate-950/35 px-3.5 py-3 text-center text-lg tracking-[0.5em] text-white outline-none placeholder:text-white/40 focus:border-cyan-300" />
+              </label>
+              {error && <p role="alert" className="rounded-xl border border-rose-300/40 bg-rose-500/10 p-3 text-xs text-rose-100">{error}</p>}
+              <button type="submit" disabled={pin.length !== pinLength} className="w-full rounded-xl bg-cyan-500 py-3 text-sm font-extrabold text-slate-950 shadow-lg disabled:opacity-50">Masuk mode lokal</button>
             </form>
           )}
 
