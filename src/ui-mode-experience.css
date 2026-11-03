@@ -12,7 +12,7 @@ html[data-theme="soft_light"] {
   --accent: #1686d9;
   --accent-strong: #0866b3;
   --accent-soft: rgba(22,134,217,.16);
-  --nav-bg: rgba(9,32,58,.84);
+  --nav-bg: rgba(239,247,255,.94);
   --card-radius: 1.35rem;
   --shadow-1: 0 12px 30px rgba(0,22,48,.14), inset 0 1px 0 rgba(255,255,255,.72);
   --shadow-2: 0 18px 42px rgba(0,22,48,.20), inset 0 1px 0 rgba(255,255,255,.8);
@@ -149,7 +149,7 @@ html[data-theme="soft_light"] {
   --card-value: #075ea8;
   --card-copy: #496985;
   --card-kicker: #1766a8;
-  --card-icon: #0879c9;
+  --card-icon: #0667a6;
   --card-icon-surface: rgba(8,121,201,.12);
   --card-number-glow: 0 1px 0 rgba(255,255,255,.85);
   --card-divider: rgba(23,102,168,.16);
@@ -175,7 +175,7 @@ html[data-theme="graphite_titanium"] {
   --card-value: #087e78;
   --card-copy: #4d7372;
   --card-kicker: #08776f;
-  --card-icon: #078d84;
+  --card-icon: #076b65;
   --card-icon-surface: rgba(13,155,145,.13);
   --card-number-glow: 0 1px 0 rgba(255,255,255,.9);
   --card-divider: rgba(8,119,111,.18);
@@ -274,3 +274,39 @@ html[data-theme="graphite_titanium"] .page-content :is(.card,.surface,.section-c
   -webkit-backdrop-filter: blur(12px) saturate(1.12);
   box-shadow: 0 10px 24px rgba(0,26,28,.16), inset 0 1px 0 rgba(255,255,255,.62);
 }
+
+
+/* Theme-specific sticky header and navigation contrast. */
+html[data-theme="soft_light"] .app-top-header .app-header-card {
+  background: rgba(239,247,255,.94) !important;
+  border-color: rgba(255,255,255,.9) !important;
+  color: #12365b !important;
+  box-shadow: 0 12px 30px rgba(0,22,48,.14), inset 0 1px 0 rgba(255,255,255,.9) !important;
+}
+html[data-theme="soft_light"] .app-top-header .app-header-card :is(h1,p,span,strong) { color: #12365b; }
+html[data-theme="soft_light"] .app-top-header .app-header-card a { color: #075f9e !important; }
+html[data-theme="soft_light"] .app-top-header .app-header-card button {
+  color: #075f9e !important;
+  background: rgba(8,121,201,.1) !important;
+  border-color: rgba(8,121,201,.2) !important;
+}
+html[data-theme="soft_light"] .nav-btn.is-active { color: #075f9e !important; }
+html[data-theme="soft_light"] .nav-btn.is-inactive { color: #496985 !important; }
+html[data-theme="deep_ocean"] .app-top-header .app-header-card {
+  background: #102337 !important;
+  border-color: rgba(142,174,205,.24) !important;
+  color: #edf5ff !important;
+}
+html[data-theme="deep_ocean"] .app-top-header .app-header-card :is(h1,p,span,strong) { color: #edf5ff; }
+html[data-theme="deep_ocean"] .app-top-header .app-header-card a { color: #7dd3fc !important; }
+html[data-theme="deep_ocean"] .nav-btn.is-active { color: #7dd3fc !important; }
+html[data-theme="deep_ocean"] .nav-btn.is-inactive { color: #b5c8dc !important; }
+html[data-theme="graphite_titanium"] .app-top-header .app-header-card {
+  background: linear-gradient(135deg,#073b3b 0%,#0b5550 100%) !important;
+  border-color: rgba(210,246,237,.3) !important;
+  color: #f0fdfa !important;
+}
+html[data-theme="graphite_titanium"] .app-top-header .app-header-card :is(h1,p,span,strong) { color: #f0fdfa; }
+html[data-theme="graphite_titanium"] .app-top-header .app-header-card a { color: #99f6e4 !important; }
+html[data-theme="graphite_titanium"] .nav-btn.is-active { color: #99f6e4 !important; }
+html[data-theme="graphite_titanium"] .nav-btn.is-inactive { color: #c5e7df !important; }
