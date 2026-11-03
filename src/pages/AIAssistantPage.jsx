@@ -135,6 +135,10 @@ export default function AIAssistantPage() {
       if (!response.ok) {
         let detail = '';
         try { detail = (await response.json())?.error || ''; } catch (_) {}
+        if (response.status === 429) {
+          const retryAfter = response.headers.get('Retry-After') || '60';
+          throw new Error(`Batas penggunaan AI tercapai. Coba lagi dalam ${retryAfter} detik.`);
+        }
         throw new Error(detail || `Permintaan AI gagal (HTTP ${response.status})`);
       }
 
