@@ -69,7 +69,7 @@ export function AuthProvider({ children }) {
       })
       .catch((error) => {
         if (!active) return;
-        if (error.networkError && cached?.access_token && Number(cached.expires_at) * 1000 > Date.now()) {
+        if ((error.networkError || error.status >= 500 || error.status === 429) && cached?.access_token && Number(cached.expires_at) * 1000 > Date.now()) {
           applySession(cached, 'offline');
         } else {
           clearStoredSession();
