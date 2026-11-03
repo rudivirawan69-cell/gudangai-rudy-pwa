@@ -2,27 +2,27 @@ import { createContext, useContext, useEffect, useMemo, useState, useCallback } 
 
 const STORAGE_KEY = 'gudangai_theme';
 
-/** Tiga mode: Soft (domain default) + Teal + Navy dari mock centang */
+/** Tiga pengalaman antarmuka GudangAI; ID lama dipertahankan agar preferensi perangkat tetap kompatibel. */
 export const THEME_IDS = ['soft_light', 'deep_ocean', 'graphite_titanium'];
 
 export const THEME_META = {
   soft_light: {
     id: 'soft_light',
-    label: 'Arctic Professional',
-    short: 'Arctic',
-    description: 'Putih · Ice Blue · Navy — bersih dan profesional',
+    label: 'Blue Glass',
+    short: 'Blue Glass',
+    description: 'Full-screen · premium fintech · glass transparan',
   },
   deep_ocean: {
     id: 'deep_ocean',
     label: 'Deep Ocean',
     short: 'Ocean',
-    description: 'Midnight Navy · Teal · Cyan — mode gelap',
+    description: 'Minimal · bersih · cepat untuk pekerjaan rutin',
   },
   graphite_titanium: {
     id: 'graphite_titanium',
-    label: 'Graphite Titanium',
-    short: 'Graphite',
-    description: 'Graphite · Titanium · Amber — industrial premium',
+    label: 'Mobile Operations',
+    short: 'Operations',
+    description: 'Hybrid · glass 3D halus · tombol kerja lapangan',
   },
 };
 
@@ -30,9 +30,9 @@ const ThemeContext = createContext(null);
 
 function normalizeTheme(raw) {
   const v = String(raw || '').toLowerCase().trim();
-  if (v === 'dark' || v === 'deep_ocean' || v === 'ocean' || v === 'navy') return 'deep_ocean';
-  if (v === 'warm' || v === 'warm_productive' || v === 'productive' || v === 'teal' || v === 'glass' || v === 'graphite' || v === 'graphite_titanium') return 'graphite_titanium';
-  if (v === 'light' || v === 'soft_light' || v === 'soft') return 'soft_light';
+  if (v === 'dark' || v === 'deep_ocean' || v === 'ocean' || v === 'navy' || v === 'minimal') return 'deep_ocean';
+  if (v === 'warm' || v === 'warm_productive' || v === 'productive' || v === 'teal' || v === 'glass' || v === 'graphite' || v === 'graphite_titanium' || v === 'mobile_operations' || v === 'operations') return 'graphite_titanium';
+  if (v === 'light' || v === 'soft_light' || v === 'soft' || v === 'blue_glass' || v === 'blue-glass') return 'soft_light';
   if (THEME_IDS.includes(v)) return v;
   return 'soft_light';
 }
@@ -51,9 +51,9 @@ function applyDomTheme(theme) {
   root.setAttribute('data-theme', t);
   root.style.colorScheme = t === 'deep_ocean' || t === 'graphite_titanium' ? 'dark' : 'light';
   const themeColors = {
-    soft_light: '#247ba8',
+    soft_light: '#1766a8',
     deep_ocean: '#35b9b0',
-    graphite_titanium: '#d69a48',
+    graphite_titanium: '#0f8b83',
   };
   const themeColorMeta = document.querySelector('meta[name="theme-color"]');
   if (themeColorMeta) themeColorMeta.setAttribute('content', themeColors[t] || themeColors.soft_light);
