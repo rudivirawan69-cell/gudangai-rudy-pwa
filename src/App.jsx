@@ -149,6 +149,7 @@ function AppHeader({ user, tab, onOpenSettings, online, status }) {
               <h1 className="text-[13px] font-black tracking-wide text-slate-900 dark:text-slate-100 uppercase truncate leading-none">
                 GUDANG-69 RUDI
               </h1>
+              <span className="shrink-0 rounded border border-amber-200 bg-amber-100 px-1.5 py-0.5 text-[8px] font-black tracking-wide text-amber-800">PRO</span>
               <span className={`shrink-0 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[9px] font-bold ${
                 connected
                   ? 'bg-emerald-500/15 text-emerald-700'
@@ -165,7 +166,7 @@ function AppHeader({ user, tab, onOpenSettings, online, status }) {
               <div className="flex items-center gap-1.5 min-w-0">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
                 <span className="truncate">
-                  Update Sheet: <strong className="text-slate-800 dark:text-slate-100 font-bold">{liveTime}</strong>
+                  Waktu Perangkat: <strong className="text-slate-800 dark:text-slate-100 font-bold">{liveTime}</strong>
                 </span>
               </div>
               <div className="flex items-center gap-1.5 min-w-0">
@@ -179,7 +180,7 @@ function AppHeader({ user, tab, onOpenSettings, online, status }) {
 
           <button
             type="button"
-            onClick={tickClock}
+            onClick={() => { tickClock(); window.dispatchEvent(new CustomEvent("gudangai-refresh-dashboard")); }}
             className="shrink-0 w-9 h-9 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center active:scale-95"
             aria-label="Refresh waktu"
             title="Refresh"

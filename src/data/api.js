@@ -258,6 +258,40 @@ export async function getDashboardData() {
     }
   }
 }
+export async function fetchOperationalNotes() {
+  const data = await getJson('getOperationalNotes');
+  if (!data || data.success === false || data.code === 'UNAUTHORIZED') {
+    throw new Error(data?.error || 'Gagal membaca Catatan Operasional dari Spreadsheet');
+  }
+  return Array.isArray(data.items) ? data.items : [];
+}
+export async function saveOperationalNote(note) {
+  const payload = await postJson({
+    action: 'saveOperationalNote',
+    noteId: String(note?.id || note?.noteId || ''),
+    category: String(note?.category || ''),
+    text: String(note?.text || '').trim().slice(0, 300),
+    done: note?.done === true,
+    actor: String(note?.createdBy || 'GudangAI RUDY'),
+    requestId: String(note?.requestId || newIds().requestId),
+  }, { retries: 1, timeoutMs: 30000 });
+  if (!payload || payload.success !== true) {
+    throw new Error(payload?.error || 'Spreadsheet belum mengonfirmasi penyimpanan catatan');
+  }
+  return payload.item || note;
+}
+export async function deleteOperationalNote(noteId) {
+  const payload = await postJson({
+    action: 'deleteOperationalNote',
+    noteId: String(noteId || ''),
+    requestId: newIds().requestId,
+  }, { retries: 1, timeoutMs: 30000 });
+  if (!payload || payload.success !== true) {
+    throw new Error(payload?.error || 'Spreadsheet belum mengonfirmasi penghapusan catatan');
+  }
+  return payload;
+}
+
 export async function confirmPOStatus(payload) {
   try {
     return await postJson({
