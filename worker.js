@@ -112,7 +112,7 @@ async function verifySupabaseAccessToken(request, env) {
   const match = authorization.match(/^Bearer\s+(.+)$/i);
   if (!match) return { ok: false, status: 401, code: 'AUTH_REQUIRED', error: 'Silakan login untuk menggunakan Agent GudangAI.' };
 
-  const supabaseUrl = String(env.SUPABASE_URL || '').replace(/\\/+$/, '');
+  const supabaseUrl = String(env.SUPABASE_URL || '').replace(/\/+$/, '');
   const anonKey = String(env.SUPABASE_ANON_KEY || '').trim();
   if (!supabaseUrl || !anonKey) {
     return { ok: false, status: 503, code: 'AUTH_NOT_CONFIGURED', error: 'Verifikasi sesi Supabase belum dikonfigurasi pada Worker.' };
