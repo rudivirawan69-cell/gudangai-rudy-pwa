@@ -8,6 +8,7 @@ import { DIVISIONS } from '../data/master';
 import { classifyStockLevel } from '../data/stockStatus';
 import OpsCategoryCards from '../components/OpsCategoryCards';
 import HomeReminderModule from '../components/HomeReminderModule';
+import ClaudeAssistant from '../components/ClaudeAssistant';
 import {
   RefreshCw, FileText, Package, Users, Boxes, ShieldAlert, CheckCircle2, AlertCircle, X,
   CalendarDays, CalendarClock, ClipboardCheck, FilePlus2, Mail, Clock3, Layers3, ArrowUpRight,
@@ -120,6 +121,8 @@ export default function DashboardPage({ onNavigate }) {
       )}
 
       <HomeReminderModule onNavigate={onNavigate} criticalCount={stats.kritis} userName={user?.name || 'Rudi Virawan'} />
+
+      <ClaudeAssistant stock={allItems} pending={pending} />
 
       <section className="grid grid-cols-1 xl:grid-cols-2 gap-4" aria-label="Ringkasan operasional">
         <div className="dashboard-panel rounded-2xl bg-white border border-slate-200 shadow-sm p-4 min-w-0">

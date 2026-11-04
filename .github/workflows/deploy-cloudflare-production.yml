@@ -64,5 +64,5 @@ jobs:
       - name: Report deployed commit
         run: |
           echo "Cloudflare production deployment requested for commit ${GITHUB_SHA}"
-          echo "Worker: gudangai-rudy-pwa69"
-          echo "URL: https://gudangai-rudy-pwa69.rudivirawan69.workers.dev/"
+          echo "Worker: claude-proxy"
+          echo "URL: https://claude-proxy.rudivirawan69.workers.dev/"

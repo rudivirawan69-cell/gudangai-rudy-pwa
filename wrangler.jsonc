@@ -1,9 +1,12 @@
 {
-  "name": "gudangai-rudy-pwa69",
+  "name": "claude-proxy",
   "compatibility_date": "2026-10-04",
+  "main": "worker.js",
   "assets": {
     "directory": "./dist",
+    "binding": "ASSETS",
     "not_found_handling": "single-page-application",
     "html_handling": "auto-trailing-slash"
-  }
+  },
+  "previews": {}
 }
