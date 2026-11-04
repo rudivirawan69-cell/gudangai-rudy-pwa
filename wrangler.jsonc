@@ -8,5 +8,13 @@
     "not_found_handling": "single-page-application",
     "html_handling": "auto-trailing-slash"
   },
+  "ai": {
+    "binding": "AI"
+  },
+  "vars": {
+    "AI_MODEL": "@cf/meta/llama-3.1-8b-instruct",
+    "ANTHROPIC_FALLBACK_ENABLED": "false",
+    "ALLOWED_ORIGINS": "https://gudangai-rudy-pwa69.rudivirawan69.workers.dev,https://claude-proxy.rudivirawan69.workers.dev"
+  },
   "previews": {}
 }

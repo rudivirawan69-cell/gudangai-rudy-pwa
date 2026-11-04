@@ -1,4 +1,4 @@
-const CLAUDE_ENDPOINT = '/api/claude';
+const AGENT_ENDPOINT = '/api/agent';
 
 export async function askClaude({ message, context = {}, history = [] }) {
   const text = String(message || '').trim();
@@ -12,7 +12,7 @@ export async function askClaude({ message, context = {}, history = [] }) {
     }))
     .filter((item) => item.content);
 
-  const response = await fetch(CLAUDE_ENDPOINT, {
+  const response = await fetch(AGENT_ENDPOINT, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ message: text, context, history: compactHistory }),
@@ -20,9 +20,18 @@ export async function askClaude({ message, context = {}, history = [] }) {
 
   const payload = await response.json().catch(() => ({}));
   if (!response.ok || payload?.success === false) {
-    const error = new Error(payload?.error || `Agent Claude tidak tersedia (HTTP ${response.status}).`);
+    const error = new Error(payload?.error || `Agent GudangAI tidak tersedia (HTTP ${response.status}).`);
     error.code = payload?.code || '';
     throw error;
+  }
+  return payload;
+}
+
+export async function getAgentHealth() {
+  const response = await fetch('/api/agent/health', { method: 'GET', cache: 'no-store' });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || payload?.success !== true) {
+    throw new Error(payload?.error || `Status Agent tidak tersedia (HTTP ${response.status}).`);
   }
   return payload;
 }

@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "node scripts/assemble-api.mjs && node scripts/write-icons.mjs && node scripts/write-sw-version.mjs && vite build && node -e \"require('node:fs').rmSync('dist/_redirects',{force:true})\"",
     "lint": "oxlint src",
+    "test:agent": "node --test scripts/test-agent-worker.mjs",
     "preview": "vite preview",
     "write-icons": "node scripts/write-icons.mjs",
     "predev": "node scripts/assemble-api.mjs && node scripts/write-icons.mjs",
