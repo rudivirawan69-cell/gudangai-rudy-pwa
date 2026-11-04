@@ -1,0 +1,30 @@
+name: Four-card visual quality gate
+
+on:
+  push:
+    branches:
+      - feature/beranda-four-card-polish-20261104
+  pull_request:
+    branches:
+      - feature/ui-three-mode-operations
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Lint PWA
+        run: npm run lint
+      - name: Build PWA
+        run: npm run build
