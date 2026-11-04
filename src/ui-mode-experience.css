@@ -319,3 +319,77 @@ html[data-theme] .page-content :is(h1,h2,h3,.page-title,.page-heading) {
 html[data-theme] .page-content :is(.page-title,.page-heading) svg {
   color: var(--card-icon);
 }
+
+
+/* Four standalone operational cards — accent remains distinct in all three themes. */
+.ops-category-section .ops-card {
+  min-width: 0;
+  border-radius: 1.15rem;
+  box-shadow: 0 5px 16px -7px rgba(15, 23, 42, 0.24), 0 2px 5px -3px rgba(15, 23, 42, 0.12);
+  transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
+}
+.ops-category-section .ops-card:active {
+  transform: scale(.975);
+  box-shadow: 0 2px 8px -4px rgba(15, 23, 42, .2);
+}
+.ops-category-section .ops-card--amber {
+  background: linear-gradient(155deg, #fff 0%, #fffbeb 100%);
+  border-color: #fcd34d !important;
+}
+.ops-category-section .ops-card--emerald {
+  background: linear-gradient(155deg, #fff 0%, #ecfdf5 100%);
+  border-color: #86efac !important;
+}
+.ops-category-section .ops-card--indigo {
+  background: linear-gradient(155deg, #fff 0%, #eef2ff 100%);
+  border-color: #a5b4fc !important;
+}
+.ops-category-section .ops-card--sky {
+  background: linear-gradient(155deg, #fff 0%, #f0f9ff 100%);
+  border-color: #7dd3fc !important;
+}
+.ops-category-section .ops-card--amber .ops-card-title { color: #92400e !important; }
+.ops-category-section .ops-card--emerald .ops-card-title { color: #065f46 !important; }
+.ops-category-section .ops-card--indigo .ops-card-title { color: #3730a3 !important; }
+.ops-category-section .ops-card--sky .ops-card-title { color: #075985 !important; }
+.ops-category-section .ops-card .ops-card-sub { color: #64748b !important; }
+
+html[data-theme="deep_ocean"] .ops-category-section .ops-card--amber {
+  background: linear-gradient(155deg, rgba(69, 43, 15, .92), rgba(39, 30, 25, .96));
+  border-color: rgba(245, 158, 11, .62) !important;
+}
+html[data-theme="deep_ocean"] .ops-category-section .ops-card--emerald {
+  background: linear-gradient(155deg, rgba(10, 55, 48, .92), rgba(19, 42, 43, .96));
+  border-color: rgba(16, 185, 129, .58) !important;
+}
+html[data-theme="deep_ocean"] .ops-category-section .ops-card--indigo {
+  background: linear-gradient(155deg, rgba(42, 39, 89, .92), rgba(30, 35, 65, .96));
+  border-color: rgba(129, 140, 248, .58) !important;
+}
+html[data-theme="deep_ocean"] .ops-category-section .ops-card--sky {
+  background: linear-gradient(155deg, rgba(11, 55, 82, .92), rgba(21, 39, 62, .96));
+  border-color: rgba(56, 189, 248, .58) !important;
+}
+html[data-theme="deep_ocean"] .ops-category-section .ops-card--amber .ops-card-title { color: #fde68a !important; }
+html[data-theme="deep_ocean"] .ops-category-section .ops-card--emerald .ops-card-title { color: #a7f3d0 !important; }
+html[data-theme="deep_ocean"] .ops-category-section .ops-card--indigo .ops-card-title { color: #c7d2fe !important; }
+html[data-theme="deep_ocean"] .ops-category-section .ops-card--sky .ops-card-title { color: #bae6fd !important; }
+html[data-theme="deep_ocean"] .ops-category-section .ops-card .ops-card-sub { color: #cbd5e1 !important; }
+
+html[data-theme="graphite_titanium"] .ops-category-section .ops-card--amber {
+  background: linear-gradient(155deg, rgba(255,255,255,.98), rgba(255,247,224,.98));
+  border-color: rgba(217, 119, 6, .4) !important;
+}
+html[data-theme="graphite_titanium"] .ops-category-section .ops-card--emerald {
+  background: linear-gradient(155deg, rgba(255,255,255,.98), rgba(225,250,239,.98));
+  border-color: rgba(5, 150, 105, .38) !important;
+}
+html[data-theme="graphite_titanium"] .ops-category-section .ops-card--indigo {
+  background: linear-gradient(155deg, rgba(255,255,255,.98), rgba(237,239,255,.98));
+  border-color: rgba(79, 70, 229, .36) !important;
+}
+html[data-theme="graphite_titanium"] .ops-category-section .ops-card--sky {
+  background: linear-gradient(155deg, rgba(255,255,255,.98), rgba(227,244,255,.98));
+  border-color: rgba(2, 132, 199, .36) !important;
+}
+html[data-theme="graphite_titanium"] .ops-category-section .ops-card .ops-card-sub { color: #475569 !important; }

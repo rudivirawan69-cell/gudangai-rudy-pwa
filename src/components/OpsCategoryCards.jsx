@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   PackagePlus, CalendarCheck2, UsersRound, Truck,
-  ChevronRight, X, CheckCircle2, Plus, Calendar, Bell,
+  X, CheckCircle2, Plus, Calendar,
 } from 'lucide-react';
 
 const STORAGE_KEY = 'gudangai_ops_categories_v1';
@@ -93,44 +93,42 @@ export default function OpsCategoryCards() {
     {
       id: 'tambahanOrder',
       title: 'Tambahan Order',
-      subtitle: 'Susulan & reminder order',
-      action: 'Lihat & Konfirmasi',
+      subtitle: state.tambahanOrder[0]
+        ? `${state.tambahanOrder[0].client} · ${state.tambahanOrder[0].items}`
+        : 'Belum ada catatan',
       icon: PackagePlus,
       iconClass: 'ops-icon-amber',
-      accent: 'text-amber-600 dark:text-amber-400',
-      badge: pendingOrder > 0
-        ? { text: `${pendingOrder} Pending`, className: 'bg-amber-500 text-white animate-pulse' }
-        : { text: 'Kosong', className: 'bg-slate-200/80 text-slate-500 dark:bg-slate-700 dark:text-slate-300' },
+      cardClass: 'ops-card--amber',
+      badge: { text: `${pendingOrder} Aktif`, className: 'bg-amber-100 text-amber-800 border border-amber-200 dark:bg-amber-900/50 dark:text-amber-200 dark:border-amber-700' },
     },
     {
       id: 'jadwalOff',
-      title: 'Jadwal Off & Tugas',
-      subtitle: 'Tim libur & checklist harian',
-      action: 'Checklist Harian',
+      title: 'Jadwal Off',
+      subtitle: state.offToday[0]
+        ? `${state.offToday[0].name} · ${state.offToday[0].status}`
+        : 'Belum ada jadwal',
       icon: CalendarCheck2,
       iconClass: 'ops-icon-emerald',
-      accent: 'text-emerald-600 dark:text-emerald-400',
-      badge: { text: `${offCount} Off Today`, className: 'bg-emerald-100 text-emerald-700 border border-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-300 dark:border-emerald-700' },
+      cardClass: 'ops-card--emerald',
+      badge: { text: `${offCount} Orang`, className: 'bg-emerald-100 text-emerald-800 border border-emerald-200 dark:bg-emerald-900/50 dark:text-emerald-200 dark:border-emerald-700' },
     },
     {
       id: 'jadwalMeeting',
-      title: 'Meeting & Project',
-      subtitle: 'Evaluasi & Roadmap Q4',
-      action: 'Agenda & Target',
+      title: 'Jadwal Meeting',
+      subtitle: state.meeting?.title || 'Belum ada agenda meeting',
       icon: UsersRound,
       iconClass: 'ops-icon-indigo',
-      accent: 'text-indigo-600 dark:text-indigo-400',
-      badge: { text: '14:00 WIB', className: 'bg-indigo-100 text-indigo-700 border border-indigo-200 dark:bg-indigo-900/40 dark:text-indigo-300 dark:border-indigo-700' },
+      cardClass: 'ops-card--indigo',
+      badge: { text: state.meeting?.time || 'Belum dijadwalkan', className: 'bg-indigo-100 text-indigo-800 border border-indigo-200 dark:bg-indigo-900/50 dark:text-indigo-200 dark:border-indigo-700' },
     },
     {
       id: 'kirimLuarKota',
       title: 'Kirim Luar Kota',
-      subtitle: 'Rute Madiun, Solo, Jogja',
-      action: 'Status Dispatch',
+      subtitle: state.shipments[0]?.destination || 'Belum ada jadwal pengiriman',
       icon: Truck,
       iconClass: 'ops-icon-sky',
-      accent: 'text-sky-600 dark:text-sky-400',
-      badge: { text: `${state.shipments.length} Fleet`, className: 'bg-sky-500 text-white' },
+      cardClass: 'ops-card--sky',
+      badge: { text: `${state.shipments.length} Pengiriman`, className: 'bg-sky-100 text-sky-800 border border-sky-200 dark:bg-sky-900/50 dark:text-sky-200 dark:border-sky-700' },
     },
   ];
 
@@ -142,22 +140,22 @@ export default function OpsCategoryCards() {
   };
 
   return (
-    <section className="ops-category-section space-y-4" aria-label="Filter kategori operasional">
-      <div className="flex justify-between items-center px-0.5">
-        <div>
+    <section className="ops-category-section space-y-3.5" aria-label="Pengingat dan catatan operasional">
+      <div className="flex justify-between items-end px-0.5">
+        <div className="min-w-0">
           <span className="ops-section-label text-[10px] font-extrabold tracking-widest uppercase block">
-            Filter Kategori Ops
+            Modul Operasional
           </span>
           <h2 className="ops-section-title text-sm font-extrabold">
-            Akses Cepat & Tindakan
+            Pengingat & Catatan Operasional
           </h2>
         </div>
-        <span className="ops-badge-count text-xs px-2 py-0.5 rounded-md font-medium">
+        <span className="ops-badge-count text-[10px] px-2.5 py-1 rounded-full font-bold shrink-0">
           4 Kategori
         </span>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-2 gap-2.5">
         {cards.map((card) => {
           const Icon = card.icon;
           return (
@@ -165,23 +163,19 @@ export default function OpsCategoryCards() {
               key={card.id}
               type="button"
               onClick={() => setActiveModal(card.id)}
-              className="ops-card group relative text-left p-3.5 flex flex-col justify-between h-[125px]"
+              className={`ops-card group relative text-left p-3.5 flex flex-col justify-between min-h-[128px] ${card.cardClass}`}
             >
-              <div className="flex justify-between items-start">
+              <div className="flex items-start justify-between gap-2">
                 <div className={`p-2.5 rounded-xl text-white shadow-md group-hover:scale-105 transition-transform ${card.iconClass}`}>
                   <Icon className="w-5 h-5" />
                 </div>
-                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-extrabold ${card.badge.className}`}>
+                <span className={`inline-flex items-center justify-center min-w-7 px-2 py-1 rounded-full text-[10px] font-extrabold tabular-nums ${card.badge.className}`}>
                   {card.badge.text}
                 </span>
               </div>
-              <div>
-                <h3 className="ops-card-title text-sm leading-tight">{card.title}</h3>
-                <p className="ops-card-sub text-[11px] mt-0.5 line-clamp-1">{card.subtitle}</p>
-              </div>
-              <div className={`ops-card-action flex items-center text-[10px] font-semibold ${card.accent} gap-1 pt-1`}>
-                <span>{card.action}</span>
-                <ChevronRight className="w-3 h-3" />
+              <div className="min-w-0 pt-3">
+                <h3 className="ops-card-title text-xs font-extrabold leading-tight">{card.title}</h3>
+                <p className="ops-card-sub text-[10px] leading-snug mt-1 line-clamp-1">{card.subtitle}</p>
               </div>
             </button>
           );
