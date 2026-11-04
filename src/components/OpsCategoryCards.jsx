@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   PackagePlus, CalendarCheck2, UsersRound, Truck,
-  ChevronRight, X, CheckCircle2, Plus, Calendar, Bell,
+  X, CheckCircle2, Plus, Calendar,
 } from 'lucide-react';
 
 const STORAGE_KEY = 'gudangai_ops_categories_v1';
