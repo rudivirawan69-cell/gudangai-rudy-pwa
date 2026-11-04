@@ -1,4 +1,9 @@
-const AGENT_ENDPOINT = '/api/agent';
+import { readStoredSession } from './supabaseAuth';
+
+const DEFAULT_AGENT_API_BASE = 'https://gudangai-rudy-pwa69.rudivirawan69.workers.dev';
+const AGENT_API_BASE = String(import.meta.env.VITE_GUDANGAI_AI_API_BASE || DEFAULT_AGENT_API_BASE).replace(/\/+$/, '');
+const AGENT_ENDPOINT = `${AGENT_API_BASE}/api/agent`;
+const AGENT_HEALTH_ENDPOINT = `${AGENT_API_BASE}/api/agent/health`;
 
 export async function askClaude({ message, context = {}, history = [] }) {
   const text = String(message || '').trim();
@@ -12,9 +17,12 @@ export async function askClaude({ message, context = {}, history = [] }) {
     }))
     .filter((item) => item.content);
 
+  const session = readStoredSession();
+  if (!session?.access_token) throw new Error('Silakan login kembali untuk menggunakan Agent GudangAI.');
+
   const response = await fetch(AGENT_ENDPOINT, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
     body: JSON.stringify({ message: text, context, history: compactHistory }),
   });
 
@@ -28,7 +36,7 @@ export async function askClaude({ message, context = {}, history = [] }) {
 }
 
 export async function getAgentHealth() {
-  const response = await fetch('/api/agent/health', { method: 'GET', cache: 'no-store' });
+  const response = await fetch(AGENT_HEALTH_ENDPOINT, { method: 'GET', cache: 'no-store' });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok || payload?.success !== true) {
     throw new Error(payload?.error || `Status Agent tidak tersedia (HTTP ${response.status}).`);

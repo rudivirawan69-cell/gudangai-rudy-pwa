@@ -1,52 +1,91 @@
-# Supabase Auth integration — Cloudflare Worker
+# GudangAI dual-agent Workers and Supabase Auth
 
-## Authentication flow
+## Runtime architecture
 
-The PWA signs operators in with Supabase Auth and sends the access token to the existing Worker in the Authorization: Bearer header. The Worker verifies it by requesting GET {SUPABASE_URL}/auth/v1/user with the publishable key in apikey and the user token in Authorization. The browser never supplies the identity or role that the Worker trusts.
+- PWA gateway: `gudangai-rudy-pwa69`, configured by root `wrangler.jsonc`.
+- AI primary: the gateway's Cloudflare Workers AI binding (`AI`).
+- Internal fallback: Cloudflare Service Binding `CLAUDE_PROXY` targeting Worker service `claude-proxy`.
+- Proxy Worker: `claude-proxy`, configured by `wrangler.proxy.jsonc`.
+- Supabase Auth: both Workers verify the incoming user access token with `GET {SUPABASE_URL}/auth/v1/user`.
 
-The PWA currently calls Supabase Auth's documented HTTP endpoints directly (password sign-in, refresh-token grant, user lookup, and logout). This avoids adding an unpinned dependency while the repository's package lock remains stable. Session refresh is automatic and synchronized across tabs through browser storage events. A future migration to the official supabase-js client should preserve the same session contract and Worker bearer-token contract.
+The browser calls same-origin `POST /api/agent` with the established request contract:
 
-## PWA build variables
+```json
+{
+  "message": "Periksa prioritas stok",
+  "context": {},
+  "history": []
+}
+```
 
-Set these as build-time variables in the environment that builds the PWA:
+It must also send `Authorization: Bearer <Supabase access token>`. The gateway validates the token before calling any AI provider. Workers AI runs first. Only if it fails does the gateway forward the same `message/context/history` contract and bearer token through the Service Binding to `claude-proxy`. The proxy validates the token again before processing the request.
 
-- VITE_SUPABASE_URL: URL of the active Supabase project.
-- VITE_SUPABASE_PUBLISHABLE_KEY: publishable key (sb_publishable_...) or enabled legacy anon key.
-- VITE_GUDANGAI_AI_API_BASE: existing Cloudflare Worker API origin.
+## Provider and cost behavior
 
-For GitHub Actions, use repository Variables for the URL and publishable key; these are public client configuration, not secrets. For Cloudflare Pages, add the same variables to the build environment. Never place a service-role key in a VITE_ variable or browser bundle.
+- Gateway Workers AI is primary.
+- The proxy's own Workers AI is its first internal provider.
+- Anthropic is an optional downstream fallback in the proxy, and remains disabled by default through `ANTHROPIC_FALLBACK_ENABLED=false`.
+- Do not add an Anthropic API key or enable the fallback unless paid Claude usage is explicitly approved.
+- Service Binding avoids a public internet hop between Workers; it does not make external model inference free.
+- No Google Sheets or Apps Script writes are performed by this Agent route. It receives only the context sent by the PWA and provides analysis.
 
-## Required Worker variables
+## Supabase configuration
 
-Set these in the Cloudflare Worker environment (not in GitHub source):
+Worker secrets (set separately on both Worker services):
+- `SUPABASE_URL`
+- `SUPABASE_ANON_KEY` (a Supabase publishable key or enabled legacy anon key is accepted by the Auth user endpoint)
 
-- SUPABASE_URL: URL of the active Supabase project.
-- SUPABASE_PUBLISHABLE_KEY: the project's publishable key or enabled legacy anon key.
+PWA build-time public configuration:
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_PUBLISHABLE_KEY`
+- `VITE_GUDANGAI_AI_API_BASE` (defaults to `https://gudangai-rudy-pwa69.rudivirawan69.workers.dev`, so PWA builds hosted on GitHub Pages or Vercel still call the Cloudflare gateway)
 
-No service-role key is needed for this authentication flow.
+The GitHub deployment workflow uses `vars.VITE_SUPABASE_URL` and `vars.VITE_SUPABASE_PUBLISHABLE_KEY`, falling back to the corresponding Supabase secrets when repository variables are absent.
 
-## Source file
+Never expose a Supabase service-role/secret key in a `VITE_*` variable or browser bundle. A service-role key is not required for this Auth verification flow.
 
-cloudflare/worker-supabase-auth.js is a protected Worker variant based on the Worker source supplied in this conversation. It preserves AI and ASSETS bindings, /api/chat, /api/models, Claude streaming, non-streaming responses, and static asset fallback.
+## Wrangler configuration
 
-It additionally verifies API callers with Supabase Auth, restricts browser origins, ignores browser-supplied system prompts, validates messages/model/token limits, and applies the existing 20 requests/minute limit per authenticated user and IP. The in-memory rate limit is not a strict global limit.
+- `wrangler.jsonc`: deploys the PWA gateway named `gudangai-rudy-pwa69`, serves `./dist`, binds Workers AI as `AI`, and binds `CLAUDE_PROXY` to the existing `claude-proxy` service.
+- `wrangler.proxy.jsonc`: deploys the existing `worker.js` entrypoint as `claude-proxy`, retains its AI and static asset bindings, and keeps Anthropic fallback disabled.
+
+The exact browser origins allowed by each Worker are configured in its Wrangler `ALLOWED_ORIGINS` variable. Do not replace this allow-list with a wildcard.
 
 ## Deployment safety
 
-This file is intentionally NOT connected to the root wrangler.jsonc. That file currently describes the PWA static-assets deployment and has no Worker entrypoint. Do not run wrangler deploy from this repository or change that config as part of this patch; doing so could alter the existing production static-assets setup.
+The Cloudflare deployment workflow is manual-dispatch only. It:
+1. Installs locked dependencies and runs the gateway and proxy tests.
+2. Builds the PWA with its public Supabase Auth configuration.
+3. Validates Cloudflare and Supabase configuration before making changes.
+4. Runs Wrangler dry-run for both Worker configurations.
+5. Configures the Supabase verification secrets on both Workers.
+6. Deploys `claude-proxy` first, then `gudangai-rudy-pwa69`.
 
-Before deploying:
-1. Restore/activate the intended Supabase project and confirm its URL and publishable key.
-2. Set SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY as Worker environment variables.
-3. Confirm AI and ASSETS bindings remain attached.
-4. Confirm the allowed-origin list matches the exact production PWA origin.
-5. Test missing token (401), invalid token (401), valid token (200), disallowed origin (403), invalid JSON (400), oversized body (413), rate limit (429), SSE completion, and static asset fallback.
-6. Deploy only the Worker service, not the static-assets PWA configuration.
+Required GitHub Actions secrets:
+- `CLOUDFLARE_API_TOKEN`
+- `CLOUDFLARE_ACCOUNT_ID`
+- `SUPABASE_URL`
+- `SUPABASE_ANON_KEY`
 
-## Authorization boundary
+Optional GitHub Actions repository variables:
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_PUBLISHABLE_KEY`
+- `VITE_GUDANGAI_AI_API_BASE`
 
-A valid Supabase account is required for chat access. The user object returned by Supabase is the trusted identity. Authorization metadata is read only from Supabase server response app_metadata, never user_metadata or frontend profile state. Add stricter role policies before exposing stock/PO tools.
+The workflow must not run automatically on feature-branch pushes or pull-request events. Do not report deployment as complete until the manual workflow succeeds and both live health endpoints are checked.
 
-## Current limitation
+## Verification endpoints
 
-This phase authenticates Claude API access only. It does not yet connect the Worker to Google Sheets or Apps Script. Live stock and PO answers remain unavailable until read-only data tools are implemented and verified.
+- PWA gateway: `GET https://gudangai-rudy-pwa69.rudivirawan69.workers.dev/api/agent/health`
+- Proxy Worker: `GET https://claude-proxy.rudivirawan69.workers.dev/api/agent/health`
+
+Expected gateway health fields include `primary=cloudflare-workers-ai`, `proxyBindingConfigured=true`, `proxyReachable=true`, `authRequired=true`, and `anthropicFallbackEnabled=false` unless the paid fallback has explicitly been enabled.
+
+## Security and limitations
+
+- Missing/invalid Supabase sessions are rejected before either AI provider is called.
+- Browser-supplied identity, role, or system prompt is not trusted.
+- Request message length is limited; history is compacted before provider calls.
+- The proxy performs its own Supabase token verification as defense in depth.
+- Agent context is limited to what the PWA sends. This implementation does not query Google Sheets or Apps Script directly and must not claim to know live stock beyond supplied context.
+- `cloudflare/worker-supabase-auth.js` remains a legacy/reference Worker variant and is not the production gateway entrypoint.
