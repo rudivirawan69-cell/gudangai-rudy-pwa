@@ -1,3 +1,5 @@
+import { readStoredSession } from './supabaseAuth';
+
 const AGENT_ENDPOINT = '/api/agent';
 
 export async function askClaude({ message, context = {}, history = [] }) {
@@ -12,9 +14,12 @@ export async function askClaude({ message, context = {}, history = [] }) {
     }))
     .filter((item) => item.content);
 
+  const session = readStoredSession();
+  if (!session?.access_token) throw new Error('Silakan login kembali untuk menggunakan Agent GudangAI.');
+
   const response = await fetch(AGENT_ENDPOINT, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
     body: JSON.stringify({ message: text, context, history: compactHistory }),
   });
 
