@@ -12,7 +12,7 @@ export function Movement7Days({ history = [] }) {
     }
     for (const entry of history || []) {
       const raw = String(entry?.tanggal || entry?.date || entry?.createdAt || '').slice(0, 10);
-      const key = /^\\d{4}-\\d{2}-\\d{2}$/.test(raw) ? raw : '';
+      const key = raw.length === 10 && raw[4] === '-' && raw[7] === '-' ? raw : '';
       if (!map[key]) continue;
       const type = String(entry?.type || entry?.jenis || '').toLowerCase();
       const qty = Math.max(0, Number(entry?.qty || entry?.totalQty || 0) || 0);
