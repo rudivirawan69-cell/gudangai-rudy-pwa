@@ -6,7 +6,7 @@ import {
 } from '../data/api';
 import { DIVISIONS } from '../data/master';
 import { classifyStockLevel } from '../data/stockStatus';
-import OperatorTasks from '../components/OperatorTasks';
+import HomeReminderModule from '../components/HomeReminderModule';
 import {
   AlertTriangle, RefreshCw, FileText, Package, Users, Boxes, ShieldAlert, CheckCircle2, AlertCircle, X,
   CalendarDays, CalendarClock, ClipboardCheck, FilePlus2, Mail, Clock3, Layers3, ArrowUpRight,
@@ -1071,7 +1071,9 @@ export default function DashboardPage({ onNavigate }) {
       const unit = Number(it.stok ?? it.stockAkhir ?? 0) || 0;
       totalUnit += unit;
       const ent = String(it.entitas || it.entity || '').toUpperCase();
-      const bucket = ent === 'PT' ? pt : cv;
+      const code = String(it.kode || it.kodeBarang || it.code || '').toUpperCase();
+      const isPT = ['PT', 'WK', 'MM'].includes(ent) || /^(PT|WK|MM|BBPT)[-_]/.test(code);
+      const bucket = isPT ? pt : cv;
       bucket.total += 1;
       bucket.unit += unit;
       bucket[cls] += 1;
@@ -1229,67 +1231,52 @@ export default function DashboardPage({ onNavigate }) {
     dashboardData?.updatedAt ?? dashboardData?.updateTime ?? dashboardData?.waktuUpdate ??
     dashboardData?.waktu_update ?? dashboardData?.terakhirUpdate ?? dashboardData?.timestamp ?? null;
 
-  return (
-    <div className="dashboard-shell w-full max-w-6xl mx-auto px-3 sm:px-5 lg:px-7 pt-4 pb-24 space-y-4">
-      <div className="flex items-start gap-2.5">
-        <details className="dashboard-greeting-card group min-w-0 flex-1 rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-          <summary className="list-none cursor-pointer select-none px-3.5 py-3 sm:px-4 sm:py-3.5 [&::-webkit-details-marker]:hidden">
-            <div className="flex items-center gap-3 min-w-0">
-              <span className="dashboard-icon-badge dashboard-icon-cyan h-10 w-10 shrink-0 rounded-xl flex items-center justify-center">
-                <BellRing className="h-4 w-4" aria-hidden="true" />
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="block text-[9px] font-extrabold uppercase tracking-[0.13em] text-cyan-700">Sapaan & Pengingat · Beranda</span>
-                <span className="block text-[14px] font-extrabold text-slate-900 truncate mt-0.5">{greeting}, {name}</span>
-                <span className="block text-[11px] font-medium text-slate-500 leading-snug mt-0.5 line-clamp-2">{reminder}</span>
-              </span>
-              <ChevronDown className="h-4 w-4 shrink-0 text-slate-400 transition-transform duration-200 group-open:rotate-180" aria-hidden="true" />
-            </div>
-          </summary>
-          <div className="border-t border-slate-100 px-3.5 py-3 sm:px-4 sm:py-4">
-            <div className="mb-3">
-              <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-cyan-700">Dashboard Operasional · Gudang Pusat</p>
-              <p className="text-[12px] text-slate-600 mt-1 leading-relaxed">{reminder}</p>
-            </div>
-            <OperatorTasks />
-          </div>
-        </details>
-        <button
-          type="button"
-          onClick={() => { refresh?.(); loadPO(); loadDashboardData(); }}
-          className="h-11 w-11 shrink-0 rounded-xl border border-slate-200 bg-white text-slate-600 shadow-sm flex items-center justify-center active:scale-95"
-          aria-label="Refresh data"
-          title="Muat ulang data Beranda"
-        >
-          <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-        </button>
+  useEffect(() => {
+    const onRefreshRequested = () => {
+      void refresh();
+      void loadPO();
+      void loadDashboardData();
+    };
+    window.addEventListener('gudangai-refresh-dashboard', onRefreshRequested);
+    return (
+    <div className="dashboard-shell w-full max-w-lg mx-auto px-3 sm:px-4 pt-3 pb-24 space-y-3.5">
+      <div className="flex items-center justify-between gap-2 px-1">
+        <div className="min-w-0">
+          <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-cyan-700">Gudang Pusat · Ringkasan Operasional</p>
+          <p className="mt-0.5 truncate text-[10px] font-medium text-slate-500">
+            Update Spreadsheet: <strong className="text-slate-700">{formatSpreadsheetTimestamp(spreadsheetTimestamp)}</strong>
+          </p>
+        </div>
+        <span className={\`shrink-0 rounded-full border px-2.5 py-1 text-[9px] font-extrabold \${loading ? 'border-sky-200 bg-sky-50 text-sky-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700'}\`}>
+          {loading ? 'Memuat data' : 'Data terbaca'}
+        </span>
       </div>
-      {stats.kritis > 0 && (
-        <section className="home-critical-banner" aria-live="polite">
-          <span className="critical-icon"><ShieldAlert className="h-5 w-5" /></span>
-          <span className="min-w-0 flex-1">
-            <span className="critical-title block">Status Stok Kritis</span>
-            <span className="critical-copy block mt-0.5"><strong>{stats.kritis.toLocaleString('id-ID')} item</strong> perlu tindak lanjut segera.</span>
-          </span>
-          <button type="button" onClick={() => onNavigate?.('stok')}>Cek Stok</button>
-        </section>
-      )}
+
+      <HomeReminderModule
+        onNavigate={onNavigate}
+        criticalCount={stats.kritis}
+        userName={name}
+      />
+
       {confirmMsg && (
-        <p className="rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-[11px] font-semibold text-emerald-700">{confirmMsg}</p>
+        <p className="rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-[11px] font-semibold text-emerald-700" role="status">
+          {confirmMsg}
+        </p>
       )}
 
-      <section className="grid grid-cols-1 xl:grid-cols-2 gap-4" aria-label="Ringkasan operasional">
-        <div className="dashboard-panel rounded-2xl bg-white border border-slate-200 shadow-sm p-4 min-w-0">
+      <section className="grid grid-cols-1 gap-3" aria-label="Analisa dan perbandingan stok">
+        <div className="dashboard-panel rounded-3xl border border-slate-200 bg-white p-4 shadow-sm min-w-0">
           <Movement7Days history={history} />
         </div>
-        <div className="dashboard-panel rounded-2xl bg-white border border-slate-200 shadow-sm p-4 min-w-0">
+        <div className="dashboard-panel rounded-3xl border border-slate-200 bg-white p-4 shadow-sm min-w-0">
           <StockComparison cv={stats.cv} pt={stats.pt} />
         </div>
-        <div className="xl:col-span-2"><DashboardTotals totalItem={dashboardTotalItem} /></div>
       </section>
 
+      <DashboardTotals totalItem={dashboardTotalItem} />
+
       <details className="dashboard-greeting-card group rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-        <summary className="list-none cursor-pointer select-none px-3.5 py-3 sm:px-4 sm:py-3.5 [&::-webkit-details-marker]:hidden">
+        <summary className="list-none cursor-pointer select-none px-3.5 py-3.5 [&::-webkit-details-marker]:hidden">
           <div className="flex items-center gap-3 min-w-0">
             <span className="dashboard-icon-badge dashboard-icon-cyan h-10 w-10 shrink-0 rounded-xl flex items-center justify-center">
               <Layers3 className="h-4 w-4" aria-hidden="true" />
@@ -1297,26 +1284,23 @@ export default function DashboardPage({ onNavigate }) {
             <span className="min-w-0 flex-1">
               <span className="block text-[9px] font-extrabold uppercase tracking-[0.13em] text-cyan-700">Status Stok · per Divisi</span>
               <span className="block text-[14px] font-extrabold text-slate-900 truncate mt-0.5">Status Stok per Divisi</span>
-              <span className="block text-[11px] font-medium text-slate-500 leading-snug mt-0.5">Ringkas kondisi item di setiap divisi · ketuk untuk membuka</span>
+              <span className="block text-[11px] font-medium text-slate-500 mt-0.5">Buka untuk melihat rincian aman, waspada, dan kritis</span>
             </span>
             <ChevronDown className="h-4 w-4 shrink-0 text-slate-400 transition-transform duration-200 group-open:rotate-180" aria-hidden="true" />
           </div>
         </summary>
-        <div className="border-t border-slate-100 px-3.5 py-3 sm:px-4 sm:py-4">
-          <div className="mb-3">
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[9px] font-semibold">
-              <span className="text-emerald-600"><i className="inline-block w-2 h-2 rounded-full bg-emerald-500 mr-1" />Aman</span>
-              <span className="text-amber-600"><i className="inline-block w-2 h-2 rounded-full bg-amber-400 mr-1" />Waspada</span>
-              <span className="text-red-600"><i className="inline-block w-2 h-2 rounded-full bg-red-500 mr-1" />Kritis</span>
-              <span className="text-slate-400">Ring = % kritis</span>
-            </div>
+        <div className="border-t border-slate-100 px-3.5 py-3.5">
+          <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[9px] font-semibold">
+            <span className="text-emerald-600"><i className="inline-block w-2 h-2 rounded-full bg-emerald-500 mr-1" />Aman</span>
+            <span className="text-amber-600"><i className="inline-block w-2 h-2 rounded-full bg-amber-400 mr-1" />Waspada</span>
+            <span className="text-red-600"><i className="inline-block w-2 h-2 rounded-full bg-red-500 mr-1" />Kritis</span>
           </div>
           <DivisionStatus3D items={allItems} sourceRows={dashboardData?.statusPerDivisi} />
         </div>
       </details>
 
-      <details className="dashboard-greeting-card group scroll-mt-4 rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-        <summary className="list-none cursor-pointer select-none px-3.5 py-3 sm:px-4 sm:py-3.5 [&::-webkit-details-marker]:hidden">
+      <details className="dashboard-greeting-card group rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+        <summary className="list-none cursor-pointer select-none px-3.5 py-3.5 [&::-webkit-details-marker]:hidden">
           <div className="flex items-center gap-3 min-w-0">
             <span className="dashboard-icon-badge dashboard-icon-orange h-10 w-10 shrink-0 rounded-xl flex items-center justify-center">
               <ClipboardCheck className="h-4 w-4" aria-hidden="true" />
@@ -1324,31 +1308,30 @@ export default function DashboardPage({ onNavigate }) {
             <span className="min-w-0 flex-1">
               <span className="block text-[9px] font-extrabold uppercase tracking-[0.13em] text-amber-700">Status PO · Purchase Order</span>
               <span className="block text-[14px] font-extrabold text-slate-900 truncate mt-0.5">Status Purchase Order</span>
-              <span className="block text-[11px] font-medium text-slate-500 leading-snug mt-0.5">Pantau kedatangan & konfirmasi PO · ketuk untuk membuka</span>
+              <span className="block text-[11px] font-medium text-slate-500 mt-0.5">Pantau kedatangan & konfirmasi PO</span>
             </span>
             <ChevronDown className="h-4 w-4 shrink-0 text-slate-400 transition-transform duration-200 group-open:rotate-180" aria-hidden="true" />
           </div>
         </summary>
-        <div className="border-t border-slate-100 px-3.5 py-3 sm:px-4 sm:py-4">
-          <section aria-label="Purchase Order">
-            <StatusPOCard
-              data={poData}
-              loading={poLoading}
-              error={poError}
-              onRefresh={loadPO}
-              onConfirm={handleConfirm}
-              confirmingId={confirmingId}
-              onNavigate={onNavigate}
-            />
-          </section>
+        <div className="border-t border-slate-100 px-3.5 py-3.5">
+          <StatusPOCard
+            data={poData}
+            loading={poLoading}
+            error={poError}
+            onRefresh={loadPO}
+            onConfirm={handleConfirm}
+            confirmingId={confirmingId}
+            onNavigate={onNavigate}
+          />
         </div>
       </details>
 
       {pending > 0 && (
-        <div className="rounded-xl bg-amber-50 border border-amber-100 px-3 py-2.5 text-[12px] text-amber-800 font-medium">
-          {pending} item menunggu sinkronisasi di Antrian.
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-[11px] font-semibold text-amber-800">
+          {pending} item menunggu sinkronisasi transaksi di Antrian.
         </div>
       )}
     </div>
   );
+}
 }
