@@ -38,6 +38,7 @@ Worker secrets (set separately on both Worker services):
 PWA build-time public configuration:
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_PUBLISHABLE_KEY`
+- `VITE_GUDANGAI_AI_API_BASE` (defaults to `https://gudangai-rudy-pwa69.rudivirawan69.workers.dev`, so PWA builds hosted on GitHub Pages or Vercel still call the Cloudflare gateway)
 
 The GitHub deployment workflow uses `vars.VITE_SUPABASE_URL` and `vars.VITE_SUPABASE_PUBLISHABLE_KEY`, falling back to the corresponding Supabase secrets when repository variables are absent.
 
@@ -69,6 +70,7 @@ Required GitHub Actions secrets:
 Optional GitHub Actions repository variables:
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_PUBLISHABLE_KEY`
+- `VITE_GUDANGAI_AI_API_BASE`
 
 The workflow must not run automatically on feature-branch pushes or pull-request events. Do not report deployment as complete until the manual workflow succeeds and both live health endpoints are checked.
 
