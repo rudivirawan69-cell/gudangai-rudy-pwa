@@ -1,6 +1,9 @@
 import { readStoredSession } from './supabaseAuth';
 
-const AGENT_ENDPOINT = '/api/agent';
+const DEFAULT_AGENT_API_BASE = 'https://gudangai-rudy-pwa69.rudivirawan69.workers.dev';
+const AGENT_API_BASE = String(import.meta.env.VITE_GUDANGAI_AI_API_BASE || DEFAULT_AGENT_API_BASE).replace(/\\/+$/, '');
+const AGENT_ENDPOINT = `${AGENT_API_BASE}/api/agent`;
+const AGENT_HEALTH_ENDPOINT = `${AGENT_API_BASE}/api/agent/health`;
 
 export async function askClaude({ message, context = {}, history = [] }) {
   const text = String(message || '').trim();
@@ -33,7 +36,7 @@ export async function askClaude({ message, context = {}, history = [] }) {
 }
 
 export async function getAgentHealth() {
-  const response = await fetch('/api/agent/health', { method: 'GET', cache: 'no-store' });
+  const response = await fetch(AGENT_HEALTH_ENDPOINT, { method: 'GET', cache: 'no-store' });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok || payload?.success !== true) {
     throw new Error(payload?.error || `Status Agent tidak tersedia (HTTP ${response.status}).`);
