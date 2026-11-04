@@ -7,12 +7,11 @@ const source = await readFile(new URL('../src/data/claude.js', import.meta.url),
 test('PWA Agent client targets the Cloudflare gateway from GitHub Pages and other hosts', () => {
   assert.match(source, /VITE_GUDANGAI_AI_API_BASE/);
   assert.match(source, /https:\/\/gudangai-rudy-pwa69\.rudivirawan69\.workers\.dev/);
-  assert.match(source, /AGENT_API_BASE\s*\?\s*`\$\{AGENT_API_BASE\}\/api\/agent`\s*:\s*'\/api\/agent'/);
+  assert.match(source, /const AGENT_ENDPOINT = `\$\{AGENT_API_BASE\}\/api\/agent`;/);
 });
 
 test('Agent health uses the same configured gateway origin', () => {
-  assert.match(source, /AGENT_HEALTH_ENDPOINT/);
-  assert.match(source, /AGENT_API_BASE\}\/api\/agent\/health/);
+  assert.match(source, /const AGENT_HEALTH_ENDPOINT = `\$\{AGENT_API_BASE\}\/api\/agent\/health`;/);
 });
 
 test('PWA forwards the Supabase bearer token and does not call claude-proxy directly', () => {
