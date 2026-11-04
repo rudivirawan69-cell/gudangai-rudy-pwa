@@ -75,3 +75,13 @@ html[data-theme] .app-content .movement-seven-days { color: var(--text-main); }
 html[data-theme] .app-content .movement-seven-days .text-slate-800 { color: var(--text-main) !important; }
 html[data-theme] .app-content .movement-seven-days .text-slate-400 { color: var(--text-muted) !important; }
 html[data-theme] .app-content .movement-seven-days .border-slate-100 { border-color: var(--border) !important; }
+
+html[data-theme] .app-content .home-reminder-module .home-reminder-muted button {
+  background: var(--bg-elevated) !important; border-color: var(--border) !important; color: var(--text-main) !important;
+}
+html[data-theme] .app-content .home-reminder-module .home-reminder-surface[aria-pressed="true"] {
+  background: var(--bg-muted) !important;
+}
+html[data-theme] .app-content .home-reminder-module .home-reminder-critical .text-slate-700 {
+  color: #334155 !important;
+}
