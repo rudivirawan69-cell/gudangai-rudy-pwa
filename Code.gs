@@ -4599,7 +4599,8 @@ function saveOperationalNote_(body) {
     }
     if (!targetRow) targetRow = Math.max(2, last + 1);
     var updatedAt = new Date().toISOString();
-    var storedText = /^[=+\\-@]/.test(noteText) ? "'" + noteText : noteText; // prevent spreadsheet formula injection
+    var firstChar = noteText.charAt(0);
+    var storedText = ["=", "+", "-", "@"].indexOf(firstChar) >= 0 ? "'" + noteText : noteText; // prevent spreadsheet formula injection
     var values = [[id, category, storedText, done, createdAt, updatedAt, actor, false]];
     sheet.getRange(targetRow, 1, 1, 3).setNumberFormat("@");
     sheet.getRange(targetRow, 5, 1, 3).setNumberFormat("@");
