@@ -7,7 +7,7 @@ import {
 import { DIVISIONS } from '../data/master';
 import { classifyStockLevel } from '../data/stockStatus';
 import OpsCategoryCards from '../components/OpsCategoryCards';
-import HomeReminderModule from '../components/HomeReminderModule';
+import OperatorTasks from '../components/OperatorTasks';
 import ClaudeAssistant from '../components/ClaudeAssistant';
 import {
   RefreshCw, FileText, Package, Users, Boxes, ShieldAlert, CheckCircle2, AlertCircle, X,
@@ -120,7 +120,7 @@ export default function DashboardPage({ onNavigate }) {
         <p className="rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-[11px] font-semibold text-emerald-700">{confirmMsg}</p>
       )}
 
-      <HomeReminderModule onNavigate={onNavigate} criticalCount={stats.kritis} userName={user?.name || 'Rudi Virawan'} />
+      <OperatorTasks />
 
       <ClaudeAssistant stock={allItems} pending={pending} />
 
