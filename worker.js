@@ -1,43 +1,87 @@
-const ALLOWED_ORIGIN = 'https://claude-proxy.rudivirawan69.workers.dev';
-const MODEL = 'claude-3-5-haiku-latest';
+const DEFAULT_MODEL = '@cf/meta/llama-3.1-8b-instruct';
+const ANTHROPIC_MODEL = 'claude-3-5-haiku-latest';
+const MAX_MESSAGE_LENGTH = 4000;
+const MAX_HISTORY_ITEMS = 8;
 
-function json(data, status = 200, origin = ALLOWED_ORIGIN) {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: {
-      'content-type': 'application/json; charset=utf-8',
-      'cache-control': 'no-store',
-      'access-control-allow-origin': origin,
-      'access-control-allow-headers': 'content-type',
-      'access-control-allow-methods': 'POST, OPTIONS',
-    },
-  });
+function allowedOrigins(request, env) {
+  const requestOrigin = new URL(request.url).origin;
+  const configured = String(env.ALLOWED_ORIGINS || '')
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean);
+  return new Set([requestOrigin, ...configured]);
+}
+
+function json(data, status = 200, origin = '') {
+  const headers = {
+    'content-type': 'application/json; charset=utf-8',
+    'cache-control': 'no-store',
+    'vary': 'Origin',
+  };
+  if (origin) {
+    headers['access-control-allow-origin'] = origin;
+    headers['access-control-allow-headers'] = 'content-type';
+    headers['access-control-allow-methods'] = 'GET, POST, OPTIONS';
+  }
+  return new Response(JSON.stringify(data), { status, headers });
 }
 
 function systemPrompt(context = {}) {
   return [
-    'Kamu adalah Claude Ops Assistant untuk GudangAI RUDY, cold storage Nasi Goreng 69.',
-    'Jawab dalam Bahasa Indonesia secara singkat, praktis, dan berorientasi tindakan operator.',
-    'Jangan mengarang kode barang, jumlah, atau status PO yang tidak ada dalam konteks.',
-    'Jangan mengubah master data. Jika data tidak cukup, minta operator membuka halaman yang tepat.',
-    `Konteks operasi saat ini: ${JSON.stringify(context).slice(0, 3500)}`,
+    'Kamu adalah Agent Operasional GudangAI RUDY untuk gudang pusat dan cold storage Nasi Goreng 69.',
+    'Jawab dalam Bahasa Indonesia, singkat, akurat, dan berorientasi tindakan operator.',
+    'Jangan mengarang kode barang, jumlah, saldo, status PO, jadwal, atau kejadian yang tidak ada dalam konteks.',
+    'Jangan mengubah master data atau melakukan transaksi stok. Kamu hanya memberi analisis dan rekomendasi.',
+    'Jika data tidak cukup, jelaskan data yang kurang dan minta operator memeriksa halaman/sumber yang tepat.',
+    'Bedakan fakta dari perkiraan. Jangan mengklaim telah mengirim pesan, mengubah data, atau menjalankan tugas.',
+    `Konteks operasi: ${JSON.stringify(context).slice(0, 3500)}`,
   ].join('\n');
 }
 
-async function handleClaude(request, env) {
-  if (!env.ANTHROPIC_API_KEY) {
-    return json({ success: false, code: 'CLAUDE_NOT_CONFIGURED', error: 'Agent Claude belum dikonfigurasi di Worker. Tambahkan secret ANTHROPIC_API_KEY pada Cloudflare Worker.' }, 503);
-  }
-  const body = await request.json().catch(() => null);
-  const message = String(body?.message || '').trim();
-  if (!message) return json({ success: false, code: 'MESSAGE_REQUIRED', error: 'Pertanyaan belum diisi.' }, 400);
-  if (message.length > 4000) return json({ success: false, code: 'MESSAGE_TOO_LONG', error: 'Pertanyaan terlalu panjang.' }, 413);
+function normalizeHistory(history, currentMessage) {
+  const normalized = (Array.isArray(history) ? history : [])
+    .slice(-MAX_HISTORY_ITEMS)
+    .map((item) => ({
+      role: item?.role === 'assistant' ? 'assistant' : 'user',
+      content: String(item?.content || '').trim().slice(0, MAX_MESSAGE_LENGTH),
+    }))
+    .filter((item) => item.content);
 
-  const history = Array.isArray(body?.history) ? body.history.slice(-8).map((item) => ({
-    role: item?.role === 'assistant' ? 'assistant' : 'user',
-    content: String(item?.content || '').slice(0, 4000),
-  })).filter((item) => item.content) : [];
-  const messages = [...history, { role: 'user', content: message }];
+  // The PWA currently includes the just-submitted user message in history.
+  // Remove that trailing duplicate because the Worker appends it exactly once.
+  const last = normalized.at(-1);
+  if (last?.role === 'user' && last.content === currentMessage) normalized.pop();
+  return normalized;
+}
+
+function extractText(result) {
+  if (typeof result === 'string') return result.trim();
+  if (typeof result?.response === 'string') return result.response.trim();
+  if (Array.isArray(result?.content)) {
+    return result.content
+      .filter((part) => part?.type === 'text' && typeof part.text === 'string')
+      .map((part) => part.text)
+      .join('\n')
+      .trim();
+  }
+  return '';
+}
+
+async function runWorkersAI(env, messages) {
+  if (!env.AI || typeof env.AI.run !== 'function') {
+    throw new Error('Workers AI binding AI belum tersedia pada Worker.');
+  }
+  const model = String(env.AI_MODEL || DEFAULT_MODEL);
+  const result = await env.AI.run(model, { messages, max_tokens: 700 });
+  const reply = extractText(result);
+  if (!reply) throw new Error('Workers AI mengembalikan jawaban kosong.');
+  return { reply, model, provider: 'cloudflare-workers-ai' };
+}
+
+async function runAnthropicFallback(env, messages, context) {
+  if (env.ANTHROPIC_FALLBACK_ENABLED !== 'true' || !env.ANTHROPIC_API_KEY) {
+    throw new Error('Fallback Anthropic tidak diaktifkan.');
+  }
   const upstream = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
@@ -45,22 +89,97 @@ async function handleClaude(request, env) {
       'x-api-key': env.ANTHROPIC_API_KEY,
       'anthropic-version': '2023-06-01',
     },
-    body: JSON.stringify({ model: MODEL, max_tokens: 700, system: systemPrompt(body?.context), messages }),
+    body: JSON.stringify({
+      model: ANTHROPIC_MODEL,
+      max_tokens: 700,
+      system: systemPrompt(context),
+      messages,
+    }),
   });
   const data = await upstream.json().catch(() => ({}));
-  if (!upstream.ok) return json({ success: false, code: 'CLAUDE_UPSTREAM_ERROR', error: data?.error?.message || `Claude API HTTP ${upstream.status}` }, upstream.status >= 500 ? 502 : upstream.status);
-  const reply = Array.isArray(data?.content) ? data.content.filter((part) => part?.type === 'text').map((part) => part.text).join('\n').trim() : '';
-  return json({ success: true, reply, model: data?.model || MODEL });
+  if (!upstream.ok) {
+    throw new Error(data?.error?.message || `Anthropic API HTTP ${upstream.status}`);
+  }
+  const reply = extractText(data);
+  if (!reply) throw new Error('Anthropic mengembalikan jawaban kosong.');
+  return { reply, model: data?.model || ANTHROPIC_MODEL, provider: 'anthropic-fallback' };
+}
+
+async function handleAgent(request, env, origin) {
+  const body = await request.json().catch(() => null);
+  const message = String(body?.message || '').trim();
+  if (!message) return json({ success: false, code: 'MESSAGE_REQUIRED', error: 'Pertanyaan belum diisi.' }, 400, origin);
+  if (message.length > MAX_MESSAGE_LENGTH) {
+    return json({ success: false, code: 'MESSAGE_TOO_LONG', error: 'Pertanyaan terlalu panjang.' }, 413, origin);
+  }
+
+  const context = body?.context && typeof body.context === 'object' ? body.context : {};
+  const history = normalizeHistory(body?.history, message);
+  const messages = [
+    { role: 'system', content: systemPrompt(context) },
+    ...history,
+    { role: 'user', content: message },
+  ];
+
+  try {
+    const result = await runWorkersAI(env, messages);
+    return json({ success: true, ...result, mode: 'hybrid' }, 200, origin);
+  } catch (primaryError) {
+    // Anthropic is opt-in only: never trigger paid fallback unless explicitly enabled.
+    if (env.ANTHROPIC_FALLBACK_ENABLED === 'true' && env.ANTHROPIC_API_KEY) {
+      try {
+        const fallback = await runAnthropicFallback(env, messages.slice(1), context);
+        return json({ success: true, ...fallback, mode: 'hybrid', fallbackReason: String(primaryError?.message || 'Workers AI unavailable').slice(0, 240) }, 200, origin);
+      } catch (fallbackError) {
+        return json({
+          success: false,
+          code: 'AI_PROVIDERS_UNAVAILABLE',
+          error: 'Workers AI gagal dan fallback Anthropic juga tidak tersedia.',
+          detail: String(fallbackError?.message || 'Fallback gagal').slice(0, 240),
+        }, 503, origin);
+      }
+    }
+    return json({
+      success: false,
+      code: 'WORKERS_AI_UNAVAILABLE',
+      error: 'Agent utama Workers AI sedang tidak tersedia. Anthropic fallback tidak diaktifkan.',
+      detail: String(primaryError?.message || 'Workers AI gagal').slice(0, 240),
+    }, 503, origin);
+  }
 }
 
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
-    if (request.method === 'OPTIONS') return json({ success: true });
-    if (url.pathname === '/api/claude') {
-      if (request.method !== 'POST') return json({ success: false, error: 'Method not allowed' }, 405);
-      return handleClaude(request, env);
+    const originHeader = request.headers.get('Origin') || '';
+    const origins = allowedOrigins(request, env);
+    if (originHeader && !origins.has(originHeader)) {
+      return json({ success: false, code: 'ORIGIN_NOT_ALLOWED', error: 'Origin tidak diizinkan.' }, 403);
     }
+    const corsOrigin = originHeader && origins.has(originHeader) ? originHeader : '';
+
+    if (request.method === 'OPTIONS') {
+      if (originHeader && !corsOrigin) return json({ success: false, code: 'ORIGIN_NOT_ALLOWED' }, 403);
+      return json({ success: true }, 200, corsOrigin);
+    }
+
+    if (url.pathname === '/api/agent/health') {
+      if (request.method !== 'GET') return json({ success: false, error: 'Method not allowed' }, 405, corsOrigin);
+      return json({
+        success: true,
+        mode: 'hybrid',
+        primary: 'cloudflare-workers-ai',
+        primaryConfigured: Boolean(env.AI && typeof env.AI.run === 'function'),
+        model: String(env.AI_MODEL || DEFAULT_MODEL),
+        anthropicFallbackEnabled: env.ANTHROPIC_FALLBACK_ENABLED === 'true' && Boolean(env.ANTHROPIC_API_KEY),
+      }, 200, corsOrigin);
+    }
+
+    if (url.pathname === '/api/claude' || url.pathname === '/api/agent') {
+      if (request.method !== 'POST') return json({ success: false, error: 'Method not allowed' }, 405, corsOrigin);
+      return handleAgent(request, env, corsOrigin);
+    }
+
     return env.ASSETS.fetch(request);
   },
 };
