@@ -159,3 +159,23 @@ test('health reports proxy binding without claiming Anthropic is enabled', async
   assert.equal(payload.proxyBindingConfigured, true);
   assert.equal(payload.anthropicFallbackEnabled, false);
 });
+
+test('rejects oversized JSON bodies even when Content-Length is absent', async () => {
+  await withAuth(async () => {
+    let aiCalls = 0;
+    const oversized = JSON.stringify({ message: 'Cek stok', context: { payload: 'x'.repeat(70000) } });
+    const request = new Request(ORIGIN + '/api/agent', {
+      method: 'POST',
+      headers: { Origin: ORIGIN, Authorization: 'Bearer test-access-token', 'Content-Type': 'application/json' },
+      body: oversized,
+    });
+    assert.equal(request.headers.has('Content-Length'), false);
+    const response = await worker.fetch(request, {
+      ...envBase,
+      AI: { run: async () => { aiCalls++; return { response: 'unexpected' }; } },
+    });
+    assert.equal(response.status, 413);
+    assert.equal((await response.json()).code, 'PAYLOAD_TOO_LARGE');
+    assert.equal(aiCalls, 0);
+  });
+});
