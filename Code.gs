@@ -392,6 +392,9 @@ function doPost(e) {
       case "getStockAll": return jsonResponse(getAllStock(body.entitas || body.entity || "ALL"));
       case "getLowStock": return jsonResponse(getLowStock());
       case "getTransactionHistory": return jsonResponse(getTransactionHistory(body));
+      case "getOperationalNotes": return jsonResponse(getOperationalNotes_());
+      case "saveOperationalNote": return jsonResponse(saveOperationalNote_(body));
+      case "deleteOperationalNote": return jsonResponse(deleteOperationalNote_(body));
       case "searchByName": return jsonResponse(searchByName(body.query || body.q || body.nama));
       case "getDashboard":
       case "getDashboardData": return jsonResponse(getDashboardData());
@@ -446,7 +449,7 @@ function doGet(e) {
   // terpanggil oleh browser prefetch, crawler, atau pembukaan ulang URL.
   const blocked = ["addTransaction", "syncTransaction", "bulkTransaction", "writePO", "writePORecommendations", "writePurchaseOrder", "submitPO", "sendPO",
     "refreshDashboard", "refreshAllData", "syncDivision", "syncDivisionStock", "logDailySnapshot",
-    "setupConfig", "setActivePeriod", "setupNewPeriod"];
+    "setupConfig", "setActivePeriod", "setupNewPeriod", "saveOperationalNote", "deleteOperationalNote"];
   if (blocked.indexOf(action) >= 0) {
     return jsonResponse({ success: false, status: "REJECTED", code: "GET_WRITE_BLOCKED", error: "Operasi write/admin harus menggunakan POST terautentikasi." });
   }
@@ -467,6 +470,7 @@ function doGet(e) {
     case "getDashboardData": return jsonResponse(getDashboardData());
     case "getDashboardLegacy": return jsonResponse(getDashboardData());
     case "getTransactionHistory": return jsonResponse(getTransactionHistory({ sheet: e.parameter.sheet, limit: e.parameter.limit }));
+    case "getOperationalNotes": return jsonResponse(getOperationalNotes_());
     case "getTransactionStatus": return jsonResponse(getTransactionStatus({ transactionId: e.parameter.transactionId, nonce: e.parameter.nonce, sheet: e.parameter.sheet }));
     case "searchByName": return jsonResponse(searchByName(e.parameter.query || e.parameter.q));
     case "getLastUpdate": return jsonResponse({ success: true, timestamp: getLastUpdateTimestamp() });
@@ -4503,4 +4507,133 @@ function cleanDashboardPORows39to45() {
     success:false, skipped:true, readOnly:true,
     reason:"Pembersihan baris Dashboard 39:45 dinonaktifkan sampai pemilik layout mengonfirmasi area tersebut."
   };
+}
+
+
+// ============================================================
+//  OPERATIONAL NOTES — isolated shared reminder storage
+//  Does not write to stock master, transaction, Dashboard, or PO sheets.
+// ============================================================
+var OPERATIONAL_NOTES_SHEET = "Catatan Operasional";
+var OPERATIONAL_NOTES_HEADERS = ["ID", "Kategori", "Catatan", "Selesai", "Dibuat", "Diperbarui", "Dibuat Oleh", "Dihapus"];
+var OPERATIONAL_NOTE_CATEGORIES = ["tambahan-order", "jadwal-off", "jadwal-meeting", "kirim-luar-kota"];
+
+function getOperationalNotesSheet_(createIfMissing) {
+  var ss = getSS();
+  var sheet = ss.getSheetByName(OPERATIONAL_NOTES_SHEET);
+  if (!sheet && createIfMissing === true) {
+    sheet = ss.insertSheet(OPERATIONAL_NOTES_SHEET);
+    sheet.getRange(1, 1, 1, OPERATIONAL_NOTES_HEADERS.length).setValues([OPERATIONAL_NOTES_HEADERS]);
+    sheet.setFrozenRows(1);
+    sheet.getRange("A:C").setNumberFormat("@");
+    sheet.getRange("E:G").setNumberFormat("@");
+  }
+  if (sheet && sheet.getLastRow() >= 1) {
+    var header = sheet.getRange(1, 1, 1, OPERATIONAL_NOTES_HEADERS.length).getDisplayValues()[0];
+    if (header.join("|") !== OPERATIONAL_NOTES_HEADERS.join("|")) {
+      throw new Error("Struktur sheet Catatan Operasional tidak sesuai. Periksa header sebelum menulis.");
+    }
+  }
+  return sheet;
+}
+
+function mapOperationalNoteRow_(row) {
+  return {
+    id: String(row[0] || ""),
+    category: String(row[1] || ""),
+    text: String(row[2] || ""),
+    done: row[3] === true || String(row[3]).toLowerCase() === "true",
+    createdAt: String(row[4] || ""),
+    updatedAt: String(row[5] || ""),
+    createdBy: String(row[6] || "")
+  };
+}
+
+function getOperationalNotes_() {
+  var sheet = getOperationalNotesSheet_(false);
+  if (!sheet || sheet.getLastRow() < 2) {
+    return { success: true, source: "spreadsheet", sheet: OPERATIONAL_NOTES_SHEET, items: [] };
+  }
+  var rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, OPERATIONAL_NOTES_HEADERS.length).getValues();
+  var items = [];
+  rows.forEach(function(row) {
+    if (!row[0] || row[7] === true || String(row[7]).toLowerCase() === "true") return;
+    items.push(mapOperationalNoteRow_(row));
+  });
+  items.sort(function(a, b) { return String(b.createdAt).localeCompare(String(a.createdAt)); });
+  return { success: true, source: "spreadsheet", sheet: OPERATIONAL_NOTES_SHEET, items: items };
+}
+
+function saveOperationalNote_(body) {
+  var id = String(body.noteId || body.id || "").trim();
+  var category = String(body.category || "").trim();
+  var noteText = String(body.text || body.catatan || "").trim();
+  var done = body.done === true || String(body.done).toLowerCase() === "true";
+  var actor = String(body.actor || body.createdBy || "GudangAI RUDY").trim().slice(0, 120);
+  if (!id || id.length > 120 || /[\\u0000-\\u001F\\u007F]/.test(id)) {
+    return { success: false, code: "NOTE_ID_INVALID", error: "ID catatan tidak valid." };
+  }
+  if (OPERATIONAL_NOTE_CATEGORIES.indexOf(category) < 0) {
+    return { success: false, code: "NOTE_CATEGORY_INVALID", error: "Kategori catatan tidak dikenal." };
+  }
+  if (!noteText || noteText.length > 300) {
+    return { success: false, code: "NOTE_TEXT_INVALID", error: "Catatan wajib diisi dan maksimal 300 karakter." };
+  }
+  var lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    var sheet = getOperationalNotesSheet_(true);
+    var last = sheet.getLastRow();
+    var targetRow = 0;
+    var createdAt = new Date().toISOString();
+    if (last >= 2) {
+      var ids = sheet.getRange(2, 1, last - 1, 1).getDisplayValues();
+      for (var i = ids.length - 1; i >= 0; i--) {
+        if (String(ids[i][0]) === id) {
+          targetRow = i + 2;
+          var prior = sheet.getRange(targetRow, 1, 1, OPERATIONAL_NOTES_HEADERS.length).getValues()[0];
+          createdAt = String(prior[4] || createdAt);
+          break;
+        }
+      }
+    }
+    if (!targetRow) targetRow = Math.max(2, last + 1);
+    var updatedAt = new Date().toISOString();
+    var values = [[id, category, noteText, done, createdAt, updatedAt, actor, false]];
+    sheet.getRange(targetRow, 1, 1, 3).setNumberFormat("@");
+    sheet.getRange(targetRow, 5, 1, 3).setNumberFormat("@");
+    sheet.getRange(targetRow, 1, 1, OPERATIONAL_NOTES_HEADERS.length).setValues(values);
+    SpreadsheetApp.flush();
+    var check = sheet.getRange(targetRow, 1, 1, OPERATIONAL_NOTES_HEADERS.length).getValues()[0];
+    if (String(check[0]) !== id || String(check[2]) !== noteText || (check[3] === true) !== done) {
+      return { success: false, code: "NOTE_READBACK_FAILED", error: "Catatan belum lolos verifikasi baca ulang." };
+    }
+    return { success: true, source: "spreadsheet", item: mapOperationalNoteRow_(check), row: targetRow };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function deleteOperationalNote_(body) {
+  var id = String(body.noteId || body.id || "").trim();
+  if (!id || id.length > 120) return { success: false, code: "NOTE_ID_INVALID", error: "ID catatan tidak valid." };
+  var lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    var sheet = getOperationalNotesSheet_(false);
+    if (!sheet || sheet.getLastRow() < 2) return { success: true, deleted: false, source: "spreadsheet" };
+    var ids = sheet.getRange(2, 1, sheet.getLastRow() - 1, 1).getDisplayValues();
+    for (var i = ids.length - 1; i >= 0; i--) {
+      if (String(ids[i][0]) !== id) continue;
+      var row = i + 2;
+      sheet.getRange(row, 8).setValue(true); // soft delete; keep audit history
+      sheet.getRange(row, 6).setNumberFormat("@").setValue(new Date().toISOString());
+      SpreadsheetApp.flush();
+      var deleted = sheet.getRange(row, 8).getValue() === true;
+      return { success: deleted, deleted: deleted, source: "spreadsheet", noteId: id };
+    }
+    return { success: true, deleted: false, source: "spreadsheet", noteId: id };
+  } finally {
+    lock.releaseLock();
+  }
 }
