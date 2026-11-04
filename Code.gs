@@ -4570,7 +4570,7 @@ function saveOperationalNote_(body) {
   var noteText = String(body.text || body.catatan || "").trim();
   var done = body.done === true || String(body.done).toLowerCase() === "true";
   var actor = String(body.actor || body.createdBy || "GudangAI RUDY").trim().slice(0, 120);
-  if (!id || id.length > 120 || /[\\u0000-\\u001F\\u007F]/.test(id)) {
+  if (!id || id.length > 120 || id.split("").some(function(ch) { var code = ch.charCodeAt(0); return code < 32 || code === 127; })) {
     return { success: false, code: "NOTE_ID_INVALID", error: "ID catatan tidak valid." };
   }
   if (OPERATIONAL_NOTE_CATEGORIES.indexOf(category) < 0) {
@@ -4599,13 +4599,14 @@ function saveOperationalNote_(body) {
     }
     if (!targetRow) targetRow = Math.max(2, last + 1);
     var updatedAt = new Date().toISOString();
-    var values = [[id, category, noteText, done, createdAt, updatedAt, actor, false]];
+    var storedText = /^[=+\\-@]/.test(noteText) ? "'" + noteText : noteText; // prevent spreadsheet formula injection
+    var values = [[id, category, storedText, done, createdAt, updatedAt, actor, false]];
     sheet.getRange(targetRow, 1, 1, 3).setNumberFormat("@");
     sheet.getRange(targetRow, 5, 1, 3).setNumberFormat("@");
     sheet.getRange(targetRow, 1, 1, OPERATIONAL_NOTES_HEADERS.length).setValues(values);
     SpreadsheetApp.flush();
     var check = sheet.getRange(targetRow, 1, 1, OPERATIONAL_NOTES_HEADERS.length).getValues()[0];
-    if (String(check[0]) !== id || String(check[2]) !== noteText || (check[3] === true) !== done) {
+    if (String(check[0]) !== id || String(check[2]).replace(/^\'/, "") !== noteText || (check[3] === true) !== done) {
       return { success: false, code: "NOTE_READBACK_FAILED", error: "Catatan belum lolos verifikasi baca ulang." };
     }
     return { success: true, source: "spreadsheet", item: mapOperationalNoteRow_(check), row: targetRow };
