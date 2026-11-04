@@ -1,0 +1,48 @@
+name: Cloudflare preview — four-card Beranda
+
+on:
+  push:
+    branches:
+      - feature/beranda-four-card-polish-20261104
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gudangai-cloudflare-four-card-preview
+  cancel-in-progress: true
+
+jobs:
+  deploy-preview:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout preview branch
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build PWA
+        run: npm run build
+
+      - name: Deploy isolated Cloudflare preview Worker
+        uses: cloudflare/wrangler-action@v3
+        id: deploy
+        with:
+          apiToken: \${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: \${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy --config wrangler.jsonc --name gudangai-rudy-live69-preview --var RELEASE_CHANNEL:preview
+
+      - name: Publish preview details
+        run: |
+          echo "## GudangAI preview deployment" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Branch: \`\${GITHUB_REF_NAME}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Worker: \`gudangai-rudy-live69-preview\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Environment: isolated preview; production Worker untouched" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Check the deployment step above for the generated workers.dev URL." >> "$GITHUB_STEP_SUMMARY"
