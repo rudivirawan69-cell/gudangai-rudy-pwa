@@ -144,10 +144,10 @@ export default function OpsCategoryCards() {
       <div className="flex justify-between items-end px-0.5">
         <div className="min-w-0">
           <span className="ops-section-label text-[10px] font-extrabold tracking-widest uppercase block">
-            Pengingat & Catatan
+            Modul Operasional
           </span>
           <h2 className="ops-section-title text-sm font-extrabold">
-            Operasional Gudang
+            Pengingat & Catatan Operasional
           </h2>
         </div>
         <span className="ops-badge-count text-[10px] px-2.5 py-1 rounded-full font-bold shrink-0">
