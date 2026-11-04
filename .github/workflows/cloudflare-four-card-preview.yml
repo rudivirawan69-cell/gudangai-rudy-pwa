@@ -35,14 +35,14 @@ jobs:
         uses: cloudflare/wrangler-action@v3
         id: deploy
         with:
-          apiToken: \${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: \${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: deploy --config wrangler.jsonc --name gudangai-rudy-live69-preview --var RELEASE_CHANNEL:preview
 
       - name: Publish preview details
         run: |
           echo "## GudangAI preview deployment" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Branch: \`\${GITHUB_REF_NAME}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Branch: \`${GITHUB_REF_NAME}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- Worker: \`gudangai-rudy-live69-preview\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- Environment: isolated preview; production Worker untouched" >> "$GITHUB_STEP_SUMMARY"
           echo "- Check the deployment step above for the generated workers.dev URL." >> "$GITHUB_STEP_SUMMARY"
