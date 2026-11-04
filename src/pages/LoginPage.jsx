@@ -1,56 +1,51 @@
 import { useState, useMemo } from 'react';
 import { useAuth } from '../hooks/useAuth';
+import { isSupabaseConfigured } from '../data/supabaseAuth';
 
 const DEFAULT_PIN = '6969';
 
 export default function LoginPage() {
-  const { login } = useAuth();
+  const { login, loginLocal } = useAuth();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [pin, setPin] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
-  const [shake, setShake] = useState(false);
-
-  // PIN length follows stored value (4–6). Default remains 4 digits (6969).
+  const [submitting, setSubmitting] = useState(false);
+  const configured = isSupabaseConfigured();
   const pinLength = useMemo(() => {
     const stored = localStorage.getItem('gudangai_pin') || DEFAULT_PIN;
-    const len = String(stored).length;
-    return Math.min(6, Math.max(4, len || 4));
+    return Math.min(6, Math.max(4, String(stored).length || 4));
   }, []);
 
-  const handleDigit = (d) => {
-    if (pin.length >= pinLength) return;
-    const next = pin + d;
-    setPin(next);
+  const handleSupabaseSubmit = async (event) => {
+    event.preventDefault();
+    if (!configured || submitting) return;
     setError('');
-    if (next.length === pinLength) {
-      setTimeout(() => {
-        if (!login(next)) {
-          setError('PIN salah');
-          setShake(true);
-          setTimeout(() => { setShake(false); setPin(''); }, 600);
-        }
-      }, 200);
+    setSubmitting(true);
+    try {
+      await login(email.trim(), password);
+    } catch (err) {
+      setError(err.message || 'Login Supabase gagal. Periksa akun dan koneksi.');
+    } finally {
+      setSubmitting(false);
     }
   };
 
-  const handleDelete = () => {
-    setPin(p => p.slice(0, -1));
-    setError('');
+  const handleLocalSubmit = (event) => {
+    event.preventDefault();
+    if (loginLocal(pin)) return;
+    setError('PIN lokal salah.');
+    setPin('');
   };
 
-  const dots = Array.from({ length: pinLength }, (_, i) => (
-    <div key={i} className={`w-3.5 h-3.5 rounded-full transition-all duration-200 ${i < pin.length
-      ? 'bg-cyan-300 scale-110 shadow-[0_0_12px_rgba(103,232,249,0.7)]'
-      : 'bg-white/25 border border-white/40'}`} />
-  ));
-
-  const keys = [1, 2, 3, 4, 5, 6, 7, 8, 9, null, 0, 'del'];
   return (
     <div className="min-h-dvh relative overflow-hidden bg-slate-950 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: "url('/assets/login-meeting.jpg')" }} />
       <div className="absolute inset-0 bg-slate-950/55" />
       <div className="absolute inset-0 bg-gradient-to-b from-slate-950/20 via-slate-950/35 to-slate-950/80" />
 
-      <main className={`relative z-10 w-full max-w-sm ${shake ? 'animate-[shake_0.5s_ease-in-out]' : ''}`}>
+      <main className="relative z-10 w-full max-w-sm">
         <section className="rounded-[2rem] border border-white/20 bg-white/10 backdrop-blur-xl shadow-2xl px-6 py-7">
           <div className="text-center mb-6">
             <div className="mx-auto mb-3 w-16 h-16 rounded-2xl bg-white flex items-center justify-center shadow-lg ring-1 ring-white/30 overflow-hidden p-1">
@@ -60,43 +55,39 @@ export default function LoginPage() {
             <p className="text-white/75 text-xs mt-1">Cold Storage Control System</p>
           </div>
 
-          <div className="flex justify-center gap-4 mb-2">
-            {dots}
-          </div>
+          {configured ? (
+            <form onSubmit={handleSupabaseSubmit} className="space-y-3">
+              <label className="block">
+                <span className="mb-1.5 block text-xs font-semibold text-white/85">Email operator</span>
+                <input type="email" autoComplete="username" required value={email} onChange={(event) => setEmail(event.target.value)} placeholder="nama@perusahaan.com" className="w-full rounded-xl border border-white/20 bg-slate-950/35 px-3.5 py-3 text-sm text-white outline-none placeholder:text-white/40 focus:border-cyan-300" />
+              </label>
+              <label className="block">
+                <span className="mb-1.5 block text-xs font-semibold text-white/85">Password</span>
+                <div className="flex gap-2">
+                  <input type={showPassword ? 'text' : 'password'} autoComplete="current-password" required value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Password akun Supabase" className="min-w-0 flex-1 rounded-xl border border-white/20 bg-slate-950/35 px-3.5 py-3 text-sm text-white outline-none placeholder:text-white/40 focus:border-cyan-300" />
+                  <button type="button" onClick={() => setShowPassword((value) => !value)} className="rounded-xl border border-white/20 px-3 text-xs font-semibold text-white/80">{showPassword ? 'Sembunyi' : 'Lihat'}</button>
+                </div>
+              </label>
+              {error && <p role="alert" className="rounded-xl border border-rose-300/40 bg-rose-500/10 p-3 text-xs text-rose-100">{error}</p>}
+              <button type="submit" disabled={submitting || !email.trim() || !password} className="w-full rounded-xl bg-cyan-500 py-3 text-sm font-extrabold text-slate-950 shadow-lg disabled:opacity-50">{submitting ? 'Memverifikasi akun…' : 'Masuk dengan Supabase'}</button>
+            </form>
+          ) : (
+            <form onSubmit={handleLocalSubmit} className="space-y-3">
+              <div className="rounded-xl border border-amber-300/40 bg-amber-400/10 p-3 text-xs leading-relaxed text-amber-100">
+                Mode kompatibilitas lokal. Fitur PWA lama tetap dapat digunakan, tetapi Claude dan endpoint AI terkunci sampai Supabase dikonfigurasi. PIN lokal bukan autentikasi server.
+              </div>
+              <label className="block">
+                <span className="mb-1.5 block text-xs font-semibold text-white/85">PIN perangkat ({pinLength} digit)</span>
+                <input type="password" inputMode="numeric" autoComplete="current-password" maxLength={pinLength} required value={pin} onChange={(event) => { setPin(event.target.value.replace(/\D/g, '').slice(0, pinLength)); setError(''); }} placeholder="Masukkan PIN lokal" className="w-full rounded-xl border border-white/20 bg-slate-950/35 px-3.5 py-3 text-center text-lg tracking-[0.5em] text-white outline-none placeholder:text-white/40 focus:border-cyan-300" />
+              </label>
+              {error && <p role="alert" className="rounded-xl border border-rose-300/40 bg-rose-500/10 p-3 text-xs text-rose-100">{error}</p>}
+              <button type="submit" disabled={pin.length !== pinLength} className="w-full rounded-xl bg-cyan-500 py-3 text-sm font-extrabold text-slate-950 shadow-lg disabled:opacity-50">Masuk mode lokal</button>
+            </form>
+          )}
 
-          <div className="h-6 mb-3 text-center">
-            {error ? <p className="text-rose-300 text-sm font-semibold">{error}</p> : <p className="text-white/65 text-xs">Masukkan PIN ({pinLength} digit)</p>}
-          </div>
-
-          <div className="grid grid-cols-3 gap-2.5">
-            {keys.map((k, i) => {
-              if (k === null) return <div key={i} />;
-              if (k === 'del') return (
-                <button key={i} type="button" onClick={handleDelete} aria-label="Hapus angka terakhir"
-                  className="h-14 rounded-2xl bg-white/10 border border-white/20 text-white/80 text-sm font-semibold backdrop-blur-md active:bg-white/20 active:scale-95 transition-all">
-                  ←
-                </button>
-              );
-              return (
-                <button key={i} type="button" onClick={() => handleDigit(String(k))}
-                  className="h-14 rounded-2xl bg-white/12 border border-white/20 text-white text-lg font-bold backdrop-blur-md active:bg-cyan-400/30 active:border-cyan-300/60 active:scale-95 transition-all">
-                  {k}
-                </button>
-              );
-            })}
-          </div>
-
-          <p className="text-white/55 text-[10px] text-center mt-6">Nasi Goreng 69 · Cold Storage</p>
+          <p className="text-white/55 text-[10px] text-center mt-6">Nasi Goreng 69 · Cold Storage · Supabase Auth</p>
         </section>
       </main>
-
-      <style>{`
-        @keyframes shake {
-          0%, 100% { transform: translateX(0); }
-          25% { transform: translateX(-8px); }
-          75% { transform: translateX(8px); }
-        }
-      `}</style>
     </div>
   );
 }

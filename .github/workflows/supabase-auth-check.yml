@@ -1,0 +1,39 @@
+name: GudangAI Supabase Auth checks
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "cloudflare/**"
+      - "docs/SUPABASE_AUTH_WORKER_SETUP.md"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/supabase-auth-check.yml"
+  push:
+    branches: [feature/full-ai-intelligence-foundation]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Check Worker JavaScript syntax
+        run: node --check cloudflare/worker-supabase-auth.js
+      - name: Check Supabase Auth client syntax
+        run: node --check src/data/supabaseAuth.js
+      - name: Test Worker auth contract
+        run: node scripts/test-worker-auth.mjs
+      - name: Build PWA
+        run: npm run build

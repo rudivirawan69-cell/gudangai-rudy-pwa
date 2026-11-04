@@ -7,7 +7,7 @@ import { useConnection } from './hooks/useConnection';
 import { useBootstrap } from './hooks/useBootstrap';
 import {
   LayoutDashboard, Package, PackagePlus, Clock, Settings, ClipboardList,
-  WifiOff, AlertTriangle, Loader2, Mail, RefreshCw,
+  WifiOff, AlertTriangle, Loader2, Mail, RefreshCw, BrainCircuit,
 } from 'lucide-react';
 
 const DashboardPage = lazy(() => import('./pages/DashboardPage'));
@@ -17,6 +17,7 @@ const POPage = lazy(() => import('./pages/POPage'));
 const RiwayatPage = lazy(() => import('./pages/RiwayatPage'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 const SyncQueuePage = lazy(() => import('./pages/SyncQueuePage'));
+const AIAssistantPage = lazy(() => import('./pages/AIAssistantPage'));
 
 class ErrorBoundary extends Component {
   constructor(props) {
@@ -47,6 +48,7 @@ const TABS = [
   { id: 'stok', label: 'Stok', icon: Package, chip: 'bg-blue-500/25' },
   { id: 'input', label: 'Input', icon: PackagePlus, chip: 'bg-emerald-500/25' },
   { id: 'po', label: 'PO', icon: ClipboardList, chip: 'bg-violet-500/25' },
+  { id: 'ai', label: 'AI', icon: BrainCircuit, chip: 'bg-orange-500/25' },
   { id: 'riwayat', label: 'Riwayat', icon: Clock, chip: 'bg-amber-500/25' },
   { id: 'settings', label: 'Atur', icon: Settings, chip: 'bg-slate-500/25' },
 ];
@@ -56,6 +58,7 @@ const TAB_ACCENT = {
   stok: 'from-blue-400 to-blue-600',
   input: 'from-emerald-400 to-emerald-600',
   po: 'from-violet-400 to-violet-600',
+  ai: 'from-orange-400 to-amber-600',
   riwayat: 'from-amber-400 to-amber-600',
   settings: 'from-slate-400 to-slate-600',
 };
@@ -65,6 +68,7 @@ const TAB_SUBTITLE = {
   stok: 'MONITORING STOK RAK',
   input: 'PENERIMAAN & PENGELUARAN',
   po: 'PURCHASE ORDER SYSTEM',
+  ai: 'GUDANGAI INTELLIGENCE · CLAUDE',
   riwayat: 'LOG AUDIT TRANSAKSI',
   settings: 'PENGATURAN SYSTEM',
   sync: 'ANTRIAN SINKRONISASI',
@@ -251,6 +255,7 @@ function AppShell() {
     case 'stok': page = <StokPage />; break;
     case 'input': page = <InputPage />; break;
     case 'po': page = <POPage onNavigate={goTab} />; break;
+    case 'ai': page = <AIAssistantPage />; break;
     case 'riwayat': page = <RiwayatPage onNavigate={goTab} />; break;
     case 'settings': page = <SettingsPage onNavigate={goTab} />; break;
     case 'sync': page = <SyncQueuePage onBack={() => goTab('settings')} />; break;
@@ -285,7 +290,7 @@ function AppShell() {
         </div>
       </main>
       <nav className="nav-bar nav-bar-6 fixed bottom-0 left-0 right-0 safe-bottom z-40">
-        <div className="max-w-lg mx-auto flex relative" style={{ '--nav-index': navIndex, '--nav-count': 6 }}>
+        <div className="max-w-lg mx-auto flex relative" style={{ '--nav-index': navIndex, '--nav-count': TABS.length }}>
           {TABS.map((t) => {
             const Icon = t.icon;
             const isActive = tab === t.id;
