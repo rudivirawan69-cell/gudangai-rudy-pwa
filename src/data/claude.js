@@ -1,7 +1,7 @@
 import { readStoredSession } from './supabaseAuth';
 
 const DEFAULT_AGENT_API_BASE = 'https://gudangai-rudy-pwa69.rudivirawan69.workers.dev';
-const AGENT_API_BASE = String(import.meta.env.VITE_GUDANGAI_AI_API_BASE || DEFAULT_AGENT_API_BASE).replace(/\\/+$/, '');
+const AGENT_API_BASE = String(import.meta.env.VITE_GUDANGAI_AI_API_BASE || DEFAULT_AGENT_API_BASE).replace(/\/+$/, '');
 const AGENT_ENDPOINT = `${AGENT_API_BASE}/api/agent`;
 const AGENT_HEALTH_ENDPOINT = `${AGENT_API_BASE}/api/agent/health`;
 
