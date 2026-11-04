@@ -127,6 +127,7 @@ export default function HomeReminderModule({ onNavigate, criticalCount = 0, user
     const value = draft.trim();
     if (!value || busy) return;
     const note = normalizeNote({ id: makeId(), category, text: value, done: false, createdAt: new Date().toISOString(), createdBy: userName, syncStatus: 'pending' });
+    setSyncState('pending');
     setNotes((current) => [note, ...current]);
     setDraft('');
     setExpanded(false);
@@ -145,6 +146,7 @@ export default function HomeReminderModule({ onNavigate, criticalCount = 0, user
 
   const toggleNote = async (note) => {
     const updated = { ...note, done: !note.done, syncStatus: 'pending' };
+    setSyncState('pending');
     setNotes((current) => current.map((n) => n.id === note.id ? updated : n));
     try {
       await saveOperationalNote(updated);
@@ -154,6 +156,7 @@ export default function HomeReminderModule({ onNavigate, criticalCount = 0, user
   };
 
   const removeNote = async (note) => {
+    setSyncState('pending');
     setNotes((current) => current.map((n) => n.id === note.id ? { ...n, syncStatus: 'pending-delete' } : n));
     try {
       await deleteOperationalNote(note.id);
