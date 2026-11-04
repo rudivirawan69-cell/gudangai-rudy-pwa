@@ -1,7 +1,8 @@
 {
-  "name": "claude-proxy",
-  "compatibility_date": "2026-10-04",
-  "main": "worker.js",
+  "name": "gudangai-rudy-pwa69",
+  "main": "cloudflare/gateway-worker.js",
+  "compatibility_date": "2026-11-04",
+  "workers_dev": true,
   "assets": {
     "directory": "./dist",
     "binding": "ASSETS",
@@ -11,10 +12,14 @@
   "ai": {
     "binding": "AI"
   },
+  "services": [
+    {
+      "binding": "CLAUDE_PROXY",
+      "service": "claude-proxy"
+    }
+  ],
   "vars": {
     "AI_MODEL": "@cf/meta/llama-3.1-8b-instruct",
-    "ANTHROPIC_FALLBACK_ENABLED": "false",
-    "ALLOWED_ORIGINS": "https://gudangai-rudy-pwa69.rudivirawan69.workers.dev,https://claude-proxy.rudivirawan69.workers.dev"
-  },
-  "previews": {}
+    "ALLOWED_ORIGINS": "https://gudangai-rudy-pwa69.rudivirawan69.workers.dev,https://rudivirawan69-cell.github.io,https://gudangai-rudy-pwa-live.vercel.app"
+  }
 }
