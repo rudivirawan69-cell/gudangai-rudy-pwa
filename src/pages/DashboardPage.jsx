@@ -6,6 +6,7 @@ import {
 } from '../data/api';
 import { DIVISIONS } from '../data/master';
 import { classifyStockLevel } from '../data/stockStatus';
+import OpsCategoryCards from '../components/OpsCategoryCards';
 import OperatorTasks from '../components/OperatorTasks';
 import ClaudeAssistant from '../components/ClaudeAssistant';
 import {
@@ -101,16 +102,14 @@ export default function DashboardPage({ onNavigate }) {
 
   return (
     <div className="dashboard-shell w-full max-w-6xl mx-auto px-3 sm:px-5 lg:px-7 pt-4 pb-24 space-y-4">
-      <div className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200/80 bg-white/80 px-4 py-3 shadow-sm">
-        <div className="min-w-0">
-          <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-cyan-700">Pusat Kendali Gudang</p>
-          <h1 className="mt-0.5 text-base font-black tracking-tight text-slate-900">Ringkasan Operasional</h1>
-          <p className="mt-0.5 text-[10px] font-medium text-slate-500">Pantau stok, pergerakan, dan status PO</p>
+      <div className="flex items-start gap-2.5">
+        <div className="min-w-0 flex-1">
+          <OpsCategoryCards />
         </div>
         <button
           type="button"
           onClick={() => { refresh?.(); loadPO(); loadDashboardData(); }}
-          className="h-10 w-10 shrink-0 rounded-xl border border-slate-200 bg-white text-slate-600 shadow-sm flex items-center justify-center active:scale-95"
+          className="h-11 w-11 shrink-0 rounded-xl border border-slate-200 bg-white text-slate-600 shadow-sm flex items-center justify-center active:scale-95 mt-8"
           aria-label="Refresh data"
           title="Muat ulang data Beranda"
         >
