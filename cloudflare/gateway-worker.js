@@ -114,7 +114,7 @@ async function callWorkersAI(env, messages) {
   return { success: true, reply, model, provider: 'cloudflare-workers-ai', mode: 'hybrid' };
 }
 
-async function callProxyFallback(request, env, auth, body) {
+async function callProxyFallback(request, env, auth, body, primaryError) {
   if (!env.CLAUDE_PROXY || typeof env.CLAUDE_PROXY.fetch !== 'function') {
     throw new Error('Service Binding CLAUDE_PROXY belum tersedia.');
   }
@@ -138,7 +138,7 @@ async function callProxyFallback(request, env, auth, body) {
   return {
     ...payload,
     fallback: true,
-    primaryError: 'Workers AI primary tidak tersedia.',
+    primaryError: String(primaryError?.message || 'Workers AI unavailable').slice(0, 180),
   };
 }
 
@@ -185,9 +185,9 @@ async function handleAgent(request, env, origin) {
   try {
     const result = await callWorkersAI(env, messages);
     return json(result, 200, origin, env);
-  } catch (_) {
+  } catch (primaryError) {
     try {
-      const fallback = await callProxyFallback(request, env, auth, normalizedBody);
+      const fallback = await callProxyFallback(request, env, auth, normalizedBody, primaryError);
       return json(fallback, 200, origin, env);
     } catch (_) {
       return json({
