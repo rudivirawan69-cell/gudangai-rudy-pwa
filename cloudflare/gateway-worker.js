@@ -164,9 +164,16 @@ async function handleAgent(request, env, origin) {
   const auth = await verifySupabaseAccessToken(request, env);
   if (!auth.ok) return json({ success: false, code: auth.code, error: auth.error }, auth.status, origin, env);
 
-  const contentLength = Number(request.headers.get('Content-Length') || 0);
-  if (contentLength > 65536) return json({ success: false, code: 'PAYLOAD_TOO_LARGE', error: 'Ukuran permintaan melebihi 64 KB.' }, 413, origin, env);
-  const body = await request.json().catch(() => null);
+  const rawBody = await request.text();
+  if (rawBody.length > 65536) {
+    return json({ success: false, code: 'PAYLOAD_TOO_LARGE', error: 'Ukuran permintaan melebihi 64 KB.' }, 413, origin, env);
+  }
+  let body;
+  try {
+    body = JSON.parse(rawBody);
+  } catch (_) {
+    return json({ success: false, code: 'INVALID_JSON', error: 'Format permintaan tidak valid.' }, 400, origin, env);
+  }
   const message = String(body?.message || '').trim();
   if (!message) return json({ success: false, code: 'MESSAGE_REQUIRED', error: 'Pertanyaan belum diisi.' }, 400, origin, env);
   if (message.length > MAX_MESSAGE_LENGTH) {
