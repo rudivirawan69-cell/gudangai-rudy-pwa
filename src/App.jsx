@@ -149,6 +149,7 @@ function AppHeader({ user, tab, onOpenSettings, online, status }) {
               <h1 className="text-[13px] font-black tracking-wide text-slate-900 dark:text-slate-100 uppercase truncate leading-none">
                 GUDANG-69 RUDI
               </h1>
+              <span className="shrink-0 rounded border border-amber-200 bg-amber-100 px-1.5 py-0.5 text-[8px] font-black tracking-wide text-amber-800">PRO</span>
               <span className={`shrink-0 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[9px] font-bold ${
                 connected
                   ? 'bg-emerald-500/15 text-emerald-700'
