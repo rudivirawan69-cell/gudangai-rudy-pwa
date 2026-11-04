@@ -109,7 +109,7 @@ async function runAnthropicFallback(env, messages, context) {
 
 async function verifySupabaseAccessToken(request, env) {
   const authorization = request.headers.get('Authorization') || '';
-  const match = authorization.match(/^Bearer\\s+(.+)$/i);
+  const match = authorization.match(/^Bearer\s+(.+)$/i);
   if (!match) return { ok: false, status: 401, code: 'AUTH_REQUIRED', error: 'Silakan login untuk menggunakan Agent GudangAI.' };
 
   const supabaseUrl = String(env.SUPABASE_URL || '').replace(/\\/+$/, '');
