@@ -33,7 +33,7 @@ function makeId() {
   return globalThis.crypto?.randomUUID?.() || `note_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
-export default function HomeReminderModule({ onNavigate }) {
+export default function HomeReminderModule({ onNavigate, criticalCount = 0, userName = 'Rudi Virawan' }) {
   const [notes, setNotes] = useState(readNotes);
   const [expanded, setExpanded] = useState(false);
   const [category, setCategory] = useState(CATEGORIES[0].id);
@@ -51,6 +51,8 @@ export default function HomeReminderModule({ onNavigate }) {
   }, [notes]);
 
   const activeCount = Object.values(counts).reduce((sum, value) => sum + value, 0);
+  const hour = Number(new Intl.DateTimeFormat('id-ID', { hour: '2-digit', hourCycle: 'h23', timeZone: 'Asia/Jakarta' }).format(new Date()));
+  const greeting = hour >= 18 || hour < 4 ? 'Selamat malam' : hour < 11 ? 'Selamat pagi' : hour < 15 ? 'Selamat siang' : 'Selamat sore';
   const selected = CATEGORIES.find((item) => item.id === category) || CATEGORIES[0];
   const visibleNotes = activeCategory ? notes.filter((item) => item.category === activeCategory) : [];
   const activeMeta = CATEGORIES.find((item) => item.id === activeCategory);
@@ -69,7 +71,7 @@ export default function HomeReminderModule({ onNavigate }) {
 
   return (
     <section className="home-reminder-module space-y-3" aria-label="Pengingat dan catatan operasional">
-      <div className="overflow-hidden rounded-[24px] border border-slate-200/90 bg-white shadow-sm">
+      <div className="home-reminder-surface overflow-hidden rounded-[24px] border border-slate-200/90 bg-white shadow-sm">
         <button
           type="button"
           onClick={() => setExpanded((value) => !value)}
@@ -83,8 +85,8 @@ export default function HomeReminderModule({ onNavigate }) {
             </span>
             <span className="min-w-0">
               <span className="mb-1 inline-flex rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-wider text-amber-700">Reminder & Input Baru</span>
-              <span className="block truncate text-xs font-extrabold text-slate-800">Pengingat & Catatan Operasional</span>
-              <span className="mt-0.5 block text-[10px] text-slate-500">Catat tugas, jadwal, dan tindak lanjut tim</span>
+              <span className="block truncate text-xs font-extrabold text-slate-800">{greeting}, {userName}!</span>
+              <span className="mt-0.5 block text-[10px] text-slate-500">Klik untuk buka/tutup form buat catatan & tugas</span>
             </span>
           </span>
           <span className="flex shrink-0 items-center gap-2">
@@ -94,7 +96,7 @@ export default function HomeReminderModule({ onNavigate }) {
         </button>
 
         {expanded && (
-          <div id="home-reminder-form" className="space-y-3 border-t border-slate-100 bg-slate-50/80 p-4">
+          <div id="home-reminder-form" className="home-reminder-muted space-y-3 border-t border-slate-100 bg-slate-50/80 p-4">
             <p className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500">Pilih kategori catatan</p>
             <div className="grid grid-cols-2 gap-2">
               {CATEGORIES.map((item) => {
@@ -115,7 +117,7 @@ export default function HomeReminderModule({ onNavigate }) {
               <textarea value={draft} onChange={(event) => setDraft(event.target.value)} rows={2} maxLength={300}
                 onKeyDown={(event) => { if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') addNote(); }}
                 placeholder={selected.hint}
-                className="w-full resize-none rounded-2xl border border-slate-200 bg-white px-3.5 py-3 text-xs text-slate-800 shadow-inner outline-none transition focus:border-amber-400 focus:ring-2 focus:ring-amber-200"
+                className="home-reminder-input w-full resize-none rounded-2xl border border-slate-200 bg-white px-3.5 py-3 text-xs text-slate-800 shadow-inner outline-none transition focus:border-amber-400 focus:ring-2 focus:ring-amber-200"
               />
             </label>
             <div className="flex items-center justify-between gap-2">
@@ -128,6 +130,16 @@ export default function HomeReminderModule({ onNavigate }) {
           </div>
         )}
       </div>
+
+      {Number(criticalCount) > 0 && (
+        <button type="button" onClick={() => onNavigate?.('stok')} className="home-reminder-critical flex w-full items-center justify-between gap-3 rounded-2xl border border-rose-200 bg-rose-50/90 p-3.5 text-left shadow-sm transition hover:bg-rose-100/80 active:scale-[0.99]">
+          <span className="flex min-w-0 items-center gap-3">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-rose-100 text-rose-600"><BellRing className="h-4 w-4" /></span>
+            <span className="min-w-0"><span className="block text-[10px] font-extrabold uppercase tracking-wide text-rose-700">Status Stok Kritis</span><span className="mt-0.5 block text-xs font-semibold text-slate-700"><strong className="text-rose-700">{criticalCount} item</strong> perlu tindak lanjut segera.</span></span>
+          </span>
+          <span className="shrink-0 rounded-xl bg-rose-200/80 px-3 py-2 text-[10px] font-extrabold text-rose-800">Cek Stok</span>
+        </button>
+      )}
 
       <div className="space-y-2.5">
         <div className="flex items-center justify-between px-1">
@@ -147,7 +159,7 @@ export default function HomeReminderModule({ onNavigate }) {
             return (
               <button key={item.id} type="button" onClick={() => setActiveCategory(isActive ? null : item.id)}
                 aria-pressed={isActive}
-                className={`group min-w-0 rounded-2xl border bg-white p-3.5 text-left shadow-sm transition-all active:scale-[0.98] ${isActive ? `${tone.ring} ${tone.active}` : 'border-slate-200/90 hover:border-slate-300'}`}>
+                className={`home-reminder-surface group min-w-0 rounded-2xl border bg-white p-3.5 text-left shadow-sm transition-all active:scale-[0.98] ${isActive ? `${tone.ring} ${tone.active}` : 'border-slate-200/90 hover:border-slate-300'}`}>
                 <span className="mb-2 flex items-start justify-between gap-2">
                   <span className={`flex h-8 w-8 items-center justify-center rounded-xl transition-transform group-hover:scale-105 ${tone.icon}`}><Icon className="h-4 w-4" /></span>
                   <span className={`rounded-full border px-2 py-0.5 text-[10px] font-extrabold tabular-nums ${tone.badge}`}>{counts[item.id]}</span>
@@ -161,8 +173,8 @@ export default function HomeReminderModule({ onNavigate }) {
       </div>
 
       {activeCategory && activeMeta && (
-        <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm" aria-label={`Daftar ${activeMeta.label}`}>
-          <div className="flex items-center justify-between gap-2 border-b border-slate-100 px-3.5 py-3">
+        <section className="home-reminder-surface overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm" aria-label={`Daftar ${activeMeta.label}`}>
+          <div className="home-reminder-muted flex items-center justify-between gap-2 border-b border-slate-100 px-3.5 py-3">
             <div className="min-w-0">
               <h3 className="truncate text-xs font-extrabold text-slate-800">{activeMeta.label}</h3>
               <p className="text-[10px] text-slate-500">{visibleNotes.length} catatan tersimpan di perangkat ini</p>
