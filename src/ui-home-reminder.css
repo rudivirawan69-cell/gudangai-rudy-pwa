@@ -1,0 +1,38 @@
+/* GudangAI RUDY — Reminder & Catatan: tactile cards + theme-aware surfaces */
+.home-reminder-module .home-reminder-surface {
+  box-shadow: 0 4px 14px -4px rgba(0,0,0,.08), 0 2px 6px -2px rgba(0,0,0,.04);
+  transition: transform .22s cubic-bezier(.4,0,.2,1), box-shadow .22s ease, border-color .22s ease;
+}
+.home-reminder-module .home-reminder-surface:active {
+  transform: scale(.985);
+  box-shadow: 0 2px 8px -2px rgba(0,0,0,.10);
+}
+.home-reminder-sheet { animation: homeReminderFade .18s ease-out; }
+.home-reminder-sheet-panel { animation: homeReminderSlide .26s cubic-bezier(.16,1,.3,1); }
+@keyframes homeReminderFade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes homeReminderSlide { from { transform: translateY(28px); opacity: .75; } to { transform: translateY(0); opacity: 1; } }
+.home-reminder-toast { max-width: calc(100vw - 32px); text-align: center; }
+
+/* Keep all three GudangAI themes readable without changing category accents. */
+html[data-theme] .home-reminder-module .home-reminder-surface,
+html[data-theme] .home-reminder-module .home-reminder-sheet-panel {
+  background: var(--bg-elevated) !important;
+  border-color: var(--border) !important;
+  color: var(--text-main) !important;
+  box-shadow: var(--shadow-1) !important;
+}
+html[data-theme] .home-reminder-module .home-reminder-muted {
+  background: var(--bg-muted) !important;
+  border-color: var(--border) !important;
+}
+html[data-theme] .home-reminder-module .home-reminder-input {
+  background: var(--bg-elevated) !important;
+  color: var(--text-main) !important;
+  border-color: var(--border) !important;
+}
+html[data-theme] .home-reminder-module .home-reminder-input::placeholder { color: var(--text-muted) !important; opacity: .8; }
+html[data-theme] .home-reminder-module :is(.text-slate-900,.text-slate-800,.text-slate-700,.text-slate-600) { color: var(--text-main) !important; }
+html[data-theme] .home-reminder-module :is(.text-slate-500,.text-slate-400) { color: var(--text-muted) !important; }
+html[data-theme] .home-reminder-module .home-reminder-sheet-panel .border-slate-100,
+html[data-theme] .home-reminder-module .home-reminder-sheet-panel .border-slate-200 { border-color: var(--border) !important; }
+html[data-theme] .home-reminder-module .home-reminder-critical { box-shadow: var(--shadow-1); }
