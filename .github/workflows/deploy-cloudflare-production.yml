@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - feature/worker-ai-cost-safe-hardening-20261104
   workflow_dispatch:
 
 permissions:
@@ -38,11 +39,23 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
         run: |
           if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
-            echo "Missing CLOUDFLARE_API_TOKEN or CLOUDFLARE_ACCOUNT_ID secret."
+            echo "Missing Cloudflare deployment secrets."
             exit 1
           fi
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ]; then
+            echo "Missing SUPABASE_URL or SUPABASE_ANON_KEY. Agent deployment blocked to avoid an unauthenticated endpoint."
+            exit 1
+          fi
+
+      - name: Test Agent Worker security and provider routing
+        run: npm run test:agent
+
+      - name: Check Worker syntax
+        run: node --check worker.js
 
       - name: Build production PWA
         run: npm run build
@@ -55,7 +68,18 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: npx wrangler@4.156.0 deploy --config wrangler.jsonc --dry-run
 
-      - name: Deploy to production Cloudflare Worker
+      - name: Configure Supabase Auth verification secrets
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          printf '%s' "$SUPABASE_URL" | npx wrangler@4.156.0 secret put SUPABASE_URL --config wrangler.jsonc
+          printf '%s' "$SUPABASE_ANON_KEY" | npx wrangler@4.156.0 secret put SUPABASE_ANON_KEY --config wrangler.jsonc
+
+      - name: Deploy to requested Cloudflare Worker domain
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
