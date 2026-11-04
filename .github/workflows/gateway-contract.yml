@@ -1,0 +1,37 @@
+name: GudangAI dual-agent gateway contract
+
+on:
+  push:
+    branches:
+      - feature/dual-agent-service-binding-20261104
+    paths:
+      - "cloudflare/gateway-worker.js"
+      - "scripts/test-gateway-worker.mjs"
+      - ".github/workflows/gateway-contract.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "cloudflare/**"
+      - "scripts/test-gateway-worker.mjs"
+      - "wrangler*.jsonc"
+      - ".github/workflows/gateway-contract.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  gateway-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Verify gateway contract
+        run: node --test scripts/test-gateway-worker.mjs
+      - name: Verify existing Agent Worker regression suite
+        run: npm run test:agent
+      - name: Verify PWA build
+        run: npm run build
