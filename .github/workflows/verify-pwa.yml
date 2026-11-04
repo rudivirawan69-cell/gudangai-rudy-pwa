@@ -39,6 +39,12 @@ jobs:
         run: node scripts/test-combined-codegs.mjs
       - name: Test PDF precision and manual stock sync contracts
         run: node scripts/test-recovery-contracts.mjs
+      - name: Validate Agent Worker syntax and Wrangler AI binding
+        run: |
+          node --check worker.js
+          node -e "const c=JSON.parse(require('node:fs').readFileSync('wrangler.jsonc','utf8')); if(c.ai?.binding !== 'AI') process.exit(1); if(c.vars?.ANTHROPIC_FALLBACK_ENABLED !== 'false') process.exit(1)"
+      - name: Test Agent Hybrid routing and safety
+        run: npm run test:agent
       - name: Lint
         run: npm run lint
       - name: Production build
