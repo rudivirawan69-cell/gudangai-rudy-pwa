@@ -1,0 +1,321 @@
+/* GudangAI — three distinct operating experiences.
+   Presentation-only layer: no transaction, API, queue, or stock logic is changed. */
+:root,
+html[data-theme="soft_light"] {
+  --bg-app: #071a31;
+  --bg-app-grad: linear-gradient(145deg, #071a31 0%, #0d3157 52%, #14517c 100%);
+  --bg-elevated: rgba(255,255,255,.88);
+  --bg-muted: rgba(224,241,255,.62);
+  --text-main: #102b49;
+  --text-muted: #526b86;
+  --border: rgba(255,255,255,.68);
+  --accent: #1686d9;
+  --accent-strong: #0866b3;
+  --accent-soft: rgba(22,134,217,.16);
+  --nav-bg: rgba(239,247,255,.94);
+  --card-radius: 1.35rem;
+  --shadow-1: 0 12px 30px rgba(0,22,48,.14), inset 0 1px 0 rgba(255,255,255,.72);
+  --shadow-2: 0 18px 42px rgba(0,22,48,.20), inset 0 1px 0 rgba(255,255,255,.8);
+}
+html[data-theme="deep_ocean"] {
+  --bg-app: #061321;
+  --bg-app-grad: linear-gradient(180deg,#061321 0%,#0a1b2c 100%);
+  --bg-elevated: #102337;
+  --bg-muted: #0b1b2b;
+  --text-main: #edf5ff;
+  --text-muted: #a9bdd2;
+  --border: rgba(142,174,205,.2);
+  --accent: #56b8ed;
+  --accent-strong: #2695d0;
+  --accent-soft: rgba(86,184,237,.14);
+  --nav-bg: rgba(10,27,44,.97);
+  --card-radius: .9rem;
+  --shadow-1: 0 5px 14px rgba(0,0,0,.16);
+  --shadow-2: 0 8px 20px rgba(0,0,0,.22);
+}
+html[data-theme="graphite_titanium"] {
+  --bg-app: #092a2b;
+  --bg-app-grad: linear-gradient(145deg,#08272a 0%,#0c4546 55%,#12645c 100%);
+  --bg-elevated: rgba(246,252,250,.94);
+  --bg-muted: rgba(218,241,235,.78);
+  --text-main: #123b3b;
+  --text-muted: #527674;
+  --border: rgba(255,255,255,.64);
+  --accent: #0d9b91;
+  --accent-strong: #08776f;
+  --accent-soft: rgba(13,155,145,.16);
+  --nav-bg: rgba(7,42,44,.91);
+  --card-radius: 1.2rem;
+  --shadow-1: 0 9px 22px rgba(0,24,28,.16), inset 0 1px 0 rgba(255,255,255,.55);
+  --shadow-2: 0 14px 30px rgba(0,24,28,.2), inset 0 1px 0 rgba(255,255,255,.62);
+}
+
+/* Shared full-height mobile canvas */
+html, body, #root { min-height:100%; background:var(--bg-app-grad); }
+.app-shell { min-height:100dvh; background:transparent; color:var(--text-main); }
+.app-bg { background:var(--bg-app-grad); }
+.app-bg::after { background:radial-gradient(ellipse 75% 35% at 50% 0%,rgba(116,198,255,.15),transparent 72%); }
+.app-header-card {
+  border-color:var(--border)!important;
+  background:var(--nav-bg)!important;
+  color:#f4f9ff!important;
+  box-shadow:var(--shadow-1)!important;
+}
+.app-header-card h1,.app-header-card p { color:#f4f9ff!important; }
+.nav-bar {
+  background:var(--nav-bg)!important;
+  border-color:var(--border)!important;
+  backdrop-filter:blur(22px) saturate(1.25);
+  -webkit-backdrop-filter:blur(22px) saturate(1.25);
+}
+.nav-btn.is-active { color:#fff!important; }
+.nav-btn.is-inactive { color:rgba(226,239,252,.68)!important; }
+.page-content { color:var(--text-main); }
+.page-content .card,
+.page-content .surface,
+.page-content .stat-tile,
+.page-content .stock-card {
+  border-radius:var(--card-radius);
+  box-shadow:var(--shadow-1);
+}
+html[data-theme="soft_light"] .page-content .card,
+html[data-theme="soft_light"] .page-content .surface,
+html[data-theme="soft_light"] .page-content .stat-tile,
+html[data-theme="soft_light"] .page-content .stock-card {
+  background:rgba(239,247,255,.91);
+  border:1px solid rgba(255,255,255,.78);
+  backdrop-filter:blur(16px) saturate(1.12);
+  -webkit-backdrop-filter:blur(16px) saturate(1.12);
+}
+html[data-theme="deep_ocean"] .page-content .card,
+html[data-theme="deep_ocean"] .page-content .surface,
+html[data-theme="deep_ocean"] .page-content .stat-tile,
+html[data-theme="deep_ocean"] .page-content .stock-card {
+  background:#102337;
+  border:1px solid rgba(142,174,205,.2);
+  box-shadow:0 4px 12px rgba(0,0,0,.14);
+}
+html[data-theme="graphite_titanium"] .page-content .card,
+html[data-theme="graphite_titanium"] .page-content .surface,
+html[data-theme="graphite_titanium"] .page-content .stat-tile,
+html[data-theme="graphite_titanium"] .page-content .stock-card {
+  background:rgba(242,250,247,.93);
+  border:1px solid rgba(255,255,255,.68);
+  backdrop-filter:blur(12px) saturate(1.1);
+  -webkit-backdrop-filter:blur(12px) saturate(1.1);
+  box-shadow:0 10px 24px rgba(0,26,28,.15),inset 0 1px 0 rgba(255,255,255,.65);
+}
+html[data-theme="soft_light"] .page-content .card-interactive,
+html[data-theme="graphite_titanium"] .page-content .card-interactive {
+  transform:translateZ(0);
+}
+html[data-theme="soft_light"] .page-content .card-interactive:active,
+html[data-theme="graphite_titanium"] .page-content .card-interactive:active {
+  transform:translateY(1px) scale(.985);
+}
+html[data-theme="deep_ocean"] .page-content,
+html[data-theme="deep_ocean"] .page-content h1,
+html[data-theme="deep_ocean"] .page-content h2,
+html[data-theme="deep_ocean"] .page-content h3,
+html[data-theme="deep_ocean"] .page-content p,
+html[data-theme="deep_ocean"] .page-content label { color:var(--text-main); }
+html[data-theme="deep_ocean"] .page-content .text-slate-900,
+html[data-theme="deep_ocean"] .page-content .text-slate-800,
+html[data-theme="deep_ocean"] .page-content .text-gray-900 { color:#edf5ff!important; }
+html[data-theme="deep_ocean"] .page-content .text-slate-600,
+html[data-theme="deep_ocean"] .page-content .text-slate-500,
+html[data-theme="deep_ocean"] .page-content .text-gray-500 { color:#a9bdd2!important; }
+html[data-theme="deep_ocean"] .page-content input,
+html[data-theme="deep_ocean"] .page-content textarea,
+html[data-theme="deep_ocean"] .page-content select {
+  background:#0a1b2c;
+  color:#edf5ff;
+  border-color:rgba(142,174,205,.3);
+}
+html[data-theme="soft_light"] .nav-bar { box-shadow:0 -8px 28px rgba(0,24,52,.2); }
+html[data-theme="graphite_titanium"] .nav-bar { box-shadow:0 -8px 26px rgba(0,24,28,.24); }
+@media (prefers-reduced-motion:reduce) {
+  html[data-theme="soft_light"] *,html[data-theme="graphite_titanium"] * { animation:none!important; transition:none!important; }
+}
+
+
+/* ------------------------------------------------------------------
+   Theme-aware card typography & icon contrast — v2
+   Every mode owns its own card title, value, supporting text and icon
+   palette. Status colors remain semantic and are not flattened.
+------------------------------------------------------------------- */
+html[data-theme="soft_light"] {
+  --card-title: #12365b;
+  --card-value: #075ea8;
+  --card-copy: #496985;
+  --card-kicker: #1766a8;
+  --card-icon: #0667a6;
+  --card-icon-surface: rgba(8,121,201,.12);
+  --card-number-glow: 0 1px 0 rgba(255,255,255,.85);
+  --card-divider: rgba(23,102,168,.16);
+  --metric-safe: #087c59;
+  --metric-warning: #a65c05;
+  --metric-critical: #bd263b;
+}
+html[data-theme="deep_ocean"] {
+  --card-title: #e7f2ff;
+  --card-value: #7dd3fc;
+  --card-copy: #b5c8dc;
+  --card-kicker: #8ecdf2;
+  --card-icon: #67c8f4;
+  --card-icon-surface: rgba(86,184,237,.15);
+  --card-number-glow: 0 0 18px rgba(86,184,237,.12);
+  --card-divider: rgba(142,174,205,.22);
+  --metric-safe: #55d6aa;
+  --metric-warning: #ffd166;
+  --metric-critical: #ff8c9c;
+}
+html[data-theme="graphite_titanium"] {
+  --card-title: #123f40;
+  --card-value: #087e78;
+  --card-copy: #4d7372;
+  --card-kicker: #08776f;
+  --card-icon: #076b65;
+  --card-icon-surface: rgba(13,155,145,.13);
+  --card-number-glow: 0 1px 0 rgba(255,255,255,.9);
+  --card-divider: rgba(8,119,111,.18);
+  --metric-safe: #087c59;
+  --metric-warning: #a65c05;
+  --metric-critical: #bd263b;
+}
+
+/* Consistent hierarchy on every reusable card, without changing markup. */
+html[data-theme] .page-content :is(
+  .card,.surface,.section-card,.stat-tile,.stock-card,.dashboard-panel,
+  .dashboard-total-card,.dashboard-po-card,.dashboard-header-card,
+  .menu-group,.po-hub-card,.po-item-card,.stock-metric-surface,
+  .division-status-card,.info-box,.ops-card,.ops-notes-card,
+  .operator-tasks-card,.menu-row,.settings-menu-row
+) {
+  color: var(--card-copy) !important;
+  border-color: var(--card-divider) !important;
+}
+html[data-theme] .page-content :is(
+  .card,.surface,.section-card,.stat-tile,.stock-card,.dashboard-panel,
+  .dashboard-total-card,.dashboard-po-card,.dashboard-header-card,
+  .menu-group,.po-hub-card,.po-item-card,.stock-metric-surface,
+  .division-status-card,.info-box,.ops-card,.ops-notes-card,
+  .operator-tasks-card,.menu-row,.settings-menu-row
+) :is(h1,h2,h3,h4,.page-title,.ops-card-title,.po-shortcut-title,
+.settings-menu-title,.font-bold,.font-extrabold,.font-black) {
+  color: var(--card-title) !important;
+}
+html[data-theme] .page-content :is(
+  .card,.surface,.section-card,.stat-tile,.stock-card,.dashboard-panel,
+  .dashboard-total-card,.dashboard-po-card,.stock-metric-surface,
+  .division-status-card,.po-hub-card,.po-item-card,.ops-card
+) :is(.metric-value,[data-metric],.tabular-nums,.text-2xl,.text-xl,.text-lg) {
+  color: var(--card-value) !important;
+  text-shadow: var(--card-number-glow);
+  font-variant-numeric: tabular-nums lining-nums;
+}
+html[data-theme] .page-content :is(
+  .card,.surface,.section-card,.stat-tile,.stock-card,.dashboard-panel,
+  .dashboard-total-card,.dashboard-po-card,.menu-group,.po-hub-card,
+  .po-item-card,.division-status-card,.info-box,.ops-card,
+  .operator-tasks-card,.menu-row,.settings-menu-row
+) :is(.text-slate-400,.text-slate-500,.text-slate-600,.text-gray-500,.text-gray-600,
+.text-muted,.page-subtitle,.ops-card-sub,.settings-menu-sub) {
+  color: var(--card-copy) !important;
+  opacity: 1;
+}
+html[data-theme] .page-content :is(
+  .card,.surface,.section-card,.stat-tile,.stock-card,.dashboard-panel,
+  .dashboard-total-card,.dashboard-po-card,.stock-metric-surface,
+  .division-status-card,.po-hub-card,.po-item-card,.ops-card
+) :is(.page-kicker,.card-kicker,.section-label) {
+  color: var(--card-kicker) !important;
+}
+
+/* Icon chips follow the active theme; semantic status icons keep their meaning. */
+html[data-theme] .page-content :is(
+  .card,.surface,.section-card,.stat-tile,.stock-card,.dashboard-panel,
+  .dashboard-total-card,.dashboard-po-card,.stock-metric-surface,
+  .division-status-card,.po-hub-card,.po-item-card,.ops-card,
+  .operator-tasks-card,.menu-row,.settings-menu-row
+) :is(.icon-wrap,.card-icon,.stat-icon,.metric-icon,.settings-menu-icon) {
+  color: var(--card-icon) !important;
+  background-color: var(--card-icon-surface) !important;
+  border-color: var(--card-divider) !important;
+}
+html[data-theme] .page-content :is(
+  .card,.surface,.section-card,.stat-tile,.stock-card,.dashboard-panel,
+  .dashboard-total-card,.dashboard-po-card,.stock-metric-surface,
+  .division-status-card,.po-hub-card,.po-item-card,.ops-card,
+  .operator-tasks-card,.menu-row,.settings-menu-row
+) svg:not(.status-icon):not([data-status]) {
+  color: var(--card-icon);
+}
+html[data-theme] .page-content :is(.status-aman,.stok-aman,.status-waspada,
+.stok-waspada,.status-kritis,.stok-kritis) {
+  color: inherit !important;
+}
+html[data-theme] .page-content :is(.status-aman,.stok-aman) { color: var(--metric-safe) !important; }
+html[data-theme] .page-content :is(.status-waspada,.stok-waspada) { color: var(--metric-warning) !important; }
+html[data-theme] .page-content :is(.status-kritis,.stok-kritis) { color: var(--metric-critical) !important; }
+
+/* Preserve each experience's visual identity rather than merely recoloring it. */
+html[data-theme="soft_light"] .page-content :is(.card,.surface,.section-card,.stat-tile,.stock-card) {
+  backdrop-filter: blur(16px) saturate(1.16);
+  -webkit-backdrop-filter: blur(16px) saturate(1.16);
+}
+html[data-theme="deep_ocean"] .page-content :is(.card,.surface,.section-card,.stat-tile,.stock-card) {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow: 0 4px 12px rgba(0,0,0,.16);
+}
+html[data-theme="graphite_titanium"] .page-content :is(.card,.surface,.section-card,.stat-tile,.stock-card) {
+  backdrop-filter: blur(12px) saturate(1.12);
+  -webkit-backdrop-filter: blur(12px) saturate(1.12);
+  box-shadow: 0 10px 24px rgba(0,26,28,.16), inset 0 1px 0 rgba(255,255,255,.62);
+}
+
+
+/* Theme-specific sticky header and navigation contrast. */
+html[data-theme="soft_light"] .app-top-header .app-header-card {
+  background: rgba(239,247,255,.94) !important;
+  border-color: rgba(255,255,255,.9) !important;
+  color: #12365b !important;
+  box-shadow: 0 12px 30px rgba(0,22,48,.14), inset 0 1px 0 rgba(255,255,255,.9) !important;
+}
+html[data-theme="soft_light"] .app-top-header .app-header-card :is(h1,p,span,strong) { color: #12365b; }
+html[data-theme="soft_light"] .app-top-header .app-header-card a { color: #075f9e !important; }
+html[data-theme="soft_light"] .app-top-header .app-header-card button {
+  color: #075f9e !important;
+  background: rgba(8,121,201,.1) !important;
+  border-color: rgba(8,121,201,.2) !important;
+}
+html[data-theme="soft_light"] .nav-btn.is-active { color: #075f9e !important; }
+html[data-theme="soft_light"] .nav-btn.is-inactive { color: #496985 !important; }
+html[data-theme="deep_ocean"] .app-top-header .app-header-card {
+  background: #102337 !important;
+  border-color: rgba(142,174,205,.24) !important;
+  color: #edf5ff !important;
+}
+html[data-theme="deep_ocean"] .app-top-header .app-header-card :is(h1,p,span,strong) { color: #edf5ff; }
+html[data-theme="deep_ocean"] .app-top-header .app-header-card a { color: #7dd3fc !important; }
+html[data-theme="deep_ocean"] .nav-btn.is-active { color: #7dd3fc !important; }
+html[data-theme="deep_ocean"] .nav-btn.is-inactive { color: #b5c8dc !important; }
+html[data-theme="graphite_titanium"] .app-top-header .app-header-card {
+  background: linear-gradient(135deg,#073b3b 0%,#0b5550 100%) !important;
+  border-color: rgba(210,246,237,.3) !important;
+  color: #f0fdfa !important;
+}
+html[data-theme="graphite_titanium"] .app-top-header .app-header-card :is(h1,p,span,strong) { color: #f0fdfa; }
+html[data-theme="graphite_titanium"] .app-top-header .app-header-card a { color: #99f6e4 !important; }
+html[data-theme="graphite_titanium"] .nav-btn.is-active { color: #99f6e4 !important; }
+html[data-theme="graphite_titanium"] .nav-btn.is-inactive { color: #c5e7df !important; }
+
+
+/* Page-level heading and heading icon use the same theme identity. */
+html[data-theme] .page-content :is(h1,h2,h3,.page-title,.page-heading) {
+  color: var(--card-title);
+}
+html[data-theme] .page-content :is(.page-title,.page-heading) svg {
+  color: var(--card-icon);
+}

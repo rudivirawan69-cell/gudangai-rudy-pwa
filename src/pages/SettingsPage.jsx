@@ -214,7 +214,7 @@ export default function SettingsPage({ onNavigate }) {
           })}
         </div>
         <p className="text-[10px] text-slate-400 leading-relaxed">
-          Arctic Professional · Deep Ocean · Graphite Titanium — tersimpan di perangkat.
+          Blue Glass · Deep Ocean · Mobile Operations — pilihan tersimpan di perangkat ini dan tidak mengubah data gudang.
         </p>
       </div>
 
