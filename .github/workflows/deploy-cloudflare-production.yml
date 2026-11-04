@@ -47,6 +47,7 @@ jobs:
           CLOUDFLARE_WORKERS: "true"
           VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL || secrets.SUPABASE_URL }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY || secrets.SUPABASE_ANON_KEY }}
+          VITE_GUDANGAI_AI_API_BASE: ${{ vars.VITE_GUDANGAI_AI_API_BASE || 'https://gudangai-rudy-pwa69.rudivirawan69.workers.dev' }}
 
       - name: Validate deployment credentials and public PWA auth config
         shell: bash
