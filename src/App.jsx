@@ -165,7 +165,7 @@ function AppHeader({ user, tab, onOpenSettings, online, status }) {
               <div className="flex items-center gap-1.5 min-w-0">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
                 <span className="truncate">
-                  Update Sheet: <strong className="text-slate-800 dark:text-slate-100 font-bold">{liveTime}</strong>
+                  Waktu Perangkat: <strong className="text-slate-800 dark:text-slate-100 font-bold">{liveTime}</strong>
                 </span>
               </div>
               <div className="flex items-center gap-1.5 min-w-0">
@@ -179,7 +179,7 @@ function AppHeader({ user, tab, onOpenSettings, online, status }) {
 
           <button
             type="button"
-            onClick={tickClock}
+            onClick={() => { tickClock(); window.dispatchEvent(new CustomEvent("gudangai-refresh-dashboard")); }}
             className="shrink-0 w-9 h-9 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center active:scale-95"
             aria-label="Refresh waktu"
             title="Refresh"
