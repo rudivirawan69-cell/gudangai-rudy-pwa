@@ -34,6 +34,17 @@ jobs:
       - name: Install locked dependencies
         run: npm ci
 
+      - name: Test Agent Worker security and provider routing
+        run: npm run test:agent
+
+      - name: Check Worker syntax
+        run: node --check worker.js
+
+      - name: Build production PWA
+        run: npm run build
+        env:
+          CLOUDFLARE_WORKERS: "true"
+
       - name: Validate Cloudflare secrets
         shell: bash
         env:
@@ -50,17 +61,6 @@ jobs:
             echo "Missing SUPABASE_URL or SUPABASE_ANON_KEY. Agent deployment blocked to avoid an unauthenticated endpoint."
             exit 1
           fi
-
-      - name: Test Agent Worker security and provider routing
-        run: npm run test:agent
-
-      - name: Check Worker syntax
-        run: node --check worker.js
-
-      - name: Build production PWA
-        run: npm run build
-        env:
-          CLOUDFLARE_WORKERS: "true"
 
       - name: Validate Cloudflare Worker config
         env:
