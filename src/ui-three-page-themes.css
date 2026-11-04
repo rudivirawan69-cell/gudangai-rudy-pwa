@@ -55,3 +55,23 @@ html[data-theme] .app-content .input-page button:focus-visible {
   outline: 2px solid var(--accent) !important;
   outline-offset: 2px;
 }
+
+
+/* Home reminder reference polish — theme-aware surfaces, no operational data changes. */
+html[data-theme] .app-content .home-reminder-module .home-reminder-surface {
+  background: var(--bg-elevated) !important; border-color: var(--border) !important;
+  color: var(--text-main) !important; box-shadow: var(--shadow-1) !important;
+}
+html[data-theme] .app-content .home-reminder-module .home-reminder-muted {
+  background: var(--bg-muted) !important; border-color: var(--border) !important; color: var(--text-main) !important;
+}
+html[data-theme] .app-content .home-reminder-module .home-reminder-input {
+  background: var(--field-bg, var(--bg-elevated)) !important; border-color: var(--border) !important; color: var(--text-main) !important;
+}
+html[data-theme] .app-content .home-reminder-module .home-reminder-input::placeholder { color: var(--text-muted) !important; opacity: .8; }
+html[data-theme] .app-content .home-reminder-module :is(.text-slate-900,.text-slate-800,.text-slate-700) { color: var(--text-main) !important; }
+html[data-theme] .app-content .home-reminder-module :is(.text-slate-600,.text-slate-500,.text-slate-400) { color: var(--text-muted) !important; }
+html[data-theme] .app-content .movement-seven-days { color: var(--text-main); }
+html[data-theme] .app-content .movement-seven-days .text-slate-800 { color: var(--text-main) !important; }
+html[data-theme] .app-content .movement-seven-days .text-slate-400 { color: var(--text-muted) !important; }
+html[data-theme] .app-content .movement-seven-days .border-slate-100 { border-color: var(--border) !important; }
