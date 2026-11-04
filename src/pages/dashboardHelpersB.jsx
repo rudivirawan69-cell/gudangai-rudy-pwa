@@ -3,40 +3,52 @@ import { CheckCircle2, AlertCircle, RefreshCw } from 'lucide-react';
 
 export function Movement7Days({ history = [] }) {
   const days = useMemo(() => {
+    const pad = (v) => String(v).padStart(2, '0');
     const map = {};
     for (let i = 6; i >= 0; i--) {
-      const d = new Date();
-      d.setDate(d.getDate() - i);
-      const key = d.toISOString().slice(0, 10);
-      map[key] = { date: key, masuk: 0, keluar: 0 };
+      const d = new Date(); d.setDate(d.getDate() - i);
+      const key = d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+      map[key] = { date: key, label: d.toLocaleDateString('id-ID', { weekday: 'short' }).replace('.', '').slice(0, 3).toUpperCase(), masuk: 0, keluar: 0 };
     }
     for (const entry of history || []) {
-      const t = String(entry?.tanggal || entry?.date || entry?.createdAt || '').slice(0, 10);
-      if (!map[t]) continue;
+      const raw = String(entry?.tanggal || entry?.date || entry?.createdAt || '').slice(0, 10);
+      const key = raw.length === 10 && raw[4] === '-' && raw[7] === '-' ? raw : '';
+      if (!map[key]) continue;
       const type = String(entry?.type || entry?.jenis || '').toLowerCase();
-      const qty = Number(entry?.qty || entry?.totalQty || 0) || 0;
-      if (type.includes('masuk')) map[t].masuk += qty;
-      else if (type.includes('keluar')) map[t].keluar += qty;
+      const qty = Math.max(0, Number(entry?.qty || entry?.totalQty || 0) || 0);
+      if (type.includes('masuk')) map[key].masuk += qty;
+      else if (type.includes('keluar')) map[key].keluar += qty;
     }
     return Object.values(map);
   }, [history]);
-
+  const maxValue = Math.max(1, ...days.flatMap((d) => [d.masuk, d.keluar]));
+  const totalMasuk = days.reduce((n, d) => n + d.masuk, 0);
+  const totalKeluar = days.reduce((n, d) => n + d.keluar, 0);
   return (
-    <div>
-      <h3 className="text-sm font-bold text-slate-800 mb-3">Pergerakan 7 Hari</h3>
-      <div className="space-y-1.5">
-        {days.map((d) => (
-          <div key={d.date} className="flex items-center justify-between text-[11px] tabular-nums">
-            <span className="text-slate-500 font-medium">{d.date.slice(5)}</span>
-            <span className="text-emerald-600 font-semibold">+{d.masuk}</span>
-            <span className="text-rose-600 font-semibold">-{d.keluar}</span>
-          </div>
-        ))}
+    <div className="movement-seven-days">
+      <div className="flex items-start justify-between gap-2 mb-3">
+        <div><h3 className="text-sm font-bold text-slate-800">Analisa</h3><p className="text-[11px] text-slate-400">Pergerakan barang 7 hari terakhir</p></div>
+        <span className="rounded-full border border-cyan-100 bg-cyan-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-cyan-700">7 Hari</span>
       </div>
+      <div className="mb-2 flex items-center gap-4 text-[10px] font-semibold">
+        <span className="inline-flex items-center gap-1.5 text-cyan-700"><i className="h-2 w-2 rounded-sm bg-cyan-500" /> Masuk <b className="tabular-nums">{totalMasuk}</b></span>
+        <span className="inline-flex items-center gap-1.5 text-amber-700"><i className="h-2 w-2 rounded-sm bg-amber-500" /> Keluar <b className="tabular-nums">{totalKeluar}</b></span>
+      </div>
+      <div className="relative h-36 border-b border-slate-100">
+        <div className="pointer-events-none absolute inset-0 flex flex-col justify-between" aria-hidden="true"><span className="border-t border-slate-100" /><span className="border-t border-slate-100" /><span className="border-t border-slate-100" /><span className="border-t border-slate-100" /></div>
+        <div className="relative z-10 grid h-full grid-cols-7 gap-1 px-1">
+          {days.map((day) => <div key={day.date} className="flex min-w-0 flex-col items-center justify-end gap-1">
+            <div className="flex h-28 w-full items-end justify-center gap-1" title={day.date + ': masuk ' + day.masuk + ', keluar ' + day.keluar}>
+              <span className="w-2.5 max-w-[42%] rounded-t-sm bg-cyan-500 transition-all" style={{ height: day.masuk ? Math.max(4, day.masuk / maxValue * 100) + '%' : '2px' }} />
+              <span className="w-2.5 max-w-[42%] rounded-t-sm bg-amber-500 transition-all" style={{ height: day.keluar ? Math.max(4, day.keluar / maxValue * 100) + '%' : '2px' }} />
+            </div><span className="text-[9px] font-bold uppercase text-slate-400">{day.label}</span>
+          </div>)}
+        </div>
+      </div>
+      {totalMasuk + totalKeluar === 0 && <p className="mt-2 text-center text-[10px] text-slate-400">Belum ada transaksi lokal dalam 7 hari terakhir.</p>}
     </div>
   );
 }
-
 export function StockComparison({ cv = {}, pt = {} }) {
   return (
     <div>

@@ -9,7 +9,7 @@ import { classifyStockLevel } from '../data/stockStatus';
 import OpsCategoryCards from '../components/OpsCategoryCards';
 import HomeReminderModule from '../components/HomeReminderModule';
 import {
-  AlertTriangle, RefreshCw, FileText, Package, Users, Boxes, ShieldAlert, CheckCircle2, AlertCircle, X,
+  RefreshCw, FileText, Package, Users, Boxes, ShieldAlert, CheckCircle2, AlertCircle, X,
   CalendarDays, CalendarClock, ClipboardCheck, FilePlus2, Mail, Clock3, Layers3, ArrowUpRight,
   ChevronDown,
 } from 'lucide-react';
@@ -119,24 +119,7 @@ export default function DashboardPage({ onNavigate }) {
         <p className="rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-[11px] font-semibold text-emerald-700">{confirmMsg}</p>
       )}
 
-      <HomeReminderModule onNavigate={onNavigate} />
-
-      {stats.kritis > 0 && (
-        <button
-          type="button"
-          onClick={() => onNavigate?.('stok')}
-          className="flex w-full items-center justify-between gap-3 rounded-2xl border border-rose-200 bg-rose-50/90 p-3.5 text-left shadow-sm transition hover:bg-rose-100/80 active:scale-[0.99]"
-        >
-          <span className="flex min-w-0 items-center gap-3">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-rose-100 text-rose-600"><AlertTriangle className="h-4 w-4" /></span>
-            <span className="min-w-0">
-              <span className="block text-[10px] font-extrabold uppercase tracking-wide text-rose-700">Status Stok Kritis</span>
-              <span className="mt-0.5 block text-xs font-semibold text-slate-700"><strong className="text-rose-700">{stats.kritis} item</strong> perlu pemeriksaan dan tindak lanjut.</span>
-            </span>
-          </span>
-          <span className="shrink-0 rounded-xl bg-rose-200/80 px-3 py-2 text-[10px] font-extrabold text-rose-800">Cek Stok</span>
-        </button>
-      )}
+      <HomeReminderModule onNavigate={onNavigate} criticalCount={stats.kritis} userName={user?.name || 'Rudi Virawan'} />
 
       <section className="grid grid-cols-1 xl:grid-cols-2 gap-4" aria-label="Ringkasan operasional">
         <div className="dashboard-panel rounded-2xl bg-white border border-slate-200 shadow-sm p-4 min-w-0">
