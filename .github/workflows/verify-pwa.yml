@@ -39,10 +39,11 @@ jobs:
         run: node scripts/test-combined-codegs.mjs
       - name: Test PDF precision and manual stock sync contracts
         run: node scripts/test-recovery-contracts.mjs
-      - name: Validate Agent Worker syntax and Wrangler AI binding
+      - name: Validate dual-agent Workers and Wrangler bindings
         run: |
           node --check worker.js
-          node -e "const c=JSON.parse(require('node:fs').readFileSync('wrangler.jsonc','utf8')); if(c.ai?.binding !== 'AI') process.exit(1); if(c.vars?.ANTHROPIC_FALLBACK_ENABLED !== 'false') process.exit(1)"
+          node --check cloudflare/gateway-worker.js
+          node -e "const fs=require('node:fs'); const g=JSON.parse(fs.readFileSync('wrangler.jsonc','utf8')); const p=JSON.parse(fs.readFileSync('wrangler.proxy.jsonc','utf8')); if(g.name!=='gudangai-rudy-pwa69'||g.ai?.binding!=='AI'||g.services?.[0]?.binding!=='CLAUDE_PROXY'||g.services?.[0]?.service!=='claude-proxy') process.exit(1); if(p.name!=='claude-proxy'||p.ai?.binding!=='AI'||p.vars?.ANTHROPIC_FALLBACK_ENABLED!=='false') process.exit(1); console.log('Gateway, Service Binding and opt-in-only Anthropic config verified.')"
       - name: Test Agent Hybrid routing and safety
         run: npm run test:agent
       - name: Lint
