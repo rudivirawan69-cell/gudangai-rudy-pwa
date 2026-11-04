@@ -580,9 +580,10 @@ function Movement7Days({ history }) {
 }
 
 function StockComparison({ cv, pt }) {
-  const total = Math.max(1, (cv?.unit || 0) + (pt?.unit || 0));
-  const cvPct = Math.round(((cv?.unit || 0) / total) * 100);
-  const ptPct = 100 - cvPct;
+  const rawTotal = (cv?.unit || 0) + (pt?.unit || 0);
+  const total = Math.max(1, rawTotal);
+  const cvPct = rawTotal > 0 ? Math.round(((cv?.unit || 0) / total) * 100) : 0;
+  const ptPct = rawTotal > 0 ? 100 - cvPct : 0;
   return (
     <div>
       <div className="flex items-start justify-between mb-3">
@@ -606,6 +607,7 @@ function StockComparison({ cv, pt }) {
           </div>
           <p className="text-xs font-extrabold text-slate-800 mt-2">CV</p>
           <p className="text-[10px] text-slate-500 tabular-nums">{(cv?.unit || 0).toLocaleString('id-ID')} unit</p>
+          <p className="text-[9px] text-slate-400">{cv?.total || 0} SKU</p>
         </div>
         <div className="rounded-xl bg-orange-50 border border-orange-100 p-3 text-center">
           <div className="mx-auto w-16 h-16 rounded-full p-[6px]" style={{ background: `conic-gradient(#f59e0b ${ptPct * 3.6}deg, #ffedd5 0deg)` }}>
@@ -615,14 +617,16 @@ function StockComparison({ cv, pt }) {
           </div>
           <p className="text-xs font-extrabold text-slate-800 mt-2">PT</p>
           <p className="text-[10px] text-slate-500 tabular-nums">{(pt?.unit || 0).toLocaleString('id-ID')} unit</p>
+          <p className="text-[9px] text-slate-400">{pt?.total || 0} SKU</p>
         </div>
       </div>
+      {rawTotal === 0 && <p className="mt-2 text-center text-[10px] text-slate-400">Belum ada data unit stok dari backend.</p>}
     </div>
   );
 }
 
 function DashboardTotals({ totalItem }) {
-  const itemCount = totalItem || 191;
+  const itemCount = Number(totalItem) || 0;
   return (
     <div className="grid grid-cols-2 gap-3">
       <div className="dashboard-total-card border-cyan-100">
