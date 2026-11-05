@@ -84,7 +84,7 @@ assert.ok(resolverMatch, 'Missing deterministic resolver');
 const resolvePdfNameDeterministic = new Function('entity', 'rawName', 'masterList', 'normalizeOcr', resolverMatch[1]);
 const parseBody = pdf.match(/export function parsePdfLinesToItems\(text\)\s*\{([\s\S]*?)\n\}/);
 const sanitizeBody = pdf.match(/function sanitizePdfProductName\(name\)\s*\{([\s\S]*?)\n\}/);
-const stripBody = pdf.match(/function stripLeadingNo\(value\)\s*\{([\s\S]*?)\n\}/);
+const stripBody = pdf.match(/function stripLeadingNo\(name\)\s*\{([\s\S]*?)\n\}/);
 const nonItemBody = pdf.match(/function isPdfNonItemLine\(line\)\s*\{([\s\S]*?)\n\}/);
 assert.ok(parseBody && sanitizeBody && stripBody && nonItemBody, 'Missing PDF line parser helpers');
 const stripLeadingNo = new Function(stripBody[1]);
