@@ -382,6 +382,7 @@ function doPost(e) {
       case "syncBatch":
       case "bulkSync": return jsonResponse(bulkTransaction(Object.assign({}, body, { _syncMode: true })));
       case "getTransactionStatus": return jsonResponse(getTransactionStatus(body));
+      case "getTransactionStatuses": return jsonResponse(getTransactionStatuses(body));
       case "bootstrap": return jsonResponse(getPwaBootstrap(body));
       case "addTransaction": return jsonResponse(addTransaction(body));
       case "addTransactionBatch": return jsonResponse(bulkTransaction(Object.assign({}, body, { transactions: body.transactions || body.items || body.rows })));
@@ -729,9 +730,12 @@ function appendIdentityMarker_(keterangan, transactionId, nonce) {
   return base.substring(0, MAX_KETERANGAN_LENGTH);
 }
 
-function formatStockShortageNote_(orderQty, availableQty, shortageQty) {
-  // Format operasional yang disetujui: singkat, konsisten, tanpa follow-up panjang.
-  return ("order " + orderQty + ", sisa " + availableQty + " kurang " + shortageQty)
+function formatStockShortageNote_(orderQty, availableQty, shortageQty, unit) {
+  // Format HOLD yang disetujui: singkat, jelas, dan mempertahankan satuan barang.
+  var satuan = String(unit || "unit").trim().toLowerCase();
+  return ("Input pending " + orderQty + " " + satuan +
+    ", sisa stock " + availableQty + " " + satuan +
+    ", kekurangan " + shortageQty + " " + satuan)
     .substring(0, MAX_KETERANGAN_LENGTH);
 }
 
@@ -907,6 +911,67 @@ function getTransactionStatus(body) {
   }
   if (readBack.matched) return { success: true, status: "APPLIED", code: "READBACK_FOUND", transactionId: transactionId || null, nonce: nonce || null, writeOccurred: true, readBack: readBack };
   return { success: false, status: "NOT_FOUND", code: "IDENTITY_NOT_FOUND", transactionId: transactionId || null, nonce: nonce || null, writeOccurred: false, readBack: readBack };
+}
+
+function getTransactionStatuses(body) {
+  const list = (body && (body.transactions || body.items)) || [];
+  if (!Array.isArray(list) || !list.length) {
+    return { success: false, status: "REJECTED", code: "IDENTITY_LIST_REQUIRED", results: [], error: "transactions wajib berupa array berisi identitas." };
+  }
+  if (list.length > 200) {
+    return { success: false, status: "REJECTED", code: "IDENTITY_LIST_TOO_LARGE", results: [], error: "Maksimal 200 identitas per pemeriksaan." };
+  }
+
+  const startedAt = Date.now();
+  const index = buildIdempotencyIndex_();
+  const results = list.map(function(item) {
+    const entry = item || {};
+    const transactionId = String(entry.transactionId || "").trim();
+    const nonce = String(entry.nonce || "").trim();
+    const clientItemId = String(entry.clientItemId || entry.requestId || "").trim();
+    if (!transactionId && !nonce) {
+      return { success: false, status: "REJECTED", code: "IDENTITY_REQUIRED", clientItemId: clientItemId, error: "transactionId atau nonce wajib diisi." };
+    }
+
+    const rec = findIdempotencyRecordInIndex_(index, transactionId, nonce);
+    const preferredSheet = String(entry.sheet || body.sheet || (rec && rec.sheet) || "");
+    const readBack = readBackTransactionByIdentity_(
+      { transactionId: transactionId, nonce: nonce }, preferredSheet, index
+    );
+    if (rec) {
+      if (readBack.matched && rec.status !== "APPLIED") {
+        const updated = updateIdempotencyRecordIndexed_(rec, {
+          status: "APPLIED", dataRow: readBack.row, writeOccurred: true, errorCode: ""
+        }, index);
+        return {
+          success: true, status: "APPLIED", code: "READBACK_CONFIRMED",
+          transactionId: transactionId || rec.transactionId, nonce: nonce || rec.nonce,
+          clientItemId: clientItemId, record: updated, readBack: readBack
+        };
+      }
+      return {
+        success: rec.status === "APPLIED", status: rec.status, code: rec.errorCode || "LEDGER_FOUND",
+        transactionId: transactionId || rec.transactionId, nonce: nonce || rec.nonce,
+        clientItemId: clientItemId, writeOccurred: rec.writeOccurred,
+        retryable: rec.status === "FAILED" && rec.writeOccurred === "false",
+        record: rec, readBack: readBack
+      };
+    }
+    if (readBack.matched) {
+      return {
+        success: true, status: "APPLIED", code: "READBACK_FOUND",
+        transactionId: transactionId || null, nonce: nonce || null,
+        clientItemId: clientItemId, writeOccurred: true, readBack: readBack
+      };
+    }
+    return {
+      success: false, status: "NOT_FOUND", code: "IDENTITY_NOT_FOUND",
+      transactionId: transactionId || null, nonce: nonce || null,
+      clientItemId: clientItemId, writeOccurred: false, readBack: readBack
+    };
+  });
+
+  return { success: true, status: "CHECKED", checked: results.length, results: results, execMs: Date.now() - startedAt };
 }
 
 /**
@@ -1102,7 +1167,7 @@ function addTransaction(body) {
         if (kekurangan > 0) {
           shortageMode = true;
           finalQty = 0;
-          keterangan = formatStockShortageNote_(numericQty, sisa, kekurangan);
+          keterangan = formatStockShortageNote_(numericQty, sisa, kekurangan, stockInfo.satuan || request.satuan || "unit");
           flags.push("STOCK_KURANG", "STOCK_KURANG_HOLD", "QTY_HOLD_0");
           try {
             MailApp.sendEmail(ADMIN_EMAIL, "[GudangAI][STOCK KURANG] " + kode + " " + (stockInfo.nama || ""),
@@ -1385,7 +1450,7 @@ function bulkTransaction(body) {
         if (kekurangan > 0) {
           shortageMode = true;
           finalQty = 0;
-          keterangan = formatStockShortageNote_(numericQty, sisa, kekurangan);
+          keterangan = formatStockShortageNote_(numericQty, sisa, kekurangan, (st && st.satuan) || item.satuan || "unit");
         }
         if (st) st.stockAkhir = Math.max(0, sisa - (shortageMode ? 0 : finalQty));
       }
@@ -2300,10 +2365,11 @@ function formatSystemLogSheet_(sheet) {
   if (rows) {
     applyTableBodyStyle_(sheet, OPS_DATA_START_ROW, rows, 6);
     sheet.getRange(OPS_DATA_START_ROW, 1, rows, 4).setHorizontalAlignment("center");
-    sheet.getRange(OPS_DATA_START_ROW, 5, rows, 2).setHorizontalAlignment("left").setWrap(true);
+    sheet.getRange(OPS_DATA_START_ROW, 5, rows, 2).setHorizontalAlignment("left").setWrap(false).setVerticalAlignment("middle");
+    sheet.setRowHeights(OPS_DATA_START_ROW, rows, 28);
   }
   sheet.setColumnWidth(1, 145); sheet.setColumnWidth(2, 105); sheet.setColumnWidth(3, 145);
-  sheet.setColumnWidth(4, 90); sheet.setColumnWidth(5, 300); sheet.setColumnWidth(6, 220);
+  sheet.setColumnWidth(4, 90); sheet.setColumnWidth(5, 220); sheet.setColumnWidth(6, 160);
   try { if (sheet.getFilter()) sheet.getFilter().remove(); } catch (e) {}
   if (sheet.getLastRow() >= OPS_HEADER_ROW) sheet.getRange(OPS_HEADER_ROW, 1, Math.max(1, sheet.getLastRow() - OPS_HEADER_ROW + 1), 6).createFilter();
 }
@@ -2368,6 +2434,11 @@ function writeAuditLogSecure(action, status, details, errorMsg, txId) {
       logSheet = ss.insertSheet("System Log");
       styleOperationalHeader_(logSheet, 6, "SYSTEM LOG — GUDANGAI 69", "Audit transaksi • status write • detail teknis • arsip otomatis", ["Timestamp", "TransactionID", "Aksi/Action", "Status", "Rincian/Details", "Pesan Error"]);
     }
+    const formatVersion = PropertiesService.getScriptProperties();
+    if (formatVersion.getProperty("SYSTEM_LOG_FORMAT_VERSION") !== "2") {
+      formatSystemLogSheet_(logSheet);
+      formatVersion.setProperty("SYSTEM_LOG_FORMAT_VERSION", "2");
+    }
     const detailStr = redactSensitiveString_((typeof details === "object") ? JSON.stringify(details) : String(details || ""))
       .replace(/[\\r\\n\\t]+/g, " ").replace(/\\s{2,}/g, " ").trim();
     const errorStr = redactSensitiveString_(String(errorMsg || ""))
@@ -2375,13 +2446,11 @@ function writeAuditLogSecure(action, status, details, errorMsg, txId) {
     const logRow = Math.max(OPS_DATA_START_ROW, logSheet.getLastRow() + 1);
     logSheet.getRange(logRow, 1, 1, 6).setValues([[
       Utilities.formatDate(new Date(), TIMEZONE, "yyyy-MM-dd HH:mm:ss"),
-      shortId_(txId), action, status, detailStr.substring(0, 320), errorStr.substring(0, 180)
+      shortId_(txId), action, status, detailStr.substring(0, 180), errorStr.substring(0, 120)
     ]]);
-    // Keep long audit values inside their own cells; no visual spill into adjacent columns.
-    if (logSheet.getColumnWidth(5) < 240) logSheet.setColumnWidth(5, 280);
-    if (logSheet.getColumnWidth(6) < 180) logSheet.setColumnWidth(6, 220);
-    logSheet.getRange(logRow, 1, 1, 6).setWrap(true).setVerticalAlignment("top");
-    logSheet.setRowHeight(logRow, 48);
+    // One-line clipped cells keep the operational log compact and prevent spill.
+    logSheet.getRange(logRow, 1, 1, 6).setWrap(false).setVerticalAlignment("middle");
+    logSheet.setRowHeight(logRow, 28);
     maybeArchiveAuditLog();
   } catch (logErr) {
     console.error("writeAuditLogSecure gagal: " + logErr.message);
