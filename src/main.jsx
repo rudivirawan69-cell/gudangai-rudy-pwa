@@ -10,7 +10,7 @@ createRoot(document.getElementById('root')).render(
   </StrictMode>,
 )
 
-// Register Service Worker for PWA and safely apply new deployments.
+// Register the versioned Service Worker. New versions wait for explicit user approval.
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', async () => {
     try {
@@ -19,54 +19,57 @@ if ('serviceWorker' in navigator) {
         { updateViaCache: 'none' },
       )
 
-      const requestUpdate = () => registration.update().catch(() => {})
-      requestUpdate()
-      window.addEventListener('pageshow', requestUpdate)
-      registration.addEventListener('updatefound', () => {
+      let reloadAfterActivation = false
+      let updatePromptOpen = false
+
+      const askToUpdate = (waitingWorker) => {
+        if (!waitingWorker || updatePromptOpen) return
+        updatePromptOpen = true
+        const accepted = window.confirm('Pembaruan GudangAI tersedia. Perbarui aplikasi sekarang?')
+        updatePromptOpen = false
+        if (accepted) {
+          reloadAfterActivation = true
+          waitingWorker.postMessage({ type: 'SKIP_WAITING' })
+        }
+      }
+
+      const inspectWaitingWorker = () => {
+        if (registration.waiting && navigator.serviceWorker.controller) {
+          askToUpdate(registration.waiting)
+        }
+      }
+
+      const watchInstallingWorker = () => {
         const installing = registration.installing
         if (!installing) return
         installing.addEventListener('statechange', () => {
           if (installing.state === 'installed' && navigator.serviceWorker.controller) {
-            reloadPending = true
-            if (document.visibilityState === 'visible') {
-              reloadTimer = window.setTimeout(safeReload, 1200)
-            }
+            askToUpdate(registration.waiting || installing)
           }
         })
-      })
-      document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'visible') requestUpdate()
-      })
-
-      let reloadPending = false
-      let reloadTimer = null
-
-      const safeReload = () => {
-        if (!reloadPending) return
-        const active = document.activeElement
-        const editing = active && (
-          active.matches?.('input, textarea, select, [contenteditable="true"]') ||
-          active.closest?.('input, textarea, select, [contenteditable="true"]')
-        )
-        if (editing) return
-        reloadPending = false
-        if (reloadTimer) clearTimeout(reloadTimer)
-        reloadTimer = null
-        sessionStorage.setItem('gudangai_sw_updated', String(Date.now()))
-        window.location.reload()
       }
 
-      navigator.serviceWorker.addEventListener('controllerchange', () => {
-        reloadPending = true
+      registration.addEventListener('updatefound', watchInstallingWorker)
+      watchInstallingWorker()
+      inspectWaitingWorker()
+
+      const checkForUpdate = () => registration.update().catch(() => {})
+      checkForUpdate()
+      window.addEventListener('pageshow', checkForUpdate)
+      document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'visible') {
-          reloadTimer = window.setTimeout(safeReload, 900)
+          checkForUpdate()
+          inspectWaitingWorker()
         }
       })
 
-      document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'visible') safeReload()
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (!reloadAfterActivation) return
+        reloadAfterActivation = false
+        window.location.reload()
       })
     } catch (_) {
+      // Keep the application usable if Service Worker registration is unavailable.
     }
   })
 }
