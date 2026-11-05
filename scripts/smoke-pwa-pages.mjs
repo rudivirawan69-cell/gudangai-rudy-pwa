@@ -1,8 +1,27 @@
 import assert from 'node:assert/strict';
+import { mkdir } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import { chromium } from 'playwright';
 
 const HOST = 'http://127.0.0.1:4173';
+
+function hexRgb(value) {
+  const match = String(value).trim().match(/^#([0-9a-f]{6})$/i);
+  assert.ok(match, `Expected a six-digit hex color token, received: ${value}`);
+  const hex = match[1];
+  return [0, 2, 4].map((offset) => parseInt(hex.slice(offset, offset + 2), 16) / 255);
+}
+
+function relativeLuminance(rgb) {
+  const linear = rgb.map((channel) => channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4);
+  return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2];
+}
+
+function contrastRatio(foreground, background) {
+  const values = [relativeLuminance(hexRgb(foreground)), relativeLuminance(hexRgb(background))].sort((a, b) => b - a);
+  return (values[0] + 0.05) / (values[1] + 0.05);
+}
+
 const items = [
   { kode: 'CV-0001', nama: 'Ayam Fillet Dada', entitas: 'CV', entity: 'CV', stok: 25, stockAkhir: 25, stockAman: 20, satuan: 'Pack', divisi: 'CS' },
   { kode: 'PT-0001', nama: 'Bebek', entitas: 'PT', entity: 'PT', stok: 8, stockAkhir: 8, stockAman: 15, satuan: 'Pack', divisi: 'PRODUKSI' },
@@ -30,6 +49,8 @@ try {
   await waitForServer();
   const page = await browser.newPage({ viewport: { width: 390, height: 844 }, serviceWorkers: 'block' });
   const pageErrors = [];
+  let mainFrameNavigations = 0;
+  page.on('framenavigated', (frame) => { if (frame === page.mainFrame()) mainFrameNavigations += 1; });
   page.on('pageerror', (error) => pageErrors.push(error.message));
 
   await page.addInitScript(({ inputDraft, poDraft }) => {
@@ -190,6 +211,63 @@ try {
       if (label === 'Input') {
         assert.equal(await page.locator('[data-testid="input-search-results"]').count(), 0,
           'Input search results must remain hidden when the search field is empty.');
+      }
+    }
+  }
+
+  // Phase 3 visual evidence: capture 3 themes x 4 primary pages x 2 viewport classes.
+  const screenshotRoot = 'artifacts/visual-phase3';
+  await mkdir(screenshotRoot, { recursive: true });
+  const visualPages = [
+    ['Beranda', 'Status per Divisi', 'beranda'],
+    ['Stok', 'Data Stok', 'stok'],
+    ['Input', 'Draft transaksi dipulihkan', 'input'],
+    ['Atur', 'Mode Tampilan', 'atur'],
+  ];
+  const visualViewports = [
+    { width: 390, height: 844, label: 'mobile' },
+    { width: 1366, height: 768, label: 'desktop' },
+  ];
+  await page.locator('nav.nav-bar button').filter({ hasText: 'Atur' }).first().click();
+  const themeButtons = page.locator('.theme-picker-btn');
+  assert.equal(await themeButtons.count(), 3, 'Settings must expose exactly three theme controls.');
+  const navigationCountBeforeToggle = mainFrameNavigations;
+  for (let i = 0; i < 10; i += 1) {
+    const index = i % 3;
+    await page.locator('nav.nav-bar button').filter({ hasText: 'Atur' }).first().click();
+    await page.locator('.theme-picker-btn').nth(index).click();
+    const expected = ['soft_light', 'deep_ocean', 'graphite_titanium'][index];
+    await page.waitForFunction((value) => document.documentElement.dataset.theme === value, expected);
+    assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), expected,
+      `Theme toggle ${i + 1} did not apply ${expected}.`);
+  }
+  assert.equal(mainFrameNavigations, navigationCountBeforeToggle,
+    'Theme switching caused a document navigation/reload.');
+
+  for (const theme of ['soft_light', 'deep_ocean', 'graphite_titanium']) {
+    await page.locator('nav.nav-bar button').filter({ hasText: 'Atur' }).first().click();
+    const themeIndex = ['soft_light', 'deep_ocean', 'graphite_titanium'].indexOf(theme);
+    await page.locator('.theme-picker-btn').nth(themeIndex).click();
+    await page.waitForFunction((value) => document.documentElement.dataset.theme === value, theme);
+    for (const viewport of visualViewports) {
+      await page.setViewportSize({ width: viewport.width, height: viewport.height });
+      for (const [label, markerText, slug] of visualPages) {
+        await page.locator('nav.nav-bar button').filter({ hasText: label }).first().click();
+        await page.getByText(markerText, { exact: false }).first().waitFor({ state: 'visible', timeout: 10000 });
+        const safeTheme = await page.evaluate(() => ({
+          id: document.documentElement.dataset.theme,
+          bg: getComputedStyle(document.documentElement).getPropertyValue('--bg-elevated').trim(),
+          fg: getComputedStyle(document.documentElement).getPropertyValue('--text-main').trim(),
+        }));
+        assert.equal(safeTheme.id, theme, `Wrong theme on ${label}: ${JSON.stringify(safeTheme)}`);
+        assert.ok(safeTheme.bg && safeTheme.fg, `Missing color tokens on ${label} in ${theme}`);
+        const ratio = contrastRatio(safeTheme.fg, safeTheme.bg);
+        assert.ok(ratio >= 4.5, `Text contrast below WCAG AA on ${label} in ${theme}: ${ratio.toFixed(2)}:1`);
+        await page.screenshot({
+          path: `${screenshotRoot}/${theme}-${slug}-${viewport.label}.png`,
+          fullPage: true,
+          animations: 'disabled',
+        });
       }
     }
   }
