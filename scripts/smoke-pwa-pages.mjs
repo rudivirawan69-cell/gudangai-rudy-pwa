@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { mkdir } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import { chromium } from 'playwright';
 
@@ -190,6 +191,60 @@ try {
       if (label === 'Input') {
         assert.equal(await page.locator('[data-testid="input-search-results"]').count(), 0,
           'Input search results must remain hidden when the search field is empty.');
+      }
+    }
+  }
+
+  // Phase 3 visual evidence: capture 3 themes x 4 primary pages x 2 viewport classes.
+  const screenshotRoot = 'artifacts/visual-phase3';
+  await mkdir(screenshotRoot, { recursive: true });
+  const visualPages = [
+    ['Beranda', 'Status per Divisi', 'beranda'],
+    ['Stok', 'Data Stok', 'stok'],
+    ['Input', 'Draft transaksi dipulihkan', 'input'],
+    ['Atur', 'Mode Tampilan', 'atur'],
+  ];
+  const visualViewports = [
+    { width: 390, height: 844, label: 'mobile' },
+    { width: 1366, height: 768, label: 'desktop' },
+  ];
+  const themeButtons = page.locator('.theme-picker-btn');
+  assert.equal(await themeButtons.count(), 3, 'Settings must expose exactly three theme controls.');
+  const loadCountBeforeToggle = await page.evaluate(() => performance.getEntriesByType('navigation').length);
+  for (let i = 0; i < 10; i += 1) {
+    const index = i % 3;
+    await page.locator('nav.nav-bar button').filter({ hasText: 'Atur' }).first().click();
+    await page.locator('.theme-picker-btn').nth(index).click();
+    const expected = ['soft_light', 'deep_ocean', 'graphite_titanium'][index];
+    await page.waitForFunction((value) => document.documentElement.dataset.theme === value, expected);
+    assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), expected,
+      `Theme toggle ${i + 1} did not apply ${expected}.`);
+  }
+  assert.equal(await page.evaluate(() => performance.getEntriesByType('navigation').length), loadCountBeforeToggle,
+    'Theme switching caused a document navigation/reload.');
+
+  for (const theme of ['soft_light', 'deep_ocean', 'graphite_titanium']) {
+    await page.locator('nav.nav-bar button').filter({ hasText: 'Atur' }).first().click();
+    const themeIndex = ['soft_light', 'deep_ocean', 'graphite_titanium'].indexOf(theme);
+    await page.locator('.theme-picker-btn').nth(themeIndex).click();
+    await page.waitForFunction((value) => document.documentElement.dataset.theme === value, theme);
+    for (const viewport of visualViewports) {
+      await page.setViewportSize({ width: viewport.width, height: viewport.height });
+      for (const [label, markerText, slug] of visualPages) {
+        await page.locator('nav.nav-bar button').filter({ hasText: label }).first().click();
+        await page.getByText(markerText, { exact: false }).first().waitFor({ state: 'visible', timeout: 10000 });
+        const safeTheme = await page.evaluate(() => ({
+          id: document.documentElement.dataset.theme,
+          bg: getComputedStyle(document.documentElement).getPropertyValue('--bg-elevated').trim(),
+          fg: getComputedStyle(document.documentElement).getPropertyValue('--text-main').trim(),
+        }));
+        assert.equal(safeTheme.id, theme, `Wrong theme on ${label}: ${JSON.stringify(safeTheme)}`);
+        assert.ok(safeTheme.bg && safeTheme.fg, `Missing color tokens on ${label} in ${theme}`);
+        await page.screenshot({
+          path: `${screenshotRoot}/${theme}-${slug}-${viewport.label}.png`,
+          fullPage: true,
+          animations: 'disabled',
+        });
       }
     }
   }
