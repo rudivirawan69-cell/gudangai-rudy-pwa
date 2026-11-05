@@ -892,7 +892,7 @@ export default function InputPage() {
           <div className="fixed bottom-16 left-0 right-0 px-4 z-20">
             {submitProgress && (
               <p className="text-center text-xs text-cyan-700 mb-1 font-semibold">
-                Mengirim {submitProgress.sent}/{submitProgress.total} · ok {submitProgress.success} · antri {submitProgress.failed}
+                Mengirim {submitProgress.sent}/{submitProgress.total} · sukses {submitProgress.success} · antri {submitProgress.queued || 0}
               </p>
             )}
             <button type="button" onClick={handleSubmit} disabled={submitting || !cart.length}
