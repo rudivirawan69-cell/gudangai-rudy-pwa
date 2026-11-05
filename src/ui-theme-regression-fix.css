@@ -4,6 +4,7 @@
 
 html[data-theme="soft_light"] {
   color-scheme: light;
+  --header-text: #ffffff;
   --bg-app: #f1f6fa;
   --bg-app-grad: linear-gradient(180deg, #f8fbfd 0%, #edf4f8 55%, #e5eef5 100%);
   --bg-overlay: radial-gradient(ellipse 82% 34% at 50% 0%, rgba(36,123,168,.075), transparent 72%);
@@ -33,6 +34,7 @@ html[data-theme="soft_light"] {
 
 html[data-theme="deep_ocean"] {
   color-scheme: dark;
+  --header-text: #ffffff;
   --bg-app: #101b2d;
   --bg-app-grad: linear-gradient(165deg,#0c1626 0%,#14243a 52%,#192d43 100%);
   --bg-overlay: radial-gradient(ellipse 82% 34% at 50% 0%, rgba(53,185,176,.10), transparent 72%);
@@ -62,6 +64,7 @@ html[data-theme="deep_ocean"] {
 
 html[data-theme="graphite_titanium"] {
   color-scheme: dark;
+  --header-text: #171a20;
   --bg-app: #171a20;
   --bg-app-grad: linear-gradient(165deg,#14171c 0%,#202630 58%,#292f38 100%);
   --bg-overlay: radial-gradient(ellipse 82% 34% at 50% 0%, rgba(214,154,72,.085), transparent 72%);
@@ -166,8 +169,9 @@ html[data-theme] .app-header {
 }
 html[data-theme] .app-header,
 html[data-theme] .app-header :is(h1,h2,h3,p,span,svg) {
-  color: #ffffff;
+  color: var(--header-text);
 }
+html[data-theme] .nav-fab { color: var(--header-text) !important; }
 html[data-theme] .more-sheet-backdrop {
   background: var(--modal-backdrop) !important;
   -webkit-backdrop-filter: blur(3px);
