@@ -255,11 +255,14 @@ export async function fetchStock(entity, options = {}) {
   _stockCache.promise = pending;
   try {
     const all = await pending;
-    _stockCache.data = all;
-    _stockCache.at = Date.now();
+    // A late response for an old API URL/secret must never overwrite the newer cache.
+    if (_stockCache.key === cacheKey && _stockCache.promise === pending) {
+      _stockCache.data = all;
+      _stockCache.at = Date.now();
+    }
     return selectStockEntity(all, requested);
   } finally {
-    if (_stockCache.promise === pending) _stockCache.promise = null;
+    if (_stockCache.key === cacheKey && _stockCache.promise === pending) _stockCache.promise = null;
   }
 }
 export async function getStatusPO() {
