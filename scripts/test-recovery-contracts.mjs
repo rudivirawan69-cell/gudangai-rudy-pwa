@@ -173,9 +173,9 @@ assert.match(gs, /case "getTransactionStatuses": return jsonResponse\(getTransac
 assert.match(gs, /function getTransactionStatuses\(body\)/);
 assert.match(gs, /const index = buildIdempotencyIndex_\(\)/,
   'Bulk read-back must load the idempotency ledger index once per chunk');
-assert.match(apiSource, /async function reconcileAmbiguousChunk\(action, entity, chunk\)/,
+assert.match(apiSource, /async function reconcileAmbiguousChunk\(action, chunk\)/,
   'Ambiguous chunk responses must be reconciled by stable transaction ID before queueing.');
-assert.match(apiSource, /const reconciled = await reconcileAmbiguousChunk\(action, entity, chunk\)/);
+assert.match(apiSource, /const reconciled = await reconcileAmbiguousChunk\(action, chunk\)/);
 assert.match(apiSource, /action:\s*'getTransactionStatuses'/,
   'Ambiguous chunk must reconcile in one batch status request, not one request per item');
 assert.match(apiSource, /Do not break: the next chunk has independent IDs and must still be submitted/);
