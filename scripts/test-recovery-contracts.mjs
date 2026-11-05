@@ -82,6 +82,28 @@ const normalizeOcr = new Function('s', normalizeMatch[1]);
 const resolverMatch = resolverSource.match(/export function resolvePdfNameDeterministic\(entity, rawName, masterList\)\s*\{([\s\S]*?)\n\}/);
 assert.ok(resolverMatch, 'Missing deterministic resolver');
 const resolvePdfNameDeterministic = new Function('entity', 'rawName', 'masterList', 'normalizeOcr', resolverMatch[1]);
+const parseBody = pdf.match(/export function parsePdfLinesToItems\(text\)\s*\{([\s\S]*?)\n\}/);
+const sanitizeBody = pdf.match(/function sanitizePdfProductName\(name\)\s*\{([\s\S]*?)\n\}/);
+const stripBody = pdf.match(/function stripLeadingNo\(value\)\s*\{([\s\S]*?)\n\}/);
+const nonItemBody = pdf.match(/function isPdfNonItemLine\(line\)\s*\{([\s\S]*?)\n\}/);
+assert.ok(parseBody && sanitizeBody && stripBody && nonItemBody, 'Missing PDF line parser helpers');
+const stripLeadingNo = new Function(stripBody[1]);
+const sanitizePdfProductName = new Function('stripLeadingNo', sanitizeBody[1])(stripLeadingNo);
+const isPdfNonItemLine = new Function(nonItemBody[1]);
+const parsePdfLinesToItems = new Function('stripLeadingNo', 'sanitizePdfProductName', 'isPdfNonItemLine', parseBody[1])(
+  stripLeadingNo, sanitizePdfProductName, isPdfNonItemLine
+);
+for (const [line, expectedName] of [
+  ['Ayam Fillet Dada 2', 'Ayam Fillet Dada'],
+  ['Ayam Fillet Paha 3', 'Ayam Fillet Paha'],
+  ['Saos Ayam 69 4', 'Saos Ayam 69'],
+  ['Saos Ayam FROZEN 1.00 2', 'Saos Ayam FROZEN 1.00'],
+  ['Iga Sapi 5', 'Iga Sapi'],
+]) {
+  const parsed = parsePdfLinesToItems(line);
+  assert.equal(parsed[0]?.rawName, expectedName, 'PDF line parser must preserve product name: ' + line);
+}
+
 const cvMaster = [
   { kode: 'CV-0001', nama: 'Ayam Fillet Dada', satuan: 'Kg', divisi: 'CS' },
   { kode: 'CV-0002', nama: 'Ayam Fillet Paha', satuan: 'Kg', divisi: 'CS' },
