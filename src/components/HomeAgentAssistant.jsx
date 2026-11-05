@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Bot, Send, X, Loader2, Sparkles, AlertCircle, RotateCcw } from 'lucide-react';
 
-const AGENT_API = (import.meta.env.VITE_GUDANGAI_AGENT_API || 'https://gudangai-rudy-pwa69.rudivirawan69.workers.dev').replace(/\/$/, '');
+const AGENT_API = (import.meta.env.VITE_GUDANGAI_AGENT_API || 'https://gudangai-rudy.rudivirawan69.workers.dev').replace(/\/$/, '');
 const MAX_HISTORY = 8;
 
 export default function HomeAgentAssistant() {
@@ -73,7 +73,7 @@ export default function HomeAgentAssistant() {
         <span className="home-agent-icon"><Bot className="h-6 w-6" /></span>
         <span className="min-w-0 flex-1 text-left">
           <span className="home-agent-title">Claude Ops Assistant <Sparkles className="inline h-4 w-4 ml-1" /></span>
-          <span className="home-agent-copy">Tanya langsung di Beranda. Menggunakan AI utama Cloudflare, tanpa Claude berbayar.</span>
+          <span className="home-agent-copy">AI operasional · Cloudflare Workers AI</span>
         </span>
         <span className="home-agent-action">{open ? 'Tutup' : 'Tanya'} {open ? <X className="h-4 w-4" /> : <Send className="h-4 w-4" />}</span>
       </button>
@@ -84,7 +84,7 @@ export default function HomeAgentAssistant() {
             <button type="button" onClick={clear} className="home-agent-clear" disabled={!messages.length && !loading} aria-label="Bersihkan percakapan"><RotateCcw className="h-4 w-4" /></button>
           </div>
           <div className="home-agent-thread" aria-live="polite">
-            {!messages.length && <div className="home-agent-empty"><Bot className="h-7 w-7" /><strong>Asisten Operasional GudangAI</strong><span>Tanyakan analisis stok, prioritas kerja, atau langkah pemeriksaan. Jawaban berdasarkan konteks yang Anda berikan.</span></div>}
+            {!messages.length && <div className="home-agent-empty"><Bot className="h-7 w-7" /><strong>Asisten Operasional GudangAI</strong></div>}
             {messages.map((item, index) => (
               <div key={index} className={`home-agent-message ${item.role === 'user' ? 'is-user' : 'is-assistant'}`}>
                 {item.pending ? <span className="home-agent-thinking"><Loader2 className="h-4 w-4 animate-spin" /> Menyusun jawaban…</span> : item.content}
@@ -100,7 +100,6 @@ export default function HomeAgentAssistant() {
               {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
             </button>
           </form>
-          <p className="home-agent-footnote">Mode analisis saja · Tidak menulis atau mengubah transaksi Spreadsheet · Fallback berbayar nonaktif</p>
         </div>
       )}
     </section>
