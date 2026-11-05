@@ -571,9 +571,16 @@ async function submitItems(action, entity, items, tanggal, options = {}) {
         successCount: totalSuccess, queuedCount: totalQueued,
         failCount: Math.max(0, totalFail - totalQueued),
       });
-      const failedIds = new Set((batchRes.results || []).filter(r => !r.success && !r.skipped && r.clientItemId).map(r => r.clientItemId));
-      const knownIds = new Set((batchRes.results || []).map(r => r.clientItemId).filter(Boolean));
-      const queueItems = chunk.filter(it => failedIds.has(it.clientItemId) || !knownIds.has(it.clientItemId));
+      const resultById = new Map((batchRes.results || []).map((result) => [String(result?.clientItemId || ''), result]));
+      const queueItems = chunk.filter((item) => {
+        const result = resultById.get(String(item.clientItemId || ''));
+        if (!result) return true; // Missing item identity in response is unresolved, not a confirmed failure.
+        if (result.success || result.skipped) return false;
+        const status = String(result.status || '').toUpperCase();
+        return result.uncertain === true || result.retryable === true ||
+          result.writeOccurred === 'unknown' ||
+          ['UNKNOWN', 'IN_PROGRESS', 'PENDING', 'WRITE_PENDING'].includes(status);
+      });
       if (queueItems.length) {
         if (!options.fromQueue) enqueue(action, entity, queueItems, { tanggal });
         totalQueued += queueItems.length;
