@@ -729,6 +729,12 @@ function appendIdentityMarker_(keterangan, transactionId, nonce) {
   return base.substring(0, MAX_KETERANGAN_LENGTH);
 }
 
+function formatStockShortageNote_(orderQty, availableQty, shortageQty) {
+  // Format operasional yang disetujui: singkat, konsisten, tanpa follow-up panjang.
+  return ("order " + orderQty + ", sisa " + availableQty + " kurang " + shortageQty)
+    .substring(0, MAX_KETERANGAN_LENGTH);
+}
+
 function appendTransactionNoteWithinLimit_(base, suffix) {
   var max = MAX_KETERANGAN_LENGTH;
   var userText = String(base || "").trim();
@@ -1096,8 +1102,7 @@ function addTransaction(body) {
         if (kekurangan > 0) {
           shortageMode = true;
           finalQty = 0;
-          const structured = "Input pending " + numericQty + " > sisa stock " + sisa + " > kurang " + kekurangan;
-          keterangan = appendTransactionNoteWithinLimit_(keterangan, structured);
+          keterangan = formatStockShortageNote_(numericQty, sisa, kekurangan);
           flags.push("STOCK_KURANG", "STOCK_KURANG_HOLD", "QTY_HOLD_0");
           try {
             MailApp.sendEmail(ADMIN_EMAIL, "[GudangAI][STOCK KURANG] " + kode + " " + (stockInfo.nama || ""),
@@ -1380,8 +1385,7 @@ function bulkTransaction(body) {
         if (kekurangan > 0) {
           shortageMode = true;
           finalQty = 0;
-          var structured = "Input pending " + numericQty + " > sisa stock " + sisa + " > kurang " + kekurangan;
-          keterangan = appendTransactionNoteWithinLimit_(keterangan, structured);
+          keterangan = formatStockShortageNote_(numericQty, sisa, kekurangan);
         }
         if (st) st.stockAkhir = Math.max(0, sisa - (shortageMode ? 0 : finalQty));
       }
@@ -2364,12 +2368,20 @@ function writeAuditLogSecure(action, status, details, errorMsg, txId) {
       logSheet = ss.insertSheet("System Log");
       styleOperationalHeader_(logSheet, 6, "SYSTEM LOG — GUDANGAI 69", "Audit transaksi • status write • detail teknis • arsip otomatis", ["Timestamp", "TransactionID", "Aksi/Action", "Status", "Rincian/Details", "Pesan Error"]);
     }
-    const detailStr = redactSensitiveString_((typeof details === "object") ? JSON.stringify(details) : String(details || ""));
-    logSheet.getRange(Math.max(OPS_DATA_START_ROW, logSheet.getLastRow() + 1), 1, 1, 6).setValues([[
+    const detailStr = redactSensitiveString_((typeof details === "object") ? JSON.stringify(details) : String(details || ""))
+      .replace(/[\\r\\n\\t]+/g, " ").replace(/\\s{2,}/g, " ").trim();
+    const errorStr = redactSensitiveString_(String(errorMsg || ""))
+      .replace(/[\\r\\n\\t]+/g, " ").replace(/\\s{2,}/g, " ").trim();
+    const logRow = Math.max(OPS_DATA_START_ROW, logSheet.getLastRow() + 1);
+    logSheet.getRange(logRow, 1, 1, 6).setValues([[
       Utilities.formatDate(new Date(), TIMEZONE, "yyyy-MM-dd HH:mm:ss"),
-      shortId_(txId), action, status, detailStr.substring(0, 900), String(errorMsg || "").substring(0, 700)
+      shortId_(txId), action, status, detailStr.substring(0, 320), errorStr.substring(0, 180)
     ]]);
-    // Formatting hanya dilakukan saat setup/maintenance, bukan setiap transaksi.
+    // Keep long audit values inside their own cells; no visual spill into adjacent columns.
+    if (logSheet.getColumnWidth(5) < 240) logSheet.setColumnWidth(5, 280);
+    if (logSheet.getColumnWidth(6) < 180) logSheet.setColumnWidth(6, 220);
+    logSheet.getRange(logRow, 1, 1, 6).setWrap(true).setVerticalAlignment("top");
+    logSheet.setRowHeight(logRow, 48);
     maybeArchiveAuditLog();
   } catch (logErr) {
     console.error("writeAuditLogSecure gagal: " + logErr.message);
