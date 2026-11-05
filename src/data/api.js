@@ -561,7 +561,10 @@ async function submitItems(action, entity, items, tanggal, options = {}) {
       const fc = batchRes.failCount || 0;
       totalSuccess += sc; totalFail += fc;
       if (batchRes.results) allResults.push(...batchRes.results);
-      emitProgress(Math.min(i + chunk.length, originalList.length), originalList.length, { successCount: totalSuccess, failCount: totalFail });
+      emitProgress(Math.min(i + chunk.length, originalList.length), originalList.length, {
+        successCount: totalSuccess, queuedCount: totalQueued,
+        failCount: Math.max(0, totalFail - totalQueued),
+      });
       const failedIds = new Set((batchRes.results || []).filter(r => !r.success && !r.skipped && r.clientItemId).map(r => r.clientItemId));
       const knownIds = new Set((batchRes.results || []).map(r => r.clientItemId).filter(Boolean));
       const queueItems = chunk.filter(it => failedIds.has(it.clientItemId) || !knownIds.has(it.clientItemId));
@@ -589,20 +592,20 @@ async function submitItems(action, entity, items, tanggal, options = {}) {
         successCount: totalSuccess, queuedCount: totalQueued,
         failCount: Math.max(0, totalFail - totalQueued),
       });
-      if (unresolved.length) {
-        pushNotification({
-          type: 'warning',
-          title: confirmed.length ? 'Chunk terverifikasi sebagian' : 'Item menunggu verifikasi server',
-          body: confirmed.length + ' sukses terverifikasi · ' + unresolved.length +
-            ' belum terkonfirmasi dan diamankan di antrean. ' + msg,
-        });
-      }
+      // The final notification below summarizes all chunks once.
       // Do not break: the next chunk has independent IDs and must still be submitted.
       continue;
     }
   }
   if (totalQueued > 0) {
-    pushNotification({ type: 'warning', title: 'Sinkronisasi perlu dilanjutkan', body: totalSuccess + ' sukses · ' + totalQueued + ' masuk antrian · ' + totalFail + ' belum terkonfirmasi. Antrian menyimpan ID unik untuk mencegah duplikasi.' });
+    const hardFailures = Math.max(0, totalFail - totalQueued);
+    pushNotification({
+      type: 'warning',
+      title: totalSuccess > 0 ? 'Transaksi sebagian selesai' : 'Sinkronisasi perlu dilanjutkan',
+      body: totalSuccess + ' sukses · ' + totalQueued + ' masuk antrian' +
+        (hardFailures ? ' · ' + hardFailures + ' gagal' : '') +
+        '. ID transaksi tetap dipertahankan untuk mencegah duplikasi.',
+    });
   } else {
     pushNotification({ type: 'success', title: 'Transaksi selesai', body: totalSuccess + ' item berhasil ditulis tanpa antrian.' });
   }
