@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
+import React, { memo, useState, useRef, useCallback, useEffect, useMemo, useDeferredValue } from 'react';
 import {
   Search, Trash2, Send, Loader2,
   Plus, Minus,
@@ -31,18 +31,67 @@ function todayStr() {
   return `${dd}/${mm}/${d.getFullYear()}`;
 }
 
+const INPUT_DRAFT_KEY = 'gudangai_input_draft_v1';
+
+export function persistInputDraft(draft) {
+  if (!draft) return true;
+  try {
+    const serialized = JSON.stringify(draft);
+    if (serialized.length > 500000) return false;
+    localStorage.setItem(INPUT_DRAFT_KEY, serialized);
+    return true;
+  } catch (_) {
+    // Draft persistence is best-effort; it must never block input or submission.
+    return false;
+  }
+}
+
+function loadInputDraft() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(INPUT_DRAFT_KEY) || 'null');
+    if (!raw || raw.version !== 1) return {};
+    const cart = Array.isArray(raw.cart) ? raw.cart.slice(0, 500).map((item, index) => ({
+      kode: String(item?.kode || ''),
+      nama: String(item?.nama || ''),
+      satuan: String(item?.satuan || 'Pack'),
+      qty: item?.qty == null ? 0 : item.qty,
+      keterangan: String(item?.keterangan || ''),
+      unmatched: !!item?.unmatched,
+      pdfReviewId: String(item?.pdfReviewId || ''),
+      pdfSourceIndex: Number(item?.pdfSourceIndex) || 0,
+      clientItemId: String(item?.clientItemId || ('CI-RESTORE-' + Date.now() + '-' + index)),
+    })) : [];
+    return {
+      entity: raw.entity === 'PT' ? 'PT' : 'CV',
+      txType: TX.some((t) => t.id === raw.txType) ? raw.txType : 'keluar',
+      tanggal: typeof raw.tanggal === 'string' && raw.tanggal ? raw.tanggal : todayStr(),
+      accuracy: raw.accuracy && typeof raw.accuracy === 'object' ? raw.accuracy : null,
+      cart,
+      pdfReview: Array.isArray(raw.pdfReview) ? raw.pdfReview.slice(0, 500) : [],
+      reviewSourceLabel: String(raw.reviewSourceLabel || 'PDF'),
+    };
+  } catch (_) {
+    return {};
+  }
+}
+
 export default function InputPage() {
-  const [entity, setEntity] = useState('CV');
-  const [txType, setTxType] = useState('keluar');
-  const [tanggal, setTanggal] = useState(todayStr());
+  const [initialDraft] = useState(loadInputDraft);
+  const [entity, setEntity] = useState(initialDraft.entity || 'CV');
+  const [txType, setTxType] = useState(initialDraft.txType || 'keluar');
+  const [tanggal, setTanggal] = useState(initialDraft.tanggal || todayStr());
   const [query, setQuery] = useState('');
   const [hits, setHits] = useState([]);
   const [stockCatalog, setStockCatalog] = useState([]);
+  const [stockCatalogEntity, setStockCatalogEntity] = useState('');
+  const [stockCatalogIsDemo, setStockCatalogIsDemo] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [statusBanner, setStatusBanner] = useState('');
-  const [accuracy, setAccuracy] = useState(null);
-  const [cart, setCart] = useState([]);
-  const [pdfReview, setPdfReview] = useState([]);
+  const [statusBanner, setStatusBanner] = useState(() => (initialDraft.cart?.length || initialDraft.pdfReview?.length) ? 'Draft transaksi dipulihkan dari perangkat.' : '');
+  const [accuracy, setAccuracy] = useState(initialDraft.accuracy || null);
+  const [cart, setCart] = useState(initialDraft.cart || []);
+  const [pdfReview, setPdfReview] = useState(initialDraft.pdfReview || []);
+  const [reviewLimit, setReviewLimit] = useState(30);
+  const [reviewSourceLabel, setReviewSourceLabel] = useState(initialDraft.reviewSourceLabel || 'PDF');
   const [showPhotoSource, setShowPhotoSource] = useState(false);
   const [photoCameraOpen, setPhotoCameraOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -59,11 +108,42 @@ export default function InputPage() {
   const photoStreamRef = useRef(null);
   const photoCanvasRef = useRef(null);
   const [scanning, setScanning] = useState(false);
-  const [dense, setDense] = useState(() => (localStorage.getItem('gudangai_density') || 'comfortable') === 'compact');
+  const [dense, setDense] = useState(() => {
+    try { return (localStorage.getItem('gudangai_density') || 'comfortable') === 'compact'; } catch (_) { return false; }
+  });
   const submittingRef = useRef(false);
   const cartRef = useRef(null);
   const scanAbortRef = useRef(false);
   const bootstrapRevision = useBootstrapRevision();
+
+  const draftSnapshotRef = useRef(null);
+  useEffect(() => {
+    const draft = {
+      version: 1, savedAt: Date.now(), entity, txType, tanggal, accuracy,
+      cart, pdfReview, reviewSourceLabel,
+    };
+    draftSnapshotRef.current = draft;
+    // Avoid synchronous JSON/localStorage work on every cart edit or server response.
+    const timer = setTimeout(() => {
+      if (!persistInputDraft(draft)) setStatusBanner('Draft terlalu besar, tidak tersimpan otomatis');
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [entity, txType, tanggal, accuracy, cart, pdfReview, reviewSourceLabel]);
+
+  useEffect(() => {
+    const flushDraft = () => persistInputDraft(draftSnapshotRef.current);
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') flushDraft();
+    };
+    window.addEventListener('pagehide', flushDraft);
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => {
+      window.removeEventListener('pagehide', flushDraft);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      // Page navigation unmounts the screen; flush the newest draft before leaving.
+      flushDraft();
+    };
+  }, []);
 
   useEffect(() => {
     const refreshUnread = () => setUnread(unreadNotificationCount());
@@ -74,27 +154,37 @@ export default function InputPage() {
   useEffect(() => {
     const handler = (e) => {
       const d = e.detail || {};
-      setSubmitProgress({ sent: d.sent || 0, total: d.total || 0, success: d.success || 0, failed: d.failed || 0 });
+      setSubmitProgress({ sent: d.sent || 0, total: d.total || 0, success: d.success || 0, queued: d.queued || 0, failed: d.failed || 0 });
     };
     window.addEventListener('gudangai-submit-progress', handler);
     return () => window.removeEventListener('gudangai-submit-progress', handler);
   }, []);
   useEffect(() => {
     let cancelled = false;
-    (async () => {
+    const loadStockCatalog = async () => {
       try {
         const list = await fetchStock(entity, { allowDemo: true });
-        if (!cancelled && Array.isArray(list)) setStockCatalog(list);
+        if (!cancelled && Array.isArray(list)) {
+          setStockCatalog(list);
+          setStockCatalogEntity(entity);
+          setStockCatalogIsDemo(!!list.demo);
+        }
       } catch (_) {
-        if (!cancelled) setStockCatalog([]);
+        if (!cancelled && !stockCatalog.length) { setStockCatalogEntity(entity); setStockCatalogIsDemo(false); }
       }
-    })();
-    return () => { cancelled = true; };
+    };
+    loadStockCatalog();
+    window.addEventListener('gudangai-stock-refresh', loadStockCatalog);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('gudangai-stock-refresh', loadStockCatalog);
+    };
   }, [entity]);
+  const deferredQuery = useDeferredValue(query);
   useEffect(() => {
-    if (!query.trim()) { setHits([]); return; }
+    if (!deferredQuery.trim()) { setHits((prev) => prev.length ? [] : prev); return; }
     const t = setTimeout(() => {
-      const q = query.trim();
+      const q = deferredQuery.trim();
       const live = searchLiveStock(stockCatalog, q);
       const staticHits = searchMaster(entity, q);
       const seen = new Set();
@@ -108,7 +198,7 @@ export default function InputPage() {
       setHits(merged.slice(0, 80));
     }, 180);
     return () => clearTimeout(t);
-  }, [query, entity, stockCatalog, bootstrapRevision]);
+  }, [deferredQuery, entity, stockCatalog, bootstrapRevision]);
 
   const addToCart = useCallback((item, qty = 1) => {
     setCart((prev) => {
@@ -172,15 +262,30 @@ export default function InputPage() {
       const useEntity = detected || entity;
       if (detected && detected !== entity) setEntity(detected);
       const rows = parseLinesFromText(text, lines);
+      await new Promise((resolve) => setTimeout(resolve, 0));
       if (!rows.length) { setStatusBanner('Tidak ada baris barang terdeteksi dari ' + sourceLabel + '.'); return; }
       const validation = validateItems(rows, useEntity);
+      await new Promise((resolve) => setTimeout(resolve, 0));
       let stock = null;
-      try { stock = await fetchStock(useEntity, { allowDemo: false }); } catch (_) { stock = null; }
-      const matched = applyStockAwareFallback(validation.matched || [], useEntity, stock)
+      // Reuse the catalog already loaded for this entity; never race a slow fetch here.
+      if (stockCatalog.length && stockCatalogEntity === useEntity && !stockCatalogIsDemo) {
+        stock = stockCatalog;
+      } else if (!stockCatalog.length) {
+        try { stock = await fetchStock(useEntity, { allowDemo: false }); } catch (_) { stock = null; }
+      }
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      const allRows = applyStockAwareFallback([
+        ...(validation.matched || []),
+        ...(validation.ambiguous || []),
+        ...(validation.unmatched || []),
+      ], useEntity, stock);
+      const cleanRows = allRows
         .filter((m) => !/\b\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4}\b/.test(String(m?.nameFromPdf || m?.rawName || '')))
         .filter((m) => !/\b(?:periode|period|minggu)\b.*\d{4}/i.test(String(m?.nameFromPdf || m?.rawName || '')));
-      const amb = validation.ambiguous || [];
-      const un = validation.unmatched || [];
+      const matched = cleanRows.filter((m) => m.status === 'matched');
+      const reviewRows = cleanRows.filter((m) => m.status !== 'matched');
+      const amb = reviewRows.filter((m) => m.status === 'ambiguous');
+      const un = reviewRows.filter((m) => m.status !== 'ambiguous');
       const reviewRunId = Date.now().toString(36);
       const review = [...amb, ...un].map((r, idx) => ({
         ...r,
@@ -196,6 +301,7 @@ export default function InputPage() {
       // Unmatched/ambiguous rows are retained for manual mapping; nothing is silently dropped.
       mergePdfIntoCart(matched, review);
       setPdfReview(review);
+      setReviewSourceLabel(sourceLabel === 'Foto' ? 'Foto' : sourceLabel === 'Tempel' ? 'Tempel' : 'PDF');
       const parts = [];
       if (matched.length) parts.push(matched.length + ' cocok');
       if (review.length) parts.push(review.length + ' perlu validasi');
@@ -203,16 +309,17 @@ export default function InputPage() {
     } catch (err) {
       setStatusBanner(err.message || 'Gagal memvalidasi ' + sourceLabel);
     } finally { setBusy(false); }
-  }, [entity, mergePdfIntoCart]);
+  }, [entity, mergePdfIntoCart, stockCatalog, stockCatalogEntity, stockCatalogIsDemo]);
 
-  const updateQty = (idx, delta) => setCart((prev) => prev.map((c, i) => (i === idx ? { ...c, qty: Math.max(0.01, +(c.qty + delta).toFixed(2)) } : c)));
-  const setQtyValue = (idx, val) => {
-    if (val === '') { setCart((prev) => prev.map((c, i) => (i === idx ? { ...c, qty: '' } : c))); return; }
-    const n = parseFloat(val); if (Number.isNaN(n)) return;
-    setCart((prev) => prev.map((c, i) => (i === idx ? { ...c, qty: +n.toFixed(2) } : c)));
-  };
-  const removeCart = (idx) => setCart((prev) => prev.filter((_, i) => i !== idx));
-  const setKet = (idx, val) => setCart((prev) => prev.map((c, i) => (i === idx ? { ...c, keterangan: val } : c)));
+  const updateQty = useCallback((clientItemId, delta) => setCart((prev) => prev.map((c) => c.clientItemId === clientItemId ? { ...c, qty: Math.max(0.01, +(Number(c.qty || 0) + delta).toFixed(2)) } : c)), []);
+  const setQtyValue = useCallback((clientItemId, val) => {
+    const normalized = String(val).replace(',', '.');
+    if (normalized === '') { setCart((prev) => prev.map((c) => c.clientItemId === clientItemId ? { ...c, qty: '' } : c)); return; }
+    const n = parseFloat(normalized); if (Number.isNaN(n)) return;
+    setCart((prev) => prev.map((c) => c.clientItemId === clientItemId ? { ...c, qty: +n.toFixed(2) } : c));
+  }, []);
+  const removeCart = useCallback((clientItemId) => setCart((prev) => prev.filter((c) => c.clientItemId !== clientItemId)), []);
+  const setKet = useCallback((clientItemId, val) => setCart((prev) => prev.map((c) => c.clientItemId === clientItemId ? { ...c, keterangan: val } : c)), []);
 
   const changeEntity = (nextEntity) => {
     if (nextEntity === entity) return;
@@ -222,6 +329,7 @@ export default function InputPage() {
     }
     setEntity(nextEntity);
     setPdfReview([]);
+    setReviewSourceLabel('PDF');
     setAccuracy(null);
     setStatusBanner('');
   };
@@ -356,8 +464,9 @@ export default function InputPage() {
       await runValidationPipeline(text, lines, 'Foto');
     } catch (err) {
       closePhotoCamera();
-      setBusy(false);
       setStatusBanner(err?.message || 'Gagal mengambil / membaca foto');
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -444,10 +553,10 @@ export default function InputPage() {
     } catch (err) { setBusy(false); setStatusBanner(err?.message || 'Gagal memulai rekaman suara'); }
   };
 
-  const resolvePdfReview = useCallback((reviewIndex, item) => {
+  const resolvePdfReview = useCallback((reviewId, item) => {
     if (!item?.kode) return;
-    const review = pdfReview[reviewIndex];
-    setPdfReview((prev) => prev.filter((_, i) => i !== reviewIndex));
+    const review = pdfReview.find((r) => String(r.reviewId) === String(reviewId));
+    setPdfReview((prev) => prev.filter((r) => String(r.reviewId) !== String(reviewId)));
     setCart((prev) => {
       const cleaned = prev.filter((x) => !(x.unmatched && String(x.pdfReviewId || '') === String(review?.reviewId || '')));
       const add = Number(review?.qty) || 0;
@@ -470,9 +579,9 @@ export default function InputPage() {
     });
   }, [pdfReview]);
 
-  const ignorePdfReview = useCallback((reviewIndex) => {
-    const review = pdfReview[reviewIndex];
-    setPdfReview((prev) => prev.filter((_, i) => i !== reviewIndex));
+  const ignorePdfReview = useCallback((reviewId) => {
+    const review = pdfReview.find((r) => String(r.reviewId) === String(reviewId));
+    setPdfReview((prev) => prev.filter((r) => String(r.reviewId) !== String(reviewId)));
     if (review) {
       setCart((prev) => prev.filter((c) => !(c.unmatched && String(c.pdfReviewId || '') === String(review.reviewId || ''))));
       setAccuracy((prev) => prev
@@ -480,10 +589,12 @@ export default function InputPage() {
         : prev);
     }
   }, [pdfReview]);
+  const onReviewPick = useCallback((reviewId, item) => resolvePdfReview(reviewId, item), [resolvePdfReview]);
+  const onReviewIgnore = useCallback((reviewId) => ignorePdfReview(reviewId), [ignorePdfReview]);
 
 
   const handleSubmit = async () => {
-    const unresolved = cart.filter((c) => c.unmatched || !c.kode);
+    const unresolved = cart.filter((c) => (c.unmatched || !c.kode) && Number(c.qty) > 0);
     if (unresolved.length > 0) {
       setStatusBanner('Masih ada ' + unresolved.length + ' item PDF yang belum dipetakan. Pilih master atau abaikan sebelum Kirim.');
       return;
@@ -493,92 +604,52 @@ export default function InputPage() {
       return;
     }
     if (submittingRef.current || !cart.length) return;
-    submittingRef.current = true; setSubmitting(true); setSubmitProgress({ sent: 0, total: cart.length, success: 0, failed: 0 });
+    submittingRef.current = true;
+    setSubmitting(true);
+    const zeroItems = cart.filter((c) => !(Number(c.qty) > 0));
+    const orderedCart = [...cart].sort((a, b) => (Number(a.pdfSourceIndex) || 999999) - (Number(b.pdfSourceIndex) || 999999));
+    const items = orderedCart.filter((c) => Number(c.qty) > 0).map((c) => ({
+      kode: c.kode, nama: c.nama || '', satuan: c.satuan || '', qty: Number(c.qty),
+      keterangan: c.keterangan || '', clientItemId: c.clientItemId,
+    }));
+    setSubmitProgress({ sent: 0, total: items.length, success: 0, queued: 0, failed: 0 });
+    if (zeroItems.length) setStatusBanner(zeroItems.length + ' item qty 0 tidak dikirim');
+    if (!items.length) {
+      setSubmitting(false); submittingRef.current = false; setSubmitProgress(null); return;
+    }
     try {
-      const orderedCart = [...cart].sort((a, b) => {
-          const ao = Number(a.pdfSourceIndex) || 999999;
-          const bo = Number(b.pdfSourceIndex) || 999999;
-          return ao - bo;
-        });
-        const items = orderedCart.map((c) => ({ ...c, qty: Number(c.qty) || 0 })).filter((c) => c.qty > 0)
-          .map((c) => ({
-            kode: c.kode,
-            nama: c.nama || '',
-            satuan: c.satuan || '',
-            qty: c.qty,
-            keterangan: c.keterangan || '',
-            clientItemId: c.clientItemId,
-          }));
-        if (!items.length) { setStatusBanner('Isi minimal 1 jumlah barang sebelum dikirim.'); return; }
       const fn = txType === 'masuk' ? submitBarangMasuk : txType === 'rusak' ? submitBarangRusak : submitBarangKeluar;
       const res = await fn({ entity, tanggal, items });
-      if (res?.success !== false) {
-        const okCount = Number(res.count || 0);
-        const queuedCount = Number(res.queuedCount || 0);
-        const failCount = Number(res.failed || 0);
-        const resultMap = new Map((res.results || [])
-          .filter(r => r?.clientItemId)
-          .map(r => [r.clientItemId, r]));
-        const confirmedItems = cart.filter((item) => {
-          const r = resultMap.get(item.clientItemId);
-          return r?.success === true || r?.skipped === true;
-        });
-
-        // Riwayat hanya boleh dibuat dari konfirmasi per-item backend.
-        // Item yang hanya masuk antrian tidak boleh tampil sebagai "berhasil".
-        if (confirmedItems.length > 0) {
-          saveToHistory({
-            type: txType,
-            entity,
-            items: confirmedItems,
-            tanggal,
-            at: Date.now(),
-            status: 'sukses',
-            source: 'backend-confirmed',
-            syncSummary: {
-              total: cart.length,
-              success: confirmedItems.length,
-              queued: queuedCount,
-              failed: Math.max(0, cart.length - confirmedItems.length - queuedCount)
-            }
-          });
-        }
-
-        if (queuedCount > 0) {
-          pushNotification({
-            type: 'warning',
-            title: confirmedItems.length > 0 ? 'Sebagian transaksi masuk Antrian Sinkronisasi' : 'Transaksi masuk Antrian Sinkronisasi',
-            body: confirmedItems.length + ' terkonfirmasi · ' + queuedCount + ' masuk antrian · ' +
-              Math.max(0, cart.length - confirmedItems.length - queuedCount) + ' belum teridentifikasi. Tidak ada item dibuang.'
-          });
-          setStatusBanner(
-            (confirmedItems.length > 0 ? 'TERKONFIRMASI ' + confirmedItems.length + ' · ' : '') +
-            'ANTRIAN ' + queuedCount +
-            (failCount ? ' · BELUM TERKONFIRMASI ' + failCount : '') +
-            ' — belum ditulis dianggap pending.'
-          );
-        } else if (confirmedItems.length === cart.length) {
-          pushNotification({ type: 'success', title: 'Transaksi selesai', body: confirmedItems.length + ' item ' + txType + ' ' + entity + ' terkonfirmasi ditulis backend.' });
-          setStatusBanner('Berhasil dikonfirmasi · ' + confirmedItems.length + ' item');
-        } else {
-          pushNotification({ type: 'error', title: 'Belum ada konfirmasi penulisan', body: 'Tidak ada item yang dinyatakan tertulis per-item oleh backend.' });
-          setStatusBanner('Belum terkonfirmasi — item tetap diamankan di antrian');
-        }
-
-        setCart([]); setAccuracy(null); setPdfReview([]);
-        window.dispatchEvent(new Event('gudangai-stock-refresh'));
+      const resultMap = new Map((res?.results || []).filter((r) => r?.clientItemId).map((r) => [r.clientItemId, r]));
+      const confirmedItems = items.filter((item) => { const r = resultMap.get(item.clientItemId); return r?.success === true || r?.skipped === true; });
+      const queuedItems = items.filter((item) => { const r = resultMap.get(item.clientItemId); return r?.queued === true && r?.queueStored === true && r?.clientItemId; });
+      const confirmedIds = new Set(confirmedItems.map((item) => item.clientItemId));
+      const queuedIds = new Set(queuedItems.map((item) => item.clientItemId));
+      const failedItems = items.filter((item) => !confirmedIds.has(item.clientItemId) && !queuedIds.has(item.clientItemId));
+      if (confirmedItems.length > 0) saveToHistory({
+        type: txType, entity, items: confirmedItems, tanggal, at: Date.now(), status: 'sukses', source: 'backend-confirmed',
+        syncSummary: { total: items.length, success: confirmedItems.length, queued: queuedItems.length, failed: failedItems.length },
+      });
+      const totalPending = failedItems.length + zeroItems.length;
+      if (queuedItems.length || failedItems.length || zeroItems.length) {
+        pushNotification({ type: failedItems.length ? 'warning' : 'success', title: 'Hasil pengiriman', body: confirmedItems.length + ' terkonfirmasi · ' + queuedItems.length + ' masuk Antrian Sinkronisasi · ' + totalPending + ' belum terkonfirmasi.' });
+        setStatusBanner(confirmedItems.length + ' terkonfirmasi · ' + queuedItems.length + ' masuk Antrian Sinkronisasi · ' + totalPending + ' belum terkonfirmasi (tetap di keranjang)');
       } else {
-        pushNotification({ type: 'error', title: 'Transaksi belum dikirim', body: res?.error || 'Tidak ada data yang dinyatakan berhasil.' });
-        setStatusBanner(res?.error || 'Gagal kirim');
+        pushNotification({ type: 'success', title: 'Transaksi selesai', body: confirmedItems.length + ' item terkonfirmasi ditulis backend.' });
+        setStatusBanner(confirmedItems.length + ' terkonfirmasi · 0 masuk Antrian Sinkronisasi · 0 belum terkonfirmasi');
       }
-    } catch (err) { setStatusBanner(err.message || 'Gagal kirim'); }
-    finally { setSubmitting(false); submittingRef.current = false; setSubmitProgress(null); }
+      setCart(cart.filter((item) => Number(item.qty) <= 0 || failedItems.some((x) => x.clientItemId === item.clientItemId)));
+      if (!failedItems.length && !zeroItems.length) { setAccuracy(null); setPdfReview([]); setReviewSourceLabel('PDF'); }
+      if (confirmedItems.length > 0) window.dispatchEvent(new Event('gudangai-stock-refresh'));
+    } catch (err) {
+      setStatusBanner(err.message || 'Gagal kirim');
+    } finally { setSubmitting(false); submittingRef.current = false; setSubmitProgress(null); }
   };
 
   const openNotif = () => { setNotifs(getNotifications()); markNotificationsRead(); setUnread(0); setShowNotif((v) => !v); };
 
   return (
-    <div className="pb-28 space-y-4 overflow-x-hidden w-full max-w-full box-border">
+    <div className="input-page pb-28 space-y-4 overflow-x-hidden w-full max-w-full box-border">
       <div className="flex items-center justify-between gap-2">
         <h1 className="text-xl font-extrabold flex items-center gap-2 text-slate-900">
           <PackagePlus className="w-6 h-6 text-cyan-300" /> Input
@@ -709,7 +780,7 @@ export default function InputPage() {
       </div>
 
       {hits.length > 0 && (
-        <div className="rounded-xl border border-slate-200 bg-white shadow-sm max-h-64 overflow-y-auto divide-y divide-slate-100">
+        <div data-testid="input-search-results" className="rounded-xl border border-slate-200 bg-white shadow-sm max-h-64 overflow-y-auto divide-y divide-slate-100">
           {hits.map((h) => (
             <button key={h.kode} type="button" onClick={() => { addToCart(h, 1); setQuery(''); setHits([]); }}
               className="w-full text-left px-3 py-2.5 hover:bg-cyan-50 flex items-center justify-between gap-2">
@@ -735,12 +806,17 @@ export default function InputPage() {
       {pdfReview.length > 0 && (
         <div className="rounded-2xl bg-white border border-amber-200 shadow-sm p-3 space-y-3">
           <div>
-            <p className="text-sm font-bold text-slate-900">Validasi PDF — {pdfReview.length} baris perlu dicocokkan</p>
-            <p className="text-[11px] text-slate-500 mt-0.5">Nomor di PDF diabaikan. Urutan mengikuti PDF dan nomor di aplikasi dibuat ulang mulai 1.</p>
+            <p className="text-sm font-bold text-slate-900">Validasi {reviewSourceLabel} — {pdfReview.length} baris perlu dicocokkan</p>
+            <p className="text-[11px] text-slate-500 mt-0.5">
+              {reviewSourceLabel === 'Foto'
+                ? 'Hasil OCR foto. Baris berisik otomatis dibuang. Nama yang tidak cocok master perlu dipilih manual atau diabaikan.'
+                : 'Nomor di PDF diabaikan. Urutan mengikuti PDF dan nomor di aplikasi dibuat ulang mulai 1.'}
+            </p>
           </div>
-          {pdfReview.map((r, idx) => (
-            <PdfReviewRow key={r.reviewId || (r.sourceIndex || idx) + '-' + idx} row={r} entity={entity} stockCatalog={stockCatalog} onPick={(item) => resolvePdfReview(idx, item)} onIgnore={() => ignorePdfReview(idx)} />
+          {pdfReview.slice(0, reviewLimit).map((r) => (
+            <PdfReviewRow key={r.reviewId || r.sourceIndex} row={r} entity={entity} stockCatalog={stockCatalog} onPick={onReviewPick} onIgnore={onReviewIgnore} />
           ))}
+          {pdfReview.length > reviewLimit && <button type="button" onClick={() => setReviewLimit((prev) => Math.min(pdfReview.length, prev + 30))} className="text-xs font-semibold text-cyan-700">Tampilkan lebih ({pdfReview.length - reviewLimit})</button>}
         </div>
       )}
 
@@ -750,38 +826,11 @@ export default function InputPage() {
             <p className="text-sm font-bold text-slate-900">Keranjang ({cart.length})</p>
             <button type="button" onClick={() => setCart([])} className="text-xs text-rose-300 font-semibold">Kosongkan</button>
           </div>
-          {cart.map((c, idx) => (
-            <div key={c.clientItemId || idx} className={`rounded-xl bg-white border shadow-sm p-3 space-y-2 ${c.unmatched ? 'border-orange-300 bg-orange-50/60' : 'border-slate-200'}`}>
-              <div className="flex items-start justify-between gap-2">
-                <div>
-                  <p className="text-sm font-semibold text-slate-800">{c.nama}</p>
-                  {c.unmatched ? <p className="text-[11px] font-bold text-orange-700">Tidak cocok master — pilih master atau abaikan</p> : <p className="text-[11px] text-slate-500">{c.kode} · {c.satuan}</p>}
-                </div>
-                <button type="button" onClick={() => removeCart(idx)} className="text-rose-500"><Trash2 className="w-4 h-4" /></button>
-              </div>
-              <div className="flex items-center gap-2">
-                <button type="button" onClick={() => updateQty(idx, -1)} className="w-8 h-8 rounded-lg bg-slate-200 text-slate-800 flex items-center justify-center shrink-0"><Minus className="w-4 h-4" /></button>
-                <input
-                  type="number"
-                  inputMode="decimal"
-                  value={c.qty}
-                  onChange={(e) => setQtyValue(idx, e.target.value)}
-                  className="w-[4.5rem] text-center rounded-lg border border-slate-300 bg-white py-1.5 text-sm font-extrabold text-slate-900 tabular-nums shadow-sm"
-                />
-                <button type="button" onClick={() => updateQty(idx, 1)} className="w-8 h-8 rounded-lg bg-slate-200 text-slate-800 flex items-center justify-center shrink-0"><Plus className="w-4 h-4" /></button>
-                <input
-                  value={c.keterangan || ''}
-                  onChange={(e) => setKet(idx, e.target.value)}
-                  placeholder="Keterangan"
-                  className="flex-1 min-w-0 rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-900 placeholder:text-slate-400"
-                />
-              </div>
-            </div>
-          ))}
+          {cart.map((c) => <CartRow key={c.clientItemId} item={c} onUpdateQty={updateQty} onSetQty={setQtyValue} onRemove={removeCart} onSetKet={setKet} />)}
           <div className="fixed bottom-16 left-0 right-0 px-4 z-20">
             {submitProgress && (
               <p className="text-center text-xs text-cyan-700 mb-1 font-semibold">
-                Mengirim {submitProgress.sent}/{submitProgress.total} · ok {submitProgress.success} · antri {submitProgress.failed}
+                Mengirim {submitProgress.sent}/{submitProgress.total} · ok {submitProgress.success} · antri {submitProgress.queued} · gagal {submitProgress.failed}
               </p>
             )}
             <button type="button" onClick={handleSubmit} disabled={submitting || !cart.length}
@@ -867,52 +916,40 @@ export default function InputPage() {
   );
   }
 
+const CartRow = memo(function CartRow({ item, onUpdateQty, onSetQty, onRemove, onSetKet }) {
+  const [value, setValue] = useState(String(item.qty ?? ''));
+  useEffect(() => setValue(String(item.qty ?? '')), [item.qty]);
+  useEffect(() => {
+    const timer = setTimeout(() => onSetQty(item.clientItemId, value), 150);
+    return () => clearTimeout(timer);
+  }, [value, item.clientItemId, onSetQty]);
+  const commit = () => onSetQty(item.clientItemId, value);
+  return <div className={`rounded-xl bg-white border shadow-sm p-3 space-y-2 ${item.unmatched ? 'border-orange-300 bg-orange-50/60' : 'border-slate-200'}`}>
+    <div className="flex items-start justify-between gap-2"><div><p className="text-sm font-semibold text-slate-800">{item.nama}</p>{item.unmatched ? <p className="text-[11px] font-bold text-orange-700">Tidak cocok master — pilih master atau abaikan</p> : <p className="text-[11px] text-slate-500">{item.kode} · {item.satuan}</p>}</div><button type="button" onClick={() => onRemove(item.clientItemId)} className="text-rose-500"><Trash2 className="w-4 h-4" /></button></div>
+    <div className="flex items-center gap-2"><button type="button" onClick={() => onUpdateQty(item.clientItemId, -1)} className="w-8 h-8 rounded-lg bg-slate-200 text-slate-800 flex items-center justify-center shrink-0"><Minus className="w-4 h-4" /></button><input type="text" inputMode="decimal" value={value} onChange={(e) => setValue(e.target.value)} onBlur={commit} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commit(); e.currentTarget.blur(); } }} className="w-[4.5rem] text-center rounded-lg border border-slate-300 bg-white py-1.5 text-sm font-extrabold text-slate-900 tabular-nums shadow-sm" /><button type="button" onClick={() => onUpdateQty(item.clientItemId, 1)} className="w-8 h-8 rounded-lg bg-slate-200 text-slate-800 flex items-center justify-center shrink-0"><Plus className="w-4 h-4" /></button><input value={item.keterangan || ''} onChange={(e) => onSetKet(item.clientItemId, e.target.value)} placeholder="Keterangan" className="flex-1 min-w-0 rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-900 placeholder:text-slate-400" /></div>
+  </div>;
+});
 
-
-function PdfReviewRow({ row, entity, stockCatalog = [], onPick, onIgnore }) {
-  const [q, setQ] = useState(row.namaPdf || '');
-  const hits = (() => {
-    const term = q.trim();
-    if (!term) return [];
+const PdfReviewRow = memo(function PdfReviewRow({ row, entity, stockCatalog = [], onPick, onIgnore }) {
+  const [q, setQ] = useState('');
+  const [focused, setFocused] = useState(false);
+  const debouncedQ = useDebouncedValue(q, 200);
+  const hits = useMemo(() => {
+    if (!focused || !debouncedQ.trim()) return [];
+    const term = debouncedQ.trim();
     const live = searchLiveStock(stockCatalog, term);
     const stat = searchMaster(entity, term);
+    const rawMaterial = entity === 'PT' ? searchMaster('CV', term).filter((h) => String(h?.kode || '').toUpperCase().startsWith('BBPT-')) : [];
     const seen = new Set();
-    return [...live, ...stat].filter((h) => {
-      const k = String(h?.kode || h?.kodeBarang || '').trim();
-      if (!k || seen.has(k)) return false;
-      seen.add(k);
-      return true;
-    }).slice(0, 5);
-  })();
-  return (
-    <div className="rounded-xl border border-amber-100 bg-amber-50/50 p-2.5">
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <p className="text-[10px] font-bold text-orange-700">TIDAK COCOK MASTER — REVIEW MANUAL · NO {row.reviewNo}</p>
-          <p className="text-sm font-semibold text-slate-800">{row.namaPdf}</p>
-          <p className="text-[11px] text-slate-500">TOTAL {row.qty} · PDF NO {row.pdfNo || '—'}</p>
-        </div>
-      </div>
-      <input value={q} onChange={(e) => setQ(e.target.value)}
-        placeholder="Cari nama barang master..."
-        className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-900" />
-      {hits.length > 0 && (
-        <div className="mt-1 space-y-1">
-          {hits.map((h) => (
-            <button key={h.kode} type="button" onClick={() => onPick(h)}
-              className="w-full text-left rounded-lg bg-white border border-slate-200 px-2 py-1.5 text-xs text-slate-700">
-              {h.kode} · {h.nama}
-            </button>
-          ))}
-        </div>
-      )}
-      <button
-        type="button"
-        onClick={onIgnore}
-        className="mt-2 w-full rounded-lg border border-rose-200 bg-rose-50 px-2 py-1.5 text-xs font-semibold text-rose-700"
-      >
-        Abaikan baris ini
-      </button>
-    </div>
-  );
+    return [...live, ...stat, ...rawMaterial].filter((h) => { const k = String(h?.kode || h?.kodeBarang || '').trim(); if (!k || seen.has(k)) return false; seen.add(k); return true; }).slice(0, 30);
+  }, [debouncedQ, entity, focused, stockCatalog]);
+  return <div className="rounded-xl border border-amber-100 bg-amber-50/50 p-2.5"><div className="flex items-start justify-between gap-2"><div className="min-w-0"><p className="text-[10px] font-bold text-orange-700">TIDAK COCOK MASTER — REVIEW MANUAL · NO {row.reviewNo}</p><p className="text-sm font-semibold text-slate-800">{row.namaPdf}</p><p className="text-[11px] text-slate-500">TOTAL {row.qty} · PDF NO {row.pdfNo || '—'}</p></div></div><input value={focused ? q : ''} onFocus={() => { setFocused(true); if (!q) setQ(row.namaPdf || ''); }} onChange={(e) => setQ(e.target.value)} placeholder="Cari nama barang master..." className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-900" />{hits.length > 0 && <div className="mt-1 space-y-1">{hits.map((h) => <button key={h.kode} type="button" onClick={() => onPick(row.reviewId, h)} className="w-full text-left rounded-lg bg-white border border-slate-200 px-2 py-1.5 text-xs text-slate-700">{h.kode} · {h.nama}</button>)}</div>}<button type="button" onClick={() => onIgnore(row.reviewId)} className="mt-2 w-full rounded-lg border border-rose-200 bg-rose-50 px-2 py-1.5 text-xs font-semibold text-rose-700">Abaikan baris ini</button></div>;
+});
+
+function useDebouncedValue(value, delay) {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => { const timer = setTimeout(() => setDebounced(value), delay); return () => clearTimeout(timer); }, [value, delay]);
+  return debounced;
 }
+
+export { CartRow, PdfReviewRow };

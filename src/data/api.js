@@ -3,12 +3,12 @@
 const RETRY_COUNT = 2;
 const RETRY_BASE_MS = 400;
 const REQUEST_TIMEOUT_MS = 15000;
-/** Chunk aman agar Apps Script + spreadsheet selesai < timeout (anti-antrian). 20 item per POST. */
-const BATCH_CHUNK_SIZE = 20;
-const BATCH_TIMEOUT_MS = 90000;
+/** Chunk 35 item; jangan dinaikkan tanpa pengukuran latency dan validasi read-back di produksi. */
+const BATCH_CHUNK_SIZE = 35;
+const BATCH_TIMEOUT_MS = 120000;
 const SINGLE_TIMEOUT_MS = 60000;
 const SCHEMA_VERSION = '1.0';
-const SAFE_WRITE_BACKEND_RE = /STOCK-READONLY|STOCK-SOURCE-LOCKED|6\.6\.5\+?(?:BULK[-_]?STABLE|DEPLOY[-_]?READY)|6\.6\.[5-9]|V?6\.6\.[5-9]|BULK[-_]?STABLE|DEPLOY[-_]?READY/i;
+const SAFE_WRITE_BACKEND_RE = /STOCK-READONLY|STOCK-SOURCE-LOCKED|6\.6\.5\+?(?:BULK[-_]?STABLE|DEPLOY[-_]?READY)|6\.6\.[5-9]|V?6\.6\.[5-9]|7\.0\.\d+|PERFORMANCE[-_]?CANDIDATE|RECONSTRUCTION|BULK[-_]?STABLE|DEPLOY[-_]?READY/i;
 
 const APPLIED_KEY = 'gudangai_applied';
 const QUEUE_KEY = 'gudangai_queue';
@@ -22,6 +22,7 @@ let _queueRevision = 0;
 let _batchSupported = null;
 
 import { hydrateQueueBackup, persistQueueBackup } from './offlineStore';
+import { classifyStockLevel } from './stockStatus';
 function emitConn(detail) { try { window.dispatchEvent(new CustomEvent('gudangai-conn', { detail })); } catch (_) {} }
 export function getApiUrl() {
   const stored = (localStorage.getItem('gudangai_api_url') || '').trim();
@@ -51,7 +52,13 @@ function newIds() {
   return { requestId: 'REQ-' + uuid, transactionId: 'TX-RUDY-' + uuid };
 }
 function normalizeTanggal(raw) {
-  if (!raw) return new Date().toISOString().slice(0, 10);
+  const now = new Date();
+  const wibParts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Jakarta', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(now);
+  const wib = Object.fromEntries(wibParts.map((part) => [part.type, part.value]));
+  const localToday = [wib.year, wib.month, wib.day].join('-');
+  if (!raw) return localToday;
   const s = String(raw).trim();
   if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
   const m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
@@ -67,7 +74,7 @@ function normalizeTanggal(raw) {
     const da = String(d.getDate()).padStart(2, '0');
     return y + '-' + mo + '-' + da;
   }
-  return new Date().toISOString().slice(0, 10);
+  return localToday;
 }
 async function fetchWithRetry(url, options = {}, retries = RETRY_COUNT, timeoutMs = REQUEST_TIMEOUT_MS) {
   let lastError;
@@ -191,11 +198,15 @@ function mapStockItem(it, entity) {
     divisi: it.divisi || '',
     entitas: (it.entitas || entity || '').toUpperCase(),
     entity: (it.entitas || entity || '').toUpperCase(),
+    size: it.size || it.ukuran || it.Size || '',
   };
 }
 export async function fetchStock(entity, options = {}) {
   const url = getApiUrl();
-  if (!url) { if (options.allowDemo) return []; throw new Error('URL API belum diatur'); }
+  if (!url) {
+    if (options.allowDemo) { const demo = []; demo.demo = true; return demo; }
+    throw new Error('URL API belum diatur');
+  }
   let data;
   try { data = await getJson('getAllStock', { entitas: entity || 'ALL' }); }
   catch { try { data = await postJson({ action: 'getAllStock', entitas: entity || 'ALL', requestId: newIds().requestId }); } catch { data = null; } }
@@ -230,8 +241,7 @@ function buildDashboardFallbackFromStock(items) {
     if (!map[divisi]) map[divisi] = { divisi, total: 0, aman: 0, waspada: 0, kritis: 0 };
     map[divisi].total += 1;
     const stok = Number(it.stok ?? it.stockAkhir ?? 0) || 0;
-    const min = Number(it.stockAman ?? it.aman ?? it.min ?? 0) || 0;
-    const cls = min > 0 ? ((stok <= 0 || stok <= Math.max(5, Math.floor(min * 0.25))) ? 'kritis' : (stok < min ? 'waspada' : 'aman')) : (stok <= 5 ? 'kritis' : (stok <= 20 ? 'waspada' : 'aman'));
+    const cls = classifyStockLevel(stok);
     map[divisi][cls] += 1;
   }
   return Object.values(map).filter((r) => r.total > 0);
@@ -275,22 +285,29 @@ function getAppliedMap() {
   } catch { return {}; }
 }
 function isApplied(clientItemId) { return !!(clientItemId && getAppliedMap()[clientItemId]); }
-function markApplied(clientItemId) {
-  if (!clientItemId) return;
+function markAppliedMany(clientItemIds) {
+  const ids = Array.from(new Set((clientItemIds || []).map((id) => String(id || '').trim()).filter(Boolean)));
+  if (!ids.length) return;
   const map = getAppliedMap();
-  map[clientItemId] = Date.now();
+  const now = Date.now();
+  ids.forEach((id) => { map[id] = now; });
   try { localStorage.setItem(APPLIED_KEY, JSON.stringify(map)); } catch (_) {}
 }
+function markApplied(clientItemId) { markAppliedMany([clientItemId]); }
 export function markItemApplied(clientItemId) { markApplied(clientItemId); }
 function ensureClientItemId(it) {
   if (it.clientItemId) return it;
   return { ...it, clientItemId: 'CI-' + (crypto.randomUUID ? crypto.randomUUID() : Date.now() + '-' + Math.random().toString(36).slice(2, 9)) };
 }
 function enqueue(type, entity, items, meta = {}) {
-  if (!items?.length) return;
+  if (!items?.length) return [];
   const queue = getPendingQueue();
-  queue.push({ id: 'Q-' + Date.now(), type, entity, items: items.map(ensureClientItemId), tanggal: normalizeTanggal(meta.tanggal), createdAt: new Date().toISOString() });
+  const normalized = items.map(ensureClientItemId);
+  queue.push({ id: 'Q-' + Date.now(), type, entity, items: normalized, tanggal: normalizeTanggal(meta.tanggal), createdAt: new Date().toISOString() });
   commitQueueLocal(queue);
+  const stored = getPendingQueue();
+  const storedIds = new Set(stored.flatMap((entry) => (entry.items || []).map((item) => item.clientItemId).filter(Boolean)));
+  return normalized.map((item) => String(item.clientItemId)).filter((id) => storedIds.has(id));
 }
 async function submitOneItem(sheetOrAction, entity, it, tanggal) {
   const cid = it.clientItemId || ensureClientItemId(it).clientItemId;
@@ -343,7 +360,9 @@ async function submitBatchChunk(action, entity, chunkItems, tanggal) {
     requestId: batchId,
   };
 
-  const data = await postJson(payload, { retries: 2, timeoutMs: 90000 });
+  // Satu request per batch: timeout bersifat ambigu. Jangan kirim ulang saat Apps Script
+  // mungkin masih memproses batch pertama; antrikan identity yang sama untuk rekonsiliasi.
+  const data = await postJson(payload, { retries: 1, timeoutMs: BATCH_TIMEOUT_MS });
   const rawResults = data?.results || data?.data?.results || [];
   // Map identity → clientItemId from normalized (wire intentionally omits clientItemId).
   // Keys: transactionId (TX-CI-...), requestId (CI-...), and bare clientItemId.
@@ -364,88 +383,121 @@ async function submitBatchChunk(action, entity, chunkItems, tanggal) {
     return { ...r, clientItemId, success: ok };
   }) : [];
 
-  // Backend V6.6.5 dapat mengembalikan success/written tanpa array results.
-  // Dalam kondisi ini, hanya anggap sukses jika backend menyatakan seluruh batch tertulis.
-  if (!results.length && data?.success === true &&
-      (data?.successCount == null || Number(data.successCount) >= normalized.length)) {
-    for (const it of normalized) results.push({ clientItemId: it.clientItemId, success: true });
-  } else if (!results.length && data?.written === true &&
-      (data?.writtenCount == null || Number(data.writtenCount) >= normalized.length)) {
-    for (const it of normalized) results.push({ clientItemId: it.clientItemId, success: true });
+  // Backend dapat mengembalikan hanya counter tanpa array results. Bentuk ulang
+  // hasil parsial agar item yang sudah benar-benar ditulis tidak masuk antrean.
+  if (!results.length) {
+    const reportedSuccess = Math.max(0, Math.min(normalized.length, Number(
+      data?.successCount ?? data?.writtenCount ?? data?.data?.successCount ?? data?.data?.writtenCount ??
+      ((data?.success === true || data?.written === true) ? normalized.length : 0)
+    ) || 0));
+    if (reportedSuccess > 0) {
+      for (let index = 0; index < normalized.length; index += 1) {
+        results.push({ clientItemId: normalized[index].clientItemId, success: index < reportedSuccess });
+      }
+    }
   }
   if (!results.length) {
     const detail = [data?.code, data?.status, data?.error, data?.message].filter(Boolean).join(' · ');
     throw new Error(detail || 'Backend tidak mengonfirmasi seluruh batch');
   }
 
-  for (const r of results) {
-    if (r.success && r.clientItemId) markApplied(r.clientItemId);
-  }
+  // Persist all successful item IDs in one localStorage write, not one write per item.
+  markAppliedMany(results.filter((r) => r.success && r.clientItemId).map((r) => r.clientItemId));
   const successCount = results.filter((r) => r.success).length;
   const failCount = results.length - successCount;
-  return { success: successCount === normalized.length, successCount, failCount, results };
+  return { success: successCount === normalized.length, successCount, failCount, results, serverExecMs: Number(data?.execMs) || null };
 }
 function emitProgress(sent, total, chunkResult) {
-  try { window.dispatchEvent(new CustomEvent('gudangai-submit-progress', { detail: { sent, total, success: chunkResult?.successCount || 0, failed: chunkResult?.failCount || 0 } })); } catch (_) {}
+  try { window.dispatchEvent(new CustomEvent('gudangai-submit-progress', { detail: { sent, total, success: chunkResult?.successCount || 0, queued: chunkResult?.queuedCount || 0, failed: chunkResult?.failCount || 0 } })); } catch (_) {}
 }
 async function submitItems(action, entity, items, tanggal, options = {}) {
-  const list = (items || []).map(ensureClientItemId);
-  if (!list.length) return { success: false, error: 'Tidak ada item' };
+  const clientStartedAt = Date.now();
+  const originalList = (items || []).map(ensureClientItemId);
+  if (!originalList.length) return { success: false, error: 'Tidak ada item' };
+
+  // Read the local APPLIED map once; avoid parsing the full localStorage value per item.
+  const appliedAtStart = getAppliedMap();
+  const alreadyApplied = originalList.filter((it) => !!appliedAtStart[it.clientItemId]);
+  const list = originalList.filter((it) => !appliedAtStart[it.clientItemId]);
+  const confirmedResults = alreadyApplied.map((it) => ({
+    success: true, skipped: true, status: 'APPLIED', clientItemId: it.clientItemId,
+  }));
+  if (!list.length) {
+    return {
+      success: true, count: originalList.length, failed: 0, queuedCount: 0, total: originalList.length,
+      results: confirmedResults, clientElapsedMs: Date.now() - clientStartedAt,
+    };
+  }
+
   if (!navigator.onLine || !getApiUrl()) {
-    if (!options.fromQueue) enqueue(action, entity, list, { tanggal });
+    const queuedIds = options.fromQueue ? [] : enqueue(action, entity, list, { tanggal });
+    const queuedSet = new Set(queuedIds);
     const msg = list.length + ' item masuk Antrian Sinkronisasi (offline)';
     pushNotification({ type: 'warning', title: 'Koneksi terputus', body: msg + '. Tidak ada item yang dibuang.' });
-    return { success: false, queued: true, count: 0, queuedCount: list.length, failed: list.length, results: list.map(it => ({ success: false, queued: true, clientItemId: it.clientItemId })) };
+    return {
+      success: false, queued: queuedIds.length > 0, count: alreadyApplied.length, queuedCount: queuedIds.length,
+      failed: list.length - queuedIds.length, total: originalList.length, clientElapsedMs: Date.now() - clientStartedAt,
+      results: [...confirmedResults, ...list.map(it => ({ success: false, queued: queuedSet.has(it.clientItemId), queueStored: queuedSet.has(it.clientItemId), clientItemId: it.clientItemId }))],
+    };
   }
-  // Never silently queue a write while the API is reachable.
-  // Verify the exact write-capable backend before attempting any transaction.
+
+  // Backend health is cached for 60 seconds; do not pay this round-trip for local APPLIED items.
   try {
     await assertSafeWriteBackend();
   } catch (err) {
-    if (!options.fromQueue) enqueue(action, entity, list, { tanggal });
+    const queuedIds = options.fromQueue ? [] : enqueue(action, entity, list, { tanggal });
+    const queuedSet = new Set(queuedIds);
     const msg = err?.message || 'Backend write belum terverifikasi';
     pushNotification({ type: 'error', title: 'Write ditahan', body: msg });
     return {
-      success: false, count: 0, failed: list.length, queuedCount: list.length, total: list.length,
-      results: list.map(it => ({ success: false, queued: true, clientItemId: it.clientItemId, error: msg }))
+      success: false, count: alreadyApplied.length, failed: list.length - queuedIds.length, queuedCount: queuedIds.length,
+      total: originalList.length, clientElapsedMs: Date.now() - clientStartedAt,
+      results: [...confirmedResults, ...list.map(it => ({ success: false, queued: queuedSet.has(it.clientItemId), queueStored: queuedSet.has(it.clientItemId), clientItemId: it.clientItemId, error: msg }))],
     };
   }
-  const allResults = [];
-  let totalSuccess = 0, totalFail = 0, totalQueued = 0;
+
+  const allResults = [...confirmedResults];
+  let totalSuccess = alreadyApplied.length, totalFail = 0, totalQueued = 0;
+  let totalServerExecMs = 0, measuredServerChunks = 0;
   for (let i = 0; i < list.length; i += BATCH_CHUNK_SIZE) {
     const chunk = list.slice(i, i + BATCH_CHUNK_SIZE);
     try {
       const batchRes = await submitBatchChunk(action, entity, chunk, tanggal);
+      if (Number.isFinite(Number(batchRes.serverExecMs)) && Number(batchRes.serverExecMs) > 0) {
+        totalServerExecMs += Number(batchRes.serverExecMs);
+        measuredServerChunks++;
+      }
       const sc = batchRes.successCount || 0;
       const fc = batchRes.failCount || 0;
       totalSuccess += sc; totalFail += fc;
       if (batchRes.results) allResults.push(...batchRes.results);
-      emitProgress(Math.min(i + chunk.length, list.length), list.length, { successCount: totalSuccess, failCount: totalFail });
+      emitProgress(Math.min(i + chunk.length, originalList.length), originalList.length, { successCount: totalSuccess, failCount: totalFail, queuedCount: totalQueued });
       const failedIds = new Set((batchRes.results || []).filter(r => !r.success && !r.skipped && r.clientItemId).map(r => r.clientItemId));
       const knownIds = new Set((batchRes.results || []).map(r => r.clientItemId).filter(Boolean));
-      const queueItems = chunk.filter(it => failedIds.has(it.clientItemId) || (!knownIds.has(it.clientItemId) && !isApplied(it.clientItemId)));
+      const queueItems = chunk.filter(it => failedIds.has(it.clientItemId) || !knownIds.has(it.clientItemId));
       if (queueItems.length) {
-        if (!options.fromQueue) enqueue(action, entity, queueItems, { tanggal });
-        totalQueued += queueItems.length;
+        const queuedIds = options.fromQueue ? [] : enqueue(action, entity, queueItems, { tanggal });
+        const queuedSet = new Set(queuedIds);
+        for (const id of queuedIds) {
+          const result = allResults.find((r) => r.clientItemId === id);
+          if (result) { result.queued = true; result.queueStored = true; }
+          else allResults.push({ success: false, queued: true, queueStored: true, clientItemId: id });
+        }
+        totalQueued += queuedIds.length;
       }
       continue;
     } catch (err) {
       const msg = String(err?.message || 'Gagal menulis batch');
       const remainingItems = list.slice(i);
-      // HARD RULE: timeout/unknown tidak boleh diubah menjadi serial retry.
-      // Retry hanya boleh memakai identity/batch yang sama setelah read-back/status
-      // backend terverifikasi; jangan mengubah timeout menjadi write serial.
-      if (!options.fromQueue) enqueue(action, entity, remainingItems, { tanggal });
-      totalQueued += remainingItems.length;
+      // A timeout is ambiguous: never issue a second write automatically.
+      // Keep the same item IDs in the outbox for explicit backend/read-back reconciliation.
+      const queuedIds = options.fromQueue ? [] : enqueue(action, entity, remainingItems, { tanggal });
+      totalQueued += queuedIds.length;
       totalFail += remainingItems.length;
       allResults.push(...remainingItems.map(it => ({
-        success: false,
-        queued: true,
-        uncertain: true,
-        clientItemId: it.clientItemId,
-        error: msg,
+        success: false, queued: queuedIds.includes(it.clientItemId), queueStored: queuedIds.includes(it.clientItemId), uncertain: true, clientItemId: it.clientItemId, error: msg,
       })));
-      emitProgress(list.length, list.length, { successCount: totalSuccess, failCount: totalFail });
+      emitProgress(originalList.length, originalList.length, { successCount: totalSuccess, failCount: totalFail, queuedCount: totalQueued });
       pushNotification({
         type: 'warning',
         title: 'Write belum terkonfirmasi',
@@ -460,19 +512,51 @@ async function submitItems(action, entity, items, tanggal, options = {}) {
     pushNotification({ type: 'success', title: 'Transaksi selesai', body: totalSuccess + ' item berhasil ditulis tanpa antrian.' });
   }
   return {
-    success: totalSuccess === list.length,
-    partial: totalSuccess > 0 && totalSuccess < list.length,
-    count: totalSuccess,
-    failed: totalFail,
-    queuedCount: totalQueued,
-    total: list.length,
+    success: totalSuccess === originalList.length,
+    partial: totalSuccess > 0 && totalSuccess < originalList.length,
+    count: totalSuccess, failed: totalFail, queuedCount: totalQueued, total: originalList.length,
     results: allResults,
+    serverExecMs: measuredServerChunks ? totalServerExecMs : null,
+    clientElapsedMs: Date.now() - clientStartedAt,
   };
 }
 export async function submitBarangMasuk({ entity, tanggal, items }) { return submitItems('barangMasuk', entity, items, tanggal); }
 export async function submitBarangKeluar({ entity, tanggal, items }) { return submitItems('barangKeluar', entity, items, tanggal); }
 export async function submitBarangRusak({ entity, tanggal, items }) { return submitItems('barangRusak', entity, items, tanggal); }
 export function getPendingQueue() { return readQueueLocal().queue; }
+function queueItemIdentity(item) {
+  const clientItemId = String(item?.clientItemId || '').trim();
+  if (!clientItemId) return { transactionId: '', nonce: '' };
+  return { transactionId: 'TX-' + clientItemId, nonce: 'NC-' + clientItemId };
+}
+function queueItemSheet(item) {
+  return ({ masuk: 'Barang masuk', keluar: 'Barang keluar', rusak: 'Barang Rusak' })[item?.type] || '';
+}
+/** Read-only reconciliation; local removal is allowed only after APPLIED/read-back confirmation. */
+export async function verifyPendingItem(item) {
+  const identity = queueItemIdentity(item);
+  const sheet = queueItemSheet(item);
+  if (!identity.transactionId || !sheet) {
+    return { success: false, status: 'REJECTED', code: 'QUEUE_IDENTITY_REQUIRED', error: 'Identitas antrean atau sheet tidak valid.' };
+  }
+  if (!navigator.onLine || !getApiUrl()) {
+    return { success: false, status: 'OFFLINE', code: 'READBACK_OFFLINE', error: 'Perangkat sedang offline; item tetap di antrean.' };
+  }
+  try {
+    const data = await getJson('getTransactionStatus', {
+      transactionId: identity.transactionId,
+      nonce: identity.nonce,
+      sheet,
+    });
+    const applied = data?.success === true &&
+      (data?.status === 'APPLIED' || data?.code === 'READBACK_CONFIRMED' || data?.code === 'READBACK_FOUND');
+    return applied
+      ? { ...data, success: true, status: 'APPLIED', clientItemId: item.clientItemId, sheet }
+      : { ...data, success: false, clientItemId: item.clientItemId, sheet, error: data?.error || 'Server belum mengonfirmasi transaksi.' };
+  } catch (err) {
+    return { success: false, status: 'UNKNOWN', code: 'READBACK_FAILED', clientItemId: item.clientItemId, sheet, error: err?.message || 'Gagal membaca status transaksi.' };
+  }
+}
 export function removePendingByClientIds(ids) {
   const set = new Set(ids || []);
   const q = getPendingQueue().map((e) => ({ ...e, items: (e.items || []).filter((it) => !set.has(it.clientItemId)) })).filter((e) => e.items.length);
@@ -485,24 +569,69 @@ export async function syncPendingQueue() {
   if (!url || !navigator.onLine) return { synced: 0, failed: 0, skipped: true };
   if (_syncLock) return { synced: 0, failed: 0, skipped: true, reason: 'sync-in-progress' };
   _syncLock = true;
-  let synced = 0, failed = 0;
   try {
-    const queue = getPendingQueue();
-    const remaining = [];
+    const queue = getPendingQueue().map((entry) => ({
+      ...entry,
+      items: (entry.items || []).map(ensureClientItemId),
+    }));
+    const groups = new Map();
+    const conflictingIds = new Set();
+    const identitySignatures = new Map();
+
+    // Combine outbox entries that target the same transaction sheet/entity/date.
+    // A clientItemId reused with a different operation, entity, date, or payload is held.
     for (const entry of queue) {
-      const res = await submitItems(entry.type, entry.entity, entry.items, entry.tanggal, { fromQueue: true });
-      const resultMap = new Map((res.results || []).filter(r => r.clientItemId).map(r => [r.clientItemId, r]));
-      const remainingItems = (entry.items || []).filter(it => {
-        const r = resultMap.get(it.clientItemId);
-        return !r || (!r.success && !r.skipped);
-      });
-      const doneCount = (entry.items || []).length - remainingItems.length;
-      synced += doneCount;
-      if (remainingItems.length) { failed += remainingItems.length; remaining.push({ ...entry, items: remainingItems }); }
+      const type = entry.type || 'masuk';
+      const entity = String(entry.entity || '').toUpperCase();
+      const tanggal = normalizeTanggal(entry.tanggal);
+      const key = [type, entity, tanggal].join('|');
+      if (!groups.has(key)) groups.set(key, { type, entity, tanggal, itemsById: new Map() });
+      const group = groups.get(key);
+      for (const item of entry.items) {
+        const id = String(item.clientItemId || '');
+        if (!id) continue;
+        const signature = JSON.stringify([type, entity, tanggal, item.kode, item.qty, item.keterangan]);
+        const globalPrior = identitySignatures.get(id);
+        if (globalPrior && globalPrior !== signature) conflictingIds.add(id);
+        else identitySignatures.set(id, signature);
+        const prior = group.itemsById.get(id);
+        if (!prior) group.itemsById.set(id, item);
+        else if (JSON.stringify([prior.kode, prior.qty, prior.keterangan]) !== JSON.stringify([item.kode, item.qty, item.keterangan])) {
+          conflictingIds.add(id);
+        }
+      }
+    }
+
+    const confirmedIds = new Set();
+    let requests = 0;
+    for (const group of groups.values()) {
+      const items = Array.from(group.itemsById.values()).filter((item) => !conflictingIds.has(String(item.clientItemId)));
+      if (!items.length) continue;
+      const appliedBeforeGroup = getAppliedMap();
+      const needsWrite = items.filter((item) => !appliedBeforeGroup[item.clientItemId]);
+      const res = await submitItems(group.type, group.entity, items, group.tanggal, { fromQueue: true });
+      requests += Math.ceil(needsWrite.length / BATCH_CHUNK_SIZE);
+      for (const result of res.results || []) {
+        if (result.clientItemId && (result.success === true || result.skipped === true)) confirmedIds.add(result.clientItemId);
+      }
+    }
+
+    const remaining = [];
+    let synced = 0, failed = 0;
+    const appliedAfterSync = getAppliedMap();
+    for (const entry of queue) {
+      const remainingItems = entry.items.filter((item) => !confirmedIds.has(item.clientItemId) && !appliedAfterSync[item.clientItemId]);
+      synced += entry.items.length - remainingItems.length;
+      if (remainingItems.length) {
+        failed += remainingItems.length;
+        remaining.push({ ...entry, items: remainingItems });
+      }
     }
     commitQueueLocal(remaining);
-    return { synced, failed };
-  } finally { _syncLock = false; }
+    return { synced, failed, groups: groups.size, requests, conflicts: conflictingIds.size };
+  } finally {
+    _syncLock = false;
+  }
 }
 const HISTORY_KEY = 'gudangai_history';
 export function getTransactionHistory() { try { return JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]'); } catch { return []; } }
