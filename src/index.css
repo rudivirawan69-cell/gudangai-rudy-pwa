@@ -405,7 +405,7 @@ textarea:focus-visible {
 .space-y-page > * + *{margin-top:0.85rem}
 
 /* bugfix v6.8.10 — overflow + contrast on dark shell */
-.app-shell { overflow-x: hidden; max-width: 100vw; }
+.app-shell { overflow-x: clip; max-width: 100vw; }
 main { overflow-x: hidden; }
 .page-on-dark .page-title,
 .page-on-dark h1,
