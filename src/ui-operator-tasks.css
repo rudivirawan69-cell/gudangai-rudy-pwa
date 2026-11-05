@@ -280,3 +280,28 @@ html[data-theme="deep_ocean"] .home-agent-action,html[data-theme="graphite_titan
 @media(hover:hover){html[data-theme] .home-agent-card:hover{transform:translateY(-2px);box-shadow:var(--shadow-2)}}
 @media(max-width:380px){html[data-theme] .home-welcome-card,html[data-theme] .home-agent-card{gap:.65rem;padding:.75rem;border-radius:1.15rem}html[data-theme] .home-welcome-icon,html[data-theme] .home-agent-icon{width:2.75rem;height:2.75rem;border-radius:.95rem}html[data-theme] .home-agent-action{padding:.58rem .65rem;font-size:.66rem}html[data-theme] .home-welcome-copy,html[data-theme] .home-agent-copy{font-size:.7rem}}
 @media(prefers-reduced-motion:reduce){html[data-theme] .home-agent-card{transition:none}}
+
+/* Inline dashboard Agent: uses the existing three theme tokens and stays local to Beranda. */
+html[data-theme] .home-agent-wrap{width:100%;min-width:0}
+html[data-theme] .home-agent-panel{margin-top:.7rem;overflow:hidden;border:1px solid var(--border);border-radius:1.25rem;background:var(--bg-elevated);color:var(--text-main);box-shadow:var(--shadow-1);animation:homeAgentIn .2s ease-out}
+html[data-theme] .home-agent-panel-head{display:flex;align-items:center;justify-content:space-between;gap:.5rem;padding:.75rem .9rem;border-bottom:1px solid var(--border);color:var(--text-muted);font-size:.72rem;font-weight:800}
+html[data-theme] .home-agent-online-dot{display:inline-block;width:.48rem;height:.48rem;margin-right:.3rem;border-radius:50%;background:#16a36a;box-shadow:0 0 0 3px #16a36a20}
+html[data-theme] .home-agent-clear{display:grid;place-items:center;width:2rem;height:2rem;border-radius:.65rem;background:var(--bg-muted);color:var(--text-muted)}
+html[data-theme] .home-agent-clear:disabled{opacity:.35}
+html[data-theme] .home-agent-thread{display:flex;flex-direction:column;gap:.65rem;max-height: min(42vh, 360px);min-height:150px;overflow:auto;padding:.85rem;overscroll-behavior:contain}
+html[data-theme] .home-agent-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.45rem;min-height:140px;text-align:center;color:var(--text-muted);font-size:.76rem;line-height:1.5}
+html[data-theme] .home-agent-empty svg{color:var(--accent-strong)}
+html[data-theme] .home-agent-empty strong{color:var(--text-main);font-size:.9rem}
+html[data-theme] .home-agent-message{max-width:92%;white-space:pre-wrap;overflow-wrap:anywhere;border-radius:1rem;padding:.7rem .8rem;font-size:.8rem;line-height:1.55}
+html[data-theme] .home-agent-message.is-user{align-self:flex-end;background:var(--accent-strong);color:var(--text-on-accent);border-bottom-right-radius:.3rem}
+html[data-theme] .home-agent-message.is-assistant{align-self:flex-start;background:var(--bg-muted);color:var(--text-main);border:1px solid var(--border);border-bottom-left-radius:.3rem}
+html[data-theme] .home-agent-thinking{display:inline-flex;align-items:center;gap:.4rem;color:var(--text-muted)}
+html[data-theme] .home-agent-error{display:flex;align-items:flex-start;gap:.45rem;margin:0 .8rem .6rem;padding:.65rem;border-radius:.75rem;background:color-mix(in srgb,#e5484d 10%,var(--bg-elevated));color:var(--text-main);font-size:.74rem}
+html[data-theme] .home-agent-form{display:flex;align-items:flex-end;gap:.55rem;padding:.75rem;border-top:1px solid var(--border)}
+html[data-theme] .home-agent-form textarea{flex:1;min-width:0;resize:vertical;max-height:110px;border:1px solid var(--border);border-radius:.85rem;padding:.65rem .75rem;background:var(--bg-muted);color:var(--text-main);font:inherit;font-size:.8rem;line-height:1.4;outline:none}
+html[data-theme] .home-agent-form textarea:focus{border-color:var(--accent-strong);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 16%,transparent)}
+html[data-theme] .home-agent-form button{display:grid;place-items:center;flex:none;width:2.65rem;height:2.65rem;border-radius:.85rem;background:var(--accent-strong);color:var(--text-on-accent)}
+html[data-theme] .home-agent-form button:disabled{opacity:.4;cursor:not-allowed}
+html[data-theme] .home-agent-footnote{padding:0 .85rem .8rem;color:var(--text-muted);font-size:.64rem;line-height:1.45}
+@keyframes homeAgentIn{from{opacity:0;transform:translateY(-5px)}to{opacity:1;transform:translateY(0)}}
+@media(prefers-reduced-motion:reduce){html[data-theme] .home-agent-panel{animation:none}}
