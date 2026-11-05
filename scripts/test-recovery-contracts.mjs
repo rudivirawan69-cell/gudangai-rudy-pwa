@@ -41,9 +41,12 @@ const formatHold = new Function('MAX_KETERANGAN_LENGTH',
 )(200);
 assert.equal(formatHold(10, 3, 7, 'pack'), 'Input pending 10 pack, sisa stock 3 pack, kekurangan 7 pack');
 const logFnBody = gs.match(/function writeAuditLogSecure\([\s\S]*?\n\}/);
-assert.ok(logFnBody && /setWrap\(true\)/.test(logFnBody[0]), 'System Log cells must wrap text');
-assert.ok(/setColumnWidth\(5, 280\)/.test(logFnBody[0]));
-assert.ok(/setColumnWidth\(6, 220\)/.test(logFnBody[0]));
+assert.ok(logFnBody && /setWrap\(false\)/.test(logFnBody[0]), 'System Log cells must use compact clipped rows');
+assert.ok(/substring\(0, 180\)/.test(logFnBody[0]));
+assert.ok(/substring\(0, 120\)/.test(logFnBody[0]));
+assert.doesNotMatch(logFnBody[0], /setColumnWidth\(/, 'Column widths must not be reset for every log write');
+const logFormatBody = functionBody(gs, 'formatSystemLogSheet_');
+assert.match(logFormatBody, /setWrap\(false\)/);
 function functionBody(source, name) {
   const start = source.indexOf('function ' + name + '(');
   assert.notEqual(start, -1, 'Missing function ' + name);
