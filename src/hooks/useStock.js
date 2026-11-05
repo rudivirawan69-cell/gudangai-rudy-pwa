@@ -23,7 +23,7 @@ export function useStock(entity) {
     if (lastOk.current.length === 0) setLoading(true);
     setError(null);
     try {
-      const data = await fetchStock(entity);
+      const data = await fetchStock(entity, { force });
       if (requestId !== requestSequence.current) return;
       if (Array.isArray(data) && data.length > 0) {
         lastOk.current = data;
