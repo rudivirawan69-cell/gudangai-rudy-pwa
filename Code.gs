@@ -924,6 +924,7 @@ function getTransactionStatuses(body) {
 
   const startedAt = Date.now();
   const index = buildIdempotencyIndex_();
+  const pendingLedgerUpdates = [];
   const results = list.map(function(item) {
     const entry = item || {};
     const transactionId = String(entry.transactionId || "").trim();
@@ -940,9 +941,10 @@ function getTransactionStatuses(body) {
     );
     if (rec) {
       if (readBack.matched && rec.status !== "APPLIED") {
-        const updated = updateIdempotencyRecordIndexed_(rec, {
+        const updated = Object.assign({}, rec, {
           status: "APPLIED", dataRow: readBack.row, writeOccurred: true, errorCode: ""
-        }, index);
+        });
+        pendingLedgerUpdates.push(updated);
         return {
           success: true, status: "APPLIED", code: "READBACK_CONFIRMED",
           transactionId: transactionId || rec.transactionId, nonce: nonce || rec.nonce,
@@ -971,6 +973,8 @@ function getTransactionStatuses(body) {
     };
   });
 
+  // Persist all read-back confirmations in grouped row blocks, not one Sheets call per item.
+  if (pendingLedgerUpdates.length) writeIdempotencyRecordsByRow_(pendingLedgerUpdates, index);
   return { success: true, status: "CHECKED", checked: results.length, results: results, execMs: Date.now() - startedAt };
 }
 
