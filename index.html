@@ -4,6 +4,29 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no" />
     <meta name="theme-color" content="#247ba8" />
+    <script>
+      (() => {
+        const key = 'gudangai_theme';
+        const aliases = {
+          dark: 'deep_ocean', ocean: 'deep_ocean', navy: 'deep_ocean',
+          warm: 'graphite_titanium', warm_productive: 'graphite_titanium',
+          productive: 'graphite_titanium', teal: 'graphite_titanium',
+          glass: 'graphite_titanium', graphite: 'graphite_titanium',
+          light: 'soft_light', soft: 'soft_light'
+        };
+        let theme = 'soft_light';
+        try {
+          const stored = String(localStorage.getItem(key) || '').toLowerCase().trim();
+          theme = aliases[stored] || (['soft_light','deep_ocean','graphite_titanium'].includes(stored) ? stored : 'soft_light');
+        } catch (_) {}
+        const root = document.documentElement;
+        root.dataset.theme = theme;
+        root.style.colorScheme = theme === 'soft_light' ? 'light' : 'dark';
+        const colors = { soft_light: '#247ba8', deep_ocean: '#35b9b0', graphite_titanium: '#d69a48' };
+        const meta = document.querySelector('meta[name="theme-color"]');
+        if (meta) meta.setAttribute('content', colors[theme]);
+      })();
+    </script>
     <meta name="description" content="GudangAI RUDY — Dashboard stok & operasional Cold Storage Nasi Goreng 69" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
