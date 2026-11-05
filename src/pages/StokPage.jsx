@@ -1,5 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
-import { useBootstrapRevision } from '../hooks/useBootstrapRevision';
+import { useState, useMemo } from 'react';
 import {
   Search, RefreshCw, LayoutGrid, Boxes, ShieldAlert, TriangleAlert, ShieldCheck,
   ChevronDown, Snowflake, Flame, ChefHat, Utensils, Package, Truck, Layers3,
@@ -51,10 +50,6 @@ function StockRow({ item }) {
 export default function StokPage() {
   const [entity, setEntity] = useState('CV');
   const { items, loading, error, refresh } = useStock(entity);
-  const bootstrapRevision = useBootstrapRevision();
-
-  useEffect(() => { refresh?.({ force: true }); }, [bootstrapRevision, refresh]);
-
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
   const [openDivisi, setOpenDivisi] = useState(null);
