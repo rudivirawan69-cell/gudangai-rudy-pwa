@@ -87,11 +87,11 @@ const sanitizeBody = pdf.match(/function sanitizePdfProductName\(name\)\s*\{([\s
 const stripBody = pdf.match(/function stripLeadingNo\(name\)\s*\{([\s\S]*?)\n\}/);
 const nonItemBody = pdf.match(/function isPdfNonItemLine\(line\)\s*\{([\s\S]*?)\n\}/);
 assert.ok(parseBody && sanitizeBody && stripBody && nonItemBody, 'Missing PDF line parser helpers');
-const stripLeadingNo = new Function(stripBody[1]);
-const sanitizePdfProductName = new Function('stripLeadingNo', sanitizeBody[1])(stripLeadingNo);
-const isPdfNonItemLine = new Function(nonItemBody[1]);
-const parsePdfLinesToItems = new Function('stripLeadingNo', 'sanitizePdfProductName', 'isPdfNonItemLine', parseBody[1])(
-  stripLeadingNo, sanitizePdfProductName, isPdfNonItemLine
+const stripLeadingNo = new Function('name', stripBody[1]);
+const sanitizePdfProductName = new Function('stripLeadingNo', 'name', sanitizeBody[1])(stripLeadingNo);
+const isPdfNonItemLine = new Function('line', nonItemBody[1]);
+const parsePdfLinesToItems = new Function('text', 'stripLeadingNo', 'sanitizePdfProductName', 'isPdfNonItemLine', parseBody[1])(
+  '', stripLeadingNo, sanitizePdfProductName, isPdfNonItemLine
 );
 for (const [line, expectedName] of [
   ['Ayam Fillet Dada 2', 'Ayam Fillet Dada'],
