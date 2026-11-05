@@ -2440,9 +2440,9 @@ function writeAuditLogSecure(action, status, details, errorMsg, txId) {
       formatVersion.setProperty("SYSTEM_LOG_FORMAT_VERSION", "2");
     }
     const detailStr = redactSensitiveString_((typeof details === "object") ? JSON.stringify(details) : String(details || ""))
-      .replace(/[\\r\\n\\t]+/g, " ").replace(/\\s{2,}/g, " ").trim();
+      .replace(/[\r\n\t]+/g, " ").replace(/\s{2,}/g, " ").trim();
     const errorStr = redactSensitiveString_(String(errorMsg || ""))
-      .replace(/[\\r\\n\\t]+/g, " ").replace(/\\s{2,}/g, " ").trim();
+      .replace(/[\r\n\t]+/g, " ").replace(/\s{2,}/g, " ").trim();
     const logRow = Math.max(OPS_DATA_START_ROW, logSheet.getLastRow() + 1);
     logSheet.getRange(logRow, 1, 1, 6).setValues([[
       Utilities.formatDate(new Date(), TIMEZONE, "yyyy-MM-dd HH:mm:ss"),
