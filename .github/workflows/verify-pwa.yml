@@ -55,3 +55,12 @@ jobs:
           npx playwright install --with-deps chromium
       - name: Smoke test all PWA pages and responsive widths
         run: node scripts/smoke-pwa-pages.mjs
+
+      - name: Upload Phase 3 visual evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gudangai-visual-phase3
+          path: artifacts/visual-phase3/
+          if-no-files-found: warn
+          retention-days: 14
