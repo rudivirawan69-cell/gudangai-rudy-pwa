@@ -36,8 +36,10 @@ assert.match(gs, /function formatStockShortageNote_\(orderQty, availableQty, sho
 assert.match(gs, /keterangan = formatStockShortageNote_\(numericQty, sisa, kekurangan\)/);
 const holdFnBody = gs.match(/function formatStockShortageNote_\(orderQty, availableQty, shortageQty\)\s*\{([\s\S]*?)\n\}/);
 assert.ok(holdFnBody, 'Missing concise HOLD formatter');
-const formatHold = new Function('MAX_KETERANGAN_LENGTH', holdFnBody[1]);
-assert.equal(formatHold(200)(10, 3, 7), 'order 10, sisa 3 kurang 7');
+const formatHold = new Function('MAX_KETERANGAN_LENGTH',
+  'return function(orderQty, availableQty, shortageQty) {' + holdFnBody[1] + '}'
+)(200);
+assert.equal(formatHold(10, 3, 7), 'order 10, sisa 3 kurang 7');
 const logFnBody = gs.match(/function writeAuditLogSecure\([\s\S]*?\n\}/);
 assert.ok(logFnBody && /setWrap\(true\)/.test(logFnBody[0]), 'System Log cells must wrap text');
 assert.ok(/setColumnWidth\(5, 280\)/.test(logFnBody[0]));
@@ -84,7 +86,7 @@ const cvMaster = [
 const ptMaster = [
   { kode: 'WK-0004', nama: 'Iga Sapi', satuan: 'Kg', divisi: 'CS' },
   { kode: 'WK-0021', nama: 'Saos Ayam 69', satuan: 'Pack', divisi: 'CS' },
-  { kode: 'WK-0040', nama: 'Bebek Penyet', satuan: 'Pack', divisi: 'CS' },
+  { kode: 'WK-0040', nama: 'Bebek', satuan: 'Pack', divisi: 'CS' },
   { kode: 'PT-0001', nama: 'Ayam Fillet Dada', satuan: 'Kg', divisi: 'CS' },
   { kode: 'PT-0002', nama: 'Ayam Fillet Paha', satuan: 'Kg', divisi: 'CS' },
   { kode: 'BBPT-0008', nama: 'Iga Sapi', satuan: 'Kg', divisi: 'BAHAN BAKU' },
