@@ -456,51 +456,57 @@ function emitProgress(sent, total, chunkResult) {
 async function reconcileAmbiguousChunk(action, entity, chunk) {
   const SHEET_MAP = { barangMasuk: 'Barang masuk', barangKeluar: 'Barang keluar', barangRusak: 'Barang Rusak' };
   const sheet = SHEET_MAP[action] || action;
-  const results = new Array(chunk.length);
-  let cursor = 0;
-  const workerCount = Math.min(6, chunk.length);
+  const identities = (chunk || []).map((item) => {
+    const clientItemId = String(item?.clientItemId || '');
+    return {
+      clientItemId,
+      transactionId: clientItemId ? 'TX-' + clientItemId : '',
+      nonce: clientItemId ? 'NC-' + clientItemId : '',
+      sheet,
+    };
+  });
 
-  await Promise.all(Array.from({ length: workerCount }, async () => {
-    while (true) {
-      const index = cursor++;
-      if (index >= chunk.length) return;
-      const item = chunk[index];
-      const clientItemId = String(item.clientItemId || '');
-      if (!clientItemId) {
-        results[index] = { success: false, queued: true, uncertain: true, error: 'ID transaksi tidak tersedia' };
-        continue;
-      }
-      if (isApplied(clientItemId)) {
-        results[index] = { success: true, skipped: true, status: 'APPLIED', clientItemId };
-        continue;
-      }
-      try {
-        const data = await getJson('getTransactionStatus', {
-          transactionId: 'TX-' + clientItemId,
-          nonce: 'NC-' + clientItemId,
-          sheet,
-        });
-        const applied = data?.success === true &&
-          (data?.status === 'APPLIED' || data?.code === 'READBACK_CONFIRMED' || data?.code === 'READBACK_FOUND');
-        if (applied) {
-          results[index] = { ...data, success: true, status: 'APPLIED', clientItemId, sheet };
-        } else {
-          results[index] = {
-            ...data, success: false, queued: true, uncertain: true, clientItemId, sheet,
-            error: data?.error || 'Server belum mengonfirmasi transaksi.',
-          };
-        }
-      } catch (err) {
-        results[index] = {
-          success: false, queued: true, uncertain: true, clientItemId, sheet,
-          error: err?.message || 'Read-back gagal',
-        };
-      }
+  // One authenticated request reads the ledger index once on Apps Script,
+  // instead of issuing 35 separate reads that each rescan the ledger.
+  let data;
+  try {
+    data = await postJson({
+      action: 'getTransactionStatuses',
+      sheet,
+      transactions: identities,
+      requestId: newIds().requestId,
+    }, { retries: 1, timeoutMs: 60000 });
+  } catch (err) {
+    return identities.map((identity) => ({
+      success: false, queued: true, uncertain: true,
+      clientItemId: identity.clientItemId, sheet,
+      error: err?.message || 'Read-back batch gagal',
+    }));
+  }
+
+  const rawResults = Array.isArray(data?.results) ? data.results : [];
+  const byId = new Map(rawResults.map((result) => [String(result?.clientItemId || ''), result]));
+  const reconciled = identities.map((identity) => {
+    if (!identity.clientItemId) {
+      return { success: false, queued: true, uncertain: true, error: 'ID transaksi tidak tersedia', sheet };
     }
-  }));
+    if (isApplied(identity.clientItemId)) {
+      return { success: true, skipped: true, status: 'APPLIED', clientItemId: identity.clientItemId, sheet };
+    }
+    const result = byId.get(identity.clientItemId);
+    const applied = data?.success === true && result?.success === true &&
+      (result?.status === 'APPLIED' || result?.code === 'READBACK_CONFIRMED' || result?.code === 'READBACK_FOUND');
+    return applied
+      ? { ...result, success: true, status: 'APPLIED', clientItemId: identity.clientItemId, sheet }
+      : {
+          ...(result || {}), success: false, queued: true, uncertain: true,
+          clientItemId: identity.clientItemId, sheet,
+          error: result?.error || data?.error || 'Server belum mengonfirmasi transaksi.',
+        };
+  });
 
-  markAppliedMany(results.filter((result) => result?.success && result.clientItemId).map((result) => result.clientItemId));
-  return results;
+  markAppliedMany(reconciled.filter((result) => result.success && result.clientItemId).map((result) => result.clientItemId));
+  return reconciled;
 }
 async function submitItems(action, entity, items, tanggal, options = {}) {
   const clientStartedAt = Date.now();
