@@ -6,7 +6,7 @@ import {
 } from '../data/api';
 import { DIVISIONS } from '../data/master';
 import { classifyStockLevel } from '../data/stockStatus';
-import OperatorTasks from '../components/OperatorTasks';
+import HomeReminderModule from '../components/HomeReminderModule';
 import HomeAgentAssistant from '../components/HomeAgentAssistant';
 import {
   AlertTriangle, RefreshCw, FileText, Package, Users, Boxes, ShieldAlert, CheckCircle2, AlertCircle, X,
@@ -1206,12 +1206,6 @@ export default function DashboardPage({ onNavigate }) {
     } catch { return 0; }
   }, [allItems, poData]);
 
-  const hour = Number(new Intl.DateTimeFormat('id-ID', {
-    hour: '2-digit', hourCycle: 'h23', timeZone: 'Asia/Jakarta',
-  }).format(new Date()));
-  const greeting = hour >= 4 && hour < 10 ? 'Selamat pagi'
-    : hour >= 10 && hour < 15 ? 'Selamat siang'
-      : hour >= 15 && hour < 18 ? 'Selamat sore' : 'Selamat malam';
   const name = user?.name || user?.nama || 'Rudi';
 
   const spreadsheetTimestamp =
@@ -1221,33 +1215,14 @@ export default function DashboardPage({ onNavigate }) {
 
   return (
     <div className="dashboard-shell w-full max-w-6xl mx-auto px-3 sm:px-5 lg:px-7 pt-4 pb-24 space-y-4">
-      <section className="home-welcome-card" aria-label="Sapaan operator">
-        <span className="home-welcome-icon"><BellRing className="h-6 w-6" /></span>
-        <div className="min-w-0 flex-1">
-          <span className="home-welcome-kicker">Selamat datang · Gudang Pusat</span>
-          <h2 className="home-welcome-title">{greeting}, {name}!</h2>
-          <p className="home-welcome-copy">Pantau prioritas operasional, catatan tim, dan kondisi stok dalam satu beranda.</p>
-        </div>
-        <button type="button" onClick={() => { refresh?.(); loadPO(); loadDashboardData(); }}
-          className="home-refresh-btn" aria-label="Muat ulang data Beranda" title="Muat ulang data Beranda">
-          <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-        </button>
-      </section>
-
-      <OperatorTasks />
+      <HomeReminderModule
+        onNavigate={onNavigate}
+        criticalCount={stats.kritis}
+        userName={name}
+      />
 
       <HomeAgentAssistant />
 
-      {stats.kritis > 0 && (
-        <section className="home-critical-banner" aria-live="polite">
-          <span className="critical-icon"><ShieldAlert className="h-5 w-5" /></span>
-          <span className="min-w-0 flex-1">
-            <span className="critical-title block">Status Stok Kritis</span>
-            <span className="critical-copy block mt-0.5"><strong>{stats.kritis.toLocaleString('id-ID')} item</strong> perlu tindak lanjut segera.</span>
-          </span>
-          <button type="button" onClick={() => onNavigate?.('stok')}>Cek Stok</button>
-        </section>
-      )}
       {confirmMsg && (
         <p className="rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-[11px] font-semibold text-emerald-700">{confirmMsg}</p>
       )}
