@@ -31,61 +31,18 @@ function todayStr() {
   return `${dd}/${mm}/${d.getFullYear()}`;
 }
 
-const INPUT_DRAFT_KEY = 'gudangai_input_draft_v1';
-
-function persistInputDraft(draft) {
-  if (!draft) return;
-  try {
-    const serialized = JSON.stringify(draft);
-    if (serialized.length <= 1800000) localStorage.setItem(INPUT_DRAFT_KEY, serialized);
-  } catch (_) {
-    // Draft persistence is best-effort; it must never block input or submission.
-  }
-}
-
-function loadInputDraft() {
-  try {
-    const raw = JSON.parse(localStorage.getItem(INPUT_DRAFT_KEY) || 'null');
-    if (!raw || raw.version !== 1) return {};
-    const cart = Array.isArray(raw.cart) ? raw.cart.slice(0, 500).map((item, index) => ({
-      kode: String(item?.kode || ''),
-      nama: String(item?.nama || ''),
-      satuan: String(item?.satuan || 'Pack'),
-      qty: item?.qty == null ? 0 : item.qty,
-      keterangan: String(item?.keterangan || ''),
-      unmatched: !!item?.unmatched,
-      pdfReviewId: String(item?.pdfReviewId || ''),
-      pdfSourceIndex: Number(item?.pdfSourceIndex) || 0,
-      clientItemId: String(item?.clientItemId || ('CI-RESTORE-' + Date.now() + '-' + index)),
-    })) : [];
-    return {
-      entity: raw.entity === 'PT' ? 'PT' : 'CV',
-      txType: TX.some((t) => t.id === raw.txType) ? raw.txType : 'keluar',
-      tanggal: typeof raw.tanggal === 'string' && raw.tanggal ? raw.tanggal : todayStr(),
-      accuracy: raw.accuracy && typeof raw.accuracy === 'object' ? raw.accuracy : null,
-      cart,
-      pdfReview: Array.isArray(raw.pdfReview) ? raw.pdfReview.slice(0, 500) : [],
-      reviewSourceLabel: String(raw.reviewSourceLabel || 'PDF'),
-    };
-  } catch (_) {
-    return {};
-  }
-}
-
 export default function InputPage() {
-  const [initialDraft] = useState(loadInputDraft);
-  const [entity, setEntity] = useState(initialDraft.entity || 'CV');
-  const [txType, setTxType] = useState(initialDraft.txType || 'keluar');
-  const [tanggal, setTanggal] = useState(initialDraft.tanggal || todayStr());
+  const [entity, setEntity] = useState('CV');
+  const [txType, setTxType] = useState('keluar');
+  const [tanggal, setTanggal] = useState(todayStr());
   const [query, setQuery] = useState('');
   const [hits, setHits] = useState([]);
   const [stockCatalog, setStockCatalog] = useState([]);
   const [busy, setBusy] = useState(false);
-  const [statusBanner, setStatusBanner] = useState(() => (initialDraft.cart?.length || initialDraft.pdfReview?.length) ? 'Draft transaksi dipulihkan dari perangkat.' : '');
-  const [accuracy, setAccuracy] = useState(initialDraft.accuracy || null);
-  const [cart, setCart] = useState(initialDraft.cart || []);
-  const [pdfReview, setPdfReview] = useState(initialDraft.pdfReview || []);
-  const [reviewSourceLabel, setReviewSourceLabel] = useState(initialDraft.reviewSourceLabel || 'PDF');
+  const [statusBanner, setStatusBanner] = useState('');
+  const [accuracy, setAccuracy] = useState(null);
+  const [cart, setCart] = useState([]);
+  const [pdfReview, setPdfReview] = useState([]);
   const [showPhotoSource, setShowPhotoSource] = useState(false);
   const [photoCameraOpen, setPhotoCameraOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -108,33 +65,6 @@ export default function InputPage() {
   const scanAbortRef = useRef(false);
   const bootstrapRevision = useBootstrapRevision();
 
-  const draftSnapshotRef = useRef(null);
-  useEffect(() => {
-    const draft = {
-      version: 1, savedAt: Date.now(), entity, txType, tanggal, accuracy,
-      cart, pdfReview, reviewSourceLabel,
-    };
-    draftSnapshotRef.current = draft;
-    // Avoid synchronous JSON/localStorage work on every cart edit or server response.
-    const timer = setTimeout(() => persistInputDraft(draft), 250);
-    return () => clearTimeout(timer);
-  }, [entity, txType, tanggal, accuracy, cart, pdfReview, reviewSourceLabel]);
-
-  useEffect(() => {
-    const flushDraft = () => persistInputDraft(draftSnapshotRef.current);
-    const onVisibilityChange = () => {
-      if (document.visibilityState === 'hidden') flushDraft();
-    };
-    window.addEventListener('pagehide', flushDraft);
-    document.addEventListener('visibilitychange', onVisibilityChange);
-    return () => {
-      window.removeEventListener('pagehide', flushDraft);
-      document.removeEventListener('visibilitychange', onVisibilityChange);
-      // Page navigation unmounts the screen; flush the newest draft before leaving.
-      flushDraft();
-    };
-  }, []);
-
   useEffect(() => {
     const refreshUnread = () => setUnread(unreadNotificationCount());
     refreshUnread();
@@ -151,20 +81,15 @@ export default function InputPage() {
   }, []);
   useEffect(() => {
     let cancelled = false;
-    const loadStockCatalog = async () => {
+    (async () => {
       try {
         const list = await fetchStock(entity, { allowDemo: true });
         if (!cancelled && Array.isArray(list)) setStockCatalog(list);
       } catch (_) {
         if (!cancelled) setStockCatalog([]);
       }
-    };
-    loadStockCatalog();
-    window.addEventListener('gudangai-stock-refresh', loadStockCatalog);
-    return () => {
-      cancelled = true;
-      window.removeEventListener('gudangai-stock-refresh', loadStockCatalog);
-    };
+    })();
+    return () => { cancelled = true; };
   }, [entity]);
   useEffect(() => {
     if (!query.trim()) { setHits([]); return; }
@@ -250,26 +175,12 @@ export default function InputPage() {
       if (!rows.length) { setStatusBanner('Tidak ada baris barang terdeteksi dari ' + sourceLabel + '.'); return; }
       const validation = validateItems(rows, useEntity);
       let stock = null;
-      // OCR validation must not wait for a slow stock endpoint. Matching can continue
-      // without stock; the stock-aware fallback is best-effort only.
-      try {
-        stock = await Promise.race([
-          fetchStock(useEntity, { allowDemo: false }),
-          new Promise((resolve) => setTimeout(() => resolve(null), 5000)),
-        ]);
-      } catch (_) { stock = null; }
-      const allRows = applyStockAwareFallback([
-        ...(validation.matched || []),
-        ...(validation.ambiguous || []),
-        ...(validation.unmatched || []),
-      ], useEntity, stock);
-      const cleanRows = allRows
+      try { stock = await fetchStock(useEntity, { allowDemo: false }); } catch (_) { stock = null; }
+      const matched = applyStockAwareFallback(validation.matched || [], useEntity, stock)
         .filter((m) => !/\b\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4}\b/.test(String(m?.nameFromPdf || m?.rawName || '')))
         .filter((m) => !/\b(?:periode|period|minggu)\b.*\d{4}/i.test(String(m?.nameFromPdf || m?.rawName || '')));
-      const matched = cleanRows.filter((m) => m.status === 'matched');
-      const reviewRows = cleanRows.filter((m) => m.status !== 'matched');
-      const amb = reviewRows.filter((m) => m.status === 'ambiguous');
-      const un = reviewRows.filter((m) => m.status !== 'ambiguous');
+      const amb = validation.ambiguous || [];
+      const un = validation.unmatched || [];
       const reviewRunId = Date.now().toString(36);
       const review = [...amb, ...un].map((r, idx) => ({
         ...r,
@@ -285,7 +196,6 @@ export default function InputPage() {
       // Unmatched/ambiguous rows are retained for manual mapping; nothing is silently dropped.
       mergePdfIntoCart(matched, review);
       setPdfReview(review);
-      setReviewSourceLabel(sourceLabel === 'Foto' ? 'Foto' : sourceLabel === 'Tempel' ? 'Tempel' : 'PDF');
       const parts = [];
       if (matched.length) parts.push(matched.length + ' cocok');
       if (review.length) parts.push(review.length + ' perlu validasi');
@@ -312,7 +222,6 @@ export default function InputPage() {
     }
     setEntity(nextEntity);
     setPdfReview([]);
-    setReviewSourceLabel('PDF');
     setAccuracy(null);
     setStatusBanner('');
   };
@@ -603,7 +512,7 @@ export default function InputPage() {
         if (!items.length) { setStatusBanner('Isi minimal 1 jumlah barang sebelum dikirim.'); return; }
       const fn = txType === 'masuk' ? submitBarangMasuk : txType === 'rusak' ? submitBarangRusak : submitBarangKeluar;
       const res = await fn({ entity, tanggal, items });
-      if (res && (res.success !== false || Number(res.count || 0) > 0 || Number(res.queuedCount || 0) > 0 || (res.results || []).length > 0)) {
+      if (res?.success !== false) {
         const okCount = Number(res.count || 0);
         const queuedCount = Number(res.queuedCount || 0);
         const failCount = Number(res.failed || 0);
@@ -650,24 +559,14 @@ export default function InputPage() {
           );
         } else if (confirmedItems.length === cart.length) {
           pushNotification({ type: 'success', title: 'Transaksi selesai', body: confirmedItems.length + ' item ' + txType + ' ' + entity + ' terkonfirmasi ditulis backend.' });
-          const timingLabel = Number(res.serverExecMs) > 0
-            ? ' · server ' + Math.round(Number(res.serverExecMs)).toLocaleString('id-ID') + ' ms' +
-              (Number(res.clientElapsedMs) > 0 ? ' · total ' + Math.round(Number(res.clientElapsedMs)).toLocaleString('id-ID') + ' ms' : '')
-            : '';
-          setStatusBanner('Berhasil dikonfirmasi · ' + confirmedItems.length + ' item' + timingLabel);
+          setStatusBanner('Berhasil dikonfirmasi · ' + confirmedItems.length + ' item');
         } else {
           pushNotification({ type: 'error', title: 'Belum ada konfirmasi penulisan', body: 'Tidak ada item yang dinyatakan tertulis per-item oleh backend.' });
           setStatusBanner('Belum terkonfirmasi — item tetap diamankan di antrian');
         }
 
-        const confirmedIds = new Set(confirmedItems.map((item) => item.clientItemId));
-        const queuedIds = new Set((res.results || []).filter((r) => r?.queued && r.clientItemId).map((r) => r.clientItemId));
-        const pendingItems = cart.filter((item) => !confirmedIds.has(item.clientItemId) || queuedIds.has(item.clientItemId));
-        setCart(pendingItems);
-        if (!pendingItems.length) {
-          setAccuracy(null); setPdfReview([]); setReviewSourceLabel('PDF');
-        }
-        if (confirmedItems.length > 0) window.dispatchEvent(new Event('gudangai-stock-refresh'));
+        setCart([]); setAccuracy(null); setPdfReview([]);
+        window.dispatchEvent(new Event('gudangai-stock-refresh'));
       } else {
         pushNotification({ type: 'error', title: 'Transaksi belum dikirim', body: res?.error || 'Tidak ada data yang dinyatakan berhasil.' });
         setStatusBanner(res?.error || 'Gagal kirim');
@@ -679,7 +578,7 @@ export default function InputPage() {
   const openNotif = () => { setNotifs(getNotifications()); markNotificationsRead(); setUnread(0); setShowNotif((v) => !v); };
 
   return (
-    <div className="input-page pb-28 space-y-4 overflow-x-hidden w-full max-w-full box-border">
+    <div className="pb-28 space-y-4 overflow-x-hidden w-full max-w-full box-border">
       <div className="flex items-center justify-between gap-2">
         <h1 className="text-xl font-extrabold flex items-center gap-2 text-slate-900">
           <PackagePlus className="w-6 h-6 text-cyan-300" /> Input
@@ -810,7 +709,7 @@ export default function InputPage() {
       </div>
 
       {hits.length > 0 && (
-        <div data-testid="input-search-results" className="rounded-xl border border-slate-200 bg-white shadow-sm max-h-64 overflow-y-auto divide-y divide-slate-100">
+        <div className="rounded-xl border border-slate-200 bg-white shadow-sm max-h-64 overflow-y-auto divide-y divide-slate-100">
           {hits.map((h) => (
             <button key={h.kode} type="button" onClick={() => { addToCart(h, 1); setQuery(''); setHits([]); }}
               className="w-full text-left px-3 py-2.5 hover:bg-cyan-50 flex items-center justify-between gap-2">
@@ -836,12 +735,8 @@ export default function InputPage() {
       {pdfReview.length > 0 && (
         <div className="rounded-2xl bg-white border border-amber-200 shadow-sm p-3 space-y-3">
           <div>
-            <p className="text-sm font-bold text-slate-900">Validasi {reviewSourceLabel} — {pdfReview.length} baris perlu dicocokkan</p>
-            <p className="text-[11px] text-slate-500 mt-0.5">
-              {reviewSourceLabel === 'Foto'
-                ? 'Hasil OCR foto. Baris berisik otomatis dibuang. Nama yang tidak cocok master perlu dipilih manual atau diabaikan.'
-                : 'Nomor di PDF diabaikan. Urutan mengikuti PDF dan nomor di aplikasi dibuat ulang mulai 1.'}
-            </p>
+            <p className="text-sm font-bold text-slate-900">Validasi PDF — {pdfReview.length} baris perlu dicocokkan</p>
+            <p className="text-[11px] text-slate-500 mt-0.5">Nomor di PDF diabaikan. Urutan mengikuti PDF dan nomor di aplikasi dibuat ulang mulai 1.</p>
           </div>
           {pdfReview.map((r, idx) => (
             <PdfReviewRow key={r.reviewId || (r.sourceIndex || idx) + '-' + idx} row={r} entity={entity} stockCatalog={stockCatalog} onPick={(item) => resolvePdfReview(idx, item)} onIgnore={() => ignorePdfReview(idx)} />
@@ -972,6 +867,8 @@ export default function InputPage() {
   );
   }
 
+
+
 function PdfReviewRow({ row, entity, stockCatalog = [], onPick, onIgnore }) {
   const [q, setQ] = useState(row.namaPdf || '');
   const hits = (() => {
@@ -979,9 +876,8 @@ function PdfReviewRow({ row, entity, stockCatalog = [], onPick, onIgnore }) {
     if (!term) return [];
     const live = searchLiveStock(stockCatalog, term);
     const stat = searchMaster(entity, term);
-    const rawMaterial = entity === 'PT' ? searchMaster('CV', term).filter((h) => String(h?.kode || '').toUpperCase().startsWith('BBPT-')) : [];
     const seen = new Set();
-    return [...live, ...stat, ...rawMaterial].filter((h) => {
+    return [...live, ...stat].filter((h) => {
       const k = String(h?.kode || h?.kodeBarang || '').trim();
       if (!k || seen.has(k)) return false;
       seen.add(k);
@@ -1020,4 +916,3 @@ function PdfReviewRow({ row, entity, stockCatalog = [], onPick, onIgnore }) {
     </div>
   );
 }
- 

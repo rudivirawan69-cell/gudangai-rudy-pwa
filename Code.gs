@@ -3,7 +3,7 @@
  * BACKEND GudangAI-69 V6.6.5 — Apps Script Unified Dashboard & Operations
  * ============================================================
  * Spreadsheet Target : COLD STORAGE (auto-detect bulan)
- * Versi              : 7.0.0-RECONSTRUCTION-CANDIDATE — formula-safe division stock + managed triggers
+ * Versi              : 6.6.5+DEPLOY-READY — realtime divisi + timestamp + dashboard charts + PO date simple
  * Tanggal            : 24 September 2026
  *
  * GABUNGAN TERBAIK V6.0 + V6.1 + V6.2:
@@ -78,17 +78,15 @@ const AUDIT_LOG_ARCHIVE_THRESHOLD = 5000;
 const QUEUE_SUBJECT_TAG = "GUDANGAI_QUEUE";
 const CONFIG_SHEET_NAME = "Config";
 const APP_TITLE = "BACKEND GudangAI-69 V6.6.5 DEPLOY";
-const BACKEND_VERSION = "7.0.1-PERFORMANCE-CANDIDATE";
+const BACKEND_VERSION = "6.6.5+DEPLOY-READY";
 const PO_DATE_ROW = 4;
 const PO_HEADER_ROW = 5;
 const PO_DATA_START_ROW = 6;
 const PO_DATA_START_COL = 2; // B
 const PO_DATA_NUM_COLS = 8; // B:I
 const PO_LOCK_TIMEOUT_MS = 20000;
-const PO_SECTION_CURRENT_ROW = 46; // Dashboard PO terkunci mulai row 46; row 28–45 tidak boleh ditulis.
-// Dashboard allocates two isolated 20-row blocks: current 46:65 and previous 66:85.
-// Four rows per block are reserved for title/subtitle/header, leaving 16 item rows.
-const PO_DASHBOARD_MAX_VISIBLE_ROWS = 16;
+const PO_SECTION_CURRENT_ROW = 31;
+const PO_DASHBOARD_MAX_VISIBLE_ROWS = 50;
 const OPS_TITLE_ROWS = 2;
 const OPS_HEADER_ROW = 3;
 const OPS_DATA_START_ROW = 4;
@@ -111,7 +109,7 @@ const IDEMPOTENCY_HEADERS = [
   "Row", "WriteOccurred", "ErrorCode", "Details"
 ];
 const MAX_IDENTITY_LENGTH = 160;
-const MAX_KETERANGAN_LENGTH = 200;
+const MAX_KETERANGAN_LENGTH = 4500;
 const MASTER_SHEETS_READ_ONLY = ["Stock CV", "Stock PT"];
 
 // Mapping bulan Indonesia untuk auto-detect
@@ -298,7 +296,7 @@ function parseTransactionDate_(value) {
   if (!raw) return null;
 
   // ISO: yyyy-mm-dd atau yyyy-mm-ddTHH:mm:ss...
-  let m = raw.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[T\s].*)?$/);
+  let m = raw.match(/^(\\d{4})-(\\d{1,2})-(\\d{1,2})(?:[T\\s].*)?$/);
   if (m) {
     const y = Number(m[1]), mo = Number(m[2]), d = Number(m[3]);
     const dt = new Date(y, mo - 1, d);
@@ -307,7 +305,7 @@ function parseTransactionDate_(value) {
   }
 
   // d-MMM-yyyy / dd-MMM-yyyy, termasuk singkatan bulan Indonesia.
-  m = raw.toUpperCase().match(/^(\d{1,2})[-\/ ]([A-ZÀ-Ÿ]{3,9})[-\/ ](\d{4})$/);
+  m = raw.toUpperCase().match(/^(\\d{1,2})[-\\/ ]([A-ZÀ-Ÿ]{3,9})[-\\/ ](\\d{4})$/);
   if (m) {
     const monthMap = {
       JAN:1, JANUARI:1, FEB:2, FEBRUARI:2, MAR:3, MARET:3, APR:4, APRIL:4,
@@ -355,14 +353,13 @@ function jsonResponse(obj) {
 // 3. ENTRY POINT: doPost / doGet
 // ============================================================
 function doPost(e) {
-  let body = null;
   const t0 = Date.now();
   try {
     if (!e || !e.postData || !e.postData.contents) {
       return jsonResponse({ success: false, error: "Payload kosong" });
     }
     const parsedBody = JSON.parse(e.postData.contents);
-    body = normalizeIncomingRequest_(parsedBody);
+    const body = normalizeIncomingRequest_(parsedBody);
     if (parsedBody && parsedBody.schemaVersion && String(parsedBody.schemaVersion) !== "1.0") {
       return jsonResponse({ success: false, status: "REJECTED", code: "UNSUPPORTED_SCHEMA_VERSION", requestId: body.requestId || null, error: "schemaVersion tidak didukung." });
     }
@@ -395,8 +392,8 @@ function doPost(e) {
       case "searchByName": return jsonResponse(searchByName(body.query || body.q || body.nama));
       case "getDashboard":
       case "getDashboardData": return jsonResponse(getDashboardData());
-      case "getDashboardLegacy": return jsonResponse(getDashboardData());
-      case "refreshDashboard": return jsonResponse(refreshDashboardDataLight693_());
+      case "getDashboardLegacy": return jsonResponse(getDashboard());
+      case "refreshDashboard": return jsonResponse(refreshDashboard(body.force === true || body.force === "true"));
       case "syncDivision":
       case "syncDivisionStock": return jsonResponse(syncDivisionStock());
       case "writePO":
@@ -465,7 +462,7 @@ function doGet(e) {
     case "getLowStock": return jsonResponse(getLowStock());
     case "getDashboard":
     case "getDashboardData": return jsonResponse(getDashboardData());
-    case "getDashboardLegacy": return jsonResponse(getDashboardData());
+    case "getDashboardLegacy": return jsonResponse(getDashboard());
     case "getTransactionHistory": return jsonResponse(getTransactionHistory({ sheet: e.parameter.sheet, limit: e.parameter.limit }));
     case "getTransactionStatus": return jsonResponse(getTransactionStatus({ transactionId: e.parameter.transactionId, nonce: e.parameter.nonce, sheet: e.parameter.sheet }));
     case "searchByName": return jsonResponse(searchByName(e.parameter.query || e.parameter.q));
@@ -575,124 +572,6 @@ function findIdempotencyRecord_(transactionId, nonce) {
   return null;
 }
 
-
-function buildIdempotencyIndex_() {
-  const sheet = getIdempotencyLedgerSheet_();
-  const lastRow = sheet.getLastRow();
-  const rowCount = Math.min(IDEMPOTENCY_SCAN_LIMIT, Math.max(0, lastRow - OPS_HEADER_ROW));
-  const startRow = Math.max(OPS_DATA_START_ROW, lastRow - rowCount + 1);
-  const rows = rowCount > 0
-    ? sheet.getRange(startRow, 1, rowCount, IDEMPOTENCY_HEADERS.length).getValues()
-    : [];
-  const byTransactionId = Object.create(null);
-  const byNonce = Object.create(null);
-  for (let i = rows.length - 1; i >= 0; i--) {
-    const record = mapIdempotencyRow_(rows[i], startRow + i);
-    if (record.transactionId && !byTransactionId[record.transactionId]) byTransactionId[record.transactionId] = record;
-    if (record.nonce && !byNonce[record.nonce]) byNonce[record.nonce] = record;
-  }
-  return {
-    sheet: sheet,
-    nextRow: Math.max(OPS_DATA_START_ROW, lastRow + 1),
-    byTransactionId: byTransactionId,
-    byNonce: byNonce
-  };
-}
-
-function rememberIdempotencyRecord_(index, record) {
-  if (!index || !record) return record;
-  if (record.transactionId) index.byTransactionId[record.transactionId] = record;
-  if (record.nonce) index.byNonce[record.nonce] = record;
-  if (record.rowNumber >= index.nextRow) index.nextRow = record.rowNumber + 1;
-  return record;
-}
-
-function findIdempotencyRecordInIndex_(index, transactionId, nonce) {
-  if (!index) return findIdempotencyRecord_(transactionId, nonce);
-  const tx = String(transactionId || "").trim();
-  const no = String(nonce || "").trim();
-  const byTx = tx ? index.byTransactionId[tx] : null;
-  const byNo = no ? index.byNonce[no] : null;
-  if (byTx && byNo) return Number(byTx.rowNumber) >= Number(byNo.rowNumber) ? byTx : byNo;
-  return byTx || byNo || null;
-}
-
-function appendIdempotencyRecordIndexed_(record, index) {
-  if (!index || !index.sheet) throw new Error("Idempotency index tidak tersedia.");
-  const now = new Date().toISOString();
-  const values = [[
-    record.createdAt || now, now, record.transactionId || "", record.nonce || "", record.requestId || "", record.deviceId || "",
-    record.operation || "syncTransaction", record.sheet || "", record.entitas || "", record.kodeBarang || "", record.qty == null ? "" : record.qty,
-    record.tanggal || "", record.status || "IN_PROGRESS", record.dataRow || "", record.writeOccurred == null ? "unknown" : record.writeOccurred,
-    record.errorCode || "", redactSensitiveString_(String(record.details || "")).substring(0, 5000)
-  ]];
-  const rowNumber = index.nextRow;
-  index.sheet.getRange(rowNumber, 1, 1, IDEMPOTENCY_HEADERS.length).setValues(values);
-  const saved = mapIdempotencyRow_(values[0], rowNumber);
-  index.nextRow = rowNumber + 1;
-  return rememberIdempotencyRecord_(index, saved);
-}
-
-function updateIdempotencyRecordIndexed_(record, patch, index) {
-  const updated = updateIdempotencyRecord_(record, patch, index && index.sheet);
-  return rememberIdempotencyRecord_(index, updated);
-}
-
-// Serialize and persist ledger records in contiguous blocks. Bulk transaction paths
-// must not issue one Spreadsheet service call per item for claim/plan/APPLIED updates.
-function idempotencyRecordValues_(record, now) {
-  const merged = record || {};
-  return [
-    merged.createdAt || now, now, merged.transactionId || "", merged.nonce || "", merged.requestId || "", merged.deviceId || "",
-    merged.operation || "syncTransaction", merged.sheet || "", merged.entitas || "", merged.kodeBarang || "", merged.qty == null ? "" : merged.qty,
-    merged.tanggal || "", merged.status || "IN_PROGRESS", merged.dataRow || "", merged.writeOccurred == null ? "unknown" : merged.writeOccurred,
-    merged.errorCode || "", redactSensitiveString_(String(merged.details || "")).substring(0, 5000)
-  ];
-}
-
-function appendIdempotencyRecordsIndexed_(records, index) {
-  if (!records || !records.length) return [];
-  if (!index || !index.sheet) throw new Error("Idempotency index tidak tersedia.");
-  const startRow = index.nextRow;
-  const now = new Date().toISOString();
-  const values = records.map(function(record) { return idempotencyRecordValues_(record, now); });
-  index.sheet.getRange(startRow, 1, values.length, IDEMPOTENCY_HEADERS.length).setValues(values);
-  const saved = values.map(function(row, offset) {
-    return rememberIdempotencyRecord_(index, mapIdempotencyRow_(row, startRow + offset));
-  });
-  index.nextRow = startRow + values.length;
-  return saved;
-}
-
-function writeIdempotencyRecordsByRow_(records, index) {
-  if (!records || !records.length) return [];
-  if (!index || !index.sheet) throw new Error("Idempotency index tidak tersedia.");
-  const latestByRow = Object.create(null);
-  records.forEach(function(record) {
-    if (record && Number(record.rowNumber) >= OPS_DATA_START_ROW) latestByRow[Number(record.rowNumber)] = record;
-  });
-  const rows = Object.keys(latestByRow).map(Number).sort(function(a, b) { return a - b; });
-  if (!rows.length) return [];
-  const now = new Date().toISOString();
-  const saved = [];
-  let offset = 0;
-  while (offset < rows.length) {
-    const startRow = rows[offset];
-    let end = offset + 1;
-    while (end < rows.length && rows[end] === rows[end - 1] + 1) end++;
-    const blockRows = rows.slice(offset, end);
-    const values = blockRows.map(function(rowNumber) {
-      return idempotencyRecordValues_(latestByRow[rowNumber], now);
-    });
-    index.sheet.getRange(startRow, 1, values.length, IDEMPOTENCY_HEADERS.length).setValues(values);
-    for (let i = 0; i < values.length; i++) {
-      saved.push(rememberIdempotencyRecord_(index, mapIdempotencyRow_(values[i], startRow + i)));
-    }
-    offset = end;
-  }
-  return saved;
-}
-
 function appendIdempotencyRecord_(record) {
   const sheet = getIdempotencyLedgerSheet_();
   const now = new Date().toISOString();
@@ -706,9 +585,9 @@ function appendIdempotencyRecord_(record) {
   return mapIdempotencyRow_(values[0], sheet.getLastRow());
 }
 
-function updateIdempotencyRecord_(record, patch, sheetOverride) {
+function updateIdempotencyRecord_(record, patch) {
   if (!record || !record.rowNumber) return null;
-  const sheet = sheetOverride || getSS().getSheetByName(IDEMPOTENCY_SHEET_NAME);
+  const sheet = getSS().getSheetByName(IDEMPOTENCY_SHEET_NAME);
   if (!sheet) return null;
   const merged = Object.assign({}, record, patch || {});
   const now = new Date().toISOString();
@@ -722,6 +601,13 @@ function updateIdempotencyRecord_(record, patch, sheetOverride) {
   return mapIdempotencyRow_(values[0], record.rowNumber);
 }
 
+function identityMarker_(transactionId, nonce) {
+  // Identity markers MUST NOT be written into kolom Keterangan sheet transaksi.
+  // ID unik (transactionId / nonce / requestId) disimpan di sheet Idempotency Ledger saja.
+  // Fungsi ini dipertahankan agar call-site lama tidak error, tetapi selalu mengembalikan string kosong.
+  return "";
+}
+
 function appendIdentityMarker_(keterangan, transactionId, nonce) {
   // Hanya kembalikan keterangan user (maksimal panjang). Jangan sisipkan GUDANGAI_TX / NONCE.
   // Read-back dan anti-duplikat mengandalkan Idempotency Ledger, bukan kolom Keterangan.
@@ -729,24 +615,10 @@ function appendIdentityMarker_(keterangan, transactionId, nonce) {
   return base.substring(0, MAX_KETERANGAN_LENGTH);
 }
 
-function appendTransactionNoteWithinLimit_(base, suffix) {
-  var max = MAX_KETERANGAN_LENGTH;
-  var userText = String(base || "").trim();
-  var systemText = String(suffix || "").trim();
-  if (!systemText) return userText.substring(0, max);
-  if (systemText.length >= max) return systemText.substring(0, max);
-  var separator = userText ? " | " : "";
-  var allowedUserLength = Math.max(0, max - systemText.length - separator.length);
-  var safeUserText = userText.substring(0, allowedUserLength).trim();
-  return (safeUserText ? safeUserText + separator : "") + systemText;
-}
-
-function readBackTransactionByIdentity_(identity, preferredSheet, ledgerIndex) {
+function readBackTransactionByIdentity_(identity, preferredSheet) {
   const targetId = String(identity && identity.transactionId || "").trim();
   const targetNonce = String(identity && identity.nonce || "").trim();
-  // Legacy marker scan is only needed for old rows. Current transactions keep identity
-  // in the ledger; bulk reconciliation can jump directly to the ledger's recorded row.
-  const sheetNames = ledgerIndex ? [] : (preferredSheet ? [preferredSheet] : Object.keys(SHEET_CONFIG));
+  const sheetNames = preferredSheet ? [preferredSheet] : Object.keys(SHEET_CONFIG);
   for (let s = 0; s < sheetNames.length; s++) {
     const sheetName = sheetNames[s];
     if (!(sheetName in SHEET_CONFIG)) continue;
@@ -770,43 +642,6 @@ function readBackTransactionByIdentity_(identity, preferredSheet, ledgerIndex) {
       };
     }
   }
-  // Fallback ledger: marker GUDANGAI_TX tidak lagi ditulis ke Keterangan (lihat appendIdentityMarker_),
-  // sehingga verifikasi memakai baris yang tercatat di Idempotency Ledger.
-  try {
-    const rec = ledgerIndex
-      ? findIdempotencyRecordInIndex_(ledgerIndex, targetId, targetNonce)
-      : findIdempotencyRecord_(targetId, targetNonce);
-    const rowNo = rec ? Number(rec.dataRow) : 0;
-    const sName = preferredSheet || (rec ? rec.sheet : "");
-    const eligible = rec && (rec.status === "APPLIED" || rec.status === "UNKNOWN" || String(rec.writeOccurred) === "unknown");
-    if (eligible && rowNo > 0 && sName && (sName in SHEET_CONFIG)) {
-      const cfg = SHEET_CONFIG[sName];
-      const sh = getSS().getSheetByName(sName);
-      if (sh && rowNo > cfg.headerRow && rowNo <= sh.getMaxRows()) {
-        const r = sh.getRange(rowNo, 2, 1, 6).getValues()[0];
-        var ledgerDetails = {};
-        try { ledgerDetails = JSON.parse(String(rec.details || "")); } catch (e) {}
-        var qtyPresent = r[4] !== "" && r[4] != null;
-        var plannedWrite = ledgerDetails && ledgerDetails.planned === true &&
-          ledgerDetails.plannedFinalQty != null && ledgerDetails.keteranganHash;
-        var qtyOk = plannedWrite
-          ? (qtyPresent && Number(r[4]) === Number(ledgerDetails.plannedFinalQty))
-          : (qtyPresent && (Number(r[4]) === Number(rec.qty) || Number(r[4]) === 0));
-        var noteOk = plannedWrite
-          ? sha256Short_(String(r[5] || "")) === String(ledgerDetails.keteranganHash)
-          : true;
-        if (String(r[1] || "").trim() === String(rec.kodeBarang || "").trim() &&
-            normalizeTransactionDateKey_(r[0]) === String(rec.tanggal || "") && qtyOk && noteOk) {
-          return {
-            matched: true, sheet: sName, row: rowNo,
-            tanggal: normalizeTransactionDateKey_(r[0]), kodeBarang: String(r[1] || "").trim(),
-            namaBarang: r[2], satuan: r[3], qty: Number(r[4]) || 0, keterangan: String(r[5] || ""),
-            transactionId: targetId || null, nonce: targetNonce || null, via: "LEDGER_ROW"
-          };
-        }
-      }
-    }
-  } catch (fallbackErr) { console.error("readBack fallback ledger gagal: " + fallbackErr.message); }
   return { matched: false, transactionId: targetId || null, nonce: targetNonce || null };
 }
 
@@ -1056,7 +891,6 @@ function addTransaction(body) {
   let attempts = 0;
   let targetRow = -1;
   let writeTouched = false;
-  let verifiedReadBack = null;
   let lastError = null;
   let success = false;
   let finalQty = numericQty;
@@ -1096,9 +930,8 @@ function addTransaction(body) {
         if (kekurangan > 0) {
           shortageMode = true;
           finalQty = 0;
-  // Keep the operational hold note short and readable in the transaction column.
-  const structured = "HOLD kurang " + kekurangan + " (order " + numericQty + ", stok " + sisa + ")";
-  keterangan = appendTransactionNoteWithinLimit_(keterangan, structured);
+          const structured = "Input pending " + numericQty + " > sisa stock " + sisa + " > kurang " + kekurangan;
+          keterangan = keterangan ? (keterangan + " | " + structured) : structured;
           flags.push("STOCK_KURANG", "STOCK_KURANG_HOLD", "QTY_HOLD_0");
           try {
             MailApp.sendEmail(ADMIN_EMAIL, "[GudangAI][STOCK KURANG] " + kode + " " + (stockInfo.nama || ""),
@@ -1113,38 +946,19 @@ function addTransaction(body) {
         try {
           targetRow = findSafeEmptyRowAdaptively(sheet, config);
           if (!verifyRowStillEmptyPath2(sheet, targetRow)) throw new Error("Baris target " + targetRow + " terisi proses paralel.");
-          var plannedKeteranganHash = sha256Short_(keterangan);
-          if (!plannedKeteranganHash) throw new Error("Fingerprint Keterangan gagal dibuat; transaksi tidak ditulis.");
-          ledgerRecord = updateIdempotencyRecord_(ledgerRecord, {
-            status: "IN_PROGRESS", dataRow: targetRow, writeOccurred: "unknown", errorCode: "WRITE_PENDING",
-            details: JSON.stringify({
-              planned: true, plannedFinalQty: finalQty,
-              keteranganHash: plannedKeteranganHash, shortage: shortageMode
-            })
-          });
-          if (!ledgerRecord || Number(ledgerRecord.dataRow) !== Number(targetRow)) {
-            throw new Error("Write-ahead ledger tidak dapat dikonfirmasi; jurnal transaksi tidak ditulis.");
-          }
-          // Set konservatif sebelum panggilan Sheets: exception pada setValues bisa terjadi setelah write parsial.
-          writeTouched = true;
           // Hanya kolom writable: B:C dan F:G. Kolom D:E tetap terlindungi.
           sheet.getRange(targetRow, 2, 1, 2).setValues([[formattedDate, kode]]);
+          writeTouched = true;
           sheet.getRange(targetRow, 6, 1, 2).setValues([[finalQty, keterangan]]);
           // HARD RULE: transaksi API tidak pernah menulis/mengubah Stock CV/Stock PT.
           // Stock CV/PT adalah MASTER/SOURCE OF TRUTH dan hanya dibaca untuk validasi stok.
           normalizationStatus = { success: true, mode: "MASTER_READ_ONLY_ENFORCED" };
           SpreadsheetApp.flush();
-          const verifiedRow = sheet.getRange(targetRow, 2, 1, 6).getValues()[0];
-          if (normalizeTransactionDateKey_(verifiedRow[0]) !== expectedDateKey || String(verifiedRow[1] || "").trim() !== kode || Number(verifiedRow[4]) !== finalQty || String(verifiedRow[5] || "") !== keterangan) {
+          const vBC = sheet.getRange(targetRow, 2, 1, 2).getValues()[0];
+          const vFG = sheet.getRange(targetRow, 6, 1, 2).getValues()[0];
+          if (normalizeTransactionDateKey_(vBC[0]) !== expectedDateKey || String(vBC[1] || "").trim() !== kode || Number(vFG[0]) !== finalQty || String(vFG[1] || "") !== keterangan) {
             throw new Error("Verifikasi integritas gagal di baris " + targetRow + ".");
           }
-          verifiedReadBack = {
-            matched: true, sheet: sheetName, row: targetRow,
-            tanggal: normalizeTransactionDateKey_(verifiedRow[0]), kodeBarang: String(verifiedRow[1] || "").trim(),
-            namaBarang: verifiedRow[2], satuan: verifiedRow[3], qty: Number(verifiedRow[4]) || 0,
-            keterangan: String(verifiedRow[5] || ""), transactionId: transactionId, nonce: nonce,
-            via: "WRITE_VERIFICATION"
-          };
           success = true;
         } catch (err) {
           lastError = err;
@@ -1167,10 +981,9 @@ function addTransaction(body) {
     else if (holdReference) writeAuditLogSecure("HOLD_REALIZATION", "REALIZED", { holdTransactionId: holdReference, realizationTransactionId: transactionId, entitas: entitas, kode: kode, qty: finalQty }, "", transactionId);
     updateLastUpdateTimestamp();
     clearMasterCache();
-    // Formula kolom F mengikuti jurnal transaksi secara native; audit 3 range formula
-    // tidak perlu dijalankan di jalur respons transaksi.
-    const readBack = verifiedReadBack || readBackTransactionByIdentity_({ transactionId: transactionId, nonce: nonce }, sheetName);
-    const syncVersions = getCachedSyncVersions_();
+    try { syncDivisionStockLightweight_(); } catch (divErr) { console.error("syncDivisionStockLightweight_ gagal: " + divErr.message); }
+    const readBack = readBackTransactionByIdentity_({ transactionId: transactionId, nonce: nonce }, sheetName);
+    const syncVersions = getCurrentSyncVersions_();
     const appliedResponse = { success: true, status: "APPLIED", code: "TRANSACTION_APPLIED", requestId: request.requestId, transactionId: transactionId, nonce: nonce, sheet: sheetName, row: targetRow, masterVersion: syncVersions.masterVersion, stockVersion: syncVersions.stockVersion, entitas: entitas, kode: kode, qty: finalQty, originalQty: numericQty, shortage: shortageMode, stockPolicy: shortageMode ? "STOCK_KURANG_HOLD_QTY_0" : "NORMAL", normalization: normalizationStatus, holdTransactionId: holdReference || null, flags: flags, retries: attempts - 1, execMs: execMs, writeOccurred: true, readBack: readBack, message: shortageMode ? "HOLD: Qty ditulis 0; realisasi harus dibuat sebagai transaksi Barang keluar baru setelah stok tersedia." : "Transaksi berhasil di " + sheetName + " baris " + targetRow + "." };
     recordSyncMetric_(appliedResponse);
     return appliedResponse;
@@ -1234,7 +1047,7 @@ function bulkTransaction(body) {
   // Preflight — validasi semua dulu tanpa write
   var prepared = [];
   var validationErrors = [];
-  var seenIdentities = {};
+  var seenKeys = {};
   for (var i = 0; i < list.length; i++) {
     var original = list[i] || {};
     var tx = Object.assign({}, original);
@@ -1246,103 +1059,71 @@ function bulkTransaction(body) {
     if (!tx.nonce) tx.nonce = tx.transactionId;
     var check = validateTransactionRequest_(tx, { requireDate: !!tx._syncMode || !!body._syncMode, requireEntity: true });
     if (!check.valid) {
-      validationErrors.push({
-        batchId: batchId,
-        batchIndex: i + 1,
-        index: i + 1,
-        clientItemId: tx.clientItemId || tx.requestId || "",
-        requestId: tx.requestId || "",
-        transactionId: tx.transactionId,
-        nonce: tx.nonce,
-        success: false,
-        status: "REJECTED",
-        code: check.code || "PRECHECK_REJECTED",
-        error: check.error,
-      });
+      validationErrors.push({ index: i + 1, error: check.error });
       continue;
     }
     var normalizedKode = String(check.kode || tx.kodeBarang || tx.kode || "").trim();
-    var identityKey = String(tx.transactionId) + "|" + String(tx.nonce);
-    if (seenIdentities[identityKey]) {
-      validationErrors.push({ index: i + 1, error: "Duplikat identity dalam batch: " + tx.transactionId });
+    var duplicateKey = String(tx.sheet) + "|" + normalizedKode + "|" + String(tx.qty);
+    if (seenKeys[duplicateKey]) {
+      validationErrors.push({ index: i + 1, error: "Duplikat item dalam batch: " + normalizedKode + " qty " + tx.qty });
       continue;
     }
-    seenIdentities[identityKey] = true;
+    seenKeys[duplicateKey] = true;
     tx.kodeBarang = normalizedKode;
     prepared.push(tx);
   }
-  // Item valid tetap diproses walaupun sebagian item gagal preflight.
-  // Ini mencegah 1 item invalid menggagalkan seluruh bulkTransaction.
-  var preflightResults = validationErrors.slice();
-
-  // Pembacaan seluruh master stok hanya diperlukan untuk validasi shortage Barang keluar.
-  // Masuk/Rusak tidak memakai stockMap, jadi jangan membebani request dengan scan master 191 item.
-  var isKeluar = sheetName === "Barang keluar";
-  var stockMap = {};
-  if (isKeluar) {
-    try {
-      var allStock = getAllStock(entitas);
-      if (allStock && allStock.success && allStock.items) {
-        allStock.items.forEach(function(it) {
-          stockMap[String(it.kode || "").trim()] = {
-            stockAkhir: clampStockToZero_(it.stockAkhir),
-            nama: it.nama || "",
-            entitas: it.entitas || entitas
-          };
-        });
-      }
-    } catch (eStock) {
-      console.error("bulkTransaction stock load: " + eStock.message);
-    }
+  if (validationErrors.length > 0) {
+    var rejected = { success: false, status: "PRECHECK_REJECTED", batchId: batchId, total: list.length, validationErrors: validationErrors, results: [] };
+    batchCache.put("batchResult_" + batchId, JSON.stringify(rejected), DUP_CACHE_TTL_SEC);
+    return rejected;
   }
+
+  // Load stok 1x (untuk shortage HOLD pada keluar)
+  var stockMap = {};
+  try {
+    var allStock = getAllStock(entitas);
+    if (allStock && allStock.success && allStock.items) {
+      allStock.items.forEach(function(it) {
+        stockMap[String(it.kode || "").trim()] = {
+          stockAkhir: clampStockToZero_(it.stockAkhir),
+          nama: it.nama || "",
+          entitas: it.entitas || entitas
+        };
+      });
+    }
+  } catch (eStock) {
+    console.error("bulkTransaction stock load: " + eStock.message);
+  }
+
+  var isKeluar = sheetName === "Barang keluar";
   var lock = LockService.getScriptLock();
   if (!lock.tryLock(30000)) {
     return { success: false, status: "UNKNOWN", code: "LOCK_TIMEOUT", batchId: batchId, writeOccurred: "unknown", error: "Lock backend tidak tersedia; lakukan read-back sebelum retry." };
   }
 
-  var results = preflightResults.slice();
+  var results = [];
   var successCount = 0;
-  var failCount = preflightResults.length;
+  var failCount = 0;
   var writeTouched = false;
   var rowsToWrite = [];
-  var ledgerIndex = null;
-  var pendingNewClaims = [];
-  var pendingExistingClaims = [];
-  var pendingReconciledUpdates = [];
 
   try {
-    // Snapshot ledger satu kali per batch, bukan scan 2.000 baris untuk setiap item.
-    ledgerIndex = buildIdempotencyIndex_();
     for (var p = 0; p < prepared.length; p++) {
       var item = prepared[p];
-      var prior = findIdempotencyRecordInIndex_(ledgerIndex, item.transactionId, item.nonce);
+      var prior = findIdempotencyRecord_(item.transactionId, item.nonce);
       // Reconcile before every re-write. IN_PROGRESS/UNKNOWN may mean the previous
       // request actually committed but the client timed out before receiving the response.
       if (prior && prior.status !== "APPLIED") {
         try {
-          var priorReadBack = readBackTransactionByIdentity_({ transactionId: item.transactionId, nonce: item.nonce }, sheetName, ledgerIndex);
+          var priorReadBack = readBackTransactionByIdentity_({ transactionId: item.transactionId, nonce: item.nonce }, sheetName);
           if (priorReadBack && priorReadBack.matched) {
-            pendingReconciledUpdates.push(Object.assign({}, prior, { status: "APPLIED", dataRow: priorReadBack.row, writeOccurred: true, errorCode: "" }));
+            updateIdempotencyRecord_(prior, { status: "APPLIED", dataRow: priorReadBack.row, writeOccurred: true, errorCode: "" });
             results.push({ success: true, status: "APPLIED", code: "READBACK_CONFIRMED", batchId: batchId, batchIndex: p + 1, transactionId: item.transactionId, nonce: item.nonce, requestId: item.requestId || "", clientItemId: item.clientItemId || item.requestId || "", sheet: sheetName, row: priorReadBack.row, kode: priorReadBack.kodeBarang, qty: priorReadBack.qty, replayed: true, writeOccurred: true });
             successCount++;
             continue;
           }
         } catch (reconcileErr) {
           console.error("bulkTransaction reconciliation gagal: " + reconcileErr.message);
-        }
-        if (prior.status === "UNKNOWN" || String(prior.writeOccurred) === "unknown") {
-          results.push({
-            success: false, status: "UNKNOWN", code: "READBACK_REQUIRED",
-            batchId: batchId, batchIndex: p + 1,
-            transactionId: item.transactionId, nonce: item.nonce,
-            requestId: item.requestId || "",
-            clientItemId: item.clientItemId || item.requestId || "",
-            sheet: sheetName, kode: item.kodeBarang,
-            writeOccurred: "unknown",
-            error: "Identitas bulk sudah memiliki write intent; read-back belum mengonfirmasi jurnal. Jangan tulis ulang item ini."
-          });
-          failCount++;
-          continue;
         }
       }
       if (prior && prior.status === "APPLIED") {
@@ -1381,31 +1162,27 @@ function bulkTransaction(body) {
         if (kekurangan > 0) {
           shortageMode = true;
           finalQty = 0;
-          var structured = "Input pending " + numericQty + " > sisa stock " + sisa + " > kurang " + kekurangan;
-          keterangan = appendTransactionNoteWithinLimit_(keterangan, structured);
+          var structured = "HOLD; orderQty: " + numericQty + "; availableQty: " + sisa + "; shortageQty: " + kekurangan + "; followUp: verifikasi pembelian manual";
+          keterangan = keterangan ? (keterangan + " | " + structured) : structured;
         }
         if (st) st.stockAkhir = Math.max(0, sisa - (shortageMode ? 0 : finalQty));
       }
 
       keterangan = appendIdentityMarker_(keterangan, item.transactionId, item.nonce);
 
-      var claimedRecord = null;
-      var claimData = {
-        transactionId: item.transactionId, nonce: item.nonce,
-        requestId: item.requestId || batchId, deviceId: (item.client && item.client.deviceId) || (prior && prior.deviceId) || "",
-        operation: "bulkTransaction", sheet: sheetName, entitas: entitas,
-        kodeBarang: item.kodeBarang, qty: numericQty, tanggal: normalizeTransactionDateKey_(formattedDate),
-        status: "IN_PROGRESS", dataRow: prior ? prior.dataRow : "", writeOccurred: false,
-        errorCode: "", details: "Batch claim " + batchId,
-        createdAt: prior && prior.createdAt || new Date().toISOString()
-      };
-      if (prior) {
-        claimedRecord = Object.assign({}, prior, claimData, { rowNumber: prior.rowNumber });
-        pendingExistingClaims.push(claimedRecord);
-      } else {
-        claimedRecord = Object.assign({}, claimData, { rowNumber: ledgerIndex.nextRow + pendingNewClaims.length });
-        pendingNewClaims.push(claimedRecord);
-      }
+      try {
+        if (prior) {
+          updateIdempotencyRecord_(prior, { status: "IN_PROGRESS", requestId: item.requestId || batchId, writeOccurred: false });
+        } else {
+          appendIdempotencyRecord_({
+            transactionId: item.transactionId, nonce: item.nonce,
+            requestId: item.requestId || batchId, deviceId: (item.client && item.client.deviceId) || "",
+            operation: "bulkTransaction", sheet: sheetName, entitas: entitas,
+            kodeBarang: item.kodeBarang, qty: numericQty, tanggal: normalizeTransactionDateKey_(formattedDate),
+            status: "IN_PROGRESS", writeOccurred: false, details: "Batch claim " + batchId
+          });
+        }
+      } catch (ledErr) { console.error("ledger claim: " + ledErr.message); }
 
       rowsToWrite.push({
         index: p, date: formattedDate, kode: item.kodeBarang,
@@ -1413,21 +1190,9 @@ function bulkTransaction(body) {
         txId: item.transactionId, nonce: item.nonce,
         requestId: item.requestId || item.clientItemId || "",
         clientItemId: item.clientItemId || item.requestId || "",
-        shortage: shortageMode, availableQty: availableQty, ledgerRecord: claimedRecord
+        shortage: shortageMode, availableQty: availableQty
       });
     }
-
-    // Persist all reconciled/new/existing claims in grouped ranges before touching transaction rows.
-    var persistedClaims = [];
-    if (pendingNewClaims.length) persistedClaims = persistedClaims.concat(appendIdempotencyRecordsIndexed_(pendingNewClaims, ledgerIndex));
-    if (pendingExistingClaims.length) persistedClaims = persistedClaims.concat(writeIdempotencyRecordsByRow_(pendingExistingClaims, ledgerIndex));
-    if (pendingReconciledUpdates.length) persistedClaims = persistedClaims.concat(writeIdempotencyRecordsByRow_(pendingReconciledUpdates, ledgerIndex));
-    var persistedByRow = Object.create(null);
-    persistedClaims.forEach(function(record) { persistedByRow[record.rowNumber] = record; });
-    rowsToWrite.forEach(function(rw) {
-      if (rw.ledgerRecord && persistedByRow[rw.ledgerRecord.rowNumber]) rw.ledgerRecord = persistedByRow[rw.ledgerRecord.rowNumber];
-      if (!rw.ledgerRecord || rw.ledgerRecord.status !== "IN_PROGRESS") throw new Error("Write-ahead ledger claim tidak terkonfirmasi: " + rw.txId);
-    });
 
     if (rowsToWrite.length === 0 && failCount === 0) {
       var replayResp = {
@@ -1440,61 +1205,42 @@ function bulkTransaction(body) {
     }
 
     if (rowsToWrite.length > 0) {
-      var startRow = findSafeEmptyBlockAdaptively_(sheet, config, rowsToWrite.length);
-      if (!verifyRowsEmptyPath2(sheet, startRow, rowsToWrite.length)) {
-        throw new Error("Blok target bulk tidak kosong setelah alokasi; batalkan batch tanpa menimpa baris lama.");
+      var startRow = findSafeEmptyRowAdaptively(sheet, config);
+      var needEnd = startRow + rowsToWrite.length - 1;
+      if (sheet.getMaxRows() < needEnd) {
+        try { sheet.insertRowsAfter(sheet.getMaxRows(), needEnd - sheet.getMaxRows() + 10); } catch (insErr) {}
+      }
+      if (!verifyRowStillEmptyPath2(sheet, startRow)) {
+        startRow = findSafeEmptyRowAdaptively(sheet, config);
       }
 
       var bcValues = [];
       var fgValues = [];
-      var plannedLedgerUpdates = [];
       for (var r = 0; r < rowsToWrite.length; r++) {
-        var planned = rowsToWrite[r];
-        var plannedRow = startRow + r;
-        var plannedRecord = planned.ledgerRecord;
-        if (!plannedRecord) throw new Error("Idempotency ledger hilang sebelum bulk write: " + planned.txId);
-        var plannedKeteranganHash = sha256Short_(planned.ket);
-        if (!plannedKeteranganHash) throw new Error("Fingerprint Keterangan gagal dibuat untuk " + planned.txId + "; batch tidak ditulis.");
-        plannedLedgerUpdates.push(Object.assign({}, plannedRecord, {
-          status: "IN_PROGRESS", dataRow: plannedRow, writeOccurred: "unknown", errorCode: "WRITE_PENDING",
-          details: JSON.stringify({ planned: true, plannedFinalQty: planned.qty, keteranganHash: plannedKeteranganHash, batchId: batchId })
-        }));
-        bcValues.push([planned.date, planned.kode]);
-        fgValues.push([planned.qty, planned.ket]);
+        bcValues.push([rowsToWrite[r].date, rowsToWrite[r].kode]);
+        fgValues.push([rowsToWrite[r].qty, rowsToWrite[r].ket]);
       }
-      var persistedPlans = writeIdempotencyRecordsByRow_(plannedLedgerUpdates, ledgerIndex);
-      var plansByRow = Object.create(null);
-      persistedPlans.forEach(function(record) { plansByRow[record.rowNumber] = record; });
-      rowsToWrite.forEach(function(rw, idx) {
-        rw.ledgerRecord = plansByRow[rw.ledgerRecord.rowNumber] || rw.ledgerRecord;
-        if (!rw.ledgerRecord || Number(rw.ledgerRecord.dataRow) !== Number(startRow + idx) || rw.ledgerRecord.errorCode !== "WRITE_PENDING") {
-          throw new Error("Write-ahead ledger bulk tidak dapat dikonfirmasi: " + rw.txId);
-        }
-      });
-      // Flush the write-ahead plan before any transaction row can be written.
-      SpreadsheetApp.flush();
 
-      // Set konservatif sebelum panggilan Sheets agar partial-write exception berstatus UNKNOWN.
-      writeTouched = true;
       sheet.getRange(startRow, 2, rowsToWrite.length, 2).setValues(bcValues);
+      writeTouched = true;
       sheet.getRange(startRow, 6, rowsToWrite.length, 2).setValues(fgValues);
       SpreadsheetApp.flush();
 
-      // Verifikasi seluruh batch dalam dua pembacaan blok, bukan dua pembacaan per item.
-      var verifiedBC = sheet.getRange(startRow, 2, rowsToWrite.length, 2).getValues();
-      var verifiedFG = sheet.getRange(startRow, 6, rowsToWrite.length, 2).getValues();
       for (var v = 0; v < rowsToWrite.length; v++) {
         var rowNum = startRow + v;
         var rw = rowsToWrite[v];
-        var vBC = verifiedBC[v];
-        var vFG = verifiedFG[v];
+        var vBC = sheet.getRange(rowNum, 2, 1, 2).getValues()[0];
+        var vFG = sheet.getRange(rowNum, 6, 1, 2).getValues()[0];
         var ok = (normalizeTransactionDateKey_(vBC[0]) === normalizeTransactionDateKey_(rw.date) || String(vBC[0]) === String(rw.date))
           && String(vBC[1] || "").trim() === rw.kode
-          && Number(vFG[0]) === Number(rw.qty)
-          && String(vFG[1] || "") === String(rw.ket || "");
+          && Number(vFG[0]) === Number(rw.qty);
 
         if (ok) {
           successCount++;
+          try {
+            var rec = findIdempotencyRecord_(rw.txId, rw.nonce);
+            if (rec) updateIdempotencyRecord_(rec, { status: "APPLIED", dataRow: rowNum, writeOccurred: true, errorCode: "" });
+          } catch (uErr) {}
           results.push({
             success: true, status: "APPLIED", code: "TRANSACTION_APPLIED",
             batchId: batchId, batchIndex: rw.index + 1,
@@ -1515,52 +1261,29 @@ function bulkTransaction(body) {
           }
         } else {
           failCount++;
-            results.push({
-              success: false, status: "UNKNOWN", code: "VERIFY_FAILED",
-              batchId: batchId, batchIndex: rw.index + 1,
-              transactionId: rw.txId, nonce: rw.nonce,
-              requestId: rw.requestId || "",
-              clientItemId: rw.clientItemId || rw.requestId || "",
-              kode: rw.kode,
-              writeOccurred: "unknown", error: "Verifikasi integritas gagal di baris " + rowNum
-            });
-            // Lanjutkan verifikasi item berikutnya; item valid lain tetap tercatat.
-            continue;
+          try {
+            var rec2 = findIdempotencyRecord_(rw.txId, rw.nonce);
+            if (rec2) updateIdempotencyRecord_(rec2, { status: "UNKNOWN", dataRow: rowNum, writeOccurred: "unknown", errorCode: "VERIFY_FAILED" });
+          } catch (u2) {}
+          results.push({
+            success: false, status: "UNKNOWN", code: "VERIFY_FAILED",
+            batchId: batchId, batchIndex: rw.index + 1,
+            transactionId: rw.txId, nonce: rw.nonce,
+            requestId: rw.requestId || "",
+            clientItemId: rw.clientItemId || rw.requestId || "",
+            kode: rw.kode,
+            writeOccurred: "unknown", error: "Verifikasi integritas gagal di baris " + rowNum
+          });
+          break;
         }
       }
-      // One grouped ledger update after the entire transaction block has been read back.
-      var finalLedgerUpdates = rowsToWrite.map(function(rw, idx) {
-        var rowNum = startRow + idx;
-        var verified = results.some(function(result) {
-          return String(result.transactionId || "") === String(rw.txId) && result.success === true;
-        });
-        return Object.assign({}, rw.ledgerRecord, verified
-          ? { status: "APPLIED", dataRow: rowNum, writeOccurred: true, errorCode: "" }
-          : { status: "UNKNOWN", dataRow: rowNum, writeOccurred: "unknown", errorCode: "VERIFY_FAILED" });
-      });
-      writeIdempotencyRecordsByRow_(finalLedgerUpdates, ledgerIndex);
     }
 
     updateLastUpdateTimestamp();
     clearMasterCache();
-    // Formula Data Stok Per Divisi menghitung ulang otomatis; audit formula penuh
-    // dipindahkan dari jalur transaksi ke pemeriksaan terjadwal/manual.
+    try { syncDivisionStockLightweight_(); } catch (divErr) { console.error("syncDivisionStockLightweight_ gagal: " + divErr.message); }
   } catch (outerErr) {
     failCount++;
-    // Resolve every planned ledger record consistently with the conservative write boundary.
-    try {
-      var failureLedgerUpdates = rowsToWrite.filter(function(rw) { return !!rw.ledgerRecord; }).map(function(rw) {
-        var rec = rw.ledgerRecord;
-        return Object.assign({}, rec, {
-          status: writeTouched ? "UNKNOWN" : "FAILED",
-          dataRow: writeTouched ? rec.dataRow : "",
-          writeOccurred: writeTouched ? "unknown" : false,
-          errorCode: writeTouched ? "PARTIAL_WRITE_READBACK_REQUIRED" : "BULK_WRITE_NOT_STARTED",
-          details: String(outerErr.message || outerErr).substring(0, 1000)
-        });
-      });
-      if (failureLedgerUpdates.length) writeIdempotencyRecordsByRow_(failureLedgerUpdates, ledgerIndex);
-    } catch (ledgerErr) { console.error("bulk failure ledger reconciliation: " + ledgerErr.message); }
     try { sendErrorEmailWithCooldown("bulkTransaction", outerErr, { batchId: batchId, sheet: sheetName, count: prepared.length }); } catch (n) {}
     results.push({ success: false, status: writeTouched ? "UNKNOWN" : "FAILED", code: writeTouched ? "PARTIAL_WRITE_READBACK_REQUIRED" : "WRITE_FAILED", batchId: batchId, error: String(outerErr.message || outerErr) });
   } finally {
@@ -1613,7 +1336,7 @@ function validateTransactionRequest_(tx, options) {
   if (Object.prototype.hasOwnProperty.call(tx, "namaBarang") || Object.prototype.hasOwnProperty.call(tx, "nama") || Object.prototype.hasOwnProperty.call(tx, "satuan")) {
     return { valid: false, status: "REJECTED", code: "PROTECTED_FIELD", error: "Kolom Nama Barang/Satuan diproteksi; kirim hanya tanggal, kodeBarang, qty, dan keterangan." };
   }
-  const allowed = ["action", "operation", "schemaVersion", "sheet", "entitas", "kodeBarang", "qty", "tanggal", "keterangan", "transactionId", "nonce", "holdTransactionId", "realisasiHoldId", "holdId", "requestId", "clientItemId", "queueApproved", "client", "offlineContext", "secret", "_syncMode", "batchId", "deviceId"];
+  const allowed = ["action", "operation", "schemaVersion", "sheet", "entitas", "kodeBarang", "qty", "tanggal", "keterangan", "transactionId", "nonce", "holdTransactionId", "realisasiHoldId", "holdId", "requestId", "queueApproved", "client", "offlineContext", "secret", "_syncMode", "batchId", "deviceId"];
   const unknown = Object.keys(tx).filter(function(k) { return allowed.indexOf(k) < 0 && k !== "payload"; });
   if (unknown.length) return { valid: false, status: "REJECTED", code: "UNKNOWN_FIELD", error: "Field tidak diizinkan: " + unknown.join(", ") };
   const kode = String(tx.kodeBarang || "").trim();
@@ -1622,7 +1345,7 @@ function validateTransactionRequest_(tx, options) {
   const entitas = entityGroup.valid ? entityGroup.entitas : "";
   if (!kode) return { valid: false, status: "REJECTED", code: "CODE_REQUIRED", error: "kodeBarang wajib diisi" };
   const qty = Number(tx.qty);
-  if (!Number.isFinite(qty) || qty <= 0 || qty > MAX_QTY) return { valid: false, status: "REJECTED", code: "INVALID_QTY", error: "qty harus lebih dari 0 dan tidak boleh melebihi " + MAX_QTY };
+  if (isNaN(qty) || qty < 0 || qty > MAX_QTY) return { valid: false, status: "REJECTED", code: "INVALID_QTY", error: "qty tidak valid" };
   if (opts.requireDate && !tx.tanggal) return { valid: false, status: "REJECTED", code: "DATE_REQUIRED", error: "tanggal wajib diisi untuk sinkronisasi outbox." };
   if (tx.tanggal) {
     const dateCheck = validateTransactionDate(tx.tanggal);
@@ -1673,14 +1396,9 @@ function resolveKodeFromNama(namaInput) {
 // ============================================================
 function getRealLastDataRow(sheet, config) {
   const startRow = config.headerRow + 1;
-  // getMaxRows() mencakup seluruh baris kosong/berformat sampai batas sheet.
-  // Membaca satu kolom sampai batas itu pada setiap transaksi membuang waktu.
-  // getLastRow() adalah batas konten aktual; seluruh data di kolom kode pasti
-  // berada di dalam batas ini, termasuk bila ada data yatim di kolom lain.
-  const contentEndRow = (typeof sheet.getLastRow === "function") ? sheet.getLastRow() : sheet.getMaxRows();
-  const lastContentRow = Math.min(sheet.getMaxRows(), Math.max(startRow - 1, contentEndRow));
-  if (lastContentRow < startRow) return startRow - 1;
-  const numRows = lastContentRow - startRow + 1;
+  const totalRows = sheet.getMaxRows();
+  if (totalRows < startRow) return startRow - 1;
+  const numRows = totalRows - startRow + 1;
   const kodeColValues = sheet.getRange(startRow, config.kodeColAbsolute, numRows, 1).getValues();
   for (let i = kodeColValues.length - 1; i >= 0; i--) {
     if (kodeColValues[i][0] !== "" && kodeColValues[i][0] !== null) {
@@ -1694,11 +1412,7 @@ function findSafeEmptyRowAdaptively(sheet, config) {
   const realLastRow = getRealLastDataRow(sheet, config);
   const startRow = Math.max(config.headerRow + 1, realLastRow - SCAN_BUFFER_ROWS);
   const maxRows = sheet.getMaxRows();
-  // Jangan berhenti di realLastRow + buffer: kolom B:C/F:G bisa memiliki data
-  // yatim setelah kolom kode. getLastRow() melindungi data tersebut agar tidak tertimpa.
-  const contentEndRow = (typeof sheet.getLastRow === "function") ? sheet.getLastRow() : sheet.getMaxRows();
-  const lastContentRow = Math.max(realLastRow, contentEndRow);
-  const scanEndRow = Math.min(maxRows, Math.max(lastContentRow, realLastRow + SCAN_BUFFER_ROWS));
+  const scanEndRow = Math.min(maxRows, realLastRow + SCAN_BUFFER_ROWS);
   const numRowsToScan = Math.max(1, scanEndRow - startRow + 1);
   const bcValues = sheet.getRange(startRow, 2, numRowsToScan, 2).getValues();
   const fgValues = sheet.getRange(startRow, 6, numRowsToScan, 2).getValues();
@@ -1707,7 +1421,7 @@ function findSafeEmptyRowAdaptively(sheet, config) {
     const rightEmpty = fgValues[i].every(function(cell) { return cell === "" || cell === null || cell === undefined; });
     if (leftEmpty && rightEmpty) return startRow + i;
   }
-  const appendRow = lastContentRow + 1;
+  const appendRow = realLastRow + 1;
   if (appendRow > maxRows) {
     try {
       sheet.insertRowsAfter(maxRows, 100);
@@ -1734,65 +1448,6 @@ function verifyRowStillEmptyPath2(sheet, row) {
   const fg = sheet.getRange(row, 6, 1, 2).getValues()[0];
   return (bc[0] === "" || bc[0] === null) && (bc[1] === "" || bc[1] === null) &&
          (fg[0] === "" || fg[0] === null) && (fg[1] === "" || fg[1] === null);
-}
-
-function verifyRowsEmptyPath2(sheet, startRow, rowCount) {
-  var count = Math.max(1, Math.floor(Number(rowCount) || 1));
-  var bc = sheet.getRange(startRow, 2, count, 2).getValues();
-  var fg = sheet.getRange(startRow, 6, count, 2).getValues();
-  for (var i = 0; i < count; i++) {
-    for (var c = 0; c < 2; c++) {
-      if (bc[i][c] !== "" && bc[i][c] != null) return false;
-      if (fg[i][c] !== "" && fg[i][c] != null) return false;
-    }
-  }
-  return true;
-}
-
-/**
- * Find an append-safe contiguous block for bulk rows. A single empty first row
- * is not sufficient: every target row must be empty in both B:C and F:G.
- * Scan starts after the final non-empty item code, so historical gaps are never reused.
- */
-function findSafeEmptyBlockAdaptively_(sheet, config, rowCount) {
-  var count = Math.max(1, Math.floor(Number(rowCount) || 1));
-  var start = Math.max(config.headerRow + 1, getRealLastDataRow(sheet, config) + 1);
-  var maxRows = sheet.getMaxRows();
-
-  if (start <= maxRows) {
-    // Scan hanya sampai konten aktual + buffer yang cukup untuk satu batch.
-    // Tidak perlu membaca semua baris kosong/berformat hingga sheet.getMaxRows().
-    // Batas getLastRow() tetap menjaga data yatim pada B:C/F:G agar tidak tertimpa.
-    var contentEndRow = (typeof sheet.getLastRow === "function") ? sheet.getLastRow() : maxRows;
-    var lastContentRow = Math.max(start - 1, contentEndRow);
-    var scanEndRow = Math.min(maxRows, Math.max(lastContentRow, start + count + SCAN_BUFFER_ROWS - 1));
-    var scanCount = Math.max(count, scanEndRow - start + 1);
-    var bc = sheet.getRange(start, 2, scanCount, 2).getValues();
-    var fg = sheet.getRange(start, 6, scanCount, 2).getValues();
-    var emptyRun = 0;
-    for (var i = 0; i < scanCount; i++) {
-      var empty = true;
-      for (var c = 0; c < 2; c++) {
-        if ((bc[i][c] !== "" && bc[i][c] != null) || (fg[i][c] !== "" && fg[i][c] != null)) {
-          empty = false; break;
-        }
-      }
-      emptyRun = empty ? emptyRun + 1 : 0;
-      if (emptyRun >= count) return start + i - count + 1;
-    }
-  }
-
-  var insertAfter = sheet.getMaxRows();
-  var addRows = Math.max(count, SCAN_BUFFER_ROWS);
-  try {
-    sheet.insertRowsAfter(insertAfter, addRows);
-  } catch (insertErr) {
-    try { sheet.insertRows(insertAfter + 1, addRows); }
-    catch (insertErr2) {
-      throw new Error("Gagal menambah blok baris bulk pada '" + sheet.getName() + "': " + insertErr.message);
-    }
-  }
-  return insertAfter + 1;
 }
 
 
@@ -1836,6 +1491,24 @@ function validateHoldReference_(holdId) {
   if (!foundHold) return { valid: false, error: "Transaction HOLD tidak valid atau tidak ditemukan: " + target };
   if (isHoldReferenceAlreadyRealized_(target)) return { valid: false, error: "HOLD sudah direalisasikan sebelumnya: " + target };
   return { valid: true, holdId: target };
+}
+
+function isDuplicate(kode, qty, keterangan, sheetName) {
+  const cache = CacheService.getScriptCache();
+  const scope = String(sheetName || "").trim();
+  const normalizedKode = String(kode || "").trim();
+  const normalizedQty = String(qty == null ? "" : qty).trim();
+  const normalizedKeterangan = String(keterangan || "").trim();
+  const rawKey = [scope, normalizedKode, normalizedQty, normalizedKeterangan].join("|");
+  let digestKey = rawKey.replace(/[^A-Za-z0-9_.:-]/g, "_").substring(0, 180);
+  try {
+    const digest = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, rawKey);
+    digestKey = Utilities.base64EncodeWebSafe(digest).substring(0, 180);
+  } catch (e) {}
+  const key = "fingerprint60_" + digestKey;
+  if (cache.get(key)) return true;
+  cache.put(key, "1", 60);
+  return false;
 }
 
 function isDuplicateTransaction(sheetName, kode, qty, nonce) {
@@ -1892,7 +1565,7 @@ function rebuildAndCacheMasterMap() {
     const data = sheet.getRange(4, 1, lastRow - 3, lastCol).getValues();
     for (let i = 0; i < data.length; i++) {
       const kode = String(data[i][cKode] || "").trim();
-      if (!kode || /^total\b/i.test(kode)) continue;
+      if (!kode || /^total\\b/i.test(kode)) continue;
 
       // Key entity|kode mencegah collision bila suatu hari CV dan PT
       // memakai kode yang sama.
@@ -2026,18 +1699,6 @@ function getStockByCode(kode, requestedEntitas) {
   if (!normalizedKode) return { success: false, error: "Kode kosong" };
   if (requestedEntityInfo.valid === false && requestedEntityRaw) return { success: false, error: requestedEntityInfo.error };
 
-  const prefix = normalizedKode.toUpperCase().split("-")[0];
-  if (prefix === "BBCV" || prefix === "BBPT") {
-    const allBB = getAllStock("ALL");
-    if (!allBB.success) return { success: false, error: allBB.error || "Gagal membaca master bahan baku" };
-    const matchesBB = allBB.items.filter(function(item) {
-      return String(item.kode || "").trim() === normalizedKode &&
-        (!requestedEntity || String(item.entitas || "").toUpperCase() === requestedEntity);
-    });
-    if (matchesBB.length !== 1) return { success: false, error: matchesBB.length ? "Kode bahan baku ambigu: " + normalizedKode : "Kode bahan baku tidak ditemukan: " + normalizedKode };
-    return Object.assign({ success: true }, matchesBB[0]);
-  }
-
   const map = getMasterMap();
   const cacheKey = requestedEntity ? (requestedEntity + "|" + normalizedKode) : normalizedKode;
   const masterData = map[cacheKey] || (requestedEntity ? null : map[normalizedKode]);
@@ -2094,84 +1755,39 @@ function getStockByCode(kode, requestedEntitas) {
 
 function getAllStock(entitas) {
   const ss = getSS();
-  const requested = String(entitas || "ALL").trim().toUpperCase();
-  const byKey = {};
+  const sheets = entitas === "CV" ? ["Stock CV"] : entitas === "PT" ? ["Stock PT"] : ["Stock CV", "Stock PT"];
+  const items = [];
 
-  // Daftar master adalah gabungan unik Stock CV + Stock PT + Stock Bahan Baku.
-  // Saldo CV/PT tetap dibaca dari sheet masing-masing; kode pada Stock Bahan Baku
-  // menimpa saldo kode tersebut dan menambah item BB yang belum ada di CV/PT.
-  ["Stock CV", "Stock PT"].forEach(function(name) {
+  sheets.forEach(function(name) {
     const sheet = ss.getSheetByName(name);
-    if (!sheet || sheet.getLastRow() < 4 || sheet.getLastColumn() < 1) return;
-    const lastCol = sheet.getLastColumn();
-    const headers = sheet.getRange(3, 1, 1, lastCol).getValues()[0];
-    const lower = headers.map(function(h) { return String(h || "").toLowerCase().trim(); });
-    const cKode = lower.findIndex(function(h) { return h.indexOf("kode") >= 0; });
-    if (cKode < 0) return;
-    const rows = sheet.getRange(4, 1, sheet.getLastRow() - 3, lastCol).getValues();
-    const fallbackEntity = name === "Stock CV" ? "CV" : "PT";
-    rows.forEach(function(row) {
-      const kode = String(row[cKode] || "").trim();
-      if (!kode || /^total\b/i.test(kode)) return;
-      const normalized = normalizeEntityGroup_(fallbackEntity, kode);
-      const group = normalized.valid ? normalized.entitas : fallbackEntity;
-      const item = { kode: kode, entitas: group };
+    if (!sheet) return;
+    const headerRow = 3;
+    const last = sheet.getLastRow();
+    if (last <= headerRow) return;
+    const headers = sheet.getRange(headerRow, 1, 1, sheet.getLastColumn()).getValues()[0];
+    const data = sheet.getRange(headerRow + 1, 1, last - headerRow, sheet.getLastColumn()).getValues();
+    const label = name === "Stock CV" ? "CV" : "PT";
+
+    data.forEach(function(row) {
+      const kode = String(row[headers.findIndex(h => String(h).toLowerCase().includes("kode"))] || "").trim();
+      if (!kode || kode.startsWith("Total")) return;
+      const item = { kode: kode, entitas: label };
       headers.forEach(function(h, idx) {
-        const key = String(h || "").toLowerCase().trim();
-        if (key.indexOf("nama") >= 0) item.nama = row[idx];
-        if (key.indexOf("satuan") >= 0) item.satuan = row[idx];
-        if (key.indexOf("stock akhir") >= 0) item.stockAkhir = clampStockToZero_(row[idx]);
-        if (key.indexOf("stock aman") >= 0) item.stockAman = row[idx];
-        if (key.indexOf("stock value") >= 0 || key.indexOf("nilai stok") >= 0 || key.indexOf("nilai stock") >= 0 || key === "value") item.stockValue = row[idx];
-        if (key.indexOf("divisi") >= 0) item.divisi = row[idx];
+        const key = String(h).toLowerCase().trim();
+        if (key.includes("nama")) item.nama = row[idx];
+        if (key.includes("satuan")) item.satuan = row[idx];
+        if (key.includes("stock akhir")) item.stockAkhir = clampStockToZero_(row[idx]);
+        if (key.includes("stock aman")) item.stockAman = row[idx];
+        if (key.includes("stock value") || key.includes("nilai stok") || key.includes("nilai stock") || key.includes("value")) item.stockValue = row[idx];
+        if (key.includes("divisi")) item.divisi = row[idx];
       });
-      byKey[group + "|" + kode] = Object.assign({}, byKey[group + "|" + kode] || {}, item);
+      items.push(item);
     });
   });
 
-  const bbSheet = ss.getSheetByName("Stock Bahan Baku");
-  if (bbSheet) {
-    const bb = getBahanBakuStockMap_();
-    if (!bb.success) return { success: false, count: 0, items: [], error: bb.error || 'Gagal membaca "Stock Bahan Baku".' };
-    // Gunakan hasil pembacaan yang sama dari getBahanBakuStockMap_(); hindari
-    // membaca header dan 28+ baris bahan baku untuk kedua kalinya pada setiap request.
-    const lastRow = bb.lastRow, lastCol = bb.lastCol;
-    const headerRow = bb.headerRow;
-    const headers = bb.headers || [];
-    const lower = headers.map(function(v) { return String(v || "").toLowerCase().trim(); });
-    const cKode = lower.findIndex(function(v) { return v.indexOf("kode") >= 0; });
-    const rows = bb.rows || [];
-    if (headerRow < 0 || cKode < 0) return { success: false, count: 0, items: [], error: 'Header Kode tidak ditemukan di "Stock Bahan Baku".' };
-    rows.forEach(function(row) {
-      const kode = String(row[cKode] || "").trim();
-      if (!kode || /^total\b/i.test(kode) || !Object.prototype.hasOwnProperty.call(bb.map, kode)) return;
-      const groupInfo = normalizeEntityGroup_("", kode);
-      if (!groupInfo.valid) { console.warn("Prefix entitas bahan baku tidak dikenal: " + kode); return; }
-      const group = groupInfo.entitas, key = group + "|" + kode;
-      const item = Object.assign({}, byKey[key] || {}, { kode: kode, entitas: group, stockAkhir: clampStockToZero_(bb.map[kode]) });
-      headers.forEach(function(h, idx) {
-        const field = String(h || "").toLowerCase().trim();
-        if (field.indexOf("nama") >= 0 && row[idx] !== "") item.nama = row[idx];
-        if (field.indexOf("satuan") >= 0 && row[idx] !== "") item.satuan = row[idx];
-        if (field.indexOf("divisi") >= 0 && row[idx] !== "") item.divisi = row[idx];
-        if (field.indexOf("stock aman") >= 0 && row[idx] !== "") item.stockAman = row[idx];
-        if ((field.indexOf("stock value") >= 0 || field.indexOf("nilai stok") >= 0 || field.indexOf("nilai stock") >= 0 || field === "value") && row[idx] !== "") item.stockValue = row[idx];
-      });
-      if (!item.divisi) item.divisi = "BAHAN BAKU";
-      byKey[key] = item;
-    });
-    Object.keys(bb.map).forEach(function(kode) {
-      if (Object.keys(byKey).some(function(key) { return key.endsWith("|" + kode); })) return;
-      const groupInfo = normalizeEntityGroup_("", kode);
-      if (!groupInfo.valid) return;
-      byKey[groupInfo.entitas + "|" + kode] = { kode: kode, entitas: groupInfo.entitas, nama: kode, satuan: "", divisi: "BAHAN BAKU", stockAkhir: clampStockToZero_(bb.map[kode]), stockAman: 0, stockValue: 0 };
-    });
-  }
-
-  const items = Object.keys(byKey).sort().map(function(key) { return byKey[key]; })
-    .filter(function(item) { return requested === "ALL" || requested === item.entitas; });
-  return { success: true, count: items.length, items: items, source: "Stock CV + Stock PT + Stock Bahan Baku" };
+  return { success: true, count: items.length, items: items };
 }
+
 function getLowStock() {
   const all = getAllStock("ALL");
   if (!all.success) return all;
@@ -2366,13 +1982,10 @@ function writeAuditLogSecure(action, status, details, errorMsg, txId) {
       styleOperationalHeader_(logSheet, 6, "SYSTEM LOG — GUDANGAI 69", "Audit transaksi • status write • detail teknis • arsip otomatis", ["Timestamp", "TransactionID", "Aksi/Action", "Status", "Rincian/Details", "Pesan Error"]);
     }
     const detailStr = redactSensitiveString_((typeof details === "object") ? JSON.stringify(details) : String(details || ""));
-    const row = Math.max(OPS_DATA_START_ROW, logSheet.getLastRow() + 1);
-    logSheet.getRange(row, 1, 1, 6).setValues([[
+    logSheet.getRange(Math.max(OPS_DATA_START_ROW, logSheet.getLastRow() + 1), 1, 1, 6).setValues([[
       Utilities.formatDate(new Date(), TIMEZONE, "yyyy-MM-dd HH:mm:ss"),
-      shortId_(txId), String(action || "").substring(0, 80), String(status || "").substring(0, 40),
-      detailStr.substring(0, 420), String(errorMsg || "").substring(0, 260)
+      shortId_(txId), action, status, detailStr.substring(0, 900), String(errorMsg || "").substring(0, 700)
     ]]);
-    logSheet.getRange(row, 1, 1, 6).setVerticalAlignment("top").setWrap(true);
     // Formatting hanya dilakukan saat setup/maintenance, bukan setiap transaksi.
     maybeArchiveAuditLog();
   } catch (logErr) {
@@ -2519,17 +2132,17 @@ function getBahanBakuStockMap_() {
   const rows = sh.getRange(headerRow + 1, 1, lastRow - headerRow, lastCol).getValues();
   const map = {};
   const codes = [];
-  const invalidStockCodes = [];
 
   rows.forEach(function(row) {
     const kode = String(row[idxKode] || "").trim();
     if (!kode || /^total\b/i.test(kode) || /^kode\b/i.test(kode)) return;
+
     const raw = row[idxStock];
     const num = Number(raw);
-    // Kode barang tetap dihitung walau sel stok kosong/error; nilai stok invalid
-    // ditampilkan konservatif sebagai 0 dan dicatat agar item tidak hilang dari total master.
-    if (raw !== "" && raw != null && !isFinite(num)) invalidStockCodes.push(kode);
-    const stock = raw === "" || raw == null || !isFinite(num) ? 0 : num;
+    // Angka valid = stok. Sel kosong dianggap 0; teks error tidak dianggap valid.
+    const stock = raw === "" || raw == null ? 0 : (isFinite(num) ? num : null);
+    if (stock === null) return;
+
     map[kode] = clampStockToZero_(stock);
     codes.push(kode);
   });
@@ -2538,13 +2151,8 @@ function getBahanBakuStockMap_() {
     success: true,
     sheet: "Stock Bahan Baku",
     headerRow: headerRow,
-    lastRow: lastRow,
-    lastCol: lastCol,
-    headers: top[headerRow - 1],
-    rows: rows,
     count: codes.length,
     codes: codes,
-    invalidStockCodes: invalidStockCodes,
     map: map
   };
 }
@@ -2565,158 +2173,68 @@ function applyBahanBakuStockSource_(stockMap) {
   return bb;
 }
 
-/**
- * V7 — formula-safe Sisa Stok for Data Stok Per Divisi.
- * The source sheets remain authoritative; this code only reads their header layout.
- */
-function divisionColumnLetter_(columnNumber) {
-  var n = Number(columnNumber) || 0;
-  var out = "";
-  while (n > 0) {
-    var rem = (n - 1) % 26;
-    out = String.fromCharCode(65 + rem) + out;
-    n = Math.floor((n - 1) / 26);
-  }
-  return out;
-}
-
-function getDivisionStockFormulaSources_() {
-  var ss = getSS();
-  function scanSource(sheetName, fixedHeaderRow) {
-    var sh = ss.getSheetByName(sheetName);
-    if (!sh) return { success:false, error:"Sheet sumber tidak ditemukan: " + sheetName };
-    var lastRow = sh.getLastRow();
-    var lastCol = sh.getLastColumn();
-    if (lastCol < 1 || lastRow < 2) return { success:false, error:"Sheet sumber kosong: " + sheetName };
-    var start = fixedHeaderRow || 1;
-    var end = fixedHeaderRow || Math.min(5, lastRow);
-    var headerRow = 0, idxKode = -1, idxStock = -1;
-    for (var r = start; r <= end; r++) {
-      var headers = sh.getRange(r, 1, 1, lastCol).getDisplayValues()[0].map(function(v) {
-        return String(v || "").toLowerCase().trim();
-      });
-      var k = headers.findIndex(function(v) { return v.indexOf("kode") >= 0; });
-      var st = headers.findIndex(function(v) {
-        return v.indexOf("stock akhir") >= 0 || v.indexOf("sisa stock") >= 0 ||
-          v.indexOf("sisa stok") >= 0 || v === "sisa";
-      });
-      if (k >= 0 && st >= 0) {
-        headerRow = r; idxKode = k; idxStock = st; break;
-      }
-    }
-    if (!headerRow) return { success:false, error:"Header Kode/Stock Akhir tidak ditemukan: " + sheetName };
-    return {
-      success:true, sheetName:sheetName, headerRow:headerRow, dataStartRow:headerRow+1,
-      kodeColumn:divisionColumnLetter_(idxKode+1), stockColumn:divisionColumnLetter_(idxStock+1)
-    };
-  }
-  var cv = scanSource("Stock CV", 3);
-  if (!cv.success) return cv;
-  var pt = scanSource("Stock PT", 3);
-  if (!pt.success) return pt;
-  var bb = scanSource("Stock Bahan Baku", 0);
-  if (!bb.success) return bb;
-  return { success:true, cv:cv, pt:pt, bb:bb };
-}
-
-function divisionStockLookupExpression_(source, codeCell) {
-  var sheetRef = "'" + source.sheetName.replace(/'/g, "''") + "'";
-  return "INDEX(" + sheetRef + "!$" + source.stockColumn + "$" + source.dataStartRow +
-    ":$" + source.stockColumn + ",MATCH(" + codeCell + "," + sheetRef + "!$" +
-    source.kodeColumn + "$" + source.dataStartRow + ":$" + source.kodeColumn + ",0))";
-}
-
-function divisionFormulaArgumentSeparator_() {
-  // Indonesian Google Sheets locale requires semicolons between formula arguments.
-  var locale = "";
-  try { locale = String(getSS().getSpreadsheetLocale() || "").toLowerCase(); } catch (e) {}
-  return /^(id|de|fr|es|it|pt|nl|ru|tr|pl|sv|da|fi|no|cs|sk|hu|ro|uk|el|he|ar|th|vi|ja|ko|zh)/.test(locale) ? ";" : ",";
-}
-
-function buildDivisionStockFormula_(rowNumber, kode, sources) {
-  var codeCell = "$B$" + rowNumber;
-  var code = String(kode || "").trim().toUpperCase();
-  var sep = divisionFormulaArgumentSeparator_();
-  if (/^BB(CV|PT)-/.test(code)) return "=IFERROR(" + divisionStockLookupExpression_(sources.bb, codeCell) + sep + "0)";
-  if (/^CV-/.test(code)) return "=IFERROR(" + divisionStockLookupExpression_(sources.cv, codeCell) + sep + "0)";
-  if (/^(PT|WK|MM)-/.test(code)) return "=IFERROR(" + divisionStockLookupExpression_(sources.pt, codeCell) + sep + "0)";
-  return "=0";
-}
-
-// Repairs only formula cells in column F; does not rebuild or clear the table.
-function repairDivisionStockFormulas() {
-  var ss = getSS();
-  var sh = ss.getSheetByName("Data Stok Per Divisi");
-  if (!sh) return { success:false, error:'Sheet "Data Stok Per Divisi" tidak ditemukan' };
-  var sources = getDivisionStockFormulaSources_();
-  if (!sources.success) return { success:false, error:sources.error };
-  var lastRow = Math.min(sh.getLastRow(), 5000);
-  var codes = sh.getRange(1, 2, lastRow, 1).getDisplayValues();
-  var repaired = 0, failed = [];
-  for (var i = 0; i < lastRow; i++) {
-    var kode = String(codes[i][0] || "").trim();
-    if (!/^[A-Z]{2,6}-[A-Z0-9-]*\d[A-Z0-9-]*$/i.test(kode)) continue;
-    try {
-      sh.getRange(i + 1, 6).setFormula(buildDivisionStockFormula_(i + 1, kode, sources));
-      repaired++;
-    } catch (e) { failed.push({ row:i + 1, kode:kode, error:String(e.message || e) }); }
-  }
-  SpreadsheetApp.flush();
-  var audit = auditDivisionStockFormulaCells_();
-  updateLastUpdateTimestamp();
-  return {
-    success:failed.length === 0 && audit.success,
-    repaired:repaired, formulaCount:audit.formulaCount, itemCount:audit.itemCount,
-    failed:failed, audit:audit, locale:ss.getSpreadsheetLocale(),
-    separator:divisionFormulaArgumentSeparator_(),
-    message:failed.length ? "Sebagian formula gagal ditulis." : "Formula kolom F ditulis ulang; verifikasi hasil melalui audit."
-  };
-}
-
-function auditDivisionStockFormulaCells_() {
-  var ss = getSS();
-  var sh = ss.getSheetByName("Data Stok Per Divisi");
-  if (!sh) return { success:false, error:'Sheet "Data Stok Per Divisi" tidak ditemukan' };
-  var lastRow = Math.min(sh.getLastRow(), 5000);
-  if (lastRow < 1) return { success:false, error:"Data Stok Per Divisi kosong", itemCount:0, formulaCount:0, missing:[], formulaErrors:[] };
-  var codes = sh.getRange(1, 2, lastRow, 1).getDisplayValues();
-  var formulas = sh.getRange(1, 6, lastRow, 1).getFormulas();
-  var results = sh.getRange(1, 6, lastRow, 1).getDisplayValues();
-  var itemCount = 0, formulaCount = 0, missing = [], formulaErrors = [];
-  for (var i = 0; i < lastRow; i++) {
-    var kode = String(codes[i][0] || "").trim();
-    if (!/^[A-Z]{2,6}-[A-Z0-9-]*\d[A-Z0-9-]*$/i.test(kode)) continue;
-    itemCount++;
-    if (String(formulas[i][0] || "").charAt(0) === "=") formulaCount++;
-    else missing.push({ row:i+1, kode:kode });
-    var shown = String(results[i][0] || "").trim();
-    if (/^#(ERROR!|REF!|VALUE!|N\/A|NAME\?|NUM!|DIV\/0!)/i.test(shown)) {
-      formulaErrors.push({ row:i+1, kode:kode, result:shown, formula:formulas[i][0] || "" });
-    }
-  }
-  return { success:missing.length===0 && formulaErrors.length===0, itemCount:itemCount, formulaCount:formulaCount, missing:missing, formulaErrors:formulaErrors };
-}
-
-/**
- * Formula-safe lightweight sync.
- * Spreadsheet formulas recalculate from Stock CV/PT/Stock Bahan Baku automatically.
- * This function deliberately performs ZERO writes to column F.
- */
 function syncDivisionStockLightweight_() {
-  SpreadsheetApp.flush();
-  var audit = auditDivisionStockFormulaCells_();
-  if (!audit.success) {
-    return {
-      success:false, error:"Ada sel Sisa Stok tanpa formula; tidak ada sel F yang ditulis.",
-      mode:"FORMULA_AUDIT_ONLY", formulaProtected:true, itemCount:audit.itemCount,
-      formulaCount:audit.formulaCount, missing:audit.missing
-    };
+  const ss = getSS();
+  const dest = ss.getSheetByName("Data Stok Per Divisi");
+  if (!dest || dest.getLastRow() < 5) {
+    // Belum pernah di-build; bangun penuh sekali.
+    return syncDivisionStock({ force: true });
   }
+
+  // Sumber default tetap Stock CV/PT untuk seluruh divisi selain BAHAN BAKU.
+  const stockMap = {};
+  ["Stock CV", "Stock PT"].forEach(function(name) {
+    const sh = ss.getSheetByName(name);
+    if (!sh || sh.getLastRow() < 4) return;
+    const lastCol = sh.getLastColumn();
+    const hdr = sh.getRange(3, 1, 1, lastCol).getValues()[0].map(function(h) { return String(h).toLowerCase().trim(); });
+    const cK = hdr.findIndex(function(h) { return h.indexOf("kode") >= 0; });
+    const cA = hdr.findIndex(function(h) { return h.indexOf("stock akhir") >= 0; });
+    if (cK < 0 || cA < 0) return;
+    const rows = sh.getRange(4, 1, sh.getLastRow() - 3, lastCol).getValues();
+    rows.forEach(function(row) {
+      const k = String(row[cK] || "").trim();
+      if (k && !/^Total/i.test(k)) stockMap[k] = clampStockToZero_(row[cA]);
+    });
+  });
+
+  // HARD RULE: BAHAN BAKU mengambil stok hanya dari Stock Bahan Baku.
+  // Bila source baru tidak valid, jangan menimpa Data Stok Per Divisi dengan data CV/PT.
+  const bbSource = applyBahanBakuStockSource_(stockMap);
+  if (!bbSource.success) {
+    console.error("Sumber Stock Bahan Baku tidak valid: " + bbSource.error);
+    return { success: false, error: bbSource.error, mode: "BAHAN_BAKU_SOURCE_REQUIRED" };
+  }
+
+  // Scan area Data Stok Per Divisi: kolom B = Kode, kolom F = Sisa Stok (layout 7 kolom).
+  const last = Math.min(dest.getLastRow(), 5000);
+  if (last < 5) return { success: false, error: "Layout divisi kosong" };
+  const data = dest.getRange(1, 1, last, 7).getValues();
+  const updates = [];
+  for (let i = 0; i < data.length; i++) {
+    const kode = String(data[i][1] || "").trim();
+    if (!kode || kode === "Kode Barang" || /^DIVISI/i.test(String(data[i][0] || "")) || /^TOTAL/i.test(String(data[i][0] || "")) || /^No$/i.test(String(data[i][0] || ""))) continue;
+    if (Object.prototype.hasOwnProperty.call(stockMap, kode)) {
+      const current = Number(data[i][5]);
+      const next = stockMap[kode];
+      if (current !== next) updates.push({ row: i + 1, value: next });
+    }
+  }
+
+  updates.forEach(function(u) {
+    dest.getRange(u.row, 6).setValue(u.value);
+  });
+
+  const stamp = Utilities.formatDate(new Date(), TIMEZONE, "dd-MMM-yyyy HH:mm:ss");
+  dest.getRange(2, 1).setValue("Sisa Stok = CV/PT; BAHAN BAKU = Stock Bahan Baku | Update: " + stamp);
   clearDataDirty_();
   return {
-    success:true, updatedCells:0, formulaProtected:true, itemCount:audit.itemCount,
-    formulaCount:audit.formulaCount, mode:"FORMULA_RECALC_ONLY",
-    message:"Sisa Stok diperbarui oleh formula spreadsheet; backend tidak menulis kolom F."
+    success: true,
+    updatedCells: updates.length,
+    bahanBakuCount: bbSource.count,
+    bahanBakuSource: "Stock Bahan Baku",
+    mode: "lightweight",
+    message: updates.length + " sel Sisa Stok diperbarui real-time."
   };
 }
 
@@ -2746,117 +2264,102 @@ function removeChartByTitle_(sheet, chartTitle) {
 
 function syncDivisionStock(options) {
   options = options || {};
-  var ss = getSS();
-  var src = ss.getSheetByName("Stock Awal");
-  var dest = ss.getSheetByName("Data Stok Per Divisi");
-  if (!src || !dest) return { success:false, error:"Sheet Stock Awal / Data Stok Per Divisi tidak ditemukan" };
+  const ss = getSS();
+  const src = ss.getSheetByName("Stock awal");
+  const dest = ss.getSheetByName("Data Stok Per Divisi");
+  if (!src || !dest) return { success: false, error: "Sheet Stock awal / Data Stok Per Divisi tidak ditemukan" };
 
-  var formulaSources = getDivisionStockFormulaSources_();
-  if (!formulaSources.success) return { success:false, error:formulaSources.error, phase:"PREFLIGHT_FORMULA_SOURCES" };
+  const data = src.getDataRange().getValues();
+  if (data.length < 2) return { success: false, error: "Stock awal kosong" };
+  const header = data[0].map(h => String(h).toLowerCase().trim());
+  const idxKode = header.findIndex(h => h.includes("kode"));
+  const idxNama = header.findIndex(h => h.includes("nama"));
+  const idxSatuan = header.findIndex(h => h.includes("satuan"));
+  const idxDivisi = header.findIndex(h => h.includes("divisi"));
+  if (idxKode === -1 || idxDivisi === -1) return { success: false, error: "Header Stock awal tidak lengkap" };
 
-  var data = src.getDataRange().getValues();
-  if (data.length < 2) return { success:false, error:"Stock Awal kosong" };
-  var header = data[0].map(function(h) { return String(h).toLowerCase().trim(); });
-  var idxKode = header.findIndex(function(h) { return h.indexOf("kode") >= 0; });
-  var idxNama = header.findIndex(function(h) { return h.indexOf("nama") >= 0; });
-  var idxSatuan = header.findIndex(function(h) { return h.indexOf("satuan") >= 0; });
-  var idxDivisi = header.findIndex(function(h) { return h.indexOf("divisi") >= 0; });
-  if (idxKode < 0 || idxDivisi < 0) return { success:false, error:"Header Stock Awal tidak lengkap" };
-
-  // Read-only preflight: no write to Stock CV, Stock PT, or Stock Bahan Baku.
-  var stockMap = {};
-  ["Stock CV", "Stock PT"].forEach(function(name) {
-    var sh = ss.getSheetByName(name);
+  // Default source: Stock CV/PT. Hanya BAHAN BAKU dioverride oleh source baru.
+  const stockMap = {};
+  ["Stock CV", "Stock PT"].forEach(name => {
+    const sh = ss.getSheetByName(name);
     if (!sh || sh.getLastRow() < 4) return;
-    var lastCol = sh.getLastColumn();
-    var hdr = sh.getRange(3, 1, 1, lastCol).getDisplayValues()[0].map(function(h) { return String(h).toLowerCase().trim(); });
-    var cK = hdr.findIndex(function(h) { return h.indexOf("kode") >= 0; });
-    var cA = hdr.findIndex(function(h) { return h.indexOf("stock akhir") >= 0; });
+    const lastCol = sh.getLastColumn();
+    const hdr = sh.getRange(3, 1, 1, lastCol).getValues()[0].map(h => String(h).toLowerCase().trim());
+    const cK = hdr.findIndex(h => h.includes("kode"));
+    const cA = hdr.findIndex(h => h.includes("stock akhir"));
     if (cK < 0 || cA < 0) return;
-    var rows = sh.getRange(4, 1, sh.getLastRow()-3, lastCol).getValues();
-    rows.forEach(function(row) {
-      var kode = String(row[cK] || "").trim();
-      if (kode && !/^total/i.test(kode)) stockMap[kode] = clampStockToZero_(row[cA]);
+    const rows = sh.getRange(4, 1, sh.getLastRow() - 3, lastCol).getValues();
+    rows.forEach(row => {
+      const k = String(row[cK] || "").trim();
+      if (k && !/^Total/i.test(k)) stockMap[k] = clampStockToZero_(row[cA]);
     });
   });
-  var bbSource = applyBahanBakuStockSource_(stockMap);
-  if (!bbSource.success) return { success:false, error:bbSource.error, mode:"BAHAN_BAKU_SOURCE_REQUIRED" };
 
-  var groups = { "DAPUR 1":[], "DAPUR 2":[], "MIE":[], "PACKING":[], "CS":[], "BAHAN BAKU":[], "REKANAN":[] };
-  for (var i = 1; i < data.length; i++) {
-    var row = data[i];
-    var kode = String(row[idxKode] || "").trim();
+  const bbSource = applyBahanBakuStockSource_(stockMap);
+  if (!bbSource.success) {
+    return { success: false, error: bbSource.error, mode: "BAHAN_BAKU_SOURCE_REQUIRED" };
+  }
+
+  const groups = { "DAPUR 1":[], "DAPUR 2":[], "MIE":[], "PACKING":[], "CS":[], "BAHAN BAKU":[], "REKANAN":[] };
+  for (let i = 1; i < data.length; i++) {
+    const row = data[i];
+    const kode = String(row[idxKode] || "").trim();
     if (!kode) continue;
-    var div = normalizeDivision_(row[idxDivisi]);
-    if (kode.indexOf("BBCV-") === 0 || kode.indexOf("BBPT-") === 0) div = "BAHAN BAKU";
+    let div = String(row[idxDivisi] || "").trim().toUpperCase();
+    if (kode.startsWith("BBCV-") || kode.startsWith("BBPT-")) div = "BAHAN BAKU";
     if (!groups[div]) continue;
     groups[div].push([
-      kode, idxNama >= 0 ? row[idxNama] : "", idxSatuan >= 0 ? row[idxSatuan] : "",
-      div, "", div === "CS" ? (SIZE_MAP_CS[kode] || "") : ""
+      kode,
+      idxNama !== -1 ? row[idxNama] : "",
+      idxSatuan !== -1 ? row[idxSatuan] : "",
+      div,
+      stockMap[kode] !== undefined ? stockMap[kode] : 0,
+      div === "CS" ? (SIZE_MAP_CS[kode] || "") : ""
     ]);
   }
 
-  var order = ["DAPUR 1","DAPUR 2","MIE","PACKING","CS","BAHAN BAKU","REKANAN"];
-  var out = [
-    ["TABEL DATA STOK PER DIVISI — V7 FORMULA-SAFE", "", "", "", "", "", ""],
-    ["Sisa Stok = formula dari Stock CV/PT; BAHAN BAKU = Stock Bahan Baku | Update: " +
-      Utilities.formatDate(new Date(), TIMEZONE, "dd-MMM-yyyy HH:mm:ss"), "", "", "", "", "", ""]
+  const order = ["DAPUR 1","DAPUR 2","MIE","PACKING","CS","BAHAN BAKU","REKANAN"];
+  const out = [
+    ["TABEL DATA STOK PER DIVISI — V6.5 OPTIMIZED", "", "", "", "", "", ""],
+    ["Sisa Stok = CV/PT; BAHAN BAKU = Stock Bahan Baku | Update: " + Utilities.formatDate(new Date(), TIMEZONE, "dd-MMM-yyyy HH:mm:ss"), "", "", "", "", "", ""]
   ];
-  var formulaByRow = [];
-  order.forEach(function(div) {
-    var items = groups[div] || [];
+  order.forEach(div => {
+    const items = groups[div] || [];
     out.push(["DIVISI : " + div, "", "", "", "", "", ""]);
     out.push(["TOTAL PRODUK : " + items.length + " ITEM", "", "", "", "", "", ""]);
-    out.push(div === "CS"
-      ? ["No","Kode Barang","Nama Barang","Satuan","Divisi","Sisa Stok","Size"]
-      : ["No","Kode Barang","Nama Barang","Satuan","Divisi","Sisa Stok","Keterangan"]);
-    items.forEach(function(item, idx) {
-      var outputRow = out.length + 1;
-      var kode = item[0];
-      out.push([idx + 1, kode, item[1], item[2], div, "", item[5]]);
-      formulaByRow[outputRow - 1] = buildDivisionStockFormula_(outputRow, kode, formulaSources);
-    });
+    out.push(div === "CS" ? ["No","Kode Barang","Nama Barang","Satuan","Divisi","Sisa Stok","Size"] : ["No","Kode Barang","Nama Barang","Satuan","Divisi","Sisa Stok","Keterangan"]);
+    items.forEach((item, idx) => out.push([idx + 1].concat(item)));
     out.push(["","","","","","",""]);
   });
 
-  var neededRows = Math.max(out.length, 4);
+  const neededRows = Math.max(out.length, 4);
   if (dest.getMaxRows() < neededRows) dest.insertRowsAfter(dest.getMaxRows(), neededRows - dest.getMaxRows());
   if (dest.getMaxColumns() < 7) dest.insertColumnsAfter(dest.getMaxColumns(), 7 - dest.getMaxColumns());
 
-  // Controlled rebuild: clear only the managed A:G table, then restore F as formulas.
-  // No writes are performed to the source sheets Stock CV/PT/Stock Bahan Baku.
-  var oldRows = Math.max(neededRows, Math.min(dest.getLastRow(), 5000));
+  const oldRows = Math.max(neededRows, Math.min(dest.getLastRow(), 5000));
   try { dest.getRange(1, 1, oldRows, 7).breakApart(); } catch (e) {}
-  dest.getRange(1, 1, oldRows, 5).clearContent();
-  dest.getRange(1, 6, oldRows, 1).clearContent();
-  dest.getRange(1, 7, oldRows, 1).clearContent();
-
-  dest.getRange(1, 1, out.length, 5).setValues(out.map(function(r) { return r.slice(0,5); }));
-  dest.getRange(1, 6, out.length, 1).setFormulas(out.map(function(r, i) { return [formulaByRow[i] || ""]; }));
-  dest.getRange(1, 7, out.length, 1).setValues(out.map(function(r) { return [r[6]]; }));
-
+  dest.getRange(1, 1, oldRows, 7).clearContent();
+  dest.getRange(1, 1, out.length, 7).setValues(out);
   dest.getRange(1, 1, 1, 7).merge().setFontWeight("bold").setFontSize(14);
   dest.getRange(2, 1, 1, 7).merge().setFontStyle("italic").setFontSize(9);
-  var r = 3;
-  order.forEach(function(div) {
-    var count = (groups[div] || []).length;
+
+  let r = 3;
+  order.forEach(div => {
+    const count = (groups[div] || []).length;
     dest.getRange(r, 1, 1, 7).merge().setFontWeight("bold"); r += 2;
     dest.getRange(r, 1, 1, 7).setFontWeight("bold"); r += 1 + count + 1;
   });
   dest.setFrozenRows(3);
-  SpreadsheetApp.flush();
-
-  var formulaAudit = auditDivisionStockFormulaCells_();
-  if (!formulaAudit.success) {
-    return { success:false, error:"Rebuild selesai tetapi verifikasi formula F tidak lengkap.", formulaAudit:formulaAudit };
-  }
   updateLastUpdateTimestamp();
+
+  const total = order.reduce((sum,d) => sum + (groups[d]||[]).length, 0);
   clearDataDirty_();
-  var total = order.reduce(function(sum, d) { return sum + (groups[d] || []).length; }, 0);
   return {
-    success:true, total:total, bahanBakuCount:bbSource.count, bahanBakuSource:"Stock Bahan Baku",
-    formulaProtected:true, formulaCount:formulaAudit.formulaCount,
-    message:total + " item dibangun ulang; kolom F berisi formula, bukan nilai tetap."
+    success: true,
+    total: total,
+    bahanBakuCount: bbSource.count,
+    bahanBakuSource: "Stock Bahan Baku",
+    message: total + " item disinkronisasi tanpa rebuild struktur global."
   };
 }
 
@@ -2916,20 +2419,51 @@ function updateLastUpdateTimestamp() {
 function stampVisibleUpdateTimestamp_(formatted) {
   const ss = getSS();
   const stamp = "Update terakhir: " + (formatted || Utilities.formatDate(new Date(), TIMEZONE, "yyyy-MM-dd HH:mm:ss"));
-  // Hanya tiga lokasi metadata yang memang menampilkan waktu update.
-  // Sheet transaksi/master tidak perlu disentuh pada setiap write.
-  try {
-    const dashboard = ss.getSheetByName("Dashboard");
-    if (dashboard) dashboard.getRange("A2").setValue("Pantauan Stok & Aktivitas — Real Time | " + stamp);
-  } catch (e) { console.error("Timestamp Dashboard gagal: " + e.message); }
-  try {
-    const division = ss.getSheetByName("Data Stok Per Divisi");
-    if (division) division.getRange(2, 1).setValue("Sisa Stok = Stock Akhir CV/PT | " + stamp);
-  } catch (e) { console.error("Timestamp Data Stok Per Divisi gagal: " + e.message); }
-  try {
-    const config = ss.getSheetByName("Config");
-    if (config) config.getRange(2, 1).setValue("Konfigurasi sistem • periode aktif • parameter sinkronisasi • " + stamp);
-  } catch (e) { console.error("Timestamp Config gagal: " + e.message); }
+  const targets = [
+    { name: "Dashboard", range: "A2" },
+    { name: "Data Stok Per Divisi", range: "A2" },
+    { name: "Config", range: null },
+    { name: "purchase order", range: null },
+    { name: "Stock CV", range: null },
+    { name: "Stock PT", range: null },
+    { name: "Barang masuk", range: null },
+    { name: "Barang keluar", range: null },
+    { name: "Barang Rusak", range: null }
+  ];
+  targets.forEach(function(t) {
+    try {
+      const sh = ss.getSheetByName(t.name);
+      if (!sh) return;
+      if (t.name === "Dashboard") {
+        // Dashboard A2 sudah digabung; isi ulang dengan prefix pantauan + waktu.
+        const current = String(sh.getRange("A2").getDisplayValue() || "");
+        if (current.indexOf("Update:") >= 0 || current.indexOf("Update terakhir") >= 0) {
+          sh.getRange("A2").setValue("Pantauan Stok & Aktivitas — Real Time | " + stamp);
+        } else {
+          sh.getRange("A2").setValue("Pantauan Stok & Aktivitas — Real Time | " + stamp);
+        }
+        return;
+      }
+      if (t.name === "Data Stok Per Divisi") {
+        // Baris 2 sudah berisi subtitle; ganti dengan stamp real-time.
+        const row2 = sh.getRange(2, 1);
+        row2.setValue("Sisa Stok = Stock Akhir CV/PT | " + stamp);
+        return;
+      }
+      if (t.name === "Config") {
+        // Config row 2 subtitle
+        try {
+          const r2 = sh.getRange(2, 1);
+          const base = "Konfigurasi sistem • periode aktif • parameter sinkronisasi • " + stamp;
+          r2.setValue(base);
+        } catch (e) {}
+        return;
+      }
+      // Sheet transaksi / master: tulis di pojok kanan atas jika kolom tersedia, atau baris 1 kolom terakhir.
+      // Hindari menimpa header data. Gunakan catatan di Script Properties saja untuk sheet yang dilindungi.
+      // Untuk sheet operasional dengan layout title row 1-2, update subtitle bila ada.
+    } catch (e) {}
+  });
 }
 
 function getLastUpdateTimestamp() {
@@ -2991,6 +2525,8 @@ function getDashboardData() {
     statusPO: po
   };
 }
+
+function getDashboard() { return getDashboardData(); }
 
 function toNumber_(v) { const n = Number(String(v).replace(/[^0-9,.-]/g, "").replace(/,/g, ".")); return isNaN(n) ? 0 : n; }
 function percent_(n, d) { return d ? Math.round((n / d) * 1000) / 10 : 0; }
@@ -3059,28 +2595,7 @@ function getSevenDayTrend_() {
   return { labels: labels, values: values };
 }
 
-function getPOStatusFromStatusPO_() {
-  const st = getStatusPO();
-  if (!st || !st.success) return null;
-  const out = {
-    aktif: { cv: 0, pt: 0, purchaseOrder: 0, total: 0, itemCount: 0 },
-    konfirmasi: { cv: 0, pt: 0, purchaseOrder: 0, total: 0, itemCount: 0 }
-  };
-  (st.items || []).forEach(function(it) {
-    const b = it.status === "SELESAI" ? out.konfirmasi : out.aktif;
-    b.cv += Number(it.poCV) || 0;
-    b.pt += Number(it.poPT) || 0;
-    b.total += Number(it.totalPO) || 0;
-    b.itemCount++;
-  });
-  return out;
-}
-
 function getPOStatus_() {
-  try {
-    const viaStatusPO = getPOStatusFromStatusPO_();
-    if (viaStatusPO) return viaStatusPO;
-  } catch (poErr) { console.error("getPOStatus_ via getStatusPO gagal: " + poErr.message); }
   const result = {
     aktif: { cv: 0, pt: 0, purchaseOrder: 0, total: 0, itemCount: 0 },
     konfirmasi: { cv: 0, pt: 0, purchaseOrder: 0, total: 0, itemCount: 0 }
@@ -3096,9 +2611,9 @@ function getPOStatus_() {
   const headers = sh.getRange(headerRow, 1, 1, lastCol).getDisplayValues()[0].map(function(v) {
     return String(v || "").trim().toUpperCase();
   });
-  const cCV = headers.findIndex(function(h) { return /PO\s*CV|CV\s*PO/.test(h); });
-  const cPT = headers.findIndex(function(h) { return /PO\s*PT|PT\s*PO/.test(h); });
-  const cTotal = headers.findIndex(function(h) { return /^TOTAL$|TOTAL\s*PO/.test(h); });
+  const cCV = headers.findIndex(function(h) { return /PO\\s*CV|CV\\s*PO/.test(h); });
+  const cPT = headers.findIndex(function(h) { return /PO\\s*PT|PT\\s*PO/.test(h); });
+  const cTotal = headers.findIndex(function(h) { return /^TOTAL$|TOTAL\\s*PO/.test(h); });
   const cStatus = headers.findIndex(function(h) { return /STATUS|KONFIRM/.test(h); });
 
   if (cCV < 0 && cPT < 0 && cTotal < 0) {
@@ -3135,63 +2650,153 @@ function getPOStatus_() {
 // 14. DASHBOARD GOOGLE SHEETS — REAL-TIME RENDERER
 // ============================================================
 function diagnoseDashboard() {
-  // Read-only diagnostics: never clear or write the Dashboard sheet.
-  var data = getDashboardData();
-  if (!data || !data.success) return { success:false, error:(data && data.error) || "Dashboard data gagal dibaca" };
-  return {
-    success:true, readOnly:true, totalItem:data.totalItemAktif || data.totalItem || 0,
-    aman:data.aman || 0, waspada:data.waspada || 0, kritis:data.kritis || 0,
-    divisionCount:(data.statusPerDivisi || []).length,
-    poStatusAvailable:!!data.statusPO,
-    lastUpdate:data.lastUpdate || getLastUpdateTimestamp()
-  };
+  const ss = getSS();
+  let sh = ss.getSheetByName("Dashboard");
+  if (!sh) sh = ss.insertSheet("Dashboard", 0);
+  try {
+    sh.getRange("A1:B12").breakApart().clearContent();
+    sh.getRange("A1").setValue("DIAGNOSTIK DASHBOARD — MULAI");
+    SpreadsheetApp.flush();
+    const data = getDashboardData();
+    sh.getRange("A2:B8").setValues([
+      ["getDashboardData", data.success ? "OK" : "GAGAL"],
+      ["Total item", data.totalItemAktif || 0],
+      ["Aman", data.aman || 0],
+      ["Waspada", data.waspada || 0],
+      ["Kritis", data.kritis || 0],
+      ["Status per divisi", (data.statusPerDivisi || []).length],
+      ["Tahap data", "BERHASIL"]
+    ]);
+    SpreadsheetApp.flush();
+    const result = refreshDashboard();
+    sh.getRange("A10:B12").setValues([["refreshDashboard", result.success ? "OK" : "GAGAL"], ["Pesan", result.message || result.error || "Selesai"], ["Waktu", new Date()]]);
+    SpreadsheetApp.flush();
+    return result;
+  } catch (err) {
+    sh.getRange("A10:B12").setValues([["refreshDashboard", "ERROR"], ["Pesan", String(err && err.message || err)], ["Stack", String(err && err.stack || "") .substring(0, 500)]]);
+    SpreadsheetApp.flush();
+    return { success: false, error: String(err && err.message || err) };
+  }
+}
+
+function refreshAllData(options) {
+  options = options || {};
+  const maintenance = maintenanceCleanup(false);
+  // Trigger 15-menit dipertahankan, tetapi tidak lagi rebuild dashboard/divisi.
+  // PWA membaca data stok langsung melalui API sehingga refresh sheet penuh tidak diperlukan.
+  return { success: true, maintenance: maintenance, skippedHeavyRebuild: true, dirty: isDataDirty_() };
 }
 
 function clearDashboardCharts_(sheet) {
-  if (!sheet) {
-    console.error("Dashboard tidak ditemukan; penghapusan grafik dilewati.");
-    return { success: false, removed: 0, failed: 0 };
+  try {
+    const charts = sheet.getCharts();
+    charts.forEach(function(chart) { sheet.removeChart(chart); });
+  } catch (err) {
+    console.error("Chart lama tidak dapat dihapus: " + err.message);
   }
-
-  var charts = sheet.getCharts();
-  var removed = 0;
-  var failed = 0;
-
-  charts.forEach(function(chart, index) {
-    try {
-      sheet.removeChart(chart);
-      removed++;
-    } catch (err) {
-      failed++;
-      console.error("Grafik lama ke-" + (index + 1) +
-        " gagal dihapus: " + String(err && err.message || err));
-    }
-  });
-
-  console.log("Pembersihan grafik Dashboard: " +
-    JSON.stringify({ removed: removed, failed: failed }));
-  return { success: failed === 0, removed: removed, failed: failed };
 }
 
 /**
  * Grafik batang mendatar (horizontal bar) status stok per divisi.
  * Data sumber: statusPerDivisi dari getDashboardData().
  */
-function refreshDashboard(force) {
-  // LEGACY FULL REBUILD DISABLED:
-  // Versi lama menghapus seluruh chart lalu breakApart/clearContent A1:N30.
-  // Ini berisiko menimpa kartu/Top 10/aktivitas yang dikelola layout lain.
-  // Dashboard hanya boleh diperbarui oleh writer yang memiliki rentang terkunci.
-  return {
-    success: true,
-    skippedHeavyRebuild: true,
-    reason: "Legacy full-dashboard rebuild dinonaktifkan untuk mencegah bentrok layout. Bagian PO menggunakan refreshDashboardPOSection_ mulai row 46.",
-    protectedRows: "28:45",
-    poStartRow: PO_SECTION_CURRENT_ROW,
-    lastUpdate: getLastUpdateTimestamp(),
-    dirty: isDataDirty_()
-  };
+function renderDivisionBarChart_(sheet, dataStartRow, data) {
+  const col = 16;
+  if (sheet.getMaxColumns() < col + 5) sheet.insertColumnsAfter(sheet.getMaxColumns(), col + 5 - sheet.getMaxColumns());
+  const header = [["DIVISI", "AMAN", "WASPADA", "KRITIS"]];
+  const rows = (data.statusPerDivisi || []).map(function(d) {
+    return [d.divisi, Number(d.aman) || 0, Number(d.waspada) || 0, Number(d.kritis) || 0];
+  });
+  if (!rows.length) rows.push(["-", 0, 0, 0]);
+  const block = header.concat(rows);
+  sheet.getRange(dataStartRow, col, block.length, 4).setValues(block);
+  try { sheet.hideColumns(col, 4); } catch (e) {}
+  removeChartByTitle_(sheet, "Status Stok per Divisi");
+  const chart = sheet.newChart()
+    .setChartType(Charts.ChartType.BAR)
+    .addRange(sheet.getRange(dataStartRow, col, block.length, 4))
+    .setOption("title", "Status Stok per Divisi")
+    .setOption("legend", { position: "bottom" })
+    .setOption("isStacked", true)
+    .setOption("colors", ["#2E7D32", "#F9A825", "#C62828"])
+    .setOption("width", 520)
+    .setOption("height", 280)
+    .setOption("hAxis", { title: "Jumlah Item", minValue: 0 })
+    .setOption("vAxis", { title: "Divisi" })
+    .setPosition(11, 8, 0, 0)
+    .build();
+  sheet.insertChart(chart);
+  return { rows: rows.length, chartTitle: "Status Stok per Divisi" };
 }
+
+function refreshDashboard(force) {
+  // Dashboard sheet adalah tampilan sekunder. Jangan rebuild setiap transaksi/onEdit.
+  // force=true hanya untuk admin/manual refresh.
+  if (force !== true) {
+    return { success: true, skippedHeavyRebuild: true, reason: "Dashboard rebuild dinonaktifkan pada jalur otomatis.", lastUpdate: getLastUpdateTimestamp(), dirty: isDataDirty_() };
+  }
+  const lock = LockService.getDocumentLock();
+  if (!lock.tryLock(15000)) return { success: false, error: "Dashboard sedang diperbarui proses lain." };
+  try {
+    const ss = getSS();
+    let sh = ss.getSheetByName("Dashboard");
+    if (!sh) sh = ss.insertSheet("Dashboard", 0);
+    const data = getDashboardData();
+    if (!data.success) return data;
+    if (sh.getMaxRows() < 55) sh.insertRowsAfter(sh.getMaxRows(), 55 - sh.getMaxRows());
+    if (sh.getMaxColumns() < 14) sh.insertColumnsAfter(sh.getMaxColumns(), 14 - sh.getMaxColumns());
+    // Force rebuild hanya atas permintaan admin. Ini bukan jalur transaksi/onEdit.
+    try { clearDashboardCharts_(sh); } catch (e) {}
+    sh.getRange(1, 1, Math.min(sh.getMaxRows(), 30), 14).breakApart();
+    sh.getRange(1, 1, Math.min(sh.getMaxRows(), 30), 14).clearContent();
+    sh.setFrozenRows(3);
+    sh.getRange("A1:N1").merge().setValue("DASHBOARD GUDANG NASGOR 69").setFontSize(20).setFontWeight("bold");
+    sh.getRange("A2:N2").merge().setValue("Pantauan Stok & Aktivitas — Real Time | Update: " + (data.lastUpdate || data.generatedAt));
+    sh.getRange("A4:N4").merge().setValue("RINGKASAN EKSEKUTIF").setFontWeight("bold");
+    const cards = [["TOTAL ITEM AKTIF", data.totalItemAktif, "item"], ["KRITIS", data.kritis, percent_(data.kritis, data.totalItemAktif) + "%"], ["WASPADA", data.waspada, percent_(data.waspada, data.totalItemAktif) + "%"], ["AMAN", data.aman, percent_(data.aman, data.totalItemAktif) + "%"]];
+    [["A6:C9"],["D6:F9"],["G6:I9"],["J6:L9"]].forEach(function(x, i) { const r = sh.getRange(x[0]); r.merge(); r.setValue(cards[i][0] + "\n\n" + cards[i][1] + " " + cards[i][2]).setFontSize(16).setFontWeight("bold").setHorizontalAlignment("center").setVerticalAlignment("middle"); });
+    sh.getRange("A11:F11").merge().setValue("1 GRAFIK STATUS PER DIVISI").setFontWeight("bold");
+    sh.getRange("A12:F12").setValues([["DIVISI", "TOTAL ITEM", "AMAN", "WASPADA", "KRITIS", "% KRITIS"]]).setFontWeight("bold");
+    const divRows = data.statusPerDivisi.map(function(d) { return [d.divisi, d.total, d.aman, d.waspada, d.kritis, percent_(d.kritis, d.total) / 100]; });
+    if (divRows.length) {
+      sh.getRange(13, 1, divRows.length, 6).setValues(divRows);
+      sh.getRange(13, 2, divRows.length, 4).setNumberFormat("#,##0").setHorizontalAlignment("center");
+      sh.getRange(13, 6, divRows.length, 1).setNumberFormat("0.0%").setHorizontalAlignment("center");
+    }
+    // Grafik batang mendatar (horizontal) status stok per divisi — AMAN / WASPADA / KRITIS.
+    let divisionChart = null;
+    try { divisionChart = renderDivisionBarChart_(sh, 13, data); } catch (chartDivErr) {
+      console.error("renderDivisionBarChart_ gagal: " + chartDivErr.message);
+      divisionChart = { error: String(chartDivErr.message || chartDivErr) };
+    }
+    // Section 2: grafik donat status PO minggu ini. Tidak memakai data dummy.
+    const poNow = getStatusPO();
+    sh.getRange("H11:N11").merge().setValue("2 GRAFIK DONAT STATUS PO MINGGU INI").setFontWeight("bold");
+    if (poNow && poNow.success) {
+      try {
+        renderPODonutChart_(sh, 12, "Status PO — Minggu Ini", poNow.summary || {}, "Status PO — Minggu Ini");
+      } catch (donutErr) {
+        console.error("renderPODonutChart_ gagal: " + donutErr.message);
+      }
+    }
+    // Section 3: volume transaksi minggu berjalan.
+    const vol = getVolumeSummaryThisWeek_();
+    sh.getRange("A22:N22").merge().setValue("3 VOLUME MINGGU INI — " + (vol.minggu || "-")).setFontWeight("bold");
+    sh.getRange("A23:H23").setValues([["BARANG MASUK", "BARANG KELUAR", "BARANG RUSAK", "TOTAL VOLUME", "", "", "", ""]]).setFontWeight("bold");
+    sh.getRange("A24:D24").setValues([[vol.masuk || 0, vol.keluar || 0, vol.rusak || 0, vol.total || 0]]).setNumberFormat("#,##0").setHorizontalAlignment("center");
+    let poSection = null;
+    try { poSection = refreshDashboardPOSection_({ renderCharts: false, force: true }); }
+    catch (poErr) { poSection = { success: false, error: String(poErr && poErr.message || poErr) }; }
+    updateLastUpdateTimestamp();
+    clearDataDirty_();
+    return {
+      success: true, sheet: "Dashboard", updatedAt: getLastUpdateTimestamp(),
+      poSection: poSection, divisionChart: divisionChart,
+      summary: { total: data.totalItemAktif, aman: data.aman, waspada: data.waspada, kritis: data.kritis }
+    };
+  } finally { if (lock.hasLock()) lock.releaseLock(); }
+}
+
 
 // ============================================================
 // 15. PO RECOMMENDATIONS [V6.2 formal format]
@@ -3770,28 +3375,22 @@ function installQueueTrigger() {
 // ============================================================
 // 18. onEdit TRIGGER [V6.0 + V6.2]
 // ============================================================
-function onEditRouter_(e) {
+function onEdit(e) {
   try {
     if (!e || !e.range) return;
     const sheetName = e.range.getSheet().getName();
-    const stockSheets = ["Stock CV", "Stock PT", "Stock Awal", "Stock Bahan Baku"];
-    // Manual edits to transaction journals also affect formula-derived Stock Akhir.
-    const transactionSheets = ["Barang masuk", "Barang keluar", "Barang Rusak"];
-    const stockImpacting = stockSheets.indexOf(sheetName) >= 0 || transactionSheets.indexOf(sheetName) >= 0;
-    const affected = stockImpacting || sheetName === "purchase order" || Object.keys(SHEET_CONFIG).indexOf(sheetName) >= 0;
+    const affected = ["Stock CV", "Stock PT", "Stock awal", "purchase order"].indexOf(sheetName) >= 0 || Object.keys(SHEET_CONFIG).indexOf(sheetName) >= 0;
     if (!affected) return;
+    // onEdit: invalidasi cache + dirty + stempel waktu. Sinkronisasi divisi real-time bila stok berubah.
     clearMasterCache();
     markDataDirty_(sheetName);
     updateLastUpdateTimestamp();
-    if (stockImpacting) {
-      // Formula Sisa Stok mengikuti perubahan sumber secara native.
-      // Flush dipertahankan sebelum refresh Dashboard; audit formula penuh tidak dijalankan
-      // pada setiap edit agar tidak membebani input manual.
-      try { SpreadsheetApp.flush(); } catch (flushErr) {
-        console.error("onEdit flush: " + flushErr.message);
-      }
+    if (sheetName === "Stock CV" || sheetName === "Stock PT" || sheetName === "Stock awal") {
+      try { syncDivisionStockLightweight_(); } catch (divErr) { console.error("onEdit sync divisi: " + divErr.message); }
     }
-    try { refreshDashboardDataLight693_(); } catch (dashErr) { console.error("Dashboard refresh ringan gagal: " + dashErr.message); }
+    if (sheetName === "Barang masuk" || sheetName === "purchase order") {
+      try { refreshDashboardPOSection_({ renderCharts: false, lightweight: true }); } catch (poErr) { console.error("Dashboard PO ringan gagal: " + poErr.message); }
+    }
   } catch (err) { console.error("onEdit ringan gagal: " + err.message); }
 }
 
@@ -3844,39 +3443,6 @@ function maintenanceCleanup(force) {
 // ============================================================
 // 19. SETUP ENVIRONMENT [V6.3 UNIFIED]
 // ============================================================
-function installManagedTriggers_(spreadsheet) {
-  var ss = spreadsheet || SpreadsheetApp.getActiveSpreadsheet();
-  if (!ss) throw new Error("Spreadsheet aktif tidak ditemukan.");
-
-  // Remove every known legacy/duplicate handler before installing the single approved set.
-  var managed = [
-    "sendDailyStockReport","weeklyPOAutomation","logDailySnapshot","processEmailQueue",
-    "sendWeeklyPOReport","refreshDashboard","refreshAllData","refreshDashboardDataLight693_",
-    "refreshStatusStockLight_","refreshDashboardFinal_","refreshDashboardOperationalV68_",
-    "refreshDashboardPODataOnly_","refreshWeeklyPODashboard","buildMasterExecutiveDashboardV69",
-    "onEdit","onEditRouter_"
-  ];
-  var removed = 0;
-  ScriptApp.getProjectTriggers().forEach(function(t) {
-    if (managed.indexOf(t.getHandlerFunction()) >= 0) {
-      ScriptApp.deleteTrigger(t); removed++;
-    }
-  });
-
-  ScriptApp.newTrigger("sendDailyStockReport").timeBased().everyDays(1).atHour(7).create();
-  ScriptApp.newTrigger("weeklyPOAutomation").timeBased().onWeekDay(ScriptApp.WeekDay.MONDAY).atHour(8).create();
-  ScriptApp.newTrigger("logDailySnapshot").timeBased().everyDays(1).atHour(23).create();
-  ScriptApp.newTrigger("refreshDashboardDataLight693_").timeBased().everyMinutes(10).create();
-  // Only one installable edit handler is used; there is no simple-trigger function named onEdit.
-  ScriptApp.newTrigger("onEditRouter_").forSpreadsheet(ss).onEdit().create();
-
-  return {
-    success:true, removedLegacyTriggers:removed,
-    handlers:["sendDailyStockReport","weeklyPOAutomation","logDailySnapshot","refreshDashboardDataLight693_","onEditRouter_"],
-    dashboardRefreshMinutes:10, queueWriteEnabled:false
-  };
-}
-
 function setupEnvironment() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   if (!ss) throw new Error("Jalankan dari dalam spreadsheet.");
@@ -3896,31 +3462,44 @@ function setupEnvironment() {
     console.log("API_SECRET sudah ada.");
   }
 
+  // Hapus trigger lama
+  ScriptApp.getProjectTriggers().forEach(t => {
+    const fn = t.getHandlerFunction();
+    if (["sendDailyStockReport","weeklyPOAutomation","logDailySnapshot","processEmailQueue","sendWeeklyPOReport","refreshDashboard","refreshAllData","onEdit"].indexOf(fn) >= 0) {
+      ScriptApp.deleteTrigger(t);
+    }
+  });
+
+  // Setup trigger baru
+  ScriptApp.newTrigger("sendDailyStockReport").timeBased().everyDays(1).atHour(7).create();
+  ScriptApp.newTrigger("weeklyPOAutomation").timeBased().onWeekDay(ScriptApp.WeekDay.MONDAY).atHour(8).create();
+  ScriptApp.newTrigger("logDailySnapshot").timeBased().everyDays(1).atHour(23).create();
+  // processEmailQueue sengaja tidak dijadwalkan; seluruh queue write fail-closed.
+  ScriptApp.newTrigger("refreshAllData").timeBased().everyMinutes(15).create();
+  // Installable onEdit trigger agar perubahan manual pada semua sumber stok
+  // dapat menjalankan sinkronisasi yang membutuhkan otorisasi SpreadsheetApp.
+  ScriptApp.newTrigger("onEdit").forSpreadsheet(ss).onEdit().create();
+
   _cachedSS = null;
   _resolvedSpreadsheetId = null;
   updateLastUpdateTimestamp();
+  // Setup tidak lagi memaksa rebuild Dashboard/Data Stok Per Divisi.
+  // Format awal tetap tersedia melalui maintenance/refresh manual.
   try { maintenanceCleanup(true); } catch (maintenanceErr) { console.error("Maintenance awal gagal: " + maintenanceErr.message); }
-
-  // Dashboard layout migration is deliberately NOT run from setup.
-  // It has separate layout approval and must never clear charts or reposition PO blocks implicitly.
-  var triggerSetup = installManagedTriggers_(ss);
-  try { refreshDashboardDataLight693_(); } catch (dashboardRefreshErr) { console.error("Refresh Dashboard ringan gagal: " + dashboardRefreshErr.message); }
 
   const activeMonth = getActiveMonth();
   console.log("=== setupEnvironment BACKEND GudangAI-69 " + BACKEND_VERSION + " SELESAI ===");
   console.log("Spreadsheet: " + ss.getName());
   console.log("Bulan aktif: " + activeMonth.nama + " " + activeMonth.tahun);
-  console.log("Trigger terpasang: " + triggerSetup.handlers.join(", "));
+  console.log("Trigger: sendDailyStockReport(07:00), weeklyPOAutomation(Senin 08:00), logDailySnapshot(23:00), queue write disabled, refreshAllData(15min)");
   try {
     const masterNow = getAllStock("ALL");
     console.log("Total master data aktual: " + (masterNow && masterNow.count != null ? masterNow.count : 0));
   } catch (countErr) { console.log("Total master data aktual: gagal dibaca — " + countErr.message); }
 
-  return {
-    success:true, spreadsheetId:ss.getId(), spreadsheetName:ss.getName(), activeMonth:activeMonth,
-    title:APP_TITLE, configSheet:CONFIG_SHEET_NAME, triggerSetup:triggerSetup,
-    message:"Backend GudangAI-69 siap. Dashboard layout tidak diubah; hanya satu dashboard refresh trigger 10 menit dipasang."
-  };
+  return { success: true, spreadsheetId: ss.getId(), spreadsheetName: ss.getName(), activeMonth: activeMonth,
+           title: APP_TITLE, configSheet: CONFIG_SHEET_NAME,
+           message: "Backend V6.5 optimized siap. Trigger dipertahankan; jalur transaksi/onEdit tidak lagi rebuild struktur Dashboard/Data Stok Per Divisi." };
 }
 
 function generateRandomSecret() {
@@ -4173,17 +3752,6 @@ function getStatusPO() {
     ? po.getRange(PO_DATA_START_ROW, PO_DATA_START_COL, last - PO_DATA_START_ROW + 1, PO_DATA_NUM_COLS).getDisplayValues()
     : [];
   const allStockForPO_ = getAllStock("ALL").items || [];
-  // Index nama sekali agar lookup kandidat PO O(master + PO), bukan filter master untuk setiap item.
-  const stockByNameCV = Object.create(null);
-  const stockByNamePT = Object.create(null);
-  allStockForPO_.forEach(function(item) {
-    const key = normalizePONameKey_(item.nama);
-    if (!key) return;
-    const target = item.entitas === "CV" ? stockByNameCV : (item.entitas === "PT" ? stockByNamePT : null);
-    if (!target) return;
-    if (!target[key]) target[key] = [];
-    target[key].push(item);
-  });
 
   // Peta kedatangan:
   // 1) Primer: "No : {noPO}[ ITEM : nn ]" di keterangan Barang masuk (paling akurat).
@@ -4242,9 +3810,8 @@ function getStatusPO() {
     if (status === 'SELESAI') { itemSelesai++; totalKonfirmasi++; }
     else if (status === 'SEBAGIAN') { itemSebagian++; totalAktif++; }
     else { itemMenunggu++; totalAktif++; }
-    const nameKey = normalizePONameKey_(nama);
-    const cvCandidates = stockByNameCV[nameKey] || [];
-    const ptCandidates = stockByNamePT[nameKey] || [];
+    const cvCandidates = allStockForPO_.filter(function(it) { return it.entitas === "CV" && normalizePONameKey_(it.nama) === normalizePONameKey_(nama); });
+    const ptCandidates = allStockForPO_.filter(function(it) { return it.entitas === "PT" && normalizePONameKey_(it.nama) === normalizePONameKey_(nama); });
     items.push({
       no: no, nama: nama, totalPO: total, poCV: poCV, poPT: poPT, kodeCV: cvCandidates.length === 1 ? cvCandidates[0].kode : null, kodePT: ptCandidates.length === 1 ? ptCandidates[0].kode : null,
       qtyDatang: datang, qtyBelumDatang: belumDatang, status: status,
@@ -4269,18 +3836,11 @@ function getStatusPO() {
 }
 
 function dashboardClearPOArea_(sheet, startRow, endRow) {
-  // SAFETY BOUNDARY: PO dashboard is allowed only in A46:M99.
-  // Refuse any caller that attempts to clear rows 1–45 or extend beyond row 99.
-  const start = Number(startRow);
-  const requestedEnd = Number(endRow);
-  if (!Number.isInteger(start) || !Number.isInteger(requestedEnd) ||
-      start !== PO_SECTION_CURRENT_ROW || requestedEnd < start) {
-    throw new Error("PO dashboard clear ditolak: rentang harus dimulai tepat pada row 46.");
-  }
-  const safeEnd = Math.min(99, requestedEnd);
-  if (safeEnd < start) return;
-  if (sheet.getMaxRows() < safeEnd) sheet.insertRowsAfter(sheet.getMaxRows(), safeEnd - sheet.getMaxRows());
-  sheet.getRange(start, 1, safeEnd - start + 1, 13).breakApart().clearContent();
+  const rows = Math.max(0, endRow - startRow + 1);
+  if (!rows) return;
+  const cols = 13;
+  if (sheet.getMaxRows() < endRow) sheet.insertRowsAfter(sheet.getMaxRows(), endRow - sheet.getMaxRows());
+  sheet.getRange(startRow, 1, rows, cols).breakApart().clearContent();
 }
 
 function renderPOStatusBlock_(sheet, topRow, title, subtitle, data, items, startCol) {
@@ -4309,6 +3869,19 @@ function renderPOStatusBlock_(sheet, topRow, title, subtitle, data, items, start
   return topRow + 4 + Math.max(1, rows.length) - 1;
 }
 
+function renderPODonutChart_(sheet, chartStartRow, title, summary, chartTitle) {
+  const col = 16;
+  if (sheet.getMaxColumns() < col + 2) sheet.insertColumnsAfter(sheet.getMaxColumns(), col + 2 - sheet.getMaxColumns());
+  const rows = [['STATUS PO', 'QTY'], ['SELESAI', Number(summary.itemSelesai || 0)], ['SEBAGIAN', Number(summary.itemSebagian || 0)], ['MENUNGGU', Number(summary.itemMenunggu || 0)]];
+  sheet.getRange(chartStartRow, col, rows.length, 2).setValues(rows);
+  try { sheet.hideColumns(col, 2); } catch (e) {}
+  removeChartByTitle_(sheet, chartTitle);
+  const chart = sheet.newChart().setChartType(Charts.ChartType.PIE).addRange(sheet.getRange(chartStartRow, col, 4, 2))
+    .setOption('title', title).setOption('pieHole', 0.55).setOption('legend', {position:'right'})
+    .setOption('width', 420).setOption('height', 240).setPosition(chartStartRow, 8, 0, 0).build();
+  sheet.insertChart(chart);
+}
+
 function refreshDashboardPOSection_(options) {
   options = options || { renderCharts: true };
   const ss = getSS();
@@ -4320,13 +3893,12 @@ function refreshDashboardPOSection_(options) {
   const currentTop = PO_SECTION_CURRENT_ROW;
   const currentCount = Math.min(PO_DASHBOARD_MAX_VISIBLE_ROWS, Math.max(1, (data.items || []).length));
   const currentEnd = currentTop + 4 + currentCount - 1;
-  // Keep the two weekly blocks isolated: current 46:65, previous 66:85.
-  const previousTop = currentTop + 20;
+  const previousTop = currentTop;
   const previousItems = previous.items || [];
   const previousCount = Math.min(PO_DASHBOARD_MAX_VISIBLE_ROWS, Math.max(1, previousItems.length));
   const previousEnd = previousTop + 4 + previousCount - 1;
-  // Clear only the reserved PO area; rows 1:45 and columns P:V remain untouched.
-  const clearEnd = previousTop + 20 - 1;
+  const chartStart = previousEnd + 3;
+  const clearEnd = Math.max(chartStart + 20, Math.min(sh.getMaxRows(), chartStart + 80));
   dashboardClearPOArea_(sh, currentTop, clearEnd);
 
   const currentSubtitle = 'Periode: ' + (data.tanggalPO || data.weekKey || '-') + ' • No PO: ' + (data.noPO || '-') + ' • Total Qty: ' + (data.summary.totalPOQty || 0) + ' • Datang: ' + (data.summary.totalKonfirmasiQty || 0) + ' • Belum Datang: ' + (data.summary.totalSisaQty || 0);
@@ -4340,7 +3912,7 @@ function refreshDashboardPOSection_(options) {
   sh.setColumnWidth(7, 24);
   sh.getRange(currentTop, 1, Math.max(1, previousEnd - currentTop + 1), 13).setVerticalAlignment('middle');
   return { success: true, status: 'OK', sectionCurrent: 4, sectionPrevious: 5, noPO: data.noPO,
-    currentCount: (data.items || []).length, previousCount: previousItems.length, chartStartRow: currentEnd + 2,
+    currentCount: (data.items || []).length, previousCount: previousItems.length, chartStartRow: chartStart,
     chartsRendered: options.renderCharts !== false, updatedAt: new Date().toISOString() };
 }
 
@@ -4382,129 +3954,4 @@ function noteConnectionFailure_() {
 
 function noteConnectionSuccess_() {
   try { PropertiesService.getScriptProperties().deleteProperty("GUDANGAI_CIRCUIT_STATE"); } catch(e) {}
-}
-
-/*
- * One-time Dashboard migration.
- * It is intentionally not called by onEdit, weeklyPOAutomation, or the
- * lightweight refresh trigger. This prevents an old trigger from rebuilding
- * the sheet and overwriting the approved layout.
- */
-function setupCleanDashboardLayoutOnce() {
-  return {
-    success:false, skipped:true, readOnly:true,
-    reason:"Migrasi layout lama dinonaktifkan karena masih memuat tiga chart dan rentang yang belum direkonsiliasi dengan layout Dashboard yang disetujui."
-  };
-}
-
-/* DASHBOARD FINAL 6.9.3 — Opsi B: formatting stabil + refresh data ringan */
-var DASH693 = {
-  head:'#0e7490', sub:'#155e75', alt:'#f0f9ff', white:'#ffffff',
-  border:'#bae6fd', critical:'#fee2e2', warning:'#fef9c3', safe:'#dcfce7',
-  text:'#0f172a'
-};
-
-/**
- * Format konsisten tanpa menghapus isi tabel dan tanpa menyentuh baris 28–45.
- * Tabel Opsi B memakai area A4:G14, I4:N19, A24:F36, H24:L30.
- */
-function formatDashboardLayout693_() {
-  return {
-    success:false, skipped:true, readOnly:true,
-    reason:"Writer layout lama dinonaktifkan agar tidak menghapus chart atau menulis ulang area Dashboard sebelum layout final direkonsiliasi."
-  };
-}
-
-/**
- * Refresh ringan: perbarui data PO mingguan yang sudah punya renderer aman.
- * Tidak menjalankan setup layout, tidak menghapus chart, dan tidak menulis ke sheet purchase order.
- */
-function writeDashboardData693_(d) {
-  var s=getSS().getSheetByName('Dashboard'); if(!s||!d||!d.success)return {success:false,error:'Dashboard/data tidak valid'};
-  var k=(d.top10Kritis||[]).slice(0,10).map(function(x,i){return [i+1,x.kode||'',x.nama||'',x.divisi||'',+x.sisa||0,+x.aman||0,+x.kurang||0]});
-  while(k.length<10)k.push(['','','','','','','']);
-  s.getRange('A5:G5').setValues([['NO','KODE','NAMA BARANG','DIVISI','STOK AKHIR','STOK AMAN','KEKURANGAN']]);s.getRange('A6:G15').setValues(k);
-  s.getRange('I5:J5').setValues([['INDIKATOR','JUMLAH']]);s.getRange('I6:J10').setValues([['Total Item',+(d.totalItemAktif||d.totalItem)||0],['Total Sisa Stok',+d.totalStok||0],['Stok Aman',+d.aman||0],['Stok Waspada',+d.waspada||0],['Stok Kritis',+d.kritis||0]]);
-  var t=d.trend7Hari||{labels:[],values:[]},tr=[];for(var i=0;i<7;i++)tr.push([t.labels[i]||'',t.values[i]==null?'':+t.values[i]||0,'','','','']);
-  s.getRange('I12:J12').setValues([['TANGGAL','TOTAL ITEM']]);s.getRange('I13:J19').setValues(tr.map(function(r){return [r[0],r[1]]}));
-  var v=(d.statusPerDivisi||[]).slice(0,2).map(function(x){var n=+x.total||0,q=+x.kritis||0;return [x.divisi||'',n,+x.aman||0,+x.waspada||0,q,n?Math.round(q/n*1000)/10:0]});while(v.length<2)v.push(['','','','','','']);
-  s.getRange('A25:F25').setValues([['DIVISI','TOTAL ITEM','AMAN','WASPADA','KRITIS','% KRITIS']]);s.getRange('A26:F27').setValues(v);
-  var a=d.aktivitasHariIni||{};s.getRange('H25:I25').setValues([['AKTIVITAS HARI INI','JUMLAH']]);s.getRange('H26:I30').setValues([['Barang Masuk',+a.masuk||0],['Barang Keluar',+a.keluar||0],['Barang Rusak',+a.rusak||0],['Total Aktivitas',+a.total||0],['Update Terakhir',d.lastUpdate||'N/A']]);
-  var dv=(d.statusPerDivisi||[]).map(function(x){return [x.divisi||'',+x.aman||0,+x.waspada||0,+x.kritis||0]});if(!dv.length)dv=[['Tidak ada data',0,0,0]];
-  s.getRange(1,16,Math.max(1,dv.length)+1,4).clearContent();s.getRange(1,16,1,4).setValues([['DIVISI','AMAN','WASPADA','KRITIS']]);s.getRange(2,16,dv.length,4).setValues(dv);
-  s.getRange('U1:V4').setValues([['STATUS','JUMLAH'],['AMAN',+d.aman||0],['WASPADA',+d.waspada||0],['KRITIS',+d.kritis||0]]);
-  var ct=[['TANGGAL','TOTAL ITEM']],tt=d.trend7Hari||{labels:[],values:[]};for(var q=0;q<7;q++)ct.push([tt.labels[q]||'',tt.values[q]==null?'':+tt.values[q]||0]);s.getRange('X1:Y8').setValues(ct);
-  var ac=d.aktivitasHariIni||{};s.getRange('AA1:AB4').setValues([['AKTIVITAS','QTY'],['MASUK',+ac.masuk||0],['KELUAR',+ac.keluar||0],['RUSAK',+ac.rusak||0]]);
-  var ps=getStatusPO(),p=ps&&ps.summary||{};s.getRange('AD1:AE4').setValues([['STATUS PO','ITEM'],['SELESAI',+p.itemSelesai||0],['SEBAGIAN',+p.itemSebagian||0],['MENUNGGU',+p.itemMenunggu||0]]);try{s.hideColumns(16,16)}catch(e){}
-  s.getRange('A2').setValue('Pantauan Stok & Aktivitas — Real Time | Update terakhir: '+Utilities.formatDate(new Date(),TIMEZONE,'yyyy-MM-dd HH:mm:ss'));
-  return {success:true,totalItem:d.totalItemAktif||d.totalItem};
-}
-
-function refreshDashboardDataLight693_() {
-  var l=LockService.getScriptLock();if(!l.tryLock(5000))return {success:false,skipped:true,reason:'Dashboard refresh sedang berjalan'};
-  try{var d=getDashboardData();if(!d||!d.success)return {success:false,error:(d&&d.error)||'Gagal membaca dashboard'};
-    var w=writeDashboardData693_(d);if(!w.success)return w;
-    var p=refreshDashboardPOSection_({renderCharts:false,lightweight:true});if(!p||!p.success)return p||{success:false,error:'Refresh PO gagal'};
-    return {success:true,version:'6.9.4-DASHBOARD-REPAIR',mode:'LIGHT_DATA_REFRESH',totalItem:d.totalItemAktif||d.totalItem,po:p.status||'OK',updatedAt:new Date().toISOString()};
-  }finally{l.releaseLock();}
-}
-function ensureSingleDashboardRefreshTrigger_() {
-  var legacy = [
-    "refreshDashboardDataLight693_","refreshStatusStockLight_","refreshDashboardFinal_",
-    "refreshDashboardOperationalV68_","refreshDashboardPODataOnly_","refreshWeeklyPODashboard"
-  ];
-  var removed = 0;
-  ScriptApp.getProjectTriggers().forEach(function(t) {
-    if (legacy.indexOf(t.getHandlerFunction()) >= 0) {
-      ScriptApp.deleteTrigger(t); removed++;
-    }
-  });
-  ScriptApp.newTrigger("refreshDashboardDataLight693_").timeBased().everyMinutes(10).create();
-  return {success:true, handler:"refreshDashboardDataLight693_", intervalMinutes:10, removedLegacy:removed};
-}
-
-function installDashboardLightTrigger693_() {
-  var trigger = ensureSingleDashboardRefreshTrigger_();
-  var initialRefresh = refreshDashboardDataLight693_();
-  return {success:true, version:"V7-MANAGED-TRIGGER", trigger:trigger, initialRefresh:initialRefresh};
-}
-// ============================================================
-// V6.6.5+ LIGHT STATUS STOCK + DASHBOARD CARDS
-// ============================================================
-
-var LIGHT_DASH_STATUS_START = 3;
-var LIGHT_DASH_KRITIS_START = 8;
-var LIGHT_DASH_AKTIVITAS_START = 21;
-
-function writeDashboardStatusCardsLight_() {
-  return {
-    success:false, skipped:true, readOnly:true,
-    reason:"Writer kartu Dashboard lama dinonaktifkan; satu-satunya writer data Dashboard adalah refreshDashboardDataLight693_."
-  };
-}
-
-function refreshStatusStockLight_() {
-  // Compatibility alias: delegate to the single managed Dashboard writer.
-  return refreshDashboardDataLight693_();
-}
-
-function installStatusStockLightTrigger_() {
-  // Compatibility alias: never install a second scheduled Dashboard writer.
-  return installDashboardLightTrigger693_();
-}
-
-function testRefreshStatusStockLight_() {
-  var res = refreshStatusStockLight_();
-  Logger.log(JSON.stringify(res, null, 2));
-  return res;
-}
-/**
- * Bersihkan sisa STATUS PO lama (baris 39–45)
- * Jalankan SEKALI saja: pilih fungsi ini → Run
- */
-function cleanDashboardPORows39to45() {
-  return {
-    success:false, skipped:true, readOnly:true,
-    reason:"Pembersihan baris Dashboard 39:45 dinonaktifkan sampai pemilik layout mengonfirmasi area tersebut."
-  };
 }
