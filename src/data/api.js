@@ -579,8 +579,7 @@ async function submitItems(action, entity, items, tanggal, options = {}) {
         totalQueued += queueItems.length;
       }
       continue;
-    } catch (err) {
-      const msg = String(err?.message || 'Gagal menulis batch');
+    } catch {
       // A browser timeout does not prove that the server failed. Read back this chunk
       // by its stable transaction IDs, queue only unresolved IDs, then continue with
       // the next chunk instead of treating already-written rows as failed.
