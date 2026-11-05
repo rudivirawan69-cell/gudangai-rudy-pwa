@@ -4,6 +4,24 @@ import { spawn } from 'node:child_process';
 import { chromium } from 'playwright';
 
 const HOST = 'http://127.0.0.1:4173';
+
+function hexRgb(value) {
+  const match = String(value).trim().match(/^#([0-9a-f]{6})$/i);
+  assert.ok(match, `Expected a six-digit hex color token, received: ${value}`);
+  const hex = match[1];
+  return [0, 2, 4].map((offset) => parseInt(hex.slice(offset, offset + 2), 16) / 255);
+}
+
+function relativeLuminance(rgb) {
+  const linear = rgb.map((channel) => channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4);
+  return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2];
+}
+
+function contrastRatio(foreground, background) {
+  const values = [relativeLuminance(hexRgb(foreground)), relativeLuminance(hexRgb(background))].sort((a, b) => b - a);
+  return (values[0] + 0.05) / (values[1] + 0.05);
+}
+
 const items = [
   { kode: 'CV-0001', nama: 'Ayam Fillet Dada', entitas: 'CV', entity: 'CV', stok: 25, stockAkhir: 25, stockAman: 20, satuan: 'Pack', divisi: 'CS' },
   { kode: 'PT-0001', nama: 'Bebek', entitas: 'PT', entity: 'PT', stok: 8, stockAkhir: 8, stockAman: 15, satuan: 'Pack', divisi: 'PRODUKSI' },
@@ -243,6 +261,8 @@ try {
         }));
         assert.equal(safeTheme.id, theme, `Wrong theme on ${label}: ${JSON.stringify(safeTheme)}`);
         assert.ok(safeTheme.bg && safeTheme.fg, `Missing color tokens on ${label} in ${theme}`);
+        const ratio = contrastRatio(safeTheme.fg, safeTheme.bg);
+        assert.ok(ratio >= 4.5, `Text contrast below WCAG AA on ${label} in ${theme}: ${ratio.toFixed(2)}:1`);
         await page.screenshot({
           path: `${screenshotRoot}/${theme}-${slug}-${viewport.label}.png`,
           fullPage: true,
