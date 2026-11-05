@@ -1096,8 +1096,9 @@ function addTransaction(body) {
         if (kekurangan > 0) {
           shortageMode = true;
           finalQty = 0;
-          const structured = "Input pending " + numericQty + " > sisa stock " + sisa + " > kurang " + kekurangan;
-          keterangan = appendTransactionNoteWithinLimit_(keterangan, structured);
+  // Keep the operational hold note short and readable in the transaction column.
+  const structured = "HOLD kurang " + kekurangan + " (order " + numericQty + ", stok " + sisa + ")";
+  keterangan = appendTransactionNoteWithinLimit_(keterangan, structured);
           flags.push("STOCK_KURANG", "STOCK_KURANG_HOLD", "QTY_HOLD_0");
           try {
             MailApp.sendEmail(ADMIN_EMAIL, "[GudangAI][STOCK KURANG] " + kode + " " + (stockInfo.nama || ""),
@@ -2365,10 +2366,13 @@ function writeAuditLogSecure(action, status, details, errorMsg, txId) {
       styleOperationalHeader_(logSheet, 6, "SYSTEM LOG — GUDANGAI 69", "Audit transaksi • status write • detail teknis • arsip otomatis", ["Timestamp", "TransactionID", "Aksi/Action", "Status", "Rincian/Details", "Pesan Error"]);
     }
     const detailStr = redactSensitiveString_((typeof details === "object") ? JSON.stringify(details) : String(details || ""));
-    logSheet.getRange(Math.max(OPS_DATA_START_ROW, logSheet.getLastRow() + 1), 1, 1, 6).setValues([[
+    const row = Math.max(OPS_DATA_START_ROW, logSheet.getLastRow() + 1);
+    logSheet.getRange(row, 1, 1, 6).setValues([[
       Utilities.formatDate(new Date(), TIMEZONE, "yyyy-MM-dd HH:mm:ss"),
-      shortId_(txId), action, status, detailStr.substring(0, 900), String(errorMsg || "").substring(0, 700)
+      shortId_(txId), String(action || "").substring(0, 80), String(status || "").substring(0, 40),
+      detailStr.substring(0, 420), String(errorMsg || "").substring(0, 260)
     ]]);
+    logSheet.getRange(row, 1, 1, 6).setVerticalAlignment("top").setWrap(true);
     // Formatting hanya dilakukan saat setup/maintenance, bukan setiap transaksi.
     maybeArchiveAuditLog();
   } catch (logErr) {

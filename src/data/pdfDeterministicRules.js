@@ -59,6 +59,13 @@ export function resolvePdfNameDeterministic(entity, rawName, masterList) {
   }
 
   // --- Specific rules (CV vs PT codes differ) ---
+  // Iga sapi is a finished item in the PT/WK catalog, not BBPT bahan baku.
+  // Keep this rule before generic contains/fuzzy matching so PDF imports always
+  // resolve to the operational code WK-0004.
+  if (/\biga\s*(?:sapi|sapy|sap[il1])\b/.test(norm) || /\bsapi\s+iga\b/.test(norm)) {
+    const hit = pick('WK-0004', 'det-iga-sapi');
+    if (hit) return hit;
+  }
   // Keep the two fillet variants explicit so OCR/PDF noise cannot swap them.
   // Accept spaced, glued, mixed-case, and reversed word order from PDF/OCR.
   // Observed live PDF lines: "Ayam Fillet dada", "Ayam Fillet Paha".

@@ -376,14 +376,18 @@ async function submitBatchChunk(action, entity, chunkItems, tanggal) {
     return { ...r, clientItemId, success: ok };
   }) : [];
 
-  // Backend V6.6.5 dapat mengembalikan success/written tanpa array results.
-  // Dalam kondisi ini, hanya anggap sukses jika backend menyatakan seluruh batch tertulis.
-  if (!results.length && data?.success === true &&
-      (data?.successCount == null || Number(data.successCount) >= normalized.length)) {
-    for (const it of normalized) results.push({ clientItemId: it.clientItemId, success: true });
-  } else if (!results.length && data?.written === true &&
-      (data?.writtenCount == null || Number(data.writtenCount) >= normalized.length)) {
-    for (const it of normalized) results.push({ clientItemId: it.clientItemId, success: true });
+  // Backend dapat mengembalikan hanya counter tanpa array results. Bentuk ulang
+  // hasil parsial agar item yang sudah benar-benar ditulis tidak masuk antrean.
+  if (!results.length) {
+    const reportedSuccess = Math.max(0, Math.min(normalized.length, Number(
+      data?.successCount ?? data?.writtenCount ?? data?.data?.successCount ?? data?.data?.writtenCount ??
+      ((data?.success === true || data?.written === true) ? normalized.length : 0)
+    ) || 0));
+    if (reportedSuccess > 0) {
+      for (let index = 0; index < normalized.length; index += 1) {
+        results.push({ clientItemId: normalized[index].clientItemId, success: index < reportedSuccess });
+      }
+    }
   }
   if (!results.length) {
     const detail = [data?.code, data?.status, data?.error, data?.message].filter(Boolean).join(' · ');
