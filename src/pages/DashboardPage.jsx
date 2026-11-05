@@ -1221,7 +1221,7 @@ export default function DashboardPage({ onNavigate }) {
         userName={name}
       />
 
-      <HomeAgentAssistant />
+      <HomeAgentAssistant onNavigate={onNavigate} />
 
       {confirmMsg && (
         <p className="rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-[11px] font-semibold text-emerald-700">{confirmMsg}</p>
