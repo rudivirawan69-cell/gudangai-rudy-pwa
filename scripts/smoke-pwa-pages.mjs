@@ -31,6 +31,8 @@ try {
   await waitForServer();
   const page = await browser.newPage({ viewport: { width: 390, height: 844 }, serviceWorkers: 'block' });
   const pageErrors = [];
+  let mainFrameNavigations = 0;
+  page.on('framenavigated', (frame) => { if (frame === page.mainFrame()) mainFrameNavigations += 1; });
   page.on('pageerror', (error) => pageErrors.push(error.message));
 
   await page.addInitScript(({ inputDraft, poDraft }) => {
@@ -208,9 +210,10 @@ try {
     { width: 390, height: 844, label: 'mobile' },
     { width: 1366, height: 768, label: 'desktop' },
   ];
+  await page.locator('nav.nav-bar button').filter({ hasText: 'Atur' }).first().click();
   const themeButtons = page.locator('.theme-picker-btn');
   assert.equal(await themeButtons.count(), 3, 'Settings must expose exactly three theme controls.');
-  const loadCountBeforeToggle = await page.evaluate(() => performance.getEntriesByType('navigation').length);
+  const navigationCountBeforeToggle = mainFrameNavigations;
   for (let i = 0; i < 10; i += 1) {
     const index = i % 3;
     await page.locator('nav.nav-bar button').filter({ hasText: 'Atur' }).first().click();
@@ -220,7 +223,7 @@ try {
     assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), expected,
       `Theme toggle ${i + 1} did not apply ${expected}.`);
   }
-  assert.equal(await page.evaluate(() => performance.getEntriesByType('navigation').length), loadCountBeforeToggle,
+  assert.equal(mainFrameNavigations, navigationCountBeforeToggle,
     'Theme switching caused a document navigation/reload.');
 
   for (const theme of ['soft_light', 'deep_ocean', 'graphite_titanium']) {
