@@ -305,3 +305,20 @@ html[data-theme] .home-agent-form button:disabled{opacity:.4;cursor:not-allowed}
 html[data-theme] .home-agent-footnote{padding:0 .85rem .8rem;color:var(--text-muted);font-size:.64rem;line-height:1.45}
 @keyframes homeAgentIn{from{opacity:0;transform:translateY(-5px)}to{opacity:1;transform:translateY(0)}}
 @media(prefers-reduced-motion:reduce){html[data-theme] .home-agent-panel{animation:none}}
+
+
+/* Agent panel compact pass — keep the answer area visually dominant. */
+html[data-theme] .home-agent-card{padding:.72rem .82rem;gap:.7rem}
+html[data-theme] .home-agent-icon{width:2.8rem;height:2.8rem;border-radius:.9rem}
+html[data-theme] .home-agent-title{font-size:.92rem}
+html[data-theme] .home-agent-copy{font-size:.68rem;line-height:1.3;margin-top:.12rem}
+html[data-theme] .home-agent-action{padding:.55rem .72rem;font-size:.68rem}
+html[data-theme] .home-agent-panel{margin-top:.5rem;border-radius:1rem}
+html[data-theme] .home-agent-panel-head{padding:.55rem .75rem;font-size:.68rem}
+html[data-theme] .home-agent-thread{max-height:min(58vh,520px);min-height:112px;padding:.7rem;gap:.55rem}
+html[data-theme] .home-agent-empty{min-height:104px;gap:.3rem;font-size:.7rem}
+html[data-theme] .home-agent-empty strong{font-size:.82rem}
+html[data-theme] .home-agent-message{font-size:.84rem;line-height:1.5;padding:.72rem .82rem}
+html[data-theme] .home-agent-form{padding:.6rem;gap:.45rem}
+html[data-theme] .home-agent-form textarea{min-height:44px;font-size:.78rem;padding:.58rem .68rem}
+html[data-theme] .home-agent-form button{width:2.5rem;height:2.5rem}
