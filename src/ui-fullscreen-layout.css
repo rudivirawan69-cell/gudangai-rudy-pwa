@@ -1,0 +1,30 @@
+/* GudangAI RUDY — edge-to-edge PWA shell.
+   Layout-only overrides. Does not alter API, auth, data, transaction or Worker behavior. */
+html, body, #root { width:100%; min-width:0; max-width:100%; }
+html, body { min-height:100%; }
+#root { min-height:100dvh; }
+.app-shell { width:100%; max-width:none !important; min-height:100dvh !important; overflow-x:clip; }
+.app-top-header { width:100%; padding-left:0 !important; padding-right:0 !important; padding-top:0 !important; }
+.app-header-card {
+  width:100% !important; max-width:none !important; margin-left:0 !important; margin-right:0 !important;
+  border-radius:0 !important; border-left:0 !important; border-right:0 !important; border-top:0 !important;
+}
+.page-content {
+  width:100% !important; max-width:none !important; margin-left:0 !important; margin-right:0 !important;
+  min-height:0 !important; box-sizing:border-box;
+}
+.nav-bar {
+  left:0 !important; right:0 !important; bottom:0 !important; top:auto !important;
+  width:100% !important; max-width:none !important; border-radius:0 !important;
+  border-left:0 !important; border-right:0 !important;
+}
+.nav-bar > div {
+  width:100% !important; max-width:none !important; margin-left:0 !important; margin-right:0 !important;
+  flex-direction:row !important;
+}
+@media (min-width:768px) {
+  .nav-bar { overflow:visible !important; }
+  .nav-bar > div { flex-direction:row !important; }
+  .nav-btn { min-height:var(--nav-height,67px) !important; }
+}
+@supports (height:100dvh) { .app-shell { min-height:100dvh !important; } }
