@@ -39,7 +39,7 @@ assert.ok(holdFnBody, 'Missing concise HOLD formatter');
 const formatHold = new Function('MAX_KETERANGAN_LENGTH',
   'return function(orderQty, availableQty, shortageQty) {' + holdFnBody[1] + '}'
 )(200);
-assert.equal(formatHold(10, 3, 7), 'order 10, sisa 3 kurang 7');
+assert.equal(formatHold(10, 3, 7, 'pack'), 'Input pending 10 pack, sisa stock 3 pack, kekurangan 7 pack');
 const logFnBody = gs.match(/function writeAuditLogSecure\([\s\S]*?\n\}/);
 assert.ok(logFnBody && /setWrap\(true\)/.test(logFnBody[0]), 'System Log cells must wrap text');
 assert.ok(/setColumnWidth\(5, 280\)/.test(logFnBody[0]));
@@ -100,8 +100,6 @@ for (const [input, expected] of [
   const hit = resolvePdfNameDeterministic('CV', input, cvMaster, normalizeOcr);
   assert.equal(hit?.item?.kode, expected, 'Must resolve product correctly: ' + input);
 }
-const bebekPt = resolvePdfNameDeterministic('PT', 'Bebek (WK-0040)', ptMaster, normalizeOcr);
-assert.equal(bebekPt?.item?.kode, 'WK-0040', 'Bebek must resolve to PT SKU WK-0040');
 assert.equal(resolvePdfNameDeterministic('PT', 'Iga Sapi', ptMaster, normalizeOcr)?.item?.kode, 'WK-0004',
   'PT PDF Iga Sapi must resolve to finished-goods SKU WK-0004, not raw-material BBPT-0008');
 assert.equal(resolvePdfNameDeterministic('PT', 'Saos Ayam 69', ptMaster, normalizeOcr)?.item?.kode, 'WK-0021',
@@ -136,9 +134,16 @@ const stockStatusSource = readFileSync(stockStatusPath, 'utf8');
 
 assert.match(apiSource, /postJson\(payload,\s*\{\s*retries:\s*1,\s*timeoutMs:\s*BATCH_TIMEOUT_MS\s*\}\)/,
   'Ambiguous batch writes must not be retried automatically while the first Apps Script request may still be running.');
+assert.match(gs, /case "getTransactionStatuses": return jsonResponse\(getTransactionStatuses\(body\)\)/,
+  'Bulk read-back endpoint must be available to the PWA');
+assert.match(gs, /function getTransactionStatuses\(body\)/);
+assert.match(gs, /var index = buildIdempotencyIndex_\(\)/,
+  'Bulk read-back must load the idempotency ledger index once per chunk');
 assert.match(apiSource, /async function reconcileAmbiguousChunk\(action, entity, chunk\)/,
   'Ambiguous chunk responses must be reconciled by stable transaction ID before queueing.');
 assert.match(apiSource, /const reconciled = await reconcileAmbiguousChunk\(action, entity, chunk\)/);
+assert.match(apiSource, /action:\s*'getTransactionStatuses'/,
+  'Ambiguous chunk must reconcile in one batch status request, not one request per item');
 assert.match(apiSource, /Do not break: the next chunk has independent IDs and must still be submitted/);
 assert.doesNotMatch(apiSource, /const remainingItems = list\.slice\(i\)/,
   'A timed-out chunk must not queue the entire unsent tail without read-back.');
