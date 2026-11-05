@@ -567,10 +567,6 @@ async function submitItems(action, entity, items, tanggal, options = {}) {
       const fc = batchRes.failCount || 0;
       totalSuccess += sc; totalFail += fc;
       if (batchRes.results) allResults.push(...batchRes.results);
-      emitProgress(Math.min(i + chunk.length, originalList.length), originalList.length, {
-        successCount: totalSuccess, queuedCount: totalQueued,
-        failCount: Math.max(0, totalFail - totalQueued),
-      });
       const resultById = new Map((batchRes.results || []).map((result) => [String(result?.clientItemId || ''), result]));
       const queueItems = chunk.filter((item) => {
         const result = resultById.get(String(item.clientItemId || ''));
@@ -585,6 +581,10 @@ async function submitItems(action, entity, items, tanggal, options = {}) {
         if (!options.fromQueue) enqueue(action, entity, queueItems, { tanggal });
         totalQueued += queueItems.length;
       }
+      emitProgress(Math.min(i + chunk.length, originalList.length), originalList.length, {
+        successCount: totalSuccess, queuedCount: totalQueued,
+        failCount: Math.max(0, totalFail - totalQueued),
+      });
       continue;
     } catch {
       // A browser timeout does not prove that the server failed. Read back this chunk
