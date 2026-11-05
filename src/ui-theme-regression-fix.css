@@ -1,0 +1,204 @@
+/* GudangAI RUDY — final theme regression layer.
+   Presentation only: one active palette per html[data-theme].
+   Imported last from css-theme-imports.css so it resolves legacy cascade conflicts. */
+
+html[data-theme="soft_light"] {
+  color-scheme: light;
+  --bg-app: #f1f6fa;
+  --bg-app-grad: linear-gradient(180deg, #f8fbfd 0%, #edf4f8 55%, #e5eef5 100%);
+  --bg-overlay: radial-gradient(ellipse 82% 34% at 50% 0%, rgba(36,123,168,.075), transparent 72%);
+  --bg-elevated: #ffffff;
+  --bg-muted: #e7eff5;
+  --field-bg: #f8fbfd;
+  --text-main: #203448;
+  --text-muted: #607487;
+  --text-on-accent: #ffffff;
+  --border: #dce7ef;
+  --accent: #247ba8;
+  --accent-strong: #195f87;
+  --accent-soft: rgba(36,123,168,.12);
+  --brand-teal: #247ba8;
+  --brand-teal-dark: #195f87;
+  --brand-teal-soft: #e8f3f9;
+  --brand-orange: #d69a48;
+  --nav-bg: rgba(255,255,255,.96);
+  --modal-backdrop: rgba(17,35,49,.42);
+  --modal-surface: #ffffff;
+  --shadow-1: 0 5px 18px rgba(28,61,83,.07);
+  --shadow-2: 0 10px 26px rgba(28,61,83,.11);
+  --shadow-press: inset 0 2px 7px rgba(28,61,83,.10);
+  --shadow-nav: 0 -5px 20px rgba(28,61,83,.07);
+  --focus-ring: 0 0 0 3px rgba(36,123,168,.25);
+}
+
+html[data-theme="deep_ocean"] {
+  color-scheme: dark;
+  --bg-app: #101b2d;
+  --bg-app-grad: linear-gradient(165deg,#0c1626 0%,#14243a 52%,#192d43 100%);
+  --bg-overlay: radial-gradient(ellipse 82% 34% at 50% 0%, rgba(53,185,176,.10), transparent 72%);
+  --bg-elevated: #17283d;
+  --bg-muted: #20364d;
+  --field-bg: #102238;
+  --text-main: #f1f5f9;
+  --text-muted: #b7c7d8;
+  --text-on-accent: #071521;
+  --border: rgba(153,178,202,.22);
+  --accent: #35b9b0;
+  --accent-strong: #239b98;
+  --accent-soft: rgba(53,185,176,.16);
+  --brand-teal: #35b9b0;
+  --brand-teal-dark: #197f83;
+  --brand-teal-soft: rgba(53,185,176,.16);
+  --brand-orange: #f4bd55;
+  --nav-bg: rgba(18,35,54,.97);
+  --modal-backdrop: rgba(1,8,16,.68);
+  --modal-surface: #17283d;
+  --shadow-1: 0 7px 22px rgba(0,0,0,.20);
+  --shadow-2: 0 12px 30px rgba(0,0,0,.28);
+  --shadow-press: inset 0 2px 8px rgba(0,0,0,.28);
+  --shadow-nav: 0 -6px 22px rgba(0,0,0,.24);
+  --focus-ring: 0 0 0 3px rgba(53,185,176,.35);
+}
+
+html[data-theme="graphite_titanium"] {
+  color-scheme: dark;
+  --bg-app: #171a20;
+  --bg-app-grad: linear-gradient(165deg,#14171c 0%,#202630 58%,#292f38 100%);
+  --bg-overlay: radial-gradient(ellipse 82% 34% at 50% 0%, rgba(214,154,72,.085), transparent 72%);
+  --bg-elevated: #252b34;
+  --bg-muted: #303844;
+  --field-bg: #1c222b;
+  --text-main: #f1f3f5;
+  --text-muted: #b4bdc8;
+  --text-on-accent: #171a20;
+  --border: rgba(183,193,205,.22);
+  --accent: #d69a48;
+  --accent-strong: #b77a2e;
+  --accent-soft: rgba(214,154,72,.17);
+  --brand-teal: #d69a48;
+  --brand-teal-dark: #a96f2b;
+  --brand-teal-soft: rgba(214,154,72,.16);
+  --brand-orange: #e3a94f;
+  --nav-bg: rgba(31,36,44,.98);
+  --modal-backdrop: rgba(5,7,10,.72);
+  --modal-surface: #252b34;
+  --shadow-1: 0 7px 22px rgba(0,0,0,.24);
+  --shadow-2: 0 12px 30px rgba(0,0,0,.32);
+  --shadow-press: inset 0 2px 8px rgba(0,0,0,.32);
+  --shadow-nav: 0 -6px 22px rgba(0,0,0,.28);
+  --focus-ring: 0 0 0 3px rgba(214,154,72,.35);
+}
+
+/* One palette drives the app canvas and its decorative pseudo-element. */
+html[data-theme] body,
+html[data-theme] #root,
+html[data-theme] .app-shell {
+  background-color: var(--bg-app) !important;
+  color: var(--text-main) !important;
+  color-scheme: inherit;
+}
+html[data-theme] .app-bg {
+  background-color: var(--bg-app) !important;
+  background-image: var(--bg-app-grad) !important;
+}
+html[data-theme] .app-bg::after {
+  background: var(--bg-overlay) !important;
+  opacity: 1;
+}
+
+/* Shared surfaces: no light card or white veil leaking into dark modes. */
+html[data-theme] .app-content :is(
+  .card,.surface,.section-card,.section-card-header,.stat-tile,.stock-card,
+  .dashboard-panel,.dashboard-total-card,.dashboard-po-card,.dashboard-header-card,
+  .menu-group,.menu-row,.page-header,.po-hub-card,.po-item-card,
+  .stock-metric-surface,.division-status-card,.po-shortcut,.more-sheet,.more-row
+) {
+  background-color: var(--bg-elevated) !important;
+  border-color: var(--border) !important;
+  color: var(--text-main) !important;
+  box-shadow: var(--shadow-1) !important;
+}
+html[data-theme] .app-content .menu-row:hover,
+html[data-theme] .app-content .more-row:hover {
+  background-color: var(--bg-muted) !important;
+}
+html[data-theme] .app-content :is(.page-title,.metric-value,.section-label,.page-kicker) {
+  color: var(--text-main) !important;
+}
+html[data-theme] .app-content .page-subtitle,
+html[data-theme] .app-content :is(.text-slate-900,.text-slate-800,.text-slate-700) {
+  color: var(--text-main) !important;
+}
+html[data-theme] .app-content :is(.text-slate-600,.text-slate-500,.text-slate-400) {
+  color: var(--text-muted) !important;
+}
+html[data-theme] .app-content :is(input,select,textarea,.form-control) {
+  background-color: var(--field-bg) !important;
+  border-color: var(--border) !important;
+  color: var(--text-main) !important;
+}
+html[data-theme] .app-content :is(input,textarea,select)::placeholder {
+  color: var(--text-muted) !important;
+  opacity: .78;
+}
+html[data-theme] .app-content :is(.chip-btn,.more-row) {
+  color: var(--text-main);
+}
+html[data-theme] .nav-bar {
+  background: var(--nav-bg) !important;
+  border-color: var(--border) !important;
+  box-shadow: var(--shadow-nav) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(1.08);
+  backdrop-filter: blur(16px) saturate(1.08);
+}
+html[data-theme] .nav-btn { color: var(--text-muted) !important; }
+html[data-theme] .nav-btn.is-active { color: var(--accent) !important; }
+html[data-theme] .nav-btn.is-active .nav-icon-wrap {
+  background: var(--accent-soft) !important;
+  box-shadow: none !important;
+}
+html[data-theme] .nav-fab {
+  background: linear-gradient(145deg,var(--brand-teal),var(--brand-teal-dark)) !important;
+  border-color: var(--bg-elevated) !important;
+}
+html[data-theme] .app-header {
+  background: linear-gradient(135deg,var(--brand-teal-dark),var(--brand-teal)) !important;
+}
+html[data-theme] .app-header,
+html[data-theme] .app-header :is(h1,h2,h3,p,span,svg) {
+  color: #ffffff;
+}
+html[data-theme] .more-sheet-backdrop {
+  background: var(--modal-backdrop) !important;
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+}
+html[data-theme] .more-sheet { background: var(--modal-surface) !important; }
+html[data-theme] .page-on-dark :is(.page-title,h1,h2) { text-shadow: none !important; }
+
+/* Theme changes animate only paint properties; tactile transforms stay component-owned. */
+html[data-theme] .app-shell,
+html[data-theme] .app-bg,
+html[data-theme] .app-content :is(
+  .card,.surface,.section-card,.section-card-header,.stat-tile,.stock-card,
+  .dashboard-panel,.dashboard-total-card,.dashboard-po-card,.menu-group,
+  .menu-row,.page-header,.nav-bar,.more-sheet,.more-row,input,select,textarea
+) {
+  transition:
+    background-color .22s ease,
+    color .22s ease,
+    border-color .22s ease,
+    box-shadow .22s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html[data-theme] .app-shell,
+  html[data-theme] .app-bg,
+  html[data-theme] .app-content :is(
+    .card,.surface,.section-card,.section-card-header,.stat-tile,.stock-card,
+    .dashboard-panel,.dashboard-total-card,.dashboard-po-card,.menu-group,
+    .menu-row,.page-header,.nav-bar,.more-sheet,.more-row,input,select,textarea
+  ) {
+    transition: none !important;
+  }
+}
