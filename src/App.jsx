@@ -125,8 +125,8 @@ function AppHeader({ user, tab, onOpenSettings, online, status }) {
   const connected = online && status !== 'offline' && status !== 'error';
 
   return (
-    <header className="app-top-header sticky top-0 z-50 px-3 pt-2 pb-2 bg-transparent">
-      <div className="app-header-card max-w-lg mx-auto rounded-2xl border px-3 py-2.5 backdrop-blur-md shadow-sm">
+    <header className="app-top-header sticky top-0 z-50 px-0 pt-0 pb-2 bg-transparent">
+      <div className="app-header-card w-full max-w-none mx-0 rounded-none border px-3 py-2.5 backdrop-blur-md shadow-sm">
         <div className="flex items-center gap-2.5 min-w-0">
           <button
             type="button"
@@ -280,7 +280,7 @@ function AppShell() {
           Pasang Aplikasi
         </button>
       )}
-      <main className="page-content app-content max-w-lg mx-auto min-h-screen px-3 pb-28 pt-1">
+      <main className="page-content app-content w-full max-w-none mx-0 min-h-0 px-3 pb-28 pt-1">
         <div key={pageKey} className="animate-page-in">
           <ErrorBoundary>
             <Suspense fallback={<div className="flex justify-center py-20"><Loader2 className="w-7 h-7 text-cyan-400 animate-spin" /></div>}>
@@ -290,7 +290,7 @@ function AppShell() {
         </div>
       </main>
       <nav className="nav-bar nav-bar-6 fixed bottom-0 left-0 right-0 safe-bottom z-40">
-        <div className="max-w-lg mx-auto flex relative" style={{ '--nav-index': navIndex, '--nav-count': TABS.length }}>
+        <div className="w-full max-w-none mx-0 flex relative" style={{ '--nav-index': navIndex, '--nav-count': TABS.length }}>
           {TABS.map((t) => {
             const Icon = t.icon;
             const isActive = tab === t.id;
