@@ -1,9 +1,10 @@
-import { useState, useEffect, Component, lazy, Suspense } from 'react';
+import { useState, useEffect, useRef, Component, lazy, Suspense } from 'react';
 import { SpeedInsights } from '@vercel/speed-insights/react';
 import { AuthProvider, useAuth, DEFAULT_PROFILE_PHOTO } from './hooks/useAuth';
 import { ThemeProvider } from './hooks/useTheme';
 import LoginPage from './pages/LoginPage';
 import { useConnection } from './hooks/useConnection';
+import { useSheetUpdate } from './hooks/useSheetUpdate';
 import { useBootstrap } from './hooks/useBootstrap';
 import {
   LayoutDashboard, Package, PackagePlus, Clock, Settings, ClipboardList,
@@ -19,6 +20,7 @@ const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 const SyncQueuePage = lazy(() => import('./pages/SyncQueuePage'));
 const AIAssistantPage = lazy(() => import('./pages/AIAssistantPage'));
 
+/* Warna dari token tema (html[data-theme]) dengan fallback terang → terbaca di semua mode */
 class ErrorBoundary extends Component {
   constructor(props) {
     super(props);
@@ -30,11 +32,17 @@ class ErrorBoundary extends Component {
   render() {
     if (this.state.hasError) {
       return (
-        <div className="min-h-screen flex items-center justify-center p-6 bg-slate-50">
-          <div className="max-w-sm w-full bg-white rounded-2xl border border-slate-200 p-5 space-y-3 shadow-sm">
-            <p className="font-bold text-slate-900">Halaman gagal dimuat</p>
-            <p className="text-xs text-slate-500">{this.state.message}</p>
-            <button type="button" onClick={() => window.location.reload()} className="w-full py-2.5 rounded-xl bg-[#0b2a55] text-white text-sm font-semibold">Muat ulang</button>
+        <div className="min-h-[60vh] flex items-center justify-center p-6">
+          <div className="max-w-sm w-full rounded-2xl border border-[var(--border,#e2e8f0)] bg-[var(--bg-elevated,#fff)] p-5 space-y-3 shadow-sm">
+            <p className="font-bold text-[var(--text-main,#0f172a)]">Halaman gagal dimuat</p>
+            <p className="text-xs text-[var(--text-muted,#475569)] break-words">{this.state.message}</p>
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              className="w-full py-2.5 rounded-xl bg-[#0e7490] text-white text-sm font-semibold"
+            >
+              Muat ulang
+            </button>
           </div>
         </div>
       );
@@ -78,21 +86,21 @@ function ConnBanner({ online, hasUrl, status, message, syncing }) {
   if (!hasUrl) return null;
   if (syncing || status === 'syncing') {
     return (
-      <div className="px-3 py-1.5 bg-cyan-600/90 text-white text-[11px] font-semibold flex items-center gap-2">
+      <div className="px-3 py-1.5 bg-cyan-700 text-white text-[11px] font-semibold flex items-center gap-2">
         <Loader2 className="w-3.5 h-3.5 animate-spin" /> Menyinkronkan...
       </div>
     );
   }
   if (!online || status === 'offline') {
     return (
-      <div className="px-3 py-1.5 bg-amber-500/95 text-white text-[11px] font-semibold flex items-center gap-2">
+      <div className="px-3 py-1.5 bg-amber-600 text-white text-[11px] font-semibold flex items-center gap-2">
         <WifiOff className="w-3.5 h-3.5" /> Offline — data antrian aman di perangkat
       </div>
     );
   }
   if (status === 'error') {
     return (
-      <div className="px-3 py-1.5 bg-rose-600/90 text-white text-[11px] font-semibold flex items-center gap-2">
+      <div className="px-3 py-1.5 bg-rose-700 text-white text-[11px] font-semibold flex items-center gap-2">
         <AlertTriangle className="w-3.5 h-3.5" /> {message || 'Backend tidak merespons'}
       </div>
     );
@@ -100,29 +108,20 @@ function ConnBanner({ online, hasUrl, status, message, syncing }) {
   return null;
 }
 
-function AppHeader({ user, tab, onOpenSettings, online, status }) {
-  const [liveTime, setLiveTime] = useState('—');
-  const tickClock = () => {
-    try {
-      const now = new Date();
-      const dateStr = now.toLocaleDateString('id-ID', {
-        day: '2-digit', month: 'short', year: 'numeric', timeZone: 'Asia/Jakarta',
-      });
-      const timeStr = now.toLocaleTimeString('id-ID', {
-        hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23', timeZone: 'Asia/Jakarta',
-      });
-      setLiveTime(`${dateStr}, ${timeStr} WIB`);
-    } catch (_) {
-      setLiveTime(new Date().toLocaleString('id-ID'));
-    }
-  };
-  useEffect(() => {
-    tickClock();
-    const id = setInterval(tickClock, 1000);
-    return () => clearInterval(id);
-  }, []);
+/**
+ * Header. "Update Sheet" menampilkan waktu update yang dilaporkan API spreadsheet
+ * (dikirim DashboardPage lewat event gudangai-sheet-updated), bukan jam perangkat.
+ */
+function AppHeader({ user, tab, onOpenSettings, online, status, sheetLabel, onRefresh }) {
+  const [refreshing, setRefreshing] = useState(false);
   const photo = (user?.photo && String(user.photo).length > 40) ? user.photo : DEFAULT_PROFILE_PHOTO;
   const connected = online && status !== 'offline' && status !== 'error';
+
+  const handleRefresh = async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    try { await onRefresh?.(); } finally { setRefreshing(false); }
+  };
 
   return (
     <header className="app-top-header sticky top-0 z-50 px-0 pt-0 pb-2 bg-transparent">
@@ -142,7 +141,7 @@ function AppHeader({ user, tab, onOpenSettings, online, status }) {
               onError={(e) => { e.currentTarget.src = DEFAULT_PROFILE_PHOTO; }}
             />
             <span
-              className={`absolute bottom-0.5 right-0.5 w-2.5 h-2.5 rounded-full border-2 border-white ${
+              className={`absolute bottom-0.5 right-0.5 w-2.5 h-2.5 rounded-full border-2 border-[var(--bg-elevated,#fff)] ${
                 connected ? 'bg-emerald-500' : 'bg-amber-400'
               }`}
             />
@@ -150,31 +149,39 @@ function AppHeader({ user, tab, onOpenSettings, online, status }) {
 
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 min-w-0">
-              <h1 className="text-[13px] font-black tracking-wide text-slate-900 dark:text-slate-100 uppercase truncate leading-none">
+              <h1 className="text-[13px] font-black tracking-wide text-[var(--text-main,#0f172a)] uppercase truncate leading-none">
                 GUDANG-69 RUDI
               </h1>
-              <span className={`shrink-0 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[9px] font-bold ${
-                connected
-                  ? 'bg-emerald-500/15 text-emerald-700'
-                  : 'bg-amber-500/15 text-amber-700'
-              }`}>
+              <span
+                className={`shrink-0 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[9px] font-bold ${
+                  connected
+                    ? 'bg-emerald-500/15 text-[color-mix(in_srgb,#047857_62%,var(--text-main,#0f172a))]'
+                    : 'bg-amber-500/15 text-[color-mix(in_srgb,#b45309_62%,var(--text-main,#0f172a))]'
+                }`}
+              >
                 <span className={`w-1.5 h-1.5 rounded-full ${connected ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
                 {connected ? 'Terhubung' : 'Cek koneksi'}
               </span>
             </div>
-            <p className="text-[9px] font-bold text-slate-500 tracking-wide mt-0.5 truncate">
+            <p className="text-[9px] font-bold text-[var(--text-muted,#475569)] tracking-wide mt-0.5 truncate">
               {TAB_SUBTITLE[tab] || 'STATUS UPDATE REAL TIME'}
             </p>
-            <div className="mt-1 flex flex-col gap-0.5 text-[10px] font-medium text-slate-600 dark:text-slate-300">
+            <div className="mt-1 flex flex-col gap-0.5 text-[10px] font-medium text-[var(--text-muted,#475569)]">
               <div className="flex items-center gap-1.5 min-w-0">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${sheetLabel ? 'bg-emerald-500' : 'bg-slate-400'}`} />
                 <span className="truncate">
-                  Update Sheet: <strong className="text-slate-800 dark:text-slate-100 font-bold">{liveTime}</strong>
+                  Update Sheet:{' '}
+                  <strong className="text-[var(--text-main,#0f172a)] font-bold">
+                    {sheetLabel || 'Belum ada data dari spreadsheet'}
+                  </strong>
                 </span>
               </div>
               <div className="flex items-center gap-1.5 min-w-0">
-                <Mail className="w-3 h-3 text-cyan-700 shrink-0" aria-hidden />
-                <a className="truncate hover:underline text-cyan-800 dark:text-cyan-300" href="mailto:rudivirawan69@gmail.com">
+                <Mail className="w-3 h-3 text-[color-mix(in_srgb,#0e7490_62%,var(--text-main,#0f172a))] shrink-0" aria-hidden />
+                <a
+                  className="truncate hover:underline text-[color-mix(in_srgb,#0e7490_62%,var(--text-main,#0f172a))]"
+                  href="mailto:rudivirawan69@gmail.com"
+                >
                   rudivirawan69@gmail.com
                 </a>
               </div>
@@ -183,12 +190,13 @@ function AppHeader({ user, tab, onOpenSettings, online, status }) {
 
           <button
             type="button"
-            onClick={tickClock}
-            className="shrink-0 w-9 h-9 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center active:scale-95"
-            aria-label="Refresh waktu"
-            title="Refresh"
+            onClick={handleRefresh}
+            disabled={refreshing}
+            className="shrink-0 w-9 h-9 rounded-xl bg-[var(--bg-muted,#f8fafc)] border border-[var(--border,#e2e8f0)] flex items-center justify-center active:scale-95 disabled:opacity-60"
+            aria-label="Cek koneksi ke spreadsheet"
+            title="Cek koneksi"
           >
-            <RefreshCw className="w-3.5 h-3.5 text-slate-600 dark:text-slate-300" />
+            <RefreshCw className={`w-3.5 h-3.5 text-[var(--text-muted,#475569)] ${refreshing ? 'animate-spin' : ''}`} />
           </button>
         </div>
       </div>
@@ -223,10 +231,18 @@ function AppShell() {
   const { user, loading } = useAuth();
   const [tab, setTab] = useState('dashboard');
   const [pageKey, setPageKey] = useState(0);
-  const { online, hasUrl, status, message, syncing } = useConnection({ pollMs: 90000 });
+  const tabRef = useRef('dashboard');
+  const { online, hasUrl, status, message, syncing, checkHealth } = useConnection({ pollMs: 90000 });
+  const sheetLabel = useSheetUpdate();
   useBootstrap();
 
+  // Pindah tab. Mengetuk tab yang sedang aktif hanya menggulir ke atas (tanpa memuat ulang halaman).
   const goTab = (id) => {
+    if (tabRef.current === id) {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+    tabRef.current = id;
     setTab(id);
     setPageKey((k) => k + 1);
   };
@@ -242,8 +258,8 @@ function AppShell() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#06101f]">
-        <Loader2 className="w-8 h-8 text-cyan-400 animate-spin" />
+      <div className="min-h-screen flex items-center justify-center bg-[var(--bg-muted,#eef3f8)]">
+        <Loader2 className="w-8 h-8 text-cyan-500 animate-spin" />
       </div>
     );
   }
@@ -262,10 +278,12 @@ function AppShell() {
     default: page = <DashboardPage onNavigate={goTab} />;
   }
 
-  const navIndex = Math.max(0, TABS.findIndex((t) => t.id === tab));
+  // Halaman Antrian ('sync') adalah turunan Atur → tab Atur tetap tampak aktif di navigasi.
+  const navTab = tab === 'sync' ? 'settings' : tab;
+  const navIndex = Math.max(0, TABS.findIndex((t) => t.id === navTab));
 
   return (
-    <div className="app-shell min-h-screen text-slate-100">
+    <div className="app-shell min-h-screen text-[var(--text-main,#10232b)]">
       <div className="app-bg" aria-hidden="true" />
       <ConnBanner online={online} hasUrl={hasUrl} status={status} message={message} syncing={syncing} />
       <AppHeader
@@ -274,31 +292,38 @@ function AppShell() {
         onOpenSettings={() => goTab('settings')}
         online={online}
         status={status}
+        sheetLabel={sheetLabel}
+        onRefresh={() => checkHealth({ quiet: false })}
       />
       {installPrompt && (
-        <button type="button" onClick={installApp} className="fixed top-3 right-3 z-[60] rounded-full bg-[#0f9f9a] px-4 py-2 text-xs font-extrabold text-white shadow-lg border border-white/30">
+        <button
+          type="button"
+          onClick={installApp}
+          className="fixed top-3 right-3 z-[60] rounded-full bg-[#0f9f9a] px-4 py-2 text-xs font-extrabold text-white shadow-lg border border-white/30"
+        >
           Pasang Aplikasi
         </button>
       )}
       <main className="page-content app-content w-full max-w-none mx-0 min-h-0 px-3 pb-28 pt-1">
         <div key={pageKey} className="animate-page-in">
           <ErrorBoundary>
-            <Suspense fallback={<div className="flex justify-center py-20"><Loader2 className="w-7 h-7 text-cyan-400 animate-spin" /></div>}>
+            <Suspense fallback={<div className="flex justify-center py-20"><Loader2 className="w-7 h-7 text-cyan-500 animate-spin" /></div>}>
               {page}
             </Suspense>
           </ErrorBoundary>
         </div>
       </main>
-      <nav className="nav-bar nav-bar-6 fixed bottom-0 left-0 right-0 safe-bottom z-40">
+      <nav className="nav-bar nav-bar-6 fixed bottom-0 left-0 right-0 safe-bottom z-40" aria-label="Navigasi utama">
         <div className="w-full max-w-none mx-0 flex relative" style={{ '--nav-index': navIndex, '--nav-count': TABS.length }}>
           {TABS.map((t) => {
             const Icon = t.icon;
-            const isActive = tab === t.id;
+            const isActive = navTab === t.id;
             return (
               <button
                 key={t.id}
                 type="button"
                 onClick={() => goTab(t.id)}
+                aria-current={isActive ? 'page' : undefined}
                 className={`nav-btn flex-1 flex flex-col items-center pt-2 pb-1.5 relative min-w-0 ${
                   isActive ? 'is-active' : 'is-inactive'
                 }`}
