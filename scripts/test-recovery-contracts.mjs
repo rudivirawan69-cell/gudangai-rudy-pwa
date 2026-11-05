@@ -173,6 +173,8 @@ assert.match(gs, /case "getTransactionStatuses": return jsonResponse\(getTransac
 assert.match(gs, /function getTransactionStatuses\(body\)/);
 assert.match(gs, /const index = buildIdempotencyIndex_\(\)/,
   'Bulk read-back must load the idempotency ledger index once per chunk');
+assert.match(gs, /writeIdempotencyRecordsByRow_\(pendingLedgerUpdates, index\)/,
+  'Bulk read-back must persist APPLIED confirmations in grouped row writes');
 assert.match(apiSource, /async function reconcileAmbiguousChunk\(action, chunk\)/,
   'Ambiguous chunk responses must be reconciled by stable transaction ID before queueing.');
 assert.match(apiSource, /const reconciled = await reconcileAmbiguousChunk\(action, chunk\)/);
