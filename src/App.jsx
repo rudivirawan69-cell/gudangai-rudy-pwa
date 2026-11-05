@@ -68,7 +68,7 @@ const TAB_SUBTITLE = {
   stok: 'MONITORING STOK RAK',
   input: 'PENERIMAAN & PENGELUARAN',
   po: 'PURCHASE ORDER SYSTEM',
-  ai: 'GUDANGAI INTELLIGENCE · CLAUDE',
+  ai: 'AGENT RUBEE INTELLIGENCE · WORKER AI',
   riwayat: 'LOG AUDIT TRANSAKSI',
   settings: 'PENGATURAN SYSTEM',
   sync: 'ANTRIAN SINKRONISASI',
@@ -255,7 +255,7 @@ function AppShell() {
     case 'stok': page = <StokPage />; break;
     case 'input': page = <InputPage />; break;
     case 'po': page = <POPage onNavigate={goTab} />; break;
-    case 'ai': page = <AIAssistantPage />; break;
+    case 'ai': page = <AIAssistantPage onNavigate={goTab} />; break;
     case 'riwayat': page = <RiwayatPage onNavigate={goTab} />; break;
     case 'settings': page = <SettingsPage onNavigate={goTab} />; break;
     case 'sync': page = <SyncQueuePage onBack={() => goTab('settings')} />; break;
