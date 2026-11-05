@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "node scripts/assemble-api.mjs && node scripts/write-icons.mjs && node scripts/write-sw-version.mjs && vite build && node -e \"require('node:fs').rmSync('dist/_redirects',{force:true})\"",
     "lint": "oxlint src",
+    "test": "vitest run",
     "test:agent": "node --test scripts/test-agent-worker.mjs",
     "preview": "vite preview",
     "write-icons": "node scripts/write-icons.mjs",
@@ -23,11 +24,15 @@
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",
+    "@testing-library/jest-dom": "^6.8.0",
+    "@testing-library/react": "^16.3.0",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
     "@vitejs/plugin-react": "^6.1.0",
+    "jsdom": "^26.1.0",
     "oxlint": "^1.79.0",
     "tailwindcss": "^4.3.3",
-    "vite": "^8.2.2"
+    "vite": "^8.2.2",
+    "vitest": "^3.2.4"
   }
 }
