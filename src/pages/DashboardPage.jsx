@@ -1213,17 +1213,6 @@ export default function DashboardPage({ onNavigate }) {
       : hour >= 15 && hour < 18 ? 'Selamat sore' : 'Selamat malam';
   const name = user?.name || user?.nama || 'Rudi';
 
-  // Reminder mengikuti kondisi aktual Beranda, bukan pengingat waktu yang statis.
-  const waitingPO = Number(poData?.summary?.itemMenunggu || 0);
-  const reminder = pending > 0
-    ? `${pending} item menunggu sinkronisasi. Periksa antrean sebelum melanjutkan transaksi.`
-    : stats.kritis > 0
-      ? `${stats.kritis} item berstatus kritis. Prioritaskan pemeriksaan stok.`
-      : waitingPO > 0
-        ? `${waitingPO} item PO belum datang. Periksa jadwal dan konfirmasi kedatangan.`
-        : stats.waspada > 0
-          ? `${stats.waspada} item perlu dipantau. Periksa kebutuhan pengadaan.`
-          : 'Pantau pergerakan stok, status PO, dan catatan tugas operasional.';
   const spreadsheetTimestamp =
     dashboardData?.lastUpdate ?? dashboardData?.lastUpdatedAt ?? dashboardData?.lastUpdated ??
     dashboardData?.updatedAt ?? dashboardData?.updateTime ?? dashboardData?.waktuUpdate ??
