@@ -7,6 +7,7 @@ import {
 import { DIVISIONS } from '../data/master';
 import { classifyStockLevel } from '../data/stockStatus';
 import OperatorTasks from '../components/OperatorTasks';
+import HomeAgentAssistant from '../components/HomeAgentAssistant';
 import {
   AlertTriangle, RefreshCw, FileText, Package, Users, Boxes, ShieldAlert, CheckCircle2, AlertCircle, X,
   CalendarDays, CalendarClock, ClipboardCheck, FilePlus2, Mail, Clock3, Layers3, ArrowUpRight,
@@ -1235,15 +1236,7 @@ export default function DashboardPage({ onNavigate }) {
 
       <OperatorTasks />
 
-      <button type="button" className="home-agent-card" onClick={() => onNavigate?.('ai')}
-        aria-label="Buka Claude Ops Assistant">
-        <span className="home-agent-icon"><Bot className="h-6 w-6" /></span>
-        <span className="min-w-0 flex-1 text-left">
-          <span className="home-agent-title">Claude Ops Assistant <Sparkles className="inline h-4 w-4 ml-1" /></span>
-          <span className="home-agent-copy">Baca konteks operasional dan bantu analisis tanpa mengubah master data.</span>
-        </span>
-        <span className="home-agent-action">Tanya <ArrowUpRight className="h-4 w-4" /></span>
-      </button>
+      <HomeAgentAssistant />
 
       {stats.kritis > 0 && (
         <section className="home-critical-banner" aria-live="polite">
