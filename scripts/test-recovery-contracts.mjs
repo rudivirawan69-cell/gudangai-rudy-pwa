@@ -37,7 +37,7 @@ assert.match(gs, /keterangan = formatStockShortageNote_\(numericQty, sisa, kekur
 const holdFnBody = gs.match(/function formatStockShortageNote_\(orderQty, availableQty, shortageQty\)\s*\{([\s\S]*?)\n\}/);
 assert.ok(holdFnBody, 'Missing concise HOLD formatter');
 const formatHold = new Function('MAX_KETERANGAN_LENGTH',
-  'return function(orderQty, availableQty, shortageQty) {' + holdFnBody[1] + '}'
+  'return function(orderQty, availableQty, shortageQty, unit) {' + holdFnBody[1] + '}'
 )(200);
 assert.equal(formatHold(10, 3, 7, 'pack'), 'Input pending 10 pack, sisa stock 3 pack, kekurangan 7 pack');
 const logFnBody = gs.match(/function writeAuditLogSecure\([\s\S]*?\n\}/);
@@ -170,6 +170,7 @@ const useStockPath = new URL('../src/hooks/useStock.js', import.meta.url);
 const useStockSource = readFileSync(useStockPath, 'utf8');
 assert.match(useStockSource, /gudangai-stock-refresh/);
 assert.match(useStockSource, /fetchStock\(entity, \{ force \}\)/);
+assert.match(useStockSource, /refresh\(\{ force: false \}\)/, 'Initial stock view should reuse a recent shared cache snapshot');
 assert.match(inputPage, /gudangai-stock-refresh/);
 assert.match(queueSource, /gudangai-stock-refresh/);
 assert.match(apiSource, /serverExecMs: measuredServerChunks \? totalServerExecMs : null/);
