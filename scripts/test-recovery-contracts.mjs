@@ -190,6 +190,8 @@ assert.match(apiSource, /\['UNKNOWN', 'IN_PROGRESS', 'PENDING', 'WRITE_PENDING'\
 assert.match(apiSource, /STOCK_CACHE_TTL_MS = 10000/);
 assert.match(apiSource, /getAllStock', \{ entitas: 'ALL' \}/);
 assert.match(apiSource, /_stockCache\.promise/);
+assert.match(apiSource, /_stockCache\.key === cacheKey && _stockCache\.promise === pending/,
+  'A stale response must not overwrite a cache for a different API URL/secret');
 assert.match(apiSource, /import \{ classifyStockLevel \} from '\.\/stockStatus'/);
 assert.match(stockStatusSource, /stock < 10/);
 assert.match(stockStatusSource, /stock < 20/);
