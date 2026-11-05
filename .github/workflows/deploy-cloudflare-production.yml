@@ -18,8 +18,6 @@ jobs:
     name: Build and deploy production Worker
     runs-on: ubuntu-24.04
     timeout-minutes: 20
-    environment: production
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -64,5 +62,5 @@ jobs:
       - name: Report deployed commit
         run: |
           echo "Cloudflare production deployment requested for commit ${GITHUB_SHA}"
-          echo "Worker: claude-proxy"
-          echo "URL: https://claude-proxy.rudivirawan69.workers.dev/"
+          echo "Worker: gudangai-rudy"
+          echo "URL: https://gudangai-rudy.rudivirawan69.workers.dev/"
