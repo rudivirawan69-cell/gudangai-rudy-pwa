@@ -51,6 +51,14 @@ try {
     },
   });
 
+  await page.route('https://gudangai-rudy.rudivirawan69.workers.dev/api/agent/health', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ success: true, primaryConfigured: true, model: 'CI Mock Workers AI' }),
+    });
+  });
+
   await page.route('**/mock-api**', async (route) => {
     const request = route.request();
     const url = new URL(request.url());
@@ -83,9 +91,10 @@ try {
 
   const tabs = [
     ['Beranda', 'Status per Divisi'],
-    ['Stok', 'TOTAL ITEM'],
+    ['Stok', 'Data Stok'],
     ['Input', 'Draft transaksi dipulihkan'],
     ['PO', 'Draft PO dipulihkan'],
+    ['AI', 'Agent Rubee Intelligence'],
     ['Riwayat', 'Transaksi'],
     ['Atur', 'Mode Tampilan'],
   ];
@@ -98,15 +107,32 @@ try {
     { width: 1366, height: 768 },
   ];
   const assertNoHorizontalOverflow = async (label, viewport) => {
-    const dimensions = await page.evaluate(() => ({
-      viewport: document.documentElement.clientWidth,
-      document: document.documentElement.scrollWidth,
-      body: document.body.scrollWidth,
-    }));
+    const dimensions = await page.evaluate(() => {
+      const rect = (selector) => {
+        const element = document.querySelector(selector);
+        if (!element) return null;
+        const box = element.getBoundingClientRect();
+        return { left: box.left, right: box.right, width: box.width };
+      };
+      return {
+        viewport: document.documentElement.clientWidth,
+        document: document.documentElement.scrollWidth,
+        body: document.body.scrollWidth,
+        header: rect('.app-header-card'),
+        nav: rect('.nav-bar'),
+        navInner: rect('.nav-bar > div'),
+      };
+    });
     assert.ok(
       dimensions.document <= dimensions.viewport + 2 && dimensions.body <= dimensions.viewport + 2,
       `Horizontal overflow on ${label} at ${viewport.width}px: ${JSON.stringify(dimensions)}`
     );
+    for (const edge of ['header', 'nav', 'navInner']) {
+      assert.ok(
+        dimensions[edge] && dimensions[edge].left <= 1 && dimensions[edge].right >= dimensions.viewport - 1,
+        `Full-screen ${edge} is not edge-to-edge on ${label} at ${viewport.width}px: ${JSON.stringify(dimensions)}`
+      );
+    }
   };
 
   // Every primary page is opened at every target viewport.
@@ -131,6 +157,18 @@ try {
     await assertNoHorizontalOverflow('Antrian Sinkronisasi', viewport);
   }
 
+
+  // Verify the restored Data Stock page keeps CV/PT selection and division expansion.
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.locator('nav.nav-bar button').filter({ hasText: 'Stok' }).first().click();
+  await page.getByText('Data Stok', { exact: false }).first().waitFor({ state: 'visible', timeout: 10000 });
+  await page.getByRole('button', { name: 'CV', exact: true }).waitFor({ state: 'visible' });
+  await page.getByRole('button', { name: 'PT', exact: true }).click();
+  await page.getByRole('button').filter({ hasText: 'PRODUKSI' }).first().click();
+  await page.getByText('Bebek', { exact: true }).waitFor({ state: 'visible', timeout: 10000 });
+  await page.getByRole('button', { name: 'CV', exact: true }).click();
+  await page.getByRole('button').filter({ hasText: 'CS' }).first().click();
+  await page.getByText('Ayam Fillet Dada', { exact: true }).waitFor({ state: 'visible', timeout: 10000 });
 
   // Verify all three supported themes on the three requested primary pages.
   for (const theme of ['soft_light', 'deep_ocean', 'graphite_titanium']) {
@@ -164,7 +202,7 @@ try {
   await page.getByText('Draft transaksi dipulihkan', { exact: false }).waitFor({ state: 'visible' });
 
   assert.deepEqual(pageErrors, [], 'Uncaught browser errors were detected during page smoke tests.');
-  console.log('PASS: all six navigation pages + sync queue + Input draft recovery + five viewport widths.');
+  console.log('PASS: all seven navigation pages + sync queue + Data Stock CV/PT/division behavior + full-screen edges + Input draft recovery + five viewport widths + three themes.');
 } finally {
   await browser.close();
   server.kill('SIGTERM');
