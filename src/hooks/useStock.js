@@ -52,7 +52,8 @@ export function useStock(entity) {
     lastOk.current = [];
     setItems([]);
     setLoading(true);
-    refresh({ force: true });
+    // Reuse a recent shared ALL-entity snapshot when available; forced refresh remains for explicit user refresh/online events.
+    refresh({ force: false });
   }, [entity, refresh]);
 
   useEffect(() => {
