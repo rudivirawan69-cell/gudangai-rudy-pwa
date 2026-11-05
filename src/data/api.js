@@ -453,7 +453,7 @@ function emitProgress(sent, total, chunkResult) {
     }));
   } catch (_) {}
 }
-async function reconcileAmbiguousChunk(action, entity, chunk) {
+async function reconcileAmbiguousChunk(action, chunk) {
   const SHEET_MAP = { barangMasuk: 'Barang masuk', barangKeluar: 'Barang keluar', barangRusak: 'Barang Rusak' };
   const sheet = SHEET_MAP[action] || action;
   const identities = (chunk || []).map((item) => {
@@ -583,7 +583,7 @@ async function submitItems(action, entity, items, tanggal, options = {}) {
       // A browser timeout does not prove that the server failed. Read back this chunk
       // by its stable transaction IDs, queue only unresolved IDs, then continue with
       // the next chunk instead of treating already-written rows as failed.
-      const reconciled = await reconcileAmbiguousChunk(action, entity, chunk);
+      const reconciled = await reconcileAmbiguousChunk(action, chunk);
       const confirmed = reconciled.filter((result) => result?.success === true);
       const unresolved = chunk.filter((item) =>
         !confirmed.some((result) => result.clientItemId === item.clientItemId)
