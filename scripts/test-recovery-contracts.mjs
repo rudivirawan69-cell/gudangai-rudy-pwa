@@ -32,9 +32,9 @@ assert.match(pdf, /if\s*\(ocrCount\s*>\s*originalCount\)/);
 assert.match(inputPage, /reviewRows\s*=\s*cleanRows\.filter\(\(m\)\s*=>\s*m\.status\s*!==\s*'matched'\)/);
 
 assert.doesNotThrow(() => new vm.Script(gs), 'Root Code.gs must remain syntactically valid');
-assert.match(gs, /function formatStockShortageNote_\(orderQty, availableQty, shortageQty\)/);
-assert.match(gs, /keterangan = formatStockShortageNote_\(numericQty, sisa, kekurangan\)/);
-const holdFnBody = gs.match(/function formatStockShortageNote_\(orderQty, availableQty, shortageQty\)\s*\{([\s\S]*?)\n\}/);
+assert.match(gs, /function formatStockShortageNote_\(orderQty, availableQty, shortageQty, unit\)/);
+assert.match(gs, /keterangan = formatStockShortageNote_\(numericQty, sisa, kekurangan,/);
+const holdFnBody = gs.match(/function formatStockShortageNote_\(orderQty, availableQty, shortageQty, unit\)\s*\{([\s\S]*?)\n\}/);
 assert.ok(holdFnBody, 'Missing concise HOLD formatter');
 const formatHold = new Function('MAX_KETERANGAN_LENGTH',
   'return function(orderQty, availableQty, shortageQty, unit) {' + holdFnBody[1] + '}'
