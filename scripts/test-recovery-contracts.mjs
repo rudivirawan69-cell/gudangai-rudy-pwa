@@ -184,6 +184,9 @@ assert.match(apiSource, /Do not break: the next chunk has independent IDs and mu
 assert.doesNotMatch(apiSource, /const remainingItems = list\.slice\(i\)/,
   'A timed-out chunk must not queue the entire unsent tail without read-back.');
 assert.match(apiSource, /const BATCH_CHUNK_SIZE = 35/);
+assert.match(apiSource, /result\.uncertain === true \|\| result\.retryable === true/);
+assert.match(apiSource, /\['UNKNOWN', 'IN_PROGRESS', 'PENDING', 'WRITE_PENDING'\]/,
+  'Only ambiguous/retryable batch results should enter the offline queue');
 assert.match(apiSource, /STOCK_CACHE_TTL_MS = 10000/);
 assert.match(apiSource, /getAllStock', \{ entitas: 'ALL' \}/);
 assert.match(apiSource, /_stockCache\.promise/);
