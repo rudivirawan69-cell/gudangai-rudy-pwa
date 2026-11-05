@@ -515,7 +515,12 @@ export function validatePdfItems(entity, textOrItems, masterOverride) {
         .replace(/\b(?:bahan\s+baku|raw\s+material)\b/g, ' ')
         .replace(/\s+/g, ' ')
         .trim();
-      const exactRawName = sourceMaster.find((item) => {
+      // PT master contains both BBPT-0008 (raw material) and WK-0004 (finished-goods/CS)
+      // named Iga Sapi. For PDF order validation, explicitly prefer WK-0004 when present.
+      const prioritizeIgaSapiFinishedSku = selectedEntity === 'PT' &&
+        /\biga\s+sapi\b/.test(normalizeMatchText(rawNameOriginal)) &&
+        allowedCodes.has('WK-0004');
+      const exactRawName = prioritizeIgaSapiFinishedSku ? null : sourceMaster.find((item) => {
         const kode = String(item?.kode || item?.kodeBarang || '').trim().toUpperCase();
         const divisi = String(item?.divisi || item?.division || '').trim().toUpperCase().replace(/\s+/g, ' ');
         const isRawMaterial = /^(?:BBCV|BBPT)-/.test(kode) || divisi === 'BAHAN BAKU';

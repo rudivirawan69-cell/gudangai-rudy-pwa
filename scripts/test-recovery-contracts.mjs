@@ -32,6 +32,21 @@ assert.match(pdf, /if\s*\(ocrCount\s*>\s*originalCount\)/);
 assert.match(inputPage, /reviewRows\s*=\s*cleanRows\.filter\(\(m\)\s*=>\s*m\.status\s*!==\s*'matched'\)/);
 
 assert.doesNotThrow(() => new vm.Script(gs), 'Root Code.gs must remain syntactically valid');
+assert.match(gs, /function formatStockShortageNote_\(orderQty, availableQty, shortageQty, unit\)/);
+assert.match(gs, /keterangan = formatStockShortageNote_\(numericQty, sisa, kekurangan,/);
+const holdFnBody = gs.match(/function formatStockShortageNote_\(orderQty, availableQty, shortageQty, unit\)\s*\{([\s\S]*?)\n\}/);
+assert.ok(holdFnBody, 'Missing concise HOLD formatter');
+const formatHold = new Function('MAX_KETERANGAN_LENGTH',
+  'return function(orderQty, availableQty, shortageQty, unit) {' + holdFnBody[1] + '}'
+)(200);
+assert.equal(formatHold(10, 3, 7, 'pack'), 'Input pending 10 pack, sisa stock 3 pack, kekurangan 7 pack');
+const logFnBody = gs.match(/function writeAuditLogSecure\([\s\S]*?\n\}/);
+assert.ok(logFnBody && /setWrap\(false\)/.test(logFnBody[0]), 'System Log cells must use compact clipped rows');
+assert.ok(/substring\(0, 180\)/.test(logFnBody[0]));
+assert.ok(/substring\(0, 120\)/.test(logFnBody[0]));
+assert.doesNotMatch(logFnBody[0], /setColumnWidth\(/, 'Column widths must not be reset for every log write');
+const logFormatBody = functionBody(gs, 'formatSystemLogSheet_');
+assert.match(logFormatBody, /setWrap\(false\)/);
 function functionBody(source, name) {
   const start = source.indexOf('function ' + name + '(');
   assert.notEqual(start, -1, 'Missing function ' + name);
@@ -67,11 +82,40 @@ const normalizeOcr = new Function('s', normalizeMatch[1]);
 const resolverMatch = resolverSource.match(/export function resolvePdfNameDeterministic\(entity, rawName, masterList\)\s*\{([\s\S]*?)\n\}/);
 assert.ok(resolverMatch, 'Missing deterministic resolver');
 const resolvePdfNameDeterministic = new Function('entity', 'rawName', 'masterList', 'normalizeOcr', resolverMatch[1]);
+const parseBody = pdf.match(/export function parsePdfLinesToItems\(text\)\s*\{([\s\S]*?)\n\}/);
+const sanitizeBody = pdf.match(/function sanitizePdfProductName\(name\)\s*\{([\s\S]*?)\n\}/);
+const stripBody = pdf.match(/function stripLeadingNo\(name\)\s*\{([\s\S]*?)\n\}/);
+const nonItemBody = pdf.match(/function isPdfNonItemLine\(line\)\s*\{([\s\S]*?)\n\}/);
+assert.ok(parseBody && sanitizeBody && stripBody && nonItemBody, 'Missing PDF line parser helpers');
+const stripLeadingNo = new Function('return function(name) {' + stripBody[1] + '}')();
+const sanitizePdfProductName = new Function('stripLeadingNo', 'return function(name) {' + sanitizeBody[1] + '}')(stripLeadingNo);
+const isPdfNonItemLine = new Function('return function(line) {' + nonItemBody[1] + '}')();
+const parsePdfLinesToItems = new Function('stripLeadingNo', 'sanitizePdfProductName', 'isPdfNonItemLine',
+  'return function(text) {' + parseBody[1] + '}'
+)(stripLeadingNo, sanitizePdfProductName, isPdfNonItemLine);
+for (const [line, expectedName] of [
+  ['Ayam Fillet Dada 2', 'Ayam Fillet Dada'],
+  ['Ayam Fillet Paha 3', 'Ayam Fillet Paha'],
+  ['Saos Ayam 69 4', 'Saos Ayam 69'],
+  ['Saos Ayam FROZEN 1.00 2', 'Saos Ayam FROZEN 1.00'],
+  ['Iga Sapi 5', 'Iga Sapi'],
+]) {
+  const parsed = parsePdfLinesToItems(line);
+  assert.equal(parsed[0]?.rawName, expectedName, 'PDF line parser must preserve product name: ' + line);
+}
+
 const cvMaster = [
   { kode: 'CV-0001', nama: 'Ayam Fillet Dada', satuan: 'Kg', divisi: 'CS' },
   { kode: 'CV-0002', nama: 'Ayam Fillet Paha', satuan: 'Kg', divisi: 'CS' },
 ];
-const ptMaster = [{ kode: 'WK-0040', nama: 'Bebek', satuan: 'Ekor', divisi: 'PT' }];
+const ptMaster = [
+  { kode: 'WK-0004', nama: 'Iga Sapi', satuan: 'Kg', divisi: 'CS' },
+  { kode: 'WK-0021', nama: 'Saos Ayam 69', satuan: 'Pack', divisi: 'CS' },
+  { kode: 'WK-0040', nama: 'Bebek', satuan: 'Pack', divisi: 'CS' },
+  { kode: 'PT-0001', nama: 'Ayam Fillet Dada', satuan: 'Kg', divisi: 'CS' },
+  { kode: 'PT-0002', nama: 'Ayam Fillet Paha', satuan: 'Kg', divisi: 'CS' },
+  { kode: 'BBPT-0008', nama: 'Iga Sapi', satuan: 'Kg', divisi: 'BAHAN BAKU' },
+];
 for (const [input, expected] of [
   ['Ayam Fillet Dada', 'CV-0001'],
   ['AYAM FILLET PAHA', 'CV-0002'],
@@ -81,8 +125,21 @@ for (const [input, expected] of [
   const hit = resolvePdfNameDeterministic('CV', input, cvMaster, normalizeOcr);
   assert.equal(hit?.item?.kode, expected, 'Must resolve product correctly: ' + input);
 }
-const bebekPt = resolvePdfNameDeterministic('PT', 'Bebek (WK-0040)', ptMaster, normalizeOcr);
-assert.equal(bebekPt?.item?.kode, 'WK-0040', 'Bebek must resolve to PT SKU WK-0040');
+for (const [input, expected] of [
+  ['Ayam Fillet Dada', 'PT-0001'],
+  ['Ayam Fillet Paha', 'PT-0002'],
+  ['Saos Ayam 69', 'WK-0021'],
+  ['Saos Ayam FROZEN 1.00', 'WK-0021'],
+]) {
+  const hit = resolvePdfNameDeterministic('PT', input, ptMaster, normalizeOcr);
+  assert.equal(hit?.item?.kode, expected, 'PT PDF must resolve to the correct finished-goods SKU: ' + input);
+}
+assert.equal(resolvePdfNameDeterministic('PT', 'Iga Sapi', ptMaster, normalizeOcr)?.item?.kode, 'WK-0004',
+  'PT PDF Iga Sapi must resolve to finished-goods SKU WK-0004, not raw-material BBPT-0008');
+assert.equal(resolvePdfNameDeterministic('PT', 'Saos Ayam 69', ptMaster, normalizeOcr)?.item?.kode, 'WK-0021',
+  'PT PDF Saos Ayam 69 must resolve to WK-0021');
+assert.match(pdf, /prioritizeIgaSapiFinishedSku/,
+  'The PDF raw-material name guard must allow the explicit PT Iga Sapi → WK-0004 mapping');
 assert.equal(resolvePdfNameDeterministic('CV', 'Bebek (WK-0040)', cvMaster, normalizeOcr), null,
   'CV master must not resolve a PT WK SKU');
 
@@ -111,6 +168,30 @@ const stockStatusSource = readFileSync(stockStatusPath, 'utf8');
 
 assert.match(apiSource, /postJson\(payload,\s*\{\s*retries:\s*1,\s*timeoutMs:\s*BATCH_TIMEOUT_MS\s*\}\)/,
   'Ambiguous batch writes must not be retried automatically while the first Apps Script request may still be running.');
+assert.match(gs, /case "getTransactionStatuses": return jsonResponse\(getTransactionStatuses\(body\)\)/,
+  'Bulk read-back endpoint must be available to the PWA');
+assert.match(gs, /function getTransactionStatuses\(body\)/);
+assert.match(gs, /const index = buildIdempotencyIndex_\(\)/,
+  'Bulk read-back must load the idempotency ledger index once per chunk');
+assert.match(gs, /writeIdempotencyRecordsByRow_\(pendingLedgerUpdates, index\)/,
+  'Bulk read-back must persist APPLIED confirmations in grouped row writes');
+assert.match(apiSource, /async function reconcileAmbiguousChunk\(action, chunk\)/,
+  'Ambiguous chunk responses must be reconciled by stable transaction ID before queueing.');
+assert.match(apiSource, /const reconciled = await reconcileAmbiguousChunk\(action, chunk\)/);
+assert.match(apiSource, /action:\s*'getTransactionStatuses'/,
+  'Ambiguous chunk must reconcile in one batch status request, not one request per item');
+assert.match(apiSource, /Do not break: the next chunk has independent IDs and must still be submitted/);
+assert.doesNotMatch(apiSource, /const remainingItems = list\.slice\(i\)/,
+  'A timed-out chunk must not queue the entire unsent tail without read-back.');
+assert.match(apiSource, /const BATCH_CHUNK_SIZE = 35/);
+assert.match(apiSource, /result\.uncertain === true \|\| result\.retryable === true/);
+assert.match(apiSource, /\['UNKNOWN', 'IN_PROGRESS', 'PENDING', 'WRITE_PENDING'\]/,
+  'Only ambiguous/retryable batch results should enter the offline queue');
+assert.match(apiSource, /STOCK_CACHE_TTL_MS = 10000/);
+assert.match(apiSource, /getAllStock', \{ entitas: 'ALL' \}/);
+assert.match(apiSource, /_stockCache\.promise/);
+assert.match(apiSource, /_stockCache\.key === cacheKey && _stockCache\.promise === pending/,
+  'A stale response must not overwrite a cache for a different API URL/secret');
 assert.match(apiSource, /import \{ classifyStockLevel \} from '\.\/stockStatus'/);
 assert.match(stockStatusSource, /stock < 10/);
 assert.match(stockStatusSource, /stock < 20/);
@@ -129,6 +210,8 @@ assert.doesNotMatch(queueSource, /Math\.random\(\)/, 'Queue item fallback keys m
 const useStockPath = new URL('../src/hooks/useStock.js', import.meta.url);
 const useStockSource = readFileSync(useStockPath, 'utf8');
 assert.match(useStockSource, /gudangai-stock-refresh/);
+assert.match(useStockSource, /fetchStock\(entity, \{ force \}\)/);
+assert.match(useStockSource, /refresh\(\{ force: false \}\)/, 'Initial stock view should reuse a recent shared cache snapshot');
 assert.match(inputPage, /gudangai-stock-refresh/);
 assert.match(queueSource, /gudangai-stock-refresh/);
 assert.match(apiSource, /serverExecMs: measuredServerChunks \? totalServerExecMs : null/);

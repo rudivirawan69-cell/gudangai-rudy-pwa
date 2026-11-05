@@ -59,6 +59,12 @@ export function resolvePdfNameDeterministic(entity, rawName, masterList) {
   }
 
   // --- Specific rules (CV vs PT codes differ) ---
+  // Iga Sapi pada PDF PT harus dipetakan ke barang jadi WK-0004.
+  // Master juga memiliki BBPT-0008 dengan nama sama; validasi PDF memprioritaskan WK-0004.
+  if (ent === 'PT' && /\biga\s+sapi\b/.test(norm)) {
+    const hit = pick('WK-0004', 'det-iga-sapi-wk0004');
+    if (hit) return hit;
+  }
   // Keep the two fillet variants explicit so OCR/PDF noise cannot swap them.
   // Accept spaced, glued, mixed-case, and reversed word order from PDF/OCR.
   // Observed live PDF lines: "Ayam Fillet dada", "Ayam Fillet Paha".

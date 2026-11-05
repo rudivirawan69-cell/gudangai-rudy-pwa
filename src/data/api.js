@@ -201,21 +201,69 @@ function mapStockItem(it, entity) {
     size: it.size || it.ukuran || it.Size || '',
   };
 }
+let _stockCache = { data: null, at: 0, promise: null, key: '' };
+const STOCK_CACHE_TTL_MS = 10000;
+function selectStockEntity(items, entity) {
+  const requested = String(entity || 'ALL').toUpperCase();
+  return requested === 'ALL' ? items : items.filter((item) =>
+    String(item.entity || item.entitas || '').toUpperCase() === requested
+  );
+}
 export async function fetchStock(entity, options = {}) {
   const url = getApiUrl();
   if (!url) { if (options.allowDemo) return []; throw new Error('URL API belum diatur'); }
-  let data;
-  try { data = await getJson('getAllStock', { entitas: entity || 'ALL' }); }
-  catch { try { data = await postJson({ action: 'getAllStock', entitas: entity || 'ALL', requestId: newIds().requestId }); } catch { data = null; } }
-  if (data && data.code === 'UNAUTHORIZED') throw new Error('Unauthorized — cek API Secret di Atur');
-  if (data && data.success === false) throw new Error(data.error || 'Gagal mengambil stok');
-  if (data && !Array.isArray(data.items) && (data.cv || data.pt || data.CV || data.PT)) {
-    const cv = (data.cv || data.CV || []).map((it) => mapStockItem(it, 'CV'));
-    const pt = (data.pt || data.PT || []).map((it) => mapStockItem(it, 'PT'));
-    return [...cv, ...pt];
+  const cacheKey = url + '|' + getApiSecret();
+  if (_stockCache.key !== cacheKey) _stockCache = { data: null, at: 0, promise: null, key: cacheKey };
+  const requested = String(entity || 'ALL').toUpperCase();
+
+  if (!options.force && Array.isArray(_stockCache.data) && (Date.now() - _stockCache.at) < STOCK_CACHE_TTL_MS) {
+    return selectStockEntity(_stockCache.data, requested);
   }
-  const raw = (data && (data.items || data.stock || data.data)) || [];
-  return (Array.isArray(raw) ? raw : []).map((it) => mapStockItem(it, entity));
+  // CV, PT, and ALL views share one in-flight read. The Apps Script endpoint builds
+  // the combined master before filtering, so parallel per-entity reads waste time.
+  if (_stockCache.promise) return selectStockEntity(await _stockCache.promise, requested);
+
+  const pending = (async () => {
+    let data;
+    try { data = await getJson('getAllStock', { entitas: 'ALL' }); }
+    catch {
+      try { data = await postJson({ action: 'getAllStock', entitas: 'ALL', requestId: newIds().requestId }); }
+      catch (err) { throw new Error(err?.message || 'Gagal mengambil stok'); }
+    }
+    if (data && data.code === 'UNAUTHORIZED') throw new Error('Unauthorized — cek API Secret di Atur');
+    if (data && data.success === false) throw new Error(data.error || 'Gagal mengambil stok');
+
+    let all = [];
+    if (data && !Array.isArray(data.items) && (data.cv || data.pt || data.CV || data.PT)) {
+      const cv = (data.cv || data.CV || []).map((it) => mapStockItem(it, 'CV'));
+      const pt = (data.pt || data.PT || []).map((it) => mapStockItem(it, 'PT'));
+      all = [...cv, ...pt];
+    } else {
+      const raw = (data && (data.items || data.stock || data.data)) || [];
+      if (!Array.isArray(raw)) throw new Error('Format data stok tidak valid');
+      all = raw.map((it) => {
+        const code = String(it?.kode || it?.kodeBarang || '').toUpperCase();
+        const prefix = code.split('-')[0];
+        const inferred = ['PT', 'WK', 'MM', 'BBPT'].includes(prefix) ? 'PT'
+          : ['CV', 'BBCV'].includes(prefix) ? 'CV' : requested;
+        return mapStockItem(it, inferred);
+      });
+    }
+    return all;
+  })();
+
+  _stockCache.promise = pending;
+  try {
+    const all = await pending;
+    // A late response for an old API URL/secret must never overwrite the newer cache.
+    if (_stockCache.key === cacheKey && _stockCache.promise === pending) {
+      _stockCache.data = all;
+      _stockCache.at = Date.now();
+    }
+    return selectStockEntity(all, requested);
+  } finally {
+    if (_stockCache.key === cacheKey && _stockCache.promise === pending) _stockCache.promise = null;
+  }
 }
 export async function getStatusPO() {
   try {
@@ -397,7 +445,71 @@ async function submitBatchChunk(action, entity, chunkItems, tanggal) {
   return { success: successCount === normalized.length, successCount, failCount, results, serverExecMs: Number(data?.execMs) || null };
 }
 function emitProgress(sent, total, chunkResult) {
-  try { window.dispatchEvent(new CustomEvent('gudangai-submit-progress', { detail: { sent, total, success: chunkResult?.successCount || 0, failed: chunkResult?.failCount || 0 } })); } catch (_) {}
+  try {
+    window.dispatchEvent(new CustomEvent('gudangai-submit-progress', {
+      detail: {
+        sent, total,
+        success: chunkResult?.successCount || 0,
+        queued: chunkResult?.queuedCount || 0,
+        failed: chunkResult?.failCount || 0,
+      },
+    }));
+  } catch (_) {}
+}
+async function reconcileAmbiguousChunk(action, chunk) {
+  const SHEET_MAP = { barangMasuk: 'Barang masuk', barangKeluar: 'Barang keluar', barangRusak: 'Barang Rusak' };
+  const sheet = SHEET_MAP[action] || action;
+  const identities = (chunk || []).map((item) => {
+    const clientItemId = String(item?.clientItemId || '');
+    return {
+      clientItemId,
+      transactionId: clientItemId ? 'TX-' + clientItemId : '',
+      nonce: clientItemId ? 'NC-' + clientItemId : '',
+      sheet,
+    };
+  });
+
+  // One authenticated request reads the ledger index once on Apps Script,
+  // instead of issuing 35 separate reads that each rescan the ledger.
+  let data;
+  try {
+    data = await postJson({
+      action: 'getTransactionStatuses',
+      sheet,
+      transactions: identities,
+      requestId: newIds().requestId,
+    }, { retries: 1, timeoutMs: 60000 });
+  } catch (err) {
+    return identities.map((identity) => ({
+      success: false, queued: true, uncertain: true,
+      clientItemId: identity.clientItemId, sheet,
+      error: err?.message || 'Read-back batch gagal',
+    }));
+  }
+
+  const rawResults = Array.isArray(data?.results) ? data.results : [];
+  const byId = new Map(rawResults.map((result) => [String(result?.clientItemId || ''), result]));
+  const reconciled = identities.map((identity) => {
+    if (!identity.clientItemId) {
+      return { success: false, queued: true, uncertain: true, error: 'ID transaksi tidak tersedia', sheet };
+    }
+    if (isApplied(identity.clientItemId)) {
+      return { success: true, skipped: true, status: 'APPLIED', clientItemId: identity.clientItemId, sheet };
+    }
+    const result = byId.get(identity.clientItemId);
+    const applied = data?.success === true && result?.success === true &&
+      (result?.status === 'APPLIED' || result?.code === 'READBACK_CONFIRMED' || result?.code === 'READBACK_FOUND');
+    return applied
+      ? { ...result, success: true, status: 'APPLIED', clientItemId: identity.clientItemId, sheet }
+      : {
+          ...(result || {}), success: false, queued: true, uncertain: true,
+          clientItemId: identity.clientItemId, sheet,
+          error: result?.error || data?.error || 'Server belum mengonfirmasi transaksi.',
+        };
+  });
+
+  markAppliedMany(reconciled.filter((result) => result.success && result.clientItemId).map((result) => result.clientItemId));
+  return reconciled;
 }
 async function submitItems(action, entity, items, tanggal, options = {}) {
   const clientStartedAt = Date.now();
@@ -458,44 +570,64 @@ async function submitItems(action, entity, items, tanggal, options = {}) {
       const fc = batchRes.failCount || 0;
       totalSuccess += sc; totalFail += fc;
       if (batchRes.results) allResults.push(...batchRes.results);
-      emitProgress(Math.min(i + chunk.length, originalList.length), originalList.length, { successCount: totalSuccess, failCount: totalFail });
-      const failedIds = new Set((batchRes.results || []).filter(r => !r.success && !r.skipped && r.clientItemId).map(r => r.clientItemId));
-      const knownIds = new Set((batchRes.results || []).map(r => r.clientItemId).filter(Boolean));
-      const queueItems = chunk.filter(it => failedIds.has(it.clientItemId) || !knownIds.has(it.clientItemId));
+      const resultById = new Map((batchRes.results || []).map((result) => [String(result?.clientItemId || ''), result]));
+      const queueItems = chunk.filter((item) => {
+        const result = resultById.get(String(item.clientItemId || ''));
+        if (!result) return true; // Missing item identity in response is unresolved, not a confirmed failure.
+        if (result.success || result.skipped) return false;
+        const status = String(result.status || '').toUpperCase();
+        return result.uncertain === true || result.retryable === true ||
+          result.writeOccurred === 'unknown' ||
+          ['UNKNOWN', 'IN_PROGRESS', 'PENDING', 'WRITE_PENDING'].includes(status);
+      });
       if (queueItems.length) {
         if (!options.fromQueue) enqueue(action, entity, queueItems, { tanggal });
         totalQueued += queueItems.length;
       }
-      continue;
-    } catch (err) {
-      const msg = String(err?.message || 'Gagal menulis batch');
-      const remainingItems = list.slice(i);
-      // A timeout is ambiguous: never issue a second write automatically.
-      // Keep the same item IDs in the outbox for explicit backend/read-back reconciliation.
-      if (!options.fromQueue) enqueue(action, entity, remainingItems, { tanggal });
-      totalQueued += remainingItems.length;
-      totalFail += remainingItems.length;
-      allResults.push(...remainingItems.map(it => ({
-        success: false, queued: true, uncertain: true, clientItemId: it.clientItemId, error: msg,
-      })));
-      emitProgress(originalList.length, originalList.length, { successCount: totalSuccess, failCount: totalFail });
-      pushNotification({
-        type: 'warning',
-        title: 'Write belum terkonfirmasi',
-        body: remainingItems.length + ' item diamankan di Antrian Sinkronisasi. Detail backend: ' + msg + '. Jangan kirim ulang manual; verifikasi backend/read-back terlebih dahulu.',
+      emitProgress(Math.min(i + chunk.length, originalList.length), originalList.length, {
+        successCount: totalSuccess, queuedCount: totalQueued,
+        failCount: Math.max(0, totalFail - totalQueued),
       });
-      break;
+      continue;
+    } catch {
+      // A browser timeout does not prove that the server failed. Read back this chunk
+      // by its stable transaction IDs, queue only unresolved IDs, then continue with
+      // the next chunk instead of treating already-written rows as failed.
+      const reconciled = await reconcileAmbiguousChunk(action, chunk);
+      const confirmed = reconciled.filter((result) => result?.success === true);
+      const unresolved = chunk.filter((item) =>
+        !confirmed.some((result) => result.clientItemId === item.clientItemId)
+      );
+      totalSuccess += confirmed.length;
+      totalFail += unresolved.length;
+      totalQueued += unresolved.length;
+      allResults.push(...reconciled);
+      if (unresolved.length && !options.fromQueue) enqueue(action, entity, unresolved, { tanggal });
+      emitProgress(Math.min(i + chunk.length, originalList.length), originalList.length, {
+        successCount: totalSuccess, queuedCount: totalQueued,
+        failCount: Math.max(0, totalFail - totalQueued),
+      });
+      // The final notification below summarizes all chunks once.
+      // Do not break: the next chunk has independent IDs and must still be submitted.
+      continue;
     }
   }
   if (totalQueued > 0) {
-    pushNotification({ type: 'warning', title: 'Sinkronisasi perlu dilanjutkan', body: totalSuccess + ' sukses · ' + totalQueued + ' masuk antrian · ' + totalFail + ' belum terkonfirmasi. Antrian menyimpan ID unik untuk mencegah duplikasi.' });
+    const hardFailures = Math.max(0, totalFail - totalQueued);
+    pushNotification({
+      type: 'warning',
+      title: totalSuccess > 0 ? 'Transaksi sebagian selesai' : 'Sinkronisasi perlu dilanjutkan',
+      body: totalSuccess + ' sukses · ' + totalQueued + ' masuk antrian' +
+        (hardFailures ? ' · ' + hardFailures + ' gagal' : '') +
+        '. ID transaksi tetap dipertahankan untuk mencegah duplikasi.',
+    });
   } else {
     pushNotification({ type: 'success', title: 'Transaksi selesai', body: totalSuccess + ' item berhasil ditulis tanpa antrian.' });
   }
   return {
     success: totalSuccess === originalList.length,
     partial: totalSuccess > 0 && totalSuccess < originalList.length,
-    count: totalSuccess, failed: totalFail, queuedCount: totalQueued, total: originalList.length,
+    count: totalSuccess, failed: Math.max(0, totalFail - totalQueued), queuedCount: totalQueued, total: originalList.length,
     results: allResults,
     serverExecMs: measuredServerChunks ? totalServerExecMs : null,
     clientElapsedMs: Date.now() - clientStartedAt,

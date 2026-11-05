@@ -144,7 +144,13 @@ export default function InputPage() {
   useEffect(() => {
     const handler = (e) => {
       const d = e.detail || {};
-      setSubmitProgress({ sent: d.sent || 0, total: d.total || 0, success: d.success || 0, failed: d.failed || 0 });
+      setSubmitProgress({
+        sent: Number(d.sent) || 0,
+        total: Number(d.total) || 0,
+        success: Number(d.success) || 0,
+        queued: Number(d.queued) || 0,
+        failed: Number(d.failed) || 0,
+      });
     };
     window.addEventListener('gudangai-submit-progress', handler);
     return () => window.removeEventListener('gudangai-submit-progress', handler);
@@ -886,7 +892,7 @@ export default function InputPage() {
           <div className="fixed bottom-16 left-0 right-0 px-4 z-20">
             {submitProgress && (
               <p className="text-center text-xs text-cyan-700 mb-1 font-semibold">
-                Mengirim {submitProgress.sent}/{submitProgress.total} · ok {submitProgress.success} · antri {submitProgress.failed}
+                Mengirim {submitProgress.sent}/{submitProgress.total} · sukses {submitProgress.success} · antri {submitProgress.queued || 0} · gagal {submitProgress.failed || 0}
               </p>
             )}
             <button type="button" onClick={handleSubmit} disabled={submitting || !cart.length}
