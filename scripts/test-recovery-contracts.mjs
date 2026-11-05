@@ -103,6 +103,15 @@ for (const [input, expected] of [
   const hit = resolvePdfNameDeterministic('CV', input, cvMaster, normalizeOcr);
   assert.equal(hit?.item?.kode, expected, 'Must resolve product correctly: ' + input);
 }
+for (const [input, expected] of [
+  ['Ayam Fillet Dada', 'PT-0001'],
+  ['Ayam Fillet Paha', 'PT-0002'],
+  ['Saos Ayam 69', 'WK-0021'],
+  ['Saos Ayam FROZEN 1.00', 'WK-0021'],
+]) {
+  const hit = resolvePdfNameDeterministic('PT', input, ptMaster, normalizeOcr);
+  assert.equal(hit?.item?.kode, expected, 'PT PDF must resolve to the correct finished-goods SKU: ' + input);
+}
 assert.equal(resolvePdfNameDeterministic('PT', 'Iga Sapi', ptMaster, normalizeOcr)?.item?.kode, 'WK-0004',
   'PT PDF Iga Sapi must resolve to finished-goods SKU WK-0004, not raw-material BBPT-0008');
 assert.equal(resolvePdfNameDeterministic('PT', 'Saos Ayam 69', ptMaster, normalizeOcr)?.item?.kode, 'WK-0021',
@@ -140,7 +149,7 @@ assert.match(apiSource, /postJson\(payload,\s*\{\s*retries:\s*1,\s*timeoutMs:\s*
 assert.match(gs, /case "getTransactionStatuses": return jsonResponse\(getTransactionStatuses\(body\)\)/,
   'Bulk read-back endpoint must be available to the PWA');
 assert.match(gs, /function getTransactionStatuses\(body\)/);
-assert.match(gs, /var index = buildIdempotencyIndex_\(\)/,
+assert.match(gs, /const index = buildIdempotencyIndex_\(\)/,
   'Bulk read-back must load the idempotency ledger index once per chunk');
 assert.match(apiSource, /async function reconcileAmbiguousChunk\(action, entity, chunk\)/,
   'Ambiguous chunk responses must be reconciled by stable transaction ID before queueing.');
