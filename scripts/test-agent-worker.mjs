@@ -132,3 +132,24 @@ test('rejects empty messages after session validation', async () => {
     assert.equal((await response.json()).code, 'MESSAGE_REQUIRED');
   });
 });
+
+test('accepts Wrangler SUPABASE_PUBLISHABLE_KEY binding for Supabase verification', async () => {
+  const originalFetch = globalThis.fetch;
+  let authCalls = 0;
+  globalThis.fetch = async (url, options) => {
+    assert.equal(String(url), `${SUPABASE_URL}/auth/v1/user`);
+    assert.equal(options.headers.apikey, 'test-publishable-key');
+    authCalls += 1;
+    return new Response(JSON.stringify({ id: 'user-test-1' }), { status: 200 });
+  };
+  try {
+    const env = { SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY: 'test-publishable-key' };
+    const health = await worker.fetch(makeRequest('/api/agent/health'), env);
+    assert.equal((await health.json()).authConfigured, true);
+    const response = await worker.fetch(makeRequest('/api/agent', {
+      method: 'POST', body: { message: 'Tes koneksi agent' },
+    }), { ...env, AI: { run: async () => ({ response: 'OK' }) } });
+    assert.equal(response.status, 200);
+    assert.equal(authCalls, 1);
+  } finally { globalThis.fetch = originalFetch; }
+});
