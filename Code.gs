@@ -1233,7 +1233,10 @@ function bulkTransaction(body) {
         if (!reserveRecord) {
           throw new Error("IDEMPOTENCY_CLAIM_MISSING: " + reserveItem.txId);
         }
-        updateIdempotencyRecord_(reserveRecord, { dataRow: startRow + reserveIndex, status: "IN_PROGRESS", writeOccurred: false });
+        var reservedRecord = updateIdempotencyRecord_(reserveRecord, { dataRow: startRow + reserveIndex, status: "IN_PROGRESS", writeOccurred: false });
+        if (!reservedRecord || Number(reservedRecord.dataRow) !== (startRow + reserveIndex)) {
+          throw new Error("IDEMPOTENCY_ROW_RESERVATION_FAILED: " + reserveItem.txId);
+        }
       }
 
       var bcValues = [];
