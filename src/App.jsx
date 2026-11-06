@@ -4,7 +4,6 @@ import { AuthProvider, useAuth, DEFAULT_PROFILE_PHOTO } from './hooks/useAuth';
 import { ThemeProvider } from './hooks/useTheme';
 import LoginPage from './pages/LoginPage';
 import { useConnection } from './hooks/useConnection';
-import { useSheetUpdate } from './hooks/useSheetUpdate';
 import { useBootstrap } from './hooks/useBootstrap';
 import {
   LayoutDashboard, Package, PackagePlus, Clock, Settings, ClipboardList,
@@ -112,7 +111,7 @@ function ConnBanner({ online, hasUrl, status, message, syncing }) {
  * Header. "Update Sheet" menampilkan waktu update yang dilaporkan API spreadsheet
  * (dikirim DashboardPage lewat event gudangai-sheet-updated), bukan jam perangkat.
  */
-function AppHeader({ user, tab, onOpenSettings, online, status, sheetLabel, onRefresh }) {
+function AppHeader({ user, tab, onOpenSettings, online, status, onRefresh }) {
   const [refreshing, setRefreshing] = useState(false);
   const photo = (user?.photo && String(user.photo).length > 40) ? user.photo : DEFAULT_PROFILE_PHOTO;
   const connected = online && status !== 'offline' && status !== 'error';
@@ -168,11 +167,11 @@ function AppHeader({ user, tab, onOpenSettings, online, status, sheetLabel, onRe
             </p>
             <div className="mt-1 flex flex-col gap-0.5 text-[10px] font-medium text-[var(--text-muted,#475569)]">
               <div className="flex items-center gap-1.5 min-w-0">
-                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${sheetLabel ? 'bg-emerald-500' : 'bg-slate-400'}`} />
+                <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-slate-400" />
                 <span className="truncate">
                   Update Sheet:{' '}
                   <strong className="text-[var(--text-main,#0f172a)] font-bold">
-                    {sheetLabel || 'Belum ada data dari spreadsheet'}
+                    {'Belum ada data dari spreadsheet'}
                   </strong>
                 </span>
               </div>
@@ -233,7 +232,6 @@ function AppShell() {
   const [pageKey, setPageKey] = useState(0);
   const tabRef = useRef('dashboard');
   const { online, hasUrl, status, message, syncing, checkHealth } = useConnection({ pollMs: 90000 });
-  const sheetLabel = useSheetUpdate();
   useBootstrap();
 
   // Pindah tab. Mengetuk tab yang sedang aktif hanya menggulir ke atas (tanpa memuat ulang halaman).
@@ -292,8 +290,7 @@ function AppShell() {
         onOpenSettings={() => goTab('settings')}
         online={online}
         status={status}
-        sheetLabel={sheetLabel}
-        onRefresh={() => checkHealth({ quiet: false })}
+          onRefresh={() => checkHealth({ quiet: false })}
       />
       {installPrompt && (
         <button
