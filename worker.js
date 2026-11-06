@@ -246,7 +246,7 @@ export default {
         model: String(env.AI_MODEL || DEFAULT_MODEL),
         anthropicFallbackEnabled: env.ANTHROPIC_FALLBACK_ENABLED === 'true' && Boolean(env.ANTHROPIC_API_KEY),
         authRequired: true,
-        authConfigured: Boolean(env.SUPABASE_URL && env.SUPABASE_ANON_KEY),
+        authConfigured: Boolean(env.SUPABASE_URL && (env.SUPABASE_ANON_KEY || env.SUPABASE_PUBLISHABLE_KEY)),
         deploymentTarget: new URL(request.url).origin,
       }, 200, corsOrigin);
     }
