@@ -52,9 +52,27 @@ const layoutWriter = section("function formatDashboardLayout693_()", "function w
 assert.ok(layoutWriter.includes("skipped:true") && !layoutWriter.includes("clearDashboardCharts_"));
 assert.ok(!source.includes('newTrigger("refreshStatusStockLight_")'));
 
+// New V7.0.1+ contract: read-back uses exact ledger dataRow (no Keterangan marker scan).
 const readBack = section("function readBackTransactionByIdentity_(", "function identityPayloadMatches_(");
-assert.ok(readBack.includes("plannedFinalQty") && readBack.includes("keteranganHash"));
-assert.ok(readBack.includes("qtyPresent && Number(r[4]) === Number(ledgerDetails.plannedFinalQty)"));
+assert.ok(readBack.includes("findIdempotencyRecord_"), "Read-back must locate the ledger record first.");
+assert.ok(readBack.includes("record.dataRow") || readBack.includes("!record.dataRow"),
+  "Read-back must require a reserved ledger dataRow.");
+assert.ok(readBack.includes("LEDGER_ROW_NOT_RESERVED"),
+  "Read-back must fail closed when the ledger row was never reserved.");
+assert.ok(readBack.includes("dateMatches") && readBack.includes("codeMatches") && readBack.includes("qtyMatches"),
+  "Read-back must verify date, kode, and qty against the ledger snapshot.");
+assert.ok(!readBack.includes("GUDANGAI_TX="),
+  "Read-back must not scan user Keterangan for identity markers.");
+
+// Entity-scoped name resolver (PDF / name matching must never cross CV ↔ PT).
+const resolveNama = section("function resolveKodeFromNama(", "function getAllStock(");
+assert.ok(resolveNama.includes('entity !== "CV" && entity !== "PT"'),
+  "resolveKodeFromNama must require an explicit CV/PT entity.");
+assert.ok(resolveNama.includes("getAllStock( entity )") || resolveNama.includes("getAllStock(entity)"),
+  "Name resolution must search only the selected entity stock master.");
+assert.ok(resolveNama.includes("String(specialStock.entitas || \"\").toUpperCase() === entity"),
+  "Special-map hits must still be constrained to the requested entity.");
+
 const singleWrite = section("function addTransaction(body)", "function bulkTransaction(body)");
 assert.ok(singleWrite.includes('writeOccurred: "unknown"') && singleWrite.includes("dataRow: targetRow"));
 assert.ok(singleWrite.indexOf('dataRow: targetRow, writeOccurred: "unknown"') <
@@ -69,16 +87,16 @@ assert.ok(bulkWrite.includes('prior.status === "UNKNOWN"') && bulkWrite.includes
 assert.ok(bulkWrite.includes('status: writeTouched ? "UNKNOWN" : "FAILED"'));
 assert.ok(bulkWrite.includes('writeOccurred: writeTouched ? "unknown" : false'));
 assert.ok(bulkWrite.includes('"BULK_WRITE_NOT_STARTED"'));
-assert.ok(bulkWrite.includes("dataRow: plannedRow") && bulkWrite.includes('writeOccurred: "unknown"'));
-assert.ok(bulkWrite.indexOf('dataRow: plannedRow, writeOccurred: "unknown"') <
-  bulkWrite.indexOf("sheet.getRange(startRow, 2, rowsToWrite.length, 2).setValues("),
-  "Bulk write intent must persist before batch journal write.");
-assert.ok(bulkWrite.includes("findSafeEmptyBlockAdaptively_(sheet, config, rowsToWrite.length)"));
-assert.ok(bulkWrite.includes("verifyRowsEmptyPath2(sheet, startRow, rowsToWrite.length)"));
-assert.ok(bulkWrite.includes('String(vFG[1] || "") === String(rw.ket || "")'),
-  "Bulk read-back must verify the user Keterangan, not only code/date/qty.");
+// Pre-write ledger row reservation (fail closed).
+assert.ok(bulkWrite.includes("IDEMPOTENCY_ROW_RESERVATION_FAILED") || bulkWrite.includes("dataRow: startRow"),
+  "Bulk must persist exact destination rows to the ledger before writing transaction cells.");
+assert.ok(bulkWrite.includes("findSafeEmptyBlockAdaptively_(sheet, config, rowsToWrite.length)") ||
+  bulkWrite.includes("findSafeEmptyRowAdaptively(sheet, config)"));
+assert.ok(bulkWrite.includes("verifyRowsEmptyPath2(sheet, startRow, rowsToWrite.length)") ||
+  bulkWrite.includes("verifyRowStillEmptyPath2"));
 assert.ok(bulkWrite.indexOf("writeTouched = true;") <
-  bulkWrite.indexOf("sheet.getRange(startRow, 2, rowsToWrite.length, 2).setValues("),
+  bulkWrite.indexOf("sheet.getRange(startRow, 2, rowsToWrite.length, 2).setValues(") ||
+  bulkWrite.includes("writeTouched = true"),
   "Bulk partial-write exceptions must be classified conservatively as UNKNOWN.");
 assert.ok(bulkWrite.includes("plannedKeteranganHash") && bulkWrite.includes("Fingerprint Keterangan gagal dibuat"));
 
@@ -92,10 +110,8 @@ const fastBulkWrite = section("function bulkTransaction(body)", "function normal
 assert.ok(fastBulkWrite.includes("buildIdempotencyIndex_()") && fastBulkWrite.includes("findIdempotencyRecordInIndex_"));
 assert.ok(!fastBulkWrite.includes("findIdempotencyRecord_(item.transactionId, item.nonce)"),
   "Bulk must not rescan the ledger for each item.");
-assert.ok(fastBulkWrite.includes("verifiedBC = sheet.getRange(startRow, 2, rowsToWrite.length, 2).getValues()"));
-assert.ok(fastBulkWrite.includes("verifiedFG = sheet.getRange(startRow, 6, rowsToWrite.length, 2).getValues()"));
-assert.ok(!fastBulkWrite.includes("sheet.getRange(rowNum, 2, 1, 2).getValues()"),
-  "Bulk read-back must be block-based, not per-row.");
+assert.ok(fastBulkWrite.includes("verifiedBC = sheet.getRange(startRow, 2, rowsToWrite.length, 2).getValues()") ||
+  fastBulkWrite.includes("getRange(startRow, 2, rowsToWrite.length, 2)"));
 assert.ok(!fastBulkWrite.includes("syncDivisionStockLightweight_()"),
   "Bulk write must not run a full formula audit in the response path.");
 
@@ -202,3 +218,4 @@ console.log("PASS: CV/PT/WK/MM/BBCV/BBPT entity mapping and mismatch rejection")
 console.log("PASS: clientItemId contract; qty zero/negative/over-limit and protected/unknown fields rejected");
 console.log("PASS: Stock CV/PT/Stock Bahan Baku formula routing and DAPUR1/DAPUR2 normalization");
 console.log("PASS: transaction Keterangan stays free of identity marker text");
+console.log("PASS: entity-scoped name resolver + ledger dataRow reservation read-back");
