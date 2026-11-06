@@ -1,9 +1,9 @@
 # Produksi = Cloudflare Workers (bukan Vercel)
 
 ## URL produksi (pakai ini di HP / PWA install)
-**https://gudangai-rudy-pwa69.rudivirawan69.workers.dev/**
+**https://gudangai-rudy.rudivirawan69.workers.dev/**
 
-Worker name di `wrangler.jsonc`: `gudangai-rudy-pwa69`
+Worker name di `wrangler.jsonc`: `gudangai-rudy`
 
 ## Mengapa Cloudflare
 - Vercel Hobby: batas ~100 deploy / 24 jam (deploy gagal tetap dihitung).
