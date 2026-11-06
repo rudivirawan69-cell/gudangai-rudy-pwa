@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import worker from '../worker.js';
 
-const ORIGIN = 'https://claude-proxy.rudivirawan69.workers.dev';
+const ORIGIN = 'https://gudangai-rudy-pwa69.rudivirawan69.workers.dev';
 const SUPABASE_URL = 'https://project.supabase.co';
 const validEnv = {
   SUPABASE_URL,
@@ -44,7 +44,7 @@ test('health reports Workers AI primary, auth status and paid fallback disabled'
   assert.equal(payload.anthropicFallbackEnabled, false);
   assert.equal(payload.authRequired, true);
   assert.equal(payload.authConfigured, true);
-  assert.equal(payload.deploymentTarget, ORIGIN + '/');
+  assert.equal(payload.deploymentTarget, ORIGIN);
 });
 
 test('agent validates Supabase bearer token then uses Workers AI', async () => {
