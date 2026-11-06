@@ -203,7 +203,7 @@ export default {
         anthropicFallbackEnabled: env.ANTHROPIC_FALLBACK_ENABLED === 'true' && Boolean(env.ANTHROPIC_API_KEY),
         authRequired: true,
         authConfigured: Boolean(env.SUPABASE_URL && env.SUPABASE_ANON_KEY),
-        deploymentTarget: 'https://claude-proxy.rudivirawan69.workers.dev/',
+        deploymentTarget: new URL(request.url).origin,
       }, 200, corsOrigin);
     }
 
