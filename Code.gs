@@ -618,31 +618,42 @@ function appendIdentityMarker_(keterangan, transactionId, nonce) {
 function readBackTransactionByIdentity_(identity, preferredSheet) {
   const targetId = String(identity && identity.transactionId || "").trim();
   const targetNonce = String(identity && identity.nonce || "").trim();
-  const sheetNames = preferredSheet ? [preferredSheet] : Object.keys(SHEET_CONFIG);
-  for (let s = 0; s < sheetNames.length; s++) {
-    const sheetName = sheetNames[s];
-    if (!(sheetName in SHEET_CONFIG)) continue;
-    const config = SHEET_CONFIG[sheetName];
-    const sheet = getSS().getSheetByName(sheetName);
-    if (!sheet) continue;
-    const last = getRealLastDataRow(sheet, config);
-    if (last <= config.headerRow) continue;
-    const rows = sheet.getRange(config.headerRow + 1, 2, last - config.headerRow, 6).getValues();
-    for (let i = rows.length - 1; i >= 0; i--) {
-      const r = rows[i];
-      const note = String(r[5] || "");
-      const txMatch = targetId && new RegExp("(?:^|[;|]\\s*)GUDANGAI_TX=" + targetId.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\$&") + "(?:;|$)").test(note);
-      const nonceMatch = targetNonce && new RegExp("(?:^|[;|]\\s*)GUDANGAI_NONCE=" + targetNonce.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\$&") + "(?:;|$)").test(note);
-      if (!txMatch && !nonceMatch) continue;
-      return {
-        matched: true, sheet: sheetName, row: config.headerRow + 1 + i,
-        tanggal: normalizeTransactionDateKey_(r[0]), kodeBarang: String(r[1] || "").trim(),
-        namaBarang: r[2], satuan: r[3], qty: Number(r[4]) || 0, keterangan: note,
-        transactionId: targetId || null, nonce: targetNonce || null
-      };
-    }
+  if (!targetId && !targetNonce) return { matched: false, error: "IDENTITY_REQUIRED" };
+
+  // The transaction sheet intentionally contains no technical identity marker.
+  // The ledger's preallocated dataRow is therefore the only safe read-back locator.
+  const record = findIdempotencyRecord_(targetId, targetNonce);
+  if (!record || !record.dataRow) {
+    return { matched: false, transactionId: targetId || null, nonce: targetNonce || null, error: "LEDGER_ROW_NOT_RESERVED" };
   }
-  return { matched: false, transactionId: targetId || null, nonce: targetNonce || null };
+
+  const sheetName = String(record.sheet || preferredSheet || "").trim();
+  if (!sheetName || (preferredSheet && sheetName !== preferredSheet) || !(sheetName in SHEET_CONFIG)) {
+    return { matched: false, transactionId: targetId || null, nonce: targetNonce || null, error: "LEDGER_SHEET_MISMATCH" };
+  }
+  const config = SHEET_CONFIG[sheetName];
+  const rowNumber = Number(record.dataRow);
+  if (!Number.isInteger(rowNumber) || rowNumber <= config.headerRow) {
+    return { matched: false, transactionId: targetId || null, nonce: targetNonce || null, error: "LEDGER_ROW_INVALID" };
+  }
+
+  const sheet = getSS().getSheetByName(sheetName);
+  if (!sheet || rowNumber > sheet.getMaxRows()) {
+    return { matched: false, transactionId: targetId || null, nonce: targetNonce || null, error: "TARGET_ROW_NOT_FOUND" };
+  }
+  const r = sheet.getRange(rowNumber, 2, 1, 6).getValues()[0];
+  const dateMatches = normalizeTransactionDateKey_(r[0]) === normalizeTransactionDateKey_(record.tanggal);
+  const codeMatches = String(r[1] || "").trim() === String(record.kodeBarang || "").trim();
+  const qtyMatches = Number(r[4]) === Number(record.qty);
+  if (!dateMatches || !codeMatches || !qtyMatches) {
+    return { matched: false, transactionId: targetId || null, nonce: targetNonce || null, row: rowNumber, error: "LEDGER_ROW_PAYLOAD_MISMATCH" };
+  }
+  return {
+    matched: true, sheet: sheetName, row: rowNumber,
+    tanggal: normalizeTransactionDateKey_(r[0]), kodeBarang: String(r[1] || "").trim(),
+    namaBarang: r[2], satuan: r[3], qty: Number(r[4]) || 0, keterangan: String(r[5] || ""),
+    transactionId: record.transactionId || targetId || null, nonce: record.nonce || targetNonce || null
+  };
 }
 
 function identityPayloadMatches_(record, body) {
@@ -672,7 +683,7 @@ function validateImportedItems_(body) {
       if (stock && stock.success) { resolved = stock; confidence = 100; matchType = "CODE_EXACT"; }
     }
     if (!resolved && nama) {
-      const r = resolveKodeFromNama(nama);
+      const r = resolveKodeFromNama(nama, entity);
       if (r && r.success) {
         const stock = getStockByCode(r.kode, entity);
         if (stock && stock.success) { resolved = stock; confidence = Number(String(r.confidence || "0").replace("%", "")) || 0; matchType = r.flags && r.flags.indexOf("FUZZY_MATCH") >= 0 ? "FUZZY" : "NAME_EXACT"; }
@@ -1214,6 +1225,17 @@ function bulkTransaction(body) {
         startRow = findSafeEmptyRowAdaptively(sheet, config);
       }
 
+      // Reserve exact destination rows in the ledger BEFORE any transaction-sheet write.
+      // A retry can then reconcile an uncertain write without searching user Keterangan.
+      for (var reserveIndex = 0; reserveIndex < rowsToWrite.length; reserveIndex++) {
+        var reserveItem = rowsToWrite[reserveIndex];
+        var reserveRecord = findIdempotencyRecord_(reserveItem.txId, reserveItem.nonce);
+        if (!reserveRecord) {
+          throw new Error("IDEMPOTENCY_CLAIM_MISSING: " + reserveItem.txId);
+        }
+        updateIdempotencyRecord_(reserveRecord, { dataRow: startRow + reserveIndex, status: "IN_PROGRESS", writeOccurred: false });
+      }
+
       var bcValues = [];
       var fgValues = [];
       for (var r = 0; r < rowsToWrite.length; r++) {
@@ -1362,15 +1384,24 @@ function validateTransactionRequest_(tx, options) {
 // ============================================================
 // 5. RESOLVE NAMA → KODE [V6.2]
 // ============================================================
-function resolveKodeFromNama(namaInput) {
-  const namaLower = String(namaInput).toLowerCase().trim();
+function resolveKodeFromNama(namaInput, entitas) {
+  const namaLower = String(namaInput || "").toLowerCase().trim();
+  const entity = String(entitas || "").trim().toUpperCase();
   if (!namaLower) return { success: false, error: "Nama kosong" };
-
-  if (SPECIAL_NAME_MAP[namaLower]) {
-    return { success: true, kode: SPECIAL_NAME_MAP[namaLower], nama: namaInput, confidence: "100%", flags: ["SPECIAL_MAP"] };
+  if (entity !== "CV" && entity !== "PT") {
+    return { success: false, error: "Entitas CV/PT wajib ditentukan untuk pencocokan nama." };
   }
 
-  const all = getAllStock("ALL");
+  // Special mappings remain entity-scoped. A CV code must never leak into PT.
+  const specialCode = SPECIAL_NAME_MAP[namaLower];
+  if (specialCode) {
+    const specialStock = getStockByCode(specialCode, entity);
+    if (specialStock && specialStock.success && String(specialStock.entitas || "").toUpperCase() === entity) {
+      return { success: true, kode: specialStock.kode || specialCode, nama: specialStock.nama || namaInput, confidence: "100%", flags: ["SPECIAL_MAP"] };
+    }
+  }
+
+  const all = getAllStock(entity);
   if (!all.success) return { success: false, error: "Gagal baca master" };
 
   const exact = all.items.filter(i => String(i.nama).toLowerCase().trim() === namaLower);
