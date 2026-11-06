@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useAuth } from '../hooks/useAuth';
 import { ArrowRight, Bot, Boxes, ClipboardList, FileSearch, PackageCheck, Send, ShieldCheck, Sparkles, Thermometer, Trash2, X } from 'lucide-react';
 
-const AGENT_API = (import.meta.env.VITE_GUDANGAI_AGENT_API || 'https://gudangai-rudy.rudivirawan69.workers.dev').replace(/\/$/, '');
+const AGENT_API = (import.meta.env.VITE_GUDANGAI_AGENT_API || 'https://gudangai-rudy-pwa69.rudivirawan69.workers.dev').replace(/\/$/, '');
 const MAX_HISTORY = 8;
 
 const SKILLS = [
@@ -18,6 +19,7 @@ function getReply(payload) {
 }
 
 export default function AIAssistantPage({ onNavigate }) {
+  const { accessToken, authStatus } = useAuth();
   const [messages, setMessages] = useState([]);
   const [draft, setDraft] = useState('');
   const [activeSkill, setActiveSkill] = useState('general');
@@ -69,7 +71,11 @@ export default function AIAssistantPage({ onNavigate }) {
     try {
       const response = await fetch(`${AGENT_API}/api/agent`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        },
         credentials: 'omit',
         signal: controller.signal,
         body: JSON.stringify({
@@ -88,7 +94,10 @@ export default function AIAssistantPage({ onNavigate }) {
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok || payload.success !== true) {
-        throw new Error(payload.error || payload.detail || `Worker AI gagal merespons (HTTP ${response.status})`);
+        const authHint = !accessToken || authStatus !== 'authenticated'
+          ? ' Sesi Supabase aktif diperlukan; login ulang dengan akun yang terhubung.'
+          : '';
+        throw new Error((payload.error || payload.detail || `Worker AI gagal merespons (HTTP ${response.status})`) + authHint);
       }
       const reply = getReply(payload);
       if (!reply) throw new Error('Worker AI mengirim respons kosong.');
@@ -106,7 +115,7 @@ export default function AIAssistantPage({ onNavigate }) {
       if (controllerRef.current === controller) controllerRef.current = null;
       setLoading(false);
     }
-  }, [activeSkill, loading, messages, online]);
+  }, [accessToken, activeSkill, authStatus, loading, messages, online]);
 
   const chooseSkill = (skill) => {
     setActiveSkill(skill.id);
