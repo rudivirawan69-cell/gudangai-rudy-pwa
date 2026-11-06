@@ -9,7 +9,7 @@ const requestCounts = new Map();
 const ALLOWED_ORIGINS = new Set([
   "https://rudivirawan69-cell.github.io",
   "https://gudangai-rudy-pwa-live.vercel.app",
-  "https://gudangai-rudy-pwa69.rudivirawan69.workers.dev",
+  "https://gudangai-rudy.rudivirawan69.workers.dev",
   "http://localhost:5173",
 ]);
 const MODELS = [
