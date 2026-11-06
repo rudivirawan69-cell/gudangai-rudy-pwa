@@ -1,6 +1,5 @@
-/* GudangAI RUDY — Service Worker */
-/* BUILD_VERSION diganti otomatis oleh scripts/write-sw-version.mjs saat npm run build */
-const BUILD_VERSION = '2026-10-22T05:17:45.761Z';
+/* GudangAI RUDY — versioned Service Worker */
+const BUILD_VERSION = '2026-11-06T12:43:44.031Z';
 const CACHE_NAME = `gudangai-${BUILD_VERSION}`;
 const PRECACHE = [
   '/',
@@ -13,75 +12,81 @@ const PRECACHE = [
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) =>
-      cache.addAll(PRECACHE).catch(() => undefined)
-    ).then(() => self.skipWaiting())
+    caches.open(CACHE_NAME)
+      .then((cache) => cache.addAll(PRECACHE).catch(() => undefined))
+    // Do not skipWaiting automatically: the page asks the user first.
   );
+});
+
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(
-        keys
-          .filter((k) => k.startsWith('gudangai-') && k !== CACHE_NAME)
-          .map((k) => caches.delete(k))
-      )
-    ).then(() => self.clients.claim())
+    caches.keys()
+      .then((keys) => Promise.all(
+        keys.filter((key) => key.startsWith('gudangai-') && key !== CACHE_NAME)
+          .map((key) => caches.delete(key))
+      ))
+      .then(() => self.clients.claim())
   );
 });
 
 self.addEventListener('fetch', (event) => {
-  const req = event.request;
-  if (req.method !== 'GET') return;
-  const url = new URL(req.url);
+  const request = event.request;
+  if (request.method !== 'GET') return;
 
-  // Jangan cache API Google Apps Script / Google — offline queue tetap di IndexedDB/localStorage app
-  if (url.hostname.includes('google') || url.hostname.includes('script.google')) return;
+  const url = new URL(request.url);
+  if (url.origin !== self.location.origin) return;
 
-  // Navigasi: network-first, fallback index offline
-  if (req.mode === 'navigate') {
+  // App shell: always check the network first, use the last shell offline.
+  if (request.mode === 'navigate' || url.pathname.endsWith('/index.html') || url.pathname === '/') {
     event.respondWith(
-      fetch(req)
-        .then((res) => {
-          const copy = res.clone();
-          if (res.ok) {
-            caches.open(CACHE_NAME).then((c) => c.put('/index.html', copy)).catch(() => undefined);
+      fetch(request)
+        .then((response) => {
+          if (response.ok) {
+            const copy = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put('/index.html', copy)).catch(() => undefined);
           }
-          return res;
+          return response;
         })
-        .catch(() => caches.match('/index.html'))
+        .catch(() => caches.match('/index.html').then((cached) => cached || caches.match('/')))
     );
     return;
   }
 
-  // Aset hashed /assets/: network-first agar build baru langsung terambil, lalu cache
-  if (url.pathname.startsWith('/assets/')) {
+  // Vite build assets contain content hashes: immutable cache-first is safe.
+  const isHashedAsset = url.pathname.startsWith('/assets/') &&
+    /[-.][A-Za-z0-9_-]{8,}\.(?:js|css|woff2?|png|jpe?g|svg|webp)$/i.test(url.pathname);
+  if (isHashedAsset) {
     event.respondWith(
-      fetch(req)
-        .then((res) => {
-          const copy = res.clone();
-          if (res.ok) {
-            caches.open(CACHE_NAME).then((c) => c.put(req, copy)).catch(() => undefined);
+      caches.match(request).then((cached) => {
+        if (cached) return cached;
+        return fetch(request).then((response) => {
+          if (response.ok) {
+            const copy = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, copy)).catch(() => undefined);
           }
-          return res;
-        })
-        .catch(() => caches.match(req))
+          return response;
+        });
+      })
     );
     return;
   }
 
-  // Ikon & statis lain: cache-first
+  // Other same-origin resources: network-first with a cache fallback.
   event.respondWith(
-    caches.match(req).then((cached) => {
-      if (cached) return cached;
-      return fetch(req).then((res) => {
-        const copy = res.clone();
-        if (res.ok && url.pathname.startsWith('/icons/')) {
-          caches.open(CACHE_NAME).then((c) => c.put(req, copy)).catch(() => undefined);
+    fetch(request)
+      .then((response) => {
+        if (response.ok && url.pathname.startsWith('/icons/')) {
+          const copy = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(request, copy)).catch(() => undefined);
         }
-        return res;
-      });
-    })
+        return response;
+      })
+      .catch(() => caches.match(request))
   );
 });

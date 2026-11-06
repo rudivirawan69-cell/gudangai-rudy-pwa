@@ -1,7 +1,7 @@
 # Produksi = Cloudflare Workers (bukan Vercel)
 
 ## URL produksi (pakai ini di HP / PWA install)
-**https://gudangai-rudy-pwa69.rudivirawan69.workers.dev/**
+**https://gudangai-rudy.rudivirawan69.workers.dev/**
 
 Worker name di `wrangler.jsonc`: `gudangai-rudy-pwa69`
 

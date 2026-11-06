@@ -1,0 +1,1 @@
+import{o as e}from"./rolldown-runtime-C0FnF6B9.js";import{B as t}from"./index-DEFe5dlz.js";var n=e(t(),1);function r(){let[e,t]=(0,n.useState)(0);return(0,n.useEffect)(()=>{let e=()=>t(e=>e+1);return window.addEventListener(`gudangai-bootstrap-updated`,e),()=>window.removeEventListener(`gudangai-bootstrap-updated`,e)},[]),e}export{r as t};

@@ -1,1 +1,1 @@
-deploy 2026-11-02-ui-beranda-status-cards-v2
+deploy 2026-11-06-rename-worker-gudangai-rudy
