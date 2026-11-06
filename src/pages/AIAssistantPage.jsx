@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useAuth } from '../hooks/useAuth';
 import { ArrowRight, Bot, Boxes, ClipboardList, FileSearch, PackageCheck, Send, ShieldCheck, Sparkles, Thermometer, Trash2, X } from 'lucide-react';
 
 const AGENT_API = (import.meta.env.VITE_GUDANGAI_AGENT_API || 'https://gudangai-rudy.rudivirawan69.workers.dev').replace(/\/$/, '');
@@ -18,6 +19,7 @@ function getReply(payload) {
 }
 
 export default function AIAssistantPage({ onNavigate }) {
+  const { accessToken } = useAuth();
   const [messages, setMessages] = useState([]);
   const [draft, setDraft] = useState('');
   const [activeSkill, setActiveSkill] = useState('general');
@@ -69,7 +71,7 @@ export default function AIAssistantPage({ onNavigate }) {
     try {
       const response = await fetch(`${AGENT_API}/api/agent`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json', ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}) },
         credentials: 'omit',
         signal: controller.signal,
         body: JSON.stringify({
@@ -106,7 +108,7 @@ export default function AIAssistantPage({ onNavigate }) {
       if (controllerRef.current === controller) controllerRef.current = null;
       setLoading(false);
     }
-  }, [activeSkill, loading, messages, online]);
+  }, [accessToken, activeSkill, loading, messages, online]);
 
   const chooseSkill = (skill) => {
     setActiveSkill(skill.id);
