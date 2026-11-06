@@ -9,7 +9,9 @@ function allowedOrigins(request, env) {
     .split(',')
     .map((value) => value.trim())
     .filter(Boolean);
-  return new Set([requestOrigin, ...configured]);
+  // Do not implicitly trust arbitrary request origins. Same-origin is the
+  // fallback only when no allow-list has been configured.
+  return new Set(configured.length ? configured : [requestOrigin]);
 }
 
 function json(data, status = 200, origin = '') {
@@ -20,7 +22,7 @@ function json(data, status = 200, origin = '') {
   };
   if (origin) {
     headers['access-control-allow-origin'] = origin;
-    headers['access-control-allow-headers'] = 'content-type';
+    headers['access-control-allow-headers'] = 'content-type, authorization';
     headers['access-control-allow-methods'] = 'GET, POST, OPTIONS';
   }
   return new Response(JSON.stringify(data), { status, headers });
@@ -105,7 +107,34 @@ async function runAnthropicFallback(env, messages, context) {
   return { reply, model: data?.model || ANTHROPIC_MODEL, provider: 'anthropic-fallback' };
 }
 
+async function verifySupabaseAccessToken(request, env) {
+  const authorization = request.headers.get('Authorization') || '';
+  const match = authorization.match(/^Bearer\s+(.+)$/i);
+  if (!match) return { ok: false, status: 401, code: 'AUTH_REQUIRED', error: 'Silakan login untuk menggunakan Agent GudangAI.' };
+
+  const supabaseUrl = String(env.SUPABASE_URL || '').replace(/\/+$/, '');
+  const anonKey = String(env.SUPABASE_ANON_KEY || '').trim();
+  if (!supabaseUrl || !anonKey) {
+    return { ok: false, status: 503, code: 'AUTH_NOT_CONFIGURED', error: 'Verifikasi sesi Supabase belum dikonfigurasi pada Worker.' };
+  }
+
+  try {
+    const response = await fetch(`${supabaseUrl}/auth/v1/user`, {
+      method: 'GET',
+      headers: { apikey: anonKey, Authorization: `Bearer ${match[1]}` },
+    });
+    if (!response.ok) return { ok: false, status: 401, code: 'INVALID_SESSION', error: 'Sesi login tidak valid atau sudah berakhir. Silakan login kembali.' };
+    const user = await response.json().catch(() => null);
+    if (!user?.id) return { ok: false, status: 401, code: 'INVALID_SESSION', error: 'Supabase tidak mengembalikan identitas pengguna yang valid.' };
+    return { ok: true, userId: user.id };
+  } catch (_) {
+    return { ok: false, status: 503, code: 'AUTH_PROVIDER_UNAVAILABLE', error: 'Layanan verifikasi Supabase sedang tidak dapat dihubungi.' };
+  }
+}
+
 async function handleAgent(request, env, origin) {
+  const auth = await verifySupabaseAccessToken(request, env);
+  if (!auth.ok) return json({ success: false, code: auth.code, error: auth.error }, auth.status, origin);
   const body = await request.json().catch(() => null);
   const message = String(body?.message || '').trim();
   if (!message) return json({ success: false, code: 'MESSAGE_REQUIRED', error: 'Pertanyaan belum diisi.' }, 400, origin);
@@ -172,6 +201,9 @@ export default {
         primaryConfigured: Boolean(env.AI && typeof env.AI.run === 'function'),
         model: String(env.AI_MODEL || DEFAULT_MODEL),
         anthropicFallbackEnabled: env.ANTHROPIC_FALLBACK_ENABLED === 'true' && Boolean(env.ANTHROPIC_API_KEY),
+        authRequired: true,
+        authConfigured: Boolean(env.SUPABASE_URL && env.SUPABASE_ANON_KEY),
+        deploymentTarget: 'https://claude-proxy.rudivirawan69.workers.dev/',
       }, 200, corsOrigin);
     }
 

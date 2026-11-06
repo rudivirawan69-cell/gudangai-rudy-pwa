@@ -5,13 +5,17 @@ on:
     branches: [main]
     paths:
       - "src/**"
+      - "worker.js"
+      - "scripts/test-agent-worker.mjs"
       - "cloudflare/**"
       - "docs/SUPABASE_AUTH_WORKER_SETUP.md"
       - "package.json"
       - "package-lock.json"
       - ".github/workflows/supabase-auth-check.yml"
   push:
-    branches: [feature/full-ai-intelligence-foundation]
+    branches:
+      - feature/full-ai-intelligence-foundation
+      - feature/worker-ai-cost-safe-hardening-20261104
 
 permissions:
   contents: read
@@ -29,7 +33,11 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci
-      - name: Check Worker JavaScript syntax
+      - name: Check main Worker JavaScript syntax
+        run: node --check worker.js
+      - name: Test Agent Worker security and provider routing
+        run: npm run test:agent
+      - name: Check legacy auth Worker JavaScript syntax
         run: node --check cloudflare/worker-supabase-auth.js
       - name: Check Supabase Auth client syntax
         run: node --check src/data/supabaseAuth.js
