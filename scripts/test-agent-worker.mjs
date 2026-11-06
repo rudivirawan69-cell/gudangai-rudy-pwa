@@ -66,6 +66,58 @@ test('agent validates Supabase bearer token then uses Workers AI', async () => {
   });
 });
 
+test('accepts Supabase publishable key when anon key is not configured', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url, options) => {
+    assert.equal(String(url), `${SUPABASE_URL}/auth/v1/user`);
+    assert.equal(options.headers.apikey, 'test-publishable-key');
+    return new Response(JSON.stringify({ id: 'user-test-2' }), { status: 200 });
+  };
+  try {
+    const response = await worker.fetch(makeRequest('/api/agent', {
+      method: 'POST', body: { message: 'Tes key publishable' },
+    }), {
+      SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY: 'test-publishable-key',
+      ALLOWED_ORIGINS: ORIGIN,
+      AI: { run: async () => ({ response: 'OK' }) },
+    });
+    assert.equal(response.status, 200);
+    assert.equal((await response.json()).reply, 'OK');
+  } finally { globalThis.fetch = originalFetch; }
+});
+
+test('uses 9Router when configured and does not expose its API key in response', async () => {
+  const originalFetch = globalThis.fetch;
+  let captured;
+  globalThis.fetch = async (url, options) => {
+    if (String(url) === `${SUPABASE_URL}/auth/v1/user`) {
+      return new Response(JSON.stringify({ id: 'user-test-3' }), { status: 200 });
+    }
+    assert.equal(String(url), 'https://9router.com/v1/chat/completions');
+    assert.equal(options.headers.authorization, 'Bearer secret-test-key');
+    captured = JSON.parse(options.body);
+    return new Response(JSON.stringify({
+      model: 'test-model',
+      choices: [{ message: { content: 'Jawaban dari 9Router.' } }],
+    }), { status: 200, headers: { 'content-type': 'application/json' } });
+  };
+  try {
+    const response = await worker.fetch(makeRequest('/api/agent', {
+      method: 'POST', body: { message: 'Tes 9Router' },
+    }), {
+      ...validEnv, NINE_ROUTER_API_KEY: 'secret-test-key',
+      NINE_ROUTER_MODEL: 'test-model',
+      AI: { run: async () => { throw new Error('Workers AI should not run'); } },
+    });
+    const payload = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(payload.provider, '9router');
+    assert.equal(payload.reply, 'Jawaban dari 9Router.');
+    assert.equal(captured.messages.at(-1).content, 'Tes 9Router');
+    assert.equal(JSON.stringify(payload).includes('secret-test-key'), false);
+  } finally { globalThis.fetch = originalFetch; }
+});
+
 test('rejects Agent requests without a bearer token', async () => {
   const response = await worker.fetch(makeRequest('/api/agent', {
     method: 'POST', body: { message: 'Halo' }, token: '',
