@@ -12,8 +12,6 @@
     "binding": "AI"
   },
   "vars": {
-    "SUPABASE_URL": "https://cbeosysruwkfwgklziog.supabase.co",
-    "SUPABASE_PUBLISHABLE_KEY": "sb_publishable_nrVxMRbrQihkzwFmWEs7QA_PlVFDWOz",
     "AI_MODEL": "@cf/meta/llama-3.1-8b-instruct-fast",
     "ANTHROPIC_FALLBACK_ENABLED": "false",
     "ALLOWED_ORIGINS": "https://gudangai-rudy.rudivirawan69.workers.dev,https://gudangai-rudy-pwa.vercel.app"
