@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import worker from '../worker.js';
 
-const ORIGIN = 'https://claude-proxy.rudivirawan69.workers.dev';
+const ORIGIN = 'https://gudangai-rudy.rudivirawan69.workers.dev';
 const SUPABASE_URL = 'https://project.supabase.co';
 const validEnv = {
   SUPABASE_URL,
