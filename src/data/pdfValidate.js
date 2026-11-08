@@ -624,7 +624,13 @@ export function applyStockAwareFallback(rows) {
 }
 
 export function detectEntityFromText(text) {
-  const t = String(text || '').toLowerCase();
+  // PT. Citra Guna / PT. Reza Perkasa are supplier labels, not the PDF entity.
+  // Remove these trailing supplier annotations before counting CV/PT markers.
+  const t = String(text || '')
+    .split(/\r?\n/)
+    .map((line) => line.replace(/\s*[/|]\s*pt\.?\s*(?:citra\s*guna|reza\s*perkasa)\b.*$/i, ''))
+    .join('\n')
+    .toLowerCase();
   if (/\bpt\.?\s*rasyuka|\brasyuka\b/.test(t)) return 'PT';
   if (/\bcv\.?\s*selera|\bselera\b/.test(t)) return 'CV';
 
