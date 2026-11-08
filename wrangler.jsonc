@@ -12,6 +12,7 @@
     "binding": "AI"
   },
   "vars": {
+    "GUDANGAI_SHEETS_API_URL": "https://script.google.com/macros/s/AKfycbxYNipdWCeg1800-D4iA0ZDtO0Yy9RxQ0hcjZfJNO15mU0bSjSS6KiwkbSzcbJYhg8VIA/exec",
     "AI_MODEL": "@cf/meta/llama-3.1-8b-instruct-fast",
     "ANTHROPIC_FALLBACK_ENABLED": "false",
     "ALLOWED_ORIGINS": "https://gudangai-rudy-pwa69.rudivirawan69.workers.dev,https://rudivirawan69-cell.github.io,https://gudangai-rudy-pwa.vercel.app,https://gudangai-rudy-pwa-live.vercel.app"
