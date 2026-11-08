@@ -51,6 +51,7 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          GUDANGAI_SHEETS_API_SECRET: ${{ secrets.GUDANGAI_SHEETS_API_SECRET }}
         run: |
           if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
             echo "Missing Cloudflare deployment secrets."
@@ -60,6 +61,10 @@ jobs:
             echo "Missing SUPABASE_URL or SUPABASE_ANON_KEY. Agent deployment blocked to avoid an unauthenticated endpoint."
             exit 1
           fi
+          if [ -z "$GUDANGAI_SHEETS_API_SECRET" ]; then
+            echo "Missing GUDANGAI_SHEETS_API_SECRET. Read-only data bridge deployment is blocked."
+            exit 1
+          fi
 
       - name: Validate Cloudflare Worker config
         env:
@@ -67,25 +72,36 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: npx wrangler@4.156.0 deploy --config wrangler.jsonc --dry-run
 
-      - name: Configure Supabase Auth verification secrets
+      - name: Deploy Worker with encrypted Supabase secrets
         shell: bash
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          GUDANGAI_SHEETS_API_SECRET: ${{ secrets.GUDANGAI_SHEETS_API_SECRET }}
         run: |
-          printf '%s' "$SUPABASE_URL" | npx wrangler@4.156.0 secret put SUPABASE_URL --config wrangler.jsonc
-          printf '%s' "$SUPABASE_ANON_KEY" | npx wrangler@4.156.0 secret put SUPABASE_ANON_KEY --config wrangler.jsonc
-
-      - name: Deploy to requested Cloudflare Worker domain
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: npx wrangler@4.156.0 deploy --config wrangler.jsonc
+          set -euo pipefail
+          umask 077
+          secrets_file="$RUNNER_TEMP/gudangai-worker-secrets.json"
+          trap 'rm -f "$secrets_file"' EXIT
+          node - "$secrets_file" <<'NODE'
+          const fs = require('node:fs');
+          const file = process.argv[2];
+          const values = {
+            SUPABASE_URL: process.env.SUPABASE_URL,
+            SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY,
+            GUDANGAI_SHEETS_API_SECRET: process.env.GUDANGAI_SHEETS_API_SECRET,
+          };
+          if (!values.SUPABASE_URL || !values.SUPABASE_ANON_KEY || !values.GUDANGAI_SHEETS_API_SECRET) {
+            throw new Error('Required Worker secrets are missing.');
+          }
+          fs.writeFileSync(file, JSON.stringify(values), { mode: 0o600 });
+          NODE
+          npx wrangler@4.156.0 deploy --config wrangler.jsonc --secrets-file "$secrets_file"
 
       - name: Report deployed commit
         run: |
           echo "Cloudflare production deployment requested for commit ${GITHUB_SHA}"
-          echo "Worker: gudangai-rudy"
-          echo "URL: https://gudangai-rudy.rudivirawan69.workers.dev/"
+          echo "Worker: gudangai-rudy-pwa69"
+          echo "URL: https://gudangai-rudy-pwa69.rudivirawan69.workers.dev/"

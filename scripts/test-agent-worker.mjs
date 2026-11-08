@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import worker from '../worker.js';
 
-const ORIGIN = 'https://claude-proxy.rudivirawan69.workers.dev';
+const ORIGIN = 'https://gudangai-rudy-pwa69.rudivirawan69.workers.dev';
 const SUPABASE_URL = 'https://project.supabase.co';
 const validEnv = {
   SUPABASE_URL,
@@ -44,7 +44,51 @@ test('health reports Workers AI primary, auth status and paid fallback disabled'
   assert.equal(payload.anthropicFallbackEnabled, false);
   assert.equal(payload.authRequired, true);
   assert.equal(payload.authConfigured, true);
-  assert.equal(payload.deploymentTarget, ORIGIN + '/');
+  assert.equal(payload.deploymentTarget, ORIGIN);
+});
+
+test('read-only data gateway proxies allowlisted action without exposing secret', async () => {
+  await withSupabaseAuth(async () => {
+    const originalFetch = globalThis.fetch;
+    let captured;
+    globalThis.fetch = async (url, options) => {
+      if (String(url) === `${SUPABASE_URL}/auth/v1/user`) {
+        return new Response(JSON.stringify({ id: 'user-data-1' }), { status: 200 });
+      }
+      assert.equal(String(url), 'https://sheets.example/exec');
+      captured = JSON.parse(options.body);
+      return new Response(JSON.stringify({ success: true, items: [{ kode: 'CV-1' }] }), { status: 200 });
+    };
+    try {
+      const response = await worker.fetch(makeRequest('/api/data', {
+        method: 'POST', body: { action: 'getAllStock', entitas: 'CV', secret: 'client-must-not-win' },
+      }), {
+        ...validEnv,
+        GUDANGAI_SHEETS_API_URL: 'https://sheets.example/exec',
+        GUDANGAI_SHEETS_API_SECRET: 'server-secret',
+      });
+      const payload = await response.json();
+      assert.equal(response.status, 200);
+      assert.equal(payload.success, true);
+      assert.equal(payload.actor, 'user-data-1');
+      assert.equal(captured.secret, 'server-secret');
+      assert.equal(JSON.stringify(payload).includes('server-secret'), false);
+    } finally { globalThis.fetch = originalFetch; }
+  });
+});
+
+test('read-only data gateway rejects write action before Apps Script call', async () => {
+  await withSupabaseAuth(async () => {
+    const response = await worker.fetch(makeRequest('/api/data', {
+      method: 'POST', body: { action: 'bulkTransaction' },
+    }), {
+      ...validEnv,
+      GUDANGAI_SHEETS_API_URL: 'https://sheets.example/exec',
+      GUDANGAI_SHEETS_API_SECRET: 'server-secret',
+    });
+    assert.equal(response.status, 400);
+    assert.equal((await response.json()).code, 'READ_ACTION_NOT_ALLOWED');
+  });
 });
 
 test('agent validates Supabase bearer token then uses Workers AI', async () => {
@@ -64,6 +108,58 @@ test('agent validates Supabase bearer token then uses Workers AI', async () => {
     assert.equal(captured.model, '@cf/meta/llama-3.1-8b-instruct');
     assert.equal(captured.input.messages.filter((item) => item.role === 'user' && item.content === 'Cek stok').length, 1);
   });
+});
+
+test('accepts Supabase publishable key when anon key is not configured', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url, options) => {
+    assert.equal(String(url), `${SUPABASE_URL}/auth/v1/user`);
+    assert.equal(options.headers.apikey, 'test-publishable-key');
+    return new Response(JSON.stringify({ id: 'user-test-2' }), { status: 200 });
+  };
+  try {
+    const response = await worker.fetch(makeRequest('/api/agent', {
+      method: 'POST', body: { message: 'Tes key publishable' },
+    }), {
+      SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY: 'test-publishable-key',
+      ALLOWED_ORIGINS: ORIGIN,
+      AI: { run: async () => ({ response: 'OK' }) },
+    });
+    assert.equal(response.status, 200);
+    assert.equal((await response.json()).reply, 'OK');
+  } finally { globalThis.fetch = originalFetch; }
+});
+
+test('uses 9Router when configured and does not expose its API key in response', async () => {
+  const originalFetch = globalThis.fetch;
+  let captured;
+  globalThis.fetch = async (url, options) => {
+    if (String(url) === `${SUPABASE_URL}/auth/v1/user`) {
+      return new Response(JSON.stringify({ id: 'user-test-3' }), { status: 200 });
+    }
+    assert.equal(String(url), 'https://9router.com/v1/chat/completions');
+    assert.equal(options.headers.authorization, 'Bearer secret-test-key');
+    captured = JSON.parse(options.body);
+    return new Response(JSON.stringify({
+      model: 'test-model',
+      choices: [{ message: { content: 'Jawaban dari 9Router.' } }],
+    }), { status: 200, headers: { 'content-type': 'application/json' } });
+  };
+  try {
+    const response = await worker.fetch(makeRequest('/api/agent', {
+      method: 'POST', body: { message: 'Tes 9Router' },
+    }), {
+      ...validEnv, NINE_ROUTER_API_KEY: 'secret-test-key',
+      NINE_ROUTER_MODEL: 'test-model',
+      AI: { run: async () => { throw new Error('Workers AI should not run'); } },
+    });
+    const payload = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(payload.provider, '9router');
+    assert.equal(payload.reply, 'Jawaban dari 9Router.');
+    assert.equal(captured.messages.at(-1).content, 'Tes 9Router');
+    assert.equal(JSON.stringify(payload).includes('secret-test-key'), false);
+  } finally { globalThis.fetch = originalFetch; }
 });
 
 test('rejects Agent requests without a bearer token', async () => {

@@ -6,11 +6,15 @@
         "ayam fillet dada",
         "ayam fillet dada / cv. pd3 chicken",
         "ayam fillet dada cv pd3 chicken",
-        "fillet dada"
+        "fillet dada",
+        "ayam fillet dada / pt. citra guna",
+        "ayam fillet dada / pt. reza perkasa"
       ],
       "CV-0002": [
         "ayam fillet paha",
-        "fillet paha"
+        "fillet paha",
+        "ayam fillet paha / pt. citra guna",
+        "ayam fillet paha / pt. reza perkasa"
       ],
       "CV-0003": [
         "udang",
@@ -365,11 +369,15 @@
     "PT": {
       "PT-0001": [
         "ayam fillet dada",
-        "fillet dada"
+        "fillet dada",
+        "ayam fillet dada / pt. citra guna",
+        "ayam fillet dada / pt. reza perkasa"
       ],
       "PT-0002": [
         "ayam fillet paha",
-        "fillet paha"
+        "fillet paha",
+        "ayam fillet paha / pt. citra guna",
+        "ayam fillet paha / pt. reza perkasa"
       ],
       "PT-0003": [
         "ayam suwir bld",

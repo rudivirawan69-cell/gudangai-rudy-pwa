@@ -72,7 +72,7 @@ try {
     },
   });
 
-  await page.route('https://gudangai-rudy.rudivirawan69.workers.dev/api/agent/health', async (route) => {
+  await page.route('https://gudangai-rudy-pwa69.rudivirawan69.workers.dev/api/agent/health', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',

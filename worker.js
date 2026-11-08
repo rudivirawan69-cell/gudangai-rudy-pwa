@@ -2,6 +2,54 @@ const DEFAULT_MODEL = '@cf/meta/llama-3.1-8b-instruct';
 const ANTHROPIC_MODEL = 'claude-3-5-haiku-latest';
 const MAX_MESSAGE_LENGTH = 4000;
 const MAX_HISTORY_ITEMS = 8;
+const READ_ONLY_ACTIONS = new Set([
+  'ping', 'status', 'getConfig', 'getDashboard', 'getDashboardData',
+  'getAllStock', 'getStockAll', 'getStockByCode', 'searchByName',
+  'getLowStock', 'getTransactionHistory', 'getStatusPO', 'getPOStatus',
+  'getSystemLog', 'bootstrap',
+]);
+
+function configuredSheets(env) {
+  return Boolean(String(env.GUDANGAI_SHEETS_API_URL || '').trim()
+    && String(env.GUDANGAI_SHEETS_API_URL).startsWith('https://')
+    && String(env.GUDANGAI_SHEETS_API_SECRET || '').trim());
+}
+
+async function callSheetsRead(env, action, params = {}) {
+  if (!READ_ONLY_ACTIONS.has(action)) {
+    return { success: false, code: 'READ_ACTION_NOT_ALLOWED', error: 'Action bukan bagian dari allowlist read-only.' };
+  }
+  if (!configuredSheets(env)) {
+    return { success: false, code: 'DATA_TOOLS_NOT_CONFIGURED', error: 'Gateway spreadsheet read-only belum dikonfigurasi pada Worker.' };
+  }
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 15000);
+  try {
+    const response = await fetch(String(env.GUDANGAI_SHEETS_API_URL).trim(), {
+      method: 'POST',
+      headers: { 'content-type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({
+        action,
+        ...params,
+        secret: String(env.GUDANGAI_SHEETS_API_SECRET).trim(),
+        client: { app: 'gudangai-rudy-agent', mode: 'read_only' },
+      }),
+      signal: controller.signal,
+    });
+    const text = await response.text();
+    let payload;
+    try { payload = JSON.parse(text); } catch (_) {
+      return { success: false, code: 'SHEETS_NON_JSON', error: 'Apps Script mengembalikan respons bukan JSON.' };
+    }
+    if (!response.ok) return { success: false, code: 'SHEETS_HTTP_ERROR', error: `Apps Script HTTP ${response.status}`, detail: payload };
+    return { ...payload, source: 'Apps Script read-only gateway', action, readAt: new Date().toISOString() };
+  } catch (error) {
+    return { success: false, code: 'SHEETS_READ_FAILED', error: error?.name === 'AbortError' ? 'Pembacaan spreadsheet timeout.' : String(error?.message || error) };
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 function allowedOrigins(request, env) {
   const requestOrigin = new URL(request.url).origin;
@@ -107,13 +155,35 @@ async function runAnthropicFallback(env, messages, context) {
   return { reply, model: data?.model || ANTHROPIC_MODEL, provider: 'anthropic-fallback' };
 }
 
+async function runNineRouter(env, messages) {
+  const apiKey = String(env.NINE_ROUTER_API_KEY || '').trim();
+  const model = String(env.NINE_ROUTER_MODEL || '').trim();
+  if (!apiKey || !model) throw new Error('9Router belum dikonfigurasi: Secret NINE_ROUTER_API_KEY dan variable NINE_ROUTER_MODEL wajib tersedia.');
+  const upstream = await fetch('https://9router.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({ model, messages, max_tokens: 900 }),
+  });
+  const data = await upstream.json().catch(() => ({}));
+  if (!upstream.ok) {
+    const message = data?.error?.message || data?.message || `9Router API HTTP ${upstream.status}`;
+    throw new Error(String(message).slice(0, 240));
+  }
+  const reply = String(data?.choices?.[0]?.message?.content || '').trim();
+  if (!reply) throw new Error('9Router mengembalikan jawaban kosong.');
+  return { reply, model: data?.model || model, provider: '9router' };
+}
+
 async function verifySupabaseAccessToken(request, env) {
   const authorization = request.headers.get('Authorization') || '';
   const match = authorization.match(/^Bearer\s+(.+)$/i);
   if (!match) return { ok: false, status: 401, code: 'AUTH_REQUIRED', error: 'Silakan login untuk menggunakan Agent GudangAI.' };
 
   const supabaseUrl = String(env.SUPABASE_URL || '').replace(/\/+$/, '');
-  const anonKey = String(env.SUPABASE_ANON_KEY || '').trim();
+  const anonKey = String(env.SUPABASE_ANON_KEY || env.SUPABASE_PUBLISHABLE_KEY || '').trim();
   if (!supabaseUrl || !anonKey) {
     return { ok: false, status: 503, code: 'AUTH_NOT_CONFIGURED', error: 'Verifikasi sesi Supabase belum dikonfigurasi pada Worker.' };
   }
@@ -151,6 +221,27 @@ async function handleAgent(request, env, origin) {
   ];
 
   try {
+    if (env.NINE_ROUTER_API_KEY && env.NINE_ROUTER_MODEL) {
+      try {
+        const result = await runNineRouter(env, messages);
+        return json({ success: true, ...result, mode: 'hybrid' }, 200, origin);
+      } catch (routerError) {
+        // 9Router is preferred when configured; Cloudflare Workers AI is the controlled fallback.
+        try {
+          const fallback = await runWorkersAI(env, messages);
+          return json({
+            success: true, ...fallback, mode: 'hybrid',
+            fallbackReason: String(routerError?.message || '9Router unavailable').slice(0, 240),
+          }, 200, origin);
+        } catch (primaryError) {
+          return json({
+            success: false, code: 'AI_PROVIDERS_UNAVAILABLE',
+            error: '9Router dan Workers AI tidak tersedia.',
+            detail: String(primaryError?.message || routerError?.message || 'AI provider gagal').slice(0, 240),
+          }, 503, origin);
+        }
+      }
+    }
     const result = await runWorkersAI(env, messages);
     return json({ success: true, ...result, mode: 'hybrid' }, 200, origin);
   } catch (primaryError) {
@@ -177,6 +268,22 @@ async function handleAgent(request, env, origin) {
   }
 }
 
+async function handleReadOnlyData(request, env, origin) {
+  const auth = await verifySupabaseAccessToken(request, env);
+  if (!auth.ok) return json({ success: false, code: auth.code, error: auth.error }, auth.status, origin);
+  const body = await request.json().catch(() => null);
+  const action = String(body?.action || '').trim();
+  if (!READ_ONLY_ACTIONS.has(action)) {
+    return json({ success: false, code: 'READ_ACTION_NOT_ALLOWED', error: 'Action tidak diizinkan untuk gateway read-only.' }, 400, origin);
+  }
+  const params = { ...body };
+  delete params.action;
+  delete params.secret;
+  delete params.authorization;
+  const result = await callSheetsRead(env, action, params);
+  return json({ ...result, actor: auth.userId, permissions: 'read_only' }, result.success === false ? 502 : 200, origin);
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -194,17 +301,26 @@ export default {
 
     if (url.pathname === '/api/agent/health') {
       if (request.method !== 'GET') return json({ success: false, error: 'Method not allowed' }, 405, corsOrigin);
-      return json({
+        return json({
         success: true,
         mode: 'hybrid',
-        primary: 'cloudflare-workers-ai',
-        primaryConfigured: Boolean(env.AI && typeof env.AI.run === 'function'),
+        primary: env.NINE_ROUTER_API_KEY && env.NINE_ROUTER_MODEL ? '9router' : 'cloudflare-workers-ai',
+        primaryConfigured: Boolean((env.NINE_ROUTER_API_KEY && env.NINE_ROUTER_MODEL) || (env.AI && typeof env.AI.run === 'function')),
+        nineRouterConfigured: Boolean(env.NINE_ROUTER_API_KEY && env.NINE_ROUTER_MODEL),
         model: String(env.AI_MODEL || DEFAULT_MODEL),
         anthropicFallbackEnabled: env.ANTHROPIC_FALLBACK_ENABLED === 'true' && Boolean(env.ANTHROPIC_API_KEY),
         authRequired: true,
-        authConfigured: Boolean(env.SUPABASE_URL && env.SUPABASE_ANON_KEY),
-        deploymentTarget: 'https://claude-proxy.rudivirawan69.workers.dev/',
+        authConfigured: Boolean(env.SUPABASE_URL && (env.SUPABASE_ANON_KEY || env.SUPABASE_PUBLISHABLE_KEY)),
+        dataToolsConfigured: configuredSheets(env),
+        dataToolsMode: 'read_only_allowlist',
+        readOnlyActions: Array.from(READ_ONLY_ACTIONS),
+        deploymentTarget: new URL(request.url).origin,
       }, 200, corsOrigin);
+    }
+
+    if (url.pathname === '/api/data') {
+      if (request.method !== 'POST') return json({ success: false, error: 'Method not allowed' }, 405, corsOrigin);
+      return handleReadOnlyData(request, env, corsOrigin);
     }
 
     if (url.pathname === '/api/claude' || url.pathname === '/api/agent') {
