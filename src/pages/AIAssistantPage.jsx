@@ -162,7 +162,7 @@ export default function AIAssistantPage({ onNavigate }) {
         <span className="ml-auto text-[10px] text-slate-400">Analisis berbasis data yang Anda kirim</span>
       </div>
 
-      <div className="flex min-h-[34vh] flex-col gap-3 rounded-2xl border border-slate-200 bg-slate-50/90 p-3 shadow-sm dark:border-slate-700 dark:bg-slate-950/70">
+      <div className="flex min-h-[34vh] max-h-[58dvh] flex-col gap-3 overflow-y-auto overscroll-contain rounded-2xl border border-slate-200 bg-slate-50/90 p-3 shadow-sm [scrollbar-gutter:stable] dark:border-slate-700 dark:bg-slate-950/70">
         {!messages.length && (
           <div className="m-auto max-w-md py-5 text-center">
             <Sparkles className="mx-auto mb-2 h-8 w-8 text-cyan-600" />
