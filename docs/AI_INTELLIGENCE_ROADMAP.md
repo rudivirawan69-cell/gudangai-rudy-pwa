@@ -5,7 +5,7 @@
 This branch introduces the first isolated frontend foundation for Claude chat. It does **not** claim that stock, purchase-order, transaction, cold-storage, or Google Sheets tools are connected yet.
 
 - Default model: `anthropic/claude-sonnet-5.5`
-- Worker API base: `VITE_GUDANGAI_AI_API_BASE` or `https://gudangai-rudy.rudivirawan69.workers.dev`
+- Worker API base: `VITE_GUDANGAI_AI_API_BASE` or `https://gudangai-rudy-pwa69.rudivirawan69.workers.dev`
 - Routes consumed: `GET /api/models`, `POST /api/chat`
 - Streaming: Server-Sent Events, with incremental UTF-8 decoding and event-boundary buffering.
 - Chat history: in-memory for the current page session only; it is not persisted to localStorage.
