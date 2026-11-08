@@ -1,5 +1,5 @@
 {
-  "name": "gudangai-rudy",
+  "name": "gudangai-rudy-pwa69",
   "compatibility_date": "2026-10-04",
   "main": "worker.js",
   "assets": {
@@ -16,7 +16,7 @@
     "SUPABASE_PUBLISHABLE_KEY": "sb_publishable_nrVxMRbrQihkzwFmWEs7QA_PlVFDWOz",
     "AI_MODEL": "@cf/meta/llama-3.1-8b-instruct-fast",
     "ANTHROPIC_FALLBACK_ENABLED": "false",
-    "ALLOWED_ORIGINS": "https://gudangai-rudy.rudivirawan69.workers.dev,https://rudivirawan69-cell.github.io,https://gudangai-rudy-pwa.vercel.app,https://gudangai-rudy-pwa-live.vercel.app"
+    "ALLOWED_ORIGINS": "https://gudangai-rudy-pwa69.rudivirawan69.workers.dev,https://rudivirawan69-cell.github.io,https://gudangai-rudy-pwa.vercel.app,https://gudangai-rudy-pwa-live.vercel.app"
   },
   "previews": {}
 } 
