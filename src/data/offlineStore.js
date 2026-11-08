@@ -63,14 +63,22 @@ export async function hydrateQueueBackup(readLocalState, writeLocalState) {
     }
     const localRev = Number(local.revision) || 0;
     const backupRev = Number(backup.revision) || 0;
-    if (backupRev > localRev) {
-      const queue = Array.isArray(backup.queue) ? backup.queue : [];
-      writeLocalState?.(queue, backupRev);
-      try { window.dispatchEvent(new CustomEvent('gudangai-queue-changed', { detail: { restored: true, revision: backupRev } })); } catch (_) {}
-      return { restored: true, revision: backupRev, queue };
+    const localQueue = Array.isArray(local.queue) ? local.queue : [];
+    const backupQueue = Array.isArray(backup.queue) ? backup.queue : [];
+    const entriesById = new Map();
+    [...backupQueue, ...localQueue].forEach((entry) => {
+      const id = String(entry?.id || `${entry?.createdAt || ''}:${entry?.type || ''}:${entry?.entity || ''}`);
+      if (id && !entriesById.has(id)) entriesById.set(id, entry);
+    });
+    const queue = Array.from(entriesById.values());
+    const revision = Math.max(localRev, backupRev, queue.length ? 1 : 0);
+    const changed = queue.length !== localQueue.length || backupRev > localRev;
+    if (changed) writeLocalState?.(queue, revision);
+    await persistQueueBackup(queue, revision || 1);
+    if (changed) {
+      try { window.dispatchEvent(new CustomEvent('gudangai-queue-changed', { detail: { restored: backupRev > localRev, revision } })); } catch (_) {}
     }
-    if (localRev >= backupRev) await persistQueueBackup(local.queue || [], localRev || 1);
-    return { restored: false, revision: localRev || 1, queue: local.queue || [] };
+    return { restored: backupRev > localRev, revision: revision || 1, queue };
   } catch (_) {
     return { restored: false, revision: 0, queue: [] };
   }
