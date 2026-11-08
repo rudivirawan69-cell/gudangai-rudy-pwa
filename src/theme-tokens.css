@@ -32,6 +32,7 @@ html[data-theme="light"] {
   --nav-blur: blur(18px) saturate(1.15);
   --focus-ring: 0 0 0 3px rgba(245, 158, 11, 0.32);
   --surface: var(--bg-elevated);
+  --field-bg: #ffffff;
   --ink: var(--text-main);
   --chart-line: #0d9488;
   --chart-fill: rgba(13, 148, 136, 0.18);
@@ -46,6 +47,7 @@ html[data-theme="dark"] {
   --bg-app-grad: linear-gradient(165deg, #050f1a 0%, #0a1a2e 42%, #0f2744 100%);
   --bg-elevated: #12263d;
   --bg-muted: #0c1c30;
+  --field-bg: #0b1b2e;
   --text-main: #f8fafc;
   --text-muted: #c5d4e8;
   --text-on-accent: #061018;
@@ -71,6 +73,7 @@ html[data-theme="dark"] {
   --nav-blur: blur(20px) saturate(1.35);
   --focus-ring: 0 0 0 3px rgba(56, 189, 248, 0.4);
   --surface: var(--bg-elevated);
+  --field-bg: #ffffff;
   --ink: var(--text-main);
   --chart-line: #38bdf8;
   --chart-fill: rgba(56, 189, 248, 0.22);
@@ -110,6 +113,7 @@ html[data-theme="warm_productive"] {
   --nav-blur: blur(18px) saturate(1.15);
   --focus-ring: 0 0 0 3px rgba(20, 184, 166, 0.4);
   --surface: var(--bg-elevated);
+  --field-bg: #ffffff;
   --ink: var(--text-main);
   --chart-line: #14b8a6;
   --chart-fill: rgba(20, 184, 166, 0.25);
