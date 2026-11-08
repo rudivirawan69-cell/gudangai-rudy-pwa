@@ -2,6 +2,54 @@ const DEFAULT_MODEL = '@cf/meta/llama-3.1-8b-instruct';
 const ANTHROPIC_MODEL = 'claude-3-5-haiku-latest';
 const MAX_MESSAGE_LENGTH = 4000;
 const MAX_HISTORY_ITEMS = 8;
+const READ_ONLY_ACTIONS = new Set([
+  'ping', 'status', 'getConfig', 'getDashboard', 'getDashboardData',
+  'getAllStock', 'getStockAll', 'getStockByCode', 'searchByName',
+  'getLowStock', 'getTransactionHistory', 'getStatusPO', 'getPOStatus',
+  'getSystemLog', 'bootstrap',
+]);
+
+function configuredSheets(env) {
+  return Boolean(String(env.GUDANGAI_SHEETS_API_URL || '').trim()
+    && String(env.GUDANGAI_SHEETS_API_URL).startsWith('https://')
+    && String(env.GUDANGAI_SHEETS_API_SECRET || '').trim());
+}
+
+async function callSheetsRead(env, action, params = {}) {
+  if (!READ_ONLY_ACTIONS.has(action)) {
+    return { success: false, code: 'READ_ACTION_NOT_ALLOWED', error: 'Action bukan bagian dari allowlist read-only.' };
+  }
+  if (!configuredSheets(env)) {
+    return { success: false, code: 'DATA_TOOLS_NOT_CONFIGURED', error: 'Gateway spreadsheet read-only belum dikonfigurasi pada Worker.' };
+  }
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 15000);
+  try {
+    const response = await fetch(String(env.GUDANGAI_SHEETS_API_URL).trim(), {
+      method: 'POST',
+      headers: { 'content-type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({
+        action,
+        ...params,
+        secret: String(env.GUDANGAI_SHEETS_API_SECRET).trim(),
+        client: { app: 'gudangai-rudy-agent', mode: 'read_only' },
+      }),
+      signal: controller.signal,
+    });
+    const text = await response.text();
+    let payload;
+    try { payload = JSON.parse(text); } catch (_) {
+      return { success: false, code: 'SHEETS_NON_JSON', error: 'Apps Script mengembalikan respons bukan JSON.' };
+    }
+    if (!response.ok) return { success: false, code: 'SHEETS_HTTP_ERROR', error: `Apps Script HTTP ${response.status}`, detail: payload };
+    return { ...payload, source: 'Apps Script read-only gateway', action, readAt: new Date().toISOString() };
+  } catch (error) {
+    return { success: false, code: 'SHEETS_READ_FAILED', error: error?.name === 'AbortError' ? 'Pembacaan spreadsheet timeout.' : String(error?.message || error) };
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 function allowedOrigins(request, env) {
   const requestOrigin = new URL(request.url).origin;
@@ -220,6 +268,22 @@ async function handleAgent(request, env, origin) {
   }
 }
 
+async function handleReadOnlyData(request, env, origin) {
+  const auth = await verifySupabaseAccessToken(request, env);
+  if (!auth.ok) return json({ success: false, code: auth.code, error: auth.error }, auth.status, origin);
+  const body = await request.json().catch(() => null);
+  const action = String(body?.action || '').trim();
+  if (!READ_ONLY_ACTIONS.has(action)) {
+    return json({ success: false, code: 'READ_ACTION_NOT_ALLOWED', error: 'Action tidak diizinkan untuk gateway read-only.' }, 400, origin);
+  }
+  const params = { ...body };
+  delete params.action;
+  delete params.secret;
+  delete params.authorization;
+  const result = await callSheetsRead(env, action, params);
+  return json({ ...result, actor: auth.userId, permissions: 'read_only' }, result.success === false ? 502 : 200, origin);
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -237,7 +301,7 @@ export default {
 
     if (url.pathname === '/api/agent/health') {
       if (request.method !== 'GET') return json({ success: false, error: 'Method not allowed' }, 405, corsOrigin);
-      return json({
+        return json({
         success: true,
         mode: 'hybrid',
         primary: env.NINE_ROUTER_API_KEY && env.NINE_ROUTER_MODEL ? '9router' : 'cloudflare-workers-ai',
@@ -247,8 +311,16 @@ export default {
         anthropicFallbackEnabled: env.ANTHROPIC_FALLBACK_ENABLED === 'true' && Boolean(env.ANTHROPIC_API_KEY),
         authRequired: true,
         authConfigured: Boolean(env.SUPABASE_URL && (env.SUPABASE_ANON_KEY || env.SUPABASE_PUBLISHABLE_KEY)),
+        dataToolsConfigured: configuredSheets(env),
+        dataToolsMode: 'read_only_allowlist',
+        readOnlyActions: Array.from(READ_ONLY_ACTIONS),
         deploymentTarget: new URL(request.url).origin,
       }, 200, corsOrigin);
+    }
+
+    if (url.pathname === '/api/data') {
+      if (request.method !== 'POST') return json({ success: false, error: 'Method not allowed' }, 405, corsOrigin);
+      return handleReadOnlyData(request, env, corsOrigin);
     }
 
     if (url.pathname === '/api/claude' || url.pathname === '/api/agent') {
