@@ -29,6 +29,7 @@ export default function AIAssistantPage({ onNavigate }) {
   const [health, setHealth] = useState('Memeriksa koneksi Worker AI…');
   const controllerRef = useRef(null);
   const bottomRef = useRef(null);
+  const chatScrollRef = useRef(null);
 
   useEffect(() => {
     const onOnline = () => setOnline(true);
@@ -131,8 +132,11 @@ export default function AIAssistantPage({ onNavigate }) {
   };
 
   return (
-    <section className="mx-auto flex w-full max-w-4xl flex-col gap-3 pb-4" aria-label="Agent Rubee Intelligence">
-      <header className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+    <section
+      className="mx-auto flex h-[calc(100dvh-7.5rem)] w-full max-w-4xl flex-col gap-3 overflow-hidden pb-1"
+      aria-label="Agent Rubee Intelligence"
+    >
+      <header className="shrink-0 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-700 dark:bg-slate-900">
         <div className="flex items-center gap-3">
           <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-cyan-500 to-blue-700 text-white shadow">
             <Bot className="h-6 w-6" />
@@ -150,7 +154,7 @@ export default function AIAssistantPage({ onNavigate }) {
         </div>
       </header>
 
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+      <div className="grid shrink-0 grid-cols-2 gap-2 sm:grid-cols-3">
         {SKILLS.map((skill) => {
           const Icon = skill.icon;
           const selected = activeSkill === skill.id;
@@ -165,13 +169,16 @@ export default function AIAssistantPage({ onNavigate }) {
         })}
       </div>
 
-      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-900">
+      <div className="flex shrink-0 flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-900">
         <span className={`h-2 w-2 rounded-full ${online ? 'bg-emerald-500' : 'bg-amber-500'}`} />
         <span className="text-[10px] font-semibold text-slate-600 dark:text-slate-300">{online ? 'Online' : 'Offline'} · {activeSkill === 'general' ? 'Mode umum' : SKILLS.find((item) => item.id === activeSkill)?.title}</span>
         <span className="ml-auto text-[10px] text-slate-400">Analisis berbasis data yang Anda kirim</span>
       </div>
 
-      <div className="flex min-h-[34vh] flex-col gap-3 rounded-2xl border border-slate-200 bg-slate-50/90 p-3 shadow-sm dark:border-slate-700 dark:bg-slate-950/70">
+      <div
+        ref={chatScrollRef}
+        className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto overscroll-contain rounded-2xl border border-slate-200 bg-slate-50/90 p-3 shadow-sm dark:border-slate-700 dark:bg-slate-950/70"
+      >
         {!messages.length && (
           <div className="m-auto max-w-md py-5 text-center">
             <Sparkles className="mx-auto mb-2 h-8 w-8 text-cyan-600" />
@@ -193,10 +200,23 @@ export default function AIAssistantPage({ onNavigate }) {
         <div ref={bottomRef} />
       </div>
 
-      <form onSubmit={(event) => { event.preventDefault(); sendMessage(draft); }} className="sticky bottom-20 rounded-2xl border border-slate-200 bg-white p-2 shadow-lg dark:border-slate-700 dark:bg-slate-900">
+      <form
+        onSubmit={(event) => { event.preventDefault(); sendMessage(draft); }}
+        className="sticky bottom-0 z-10 shrink-0 rounded-2xl border border-slate-200 bg-white p-2 shadow-lg dark:border-slate-700 dark:bg-slate-900"
+      >
         <label htmlFor="rubee-message" className="sr-only">Instruksi untuk Rubee</label>
         <div className="flex items-end gap-2">
-          <textarea id="rubee-message" rows={2} maxLength={4000} value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); sendMessage(draft); } }} placeholder="Tulis kebutuhan operasional…" disabled={loading || !online} className="max-h-36 min-h-[48px] flex-1 resize-y rounded-xl bg-slate-50 px-3 py-3 text-sm text-slate-800 outline-none placeholder:text-slate-400 focus:ring-2 focus:ring-cyan-300 disabled:opacity-50 dark:bg-slate-800 dark:text-white" />
+          <textarea
+            id="rubee-message"
+            rows={2}
+            maxLength={4000}
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); sendMessage(draft); } }}
+            placeholder="Tulis kebutuhan operasional…"
+            disabled={loading || !online}
+            className="max-h-36 min-h-[48px] flex-1 resize-y rounded-xl bg-slate-50 px-3 py-3 text-sm text-slate-800 outline-none placeholder:text-slate-400 focus:ring-2 focus:ring-cyan-300 disabled:opacity-50 dark:bg-slate-800 dark:text-white"
+          />
           <button type="submit" disabled={!draft.trim() || loading || !online} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#0b2a55] text-white disabled:opacity-40" aria-label="Kirim ke Rubee">
             {loading ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" /> : <Send className="h-4 w-4" />}
           </button>
