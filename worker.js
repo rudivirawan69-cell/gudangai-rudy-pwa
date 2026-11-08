@@ -107,13 +107,35 @@ async function runAnthropicFallback(env, messages, context) {
   return { reply, model: data?.model || ANTHROPIC_MODEL, provider: 'anthropic-fallback' };
 }
 
+async function runNineRouter(env, messages) {
+  const apiKey = String(env.NINE_ROUTER_API_KEY || '').trim();
+  const model = String(env.NINE_ROUTER_MODEL || '').trim();
+  if (!apiKey || !model) throw new Error('9Router belum dikonfigurasi: Secret NINE_ROUTER_API_KEY dan variable NINE_ROUTER_MODEL wajib tersedia.');
+  const upstream = await fetch('https://9router.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({ model, messages, max_tokens: 900 }),
+  });
+  const data = await upstream.json().catch(() => ({}));
+  if (!upstream.ok) {
+    const message = data?.error?.message || data?.message || `9Router API HTTP ${upstream.status}`;
+    throw new Error(String(message).slice(0, 240));
+  }
+  const reply = String(data?.choices?.[0]?.message?.content || '').trim();
+  if (!reply) throw new Error('9Router mengembalikan jawaban kosong.');
+  return { reply, model: data?.model || model, provider: '9router' };
+}
+
 async function verifySupabaseAccessToken(request, env) {
   const authorization = request.headers.get('Authorization') || '';
   const match = authorization.match(/^Bearer\s+(.+)$/i);
   if (!match) return { ok: false, status: 401, code: 'AUTH_REQUIRED', error: 'Silakan login untuk menggunakan Agent GudangAI.' };
 
   const supabaseUrl = String(env.SUPABASE_URL || '').replace(/\/+$/, '');
-  const anonKey = String(env.SUPABASE_ANON_KEY || '').trim();
+  const anonKey = String(env.SUPABASE_ANON_KEY || env.SUPABASE_PUBLISHABLE_KEY || '').trim();
   if (!supabaseUrl || !anonKey) {
     return { ok: false, status: 503, code: 'AUTH_NOT_CONFIGURED', error: 'Verifikasi sesi Supabase belum dikonfigurasi pada Worker.' };
   }
@@ -151,6 +173,27 @@ async function handleAgent(request, env, origin) {
   ];
 
   try {
+    if (env.NINE_ROUTER_API_KEY && env.NINE_ROUTER_MODEL) {
+      try {
+        const result = await runNineRouter(env, messages);
+        return json({ success: true, ...result, mode: 'hybrid' }, 200, origin);
+      } catch (routerError) {
+        // 9Router is preferred when configured; Cloudflare Workers AI is the controlled fallback.
+        try {
+          const fallback = await runWorkersAI(env, messages);
+          return json({
+            success: true, ...fallback, mode: 'hybrid',
+            fallbackReason: String(routerError?.message || '9Router unavailable').slice(0, 240),
+          }, 200, origin);
+        } catch (primaryError) {
+          return json({
+            success: false, code: 'AI_PROVIDERS_UNAVAILABLE',
+            error: '9Router dan Workers AI tidak tersedia.',
+            detail: String(primaryError?.message || routerError?.message || 'AI provider gagal').slice(0, 240),
+          }, 503, origin);
+        }
+      }
+    }
     const result = await runWorkersAI(env, messages);
     return json({ success: true, ...result, mode: 'hybrid' }, 200, origin);
   } catch (primaryError) {
@@ -197,13 +240,14 @@ export default {
       return json({
         success: true,
         mode: 'hybrid',
-        primary: 'cloudflare-workers-ai',
-        primaryConfigured: Boolean(env.AI && typeof env.AI.run === 'function'),
+        primary: env.NINE_ROUTER_API_KEY && env.NINE_ROUTER_MODEL ? '9router' : 'cloudflare-workers-ai',
+        primaryConfigured: Boolean((env.NINE_ROUTER_API_KEY && env.NINE_ROUTER_MODEL) || (env.AI && typeof env.AI.run === 'function')),
+        nineRouterConfigured: Boolean(env.NINE_ROUTER_API_KEY && env.NINE_ROUTER_MODEL),
         model: String(env.AI_MODEL || DEFAULT_MODEL),
         anthropicFallbackEnabled: env.ANTHROPIC_FALLBACK_ENABLED === 'true' && Boolean(env.ANTHROPIC_API_KEY),
         authRequired: true,
-        authConfigured: Boolean(env.SUPABASE_URL && env.SUPABASE_ANON_KEY),
-        deploymentTarget: 'https://claude-proxy.rudivirawan69.workers.dev/',
+        authConfigured: Boolean(env.SUPABASE_URL && (env.SUPABASE_ANON_KEY || env.SUPABASE_PUBLISHABLE_KEY)),
+        deploymentTarget: new URL(request.url).origin,
       }, 200, corsOrigin);
     }
 
