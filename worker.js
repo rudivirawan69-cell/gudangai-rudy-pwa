@@ -203,7 +203,7 @@ export default {
         anthropicFallbackEnabled: env.ANTHROPIC_FALLBACK_ENABLED === 'true' && Boolean(env.ANTHROPIC_API_KEY),
         authRequired: true,
         authConfigured: Boolean(env.SUPABASE_URL && env.SUPABASE_ANON_KEY),
-        deploymentTarget: 'https://gudangai-rudy.rudivirawan69.workers.dev/',
+        deploymentTarget: 'https://gudangai-rudy-pwa69.rudivirawan69.workers.dev/',
       }, 200, corsOrigin);
     }
 
