@@ -47,6 +47,50 @@ test('health reports Workers AI primary, auth status and paid fallback disabled'
   assert.equal(payload.deploymentTarget, ORIGIN);
 });
 
+test('read-only data gateway proxies allowlisted action without exposing secret', async () => {
+  await withSupabaseAuth(async () => {
+    const originalFetch = globalThis.fetch;
+    let captured;
+    globalThis.fetch = async (url, options) => {
+      if (String(url) === `${SUPABASE_URL}/auth/v1/user`) {
+        return new Response(JSON.stringify({ id: 'user-data-1' }), { status: 200 });
+      }
+      assert.equal(String(url), 'https://sheets.example/exec');
+      captured = JSON.parse(options.body);
+      return new Response(JSON.stringify({ success: true, items: [{ kode: 'CV-1' }] }), { status: 200 });
+    };
+    try {
+      const response = await worker.fetch(makeRequest('/api/data', {
+        method: 'POST', body: { action: 'getAllStock', entitas: 'CV', secret: 'client-must-not-win' },
+      }), {
+        ...validEnv,
+        GUDANGAI_SHEETS_API_URL: 'https://sheets.example/exec',
+        GUDANGAI_SHEETS_API_SECRET: 'server-secret',
+      });
+      const payload = await response.json();
+      assert.equal(response.status, 200);
+      assert.equal(payload.success, true);
+      assert.equal(payload.actor, 'user-data-1');
+      assert.equal(captured.secret, 'server-secret');
+      assert.equal(JSON.stringify(payload).includes('server-secret'), false);
+    } finally { globalThis.fetch = originalFetch; }
+  });
+});
+
+test('read-only data gateway rejects write action before Apps Script call', async () => {
+  await withSupabaseAuth(async () => {
+    const response = await worker.fetch(makeRequest('/api/data', {
+      method: 'POST', body: { action: 'bulkTransaction' },
+    }), {
+      ...validEnv,
+      GUDANGAI_SHEETS_API_URL: 'https://sheets.example/exec',
+      GUDANGAI_SHEETS_API_SECRET: 'server-secret',
+    });
+    assert.equal(response.status, 400);
+    assert.equal((await response.json()).code, 'READ_ACTION_NOT_ALLOWED');
+  });
+});
+
 test('agent validates Supabase bearer token then uses Workers AI', async () => {
   await withSupabaseAuth(async () => {
     let captured;

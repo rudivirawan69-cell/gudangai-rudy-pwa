@@ -51,6 +51,7 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          GUDANGAI_SHEETS_API_SECRET: ${{ secrets.GUDANGAI_SHEETS_API_SECRET }}
         run: |
           if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
             echo "Missing Cloudflare deployment secrets."
@@ -58,6 +59,10 @@ jobs:
           fi
           if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ]; then
             echo "Missing SUPABASE_URL or SUPABASE_ANON_KEY. Agent deployment blocked to avoid an unauthenticated endpoint."
+            exit 1
+          fi
+          if [ -z "$GUDANGAI_SHEETS_API_SECRET" ]; then
+            echo "Missing GUDANGAI_SHEETS_API_SECRET. Read-only data bridge deployment is blocked."
             exit 1
           fi
 
@@ -74,6 +79,7 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          GUDANGAI_SHEETS_API_SECRET: ${{ secrets.GUDANGAI_SHEETS_API_SECRET }}
         run: |
           set -euo pipefail
           umask 077
@@ -85,9 +91,10 @@ jobs:
           const values = {
             SUPABASE_URL: process.env.SUPABASE_URL,
             SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY,
+            GUDANGAI_SHEETS_API_SECRET: process.env.GUDANGAI_SHEETS_API_SECRET,
           };
-          if (!values.SUPABASE_URL || !values.SUPABASE_ANON_KEY) {
-            throw new Error('Required Supabase Worker secrets are missing.');
+          if (!values.SUPABASE_URL || !values.SUPABASE_ANON_KEY || !values.GUDANGAI_SHEETS_API_SECRET) {
+            throw new Error('Required Worker secrets are missing.');
           }
           fs.writeFileSync(file, JSON.stringify(values), { mode: 0o600 });
           NODE
