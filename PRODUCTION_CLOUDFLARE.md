@@ -9,7 +9,7 @@
 | Worker name (`wrangler.jsonc`) | `gudangai-rudy-live69` |
 | Domain produksi | `https://gudangai-rudy-live69.rudivirawan69.workers.dev/` |
 | Alias legacy (masih di ALLOWED_ORIGINS) | `https://gudangai-rudy.rudivirawan69.workers.dev/` |
-| Domain nonaktif | `gudangai-rudy-live699.rudivirawan69.workers.dev` → 404 |
+| Domain nonaktif | `gudangai-rudy-pwa69.rudivirawan69.workers.dev` (bukan target produksi final) |
 
 Vercel (`gudangai-rudy-pwa.vercel.app` / `gudangai-rudy-pwa-live.vercel.app`) boleh tetap hidup sebagai cadangan, **bukan** sumber utama operasional.
 
