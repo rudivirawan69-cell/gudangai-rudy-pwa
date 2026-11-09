@@ -1,9 +1,11 @@
-// wrangler.jsonc — Worker gudangai-rudy (satu-satunya backend aktif)
-// Secret TIDAK ditulis di sini. Set lewat: wrangler secret put <NAMA>
-//   GUDANGAI_SHEETS_API_SECRET  (wajib, agar data Sheets terbaca)
-//   NINE_ROUTER_API_KEY         (jika 9Router dipakai)
+// wrangler.jsonc — Worker produksi Cloudflare Builds (gudangai-rudy-pwa6)
+// Secret TIDAK ditulis di sini. Set lewat CI (wrangler secret put) atau:
+//   wrangler secret put GUDANGAI_SHEETS_API_SECRET
+//   wrangler secret put SUPABASE_ANON_KEY
+//   wrangler secret put SUPABASE_URL
+//   wrangler secret put NINE_ROUTER_API_KEY   (opsional)
 {
-  "name": "gudangai-rudy",
+  "name": "gudangai-rudy-pwa6",
   "compatibility_date": "2026-10-04",
   "main": "worker.js",
   "assets": {
@@ -24,6 +26,6 @@
     "ANTHROPIC_FALLBACK_ENABLED": "false",
     "SUPABASE_URL": "https://cbeosysruwkfwgklziog.supabase.co",
     "SUPABASE_PUBLISHABLE_KEY": "sb_publishable_nrVxMRbrQihkzwFmWEs7QA_PlVFDWOz",
-    "ALLOWED_ORIGINS": "https://gudangai-rudy.rudivirawan69.workers.dev,https://gudangai-rudy-pwa-live.vercel.app,https://gudangai-rudy-pwa.vercel.app,https://rudivirawan69-cell.github.io"
+    "ALLOWED_ORIGINS": "https://gudangai-rudy-pwa6.rudivirawan69.workers.dev,https://gudangai-rudy.rudivirawan69.workers.dev,https://gudangai-rudy-pwa-live.vercel.app,https://gudangai-rudy-pwa.vercel.app,https://rudivirawan69-cell.github.io"
   }
 }
