@@ -1,3 +1,7 @@
+// wrangler.jsonc — Worker gudangai-rudy (satu-satunya backend aktif)
+// Secret TIDAK ditulis di sini. Set lewat: wrangler secret put <NAMA>
+//   GUDANGAI_SHEETS_API_SECRET  (wajib, agar data Sheets terbaca)
+//   NINE_ROUTER_API_KEY         (jika 9Router dipakai)
 {
   "name": "gudangai-rudy",
   "compatibility_date": "2026-10-04",
@@ -11,11 +15,15 @@
   "ai": {
     "binding": "AI"
   },
+  "observability": {
+    "enabled": true
+  },
   "vars": {
     "GUDANGAI_SHEETS_API_URL": "https://script.google.com/macros/s/AKfycbxYNipdWCeg1800-D4iA0ZDtO0Yy9RxQ0hcjZfJNO15mU0bSjSS6KiwkbSzcbJYhg8VIA/exec",
     "AI_MODEL": "@cf/meta/llama-3.1-8b-instruct-fast",
     "ANTHROPIC_FALLBACK_ENABLED": "false",
+    "SUPABASE_URL": "https://cbeosysruwkfwgklziog.supabase.co",
+    "SUPABASE_PUBLISHABLE_KEY": "sb_publishable_nrVxMRbrQihkzwFmWEs7QA_PlVFDWOz",
     "ALLOWED_ORIGINS": "https://gudangai-rudy.rudivirawan69.workers.dev,https://gudangai-rudy-pwa-live.vercel.app,https://gudangai-rudy-pwa.vercel.app,https://rudivirawan69-cell.github.io"
-  },
-  "previews": {}
+  }
 }
