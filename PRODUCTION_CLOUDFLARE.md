@@ -2,18 +2,18 @@
 
 ## URL produksi (pakai ini di HP / PWA install)
 
-**https://gudangai-rudy-pwa6.rudivirawan69.workers.dev/**
+**https://gudangai-rudy-live69.rudivirawan69.workers.dev/**
 
 | Item | Nilai |
 |------|--------|
-| Worker name (`wrangler.jsonc`) | `gudangai-rudy-pwa6` |
-| Domain produksi | `https://gudangai-rudy-pwa6.rudivirawan69.workers.dev/` |
+| Worker name (`wrangler.jsonc`) | `gudangai-rudy-live69` |
+| Domain produksi | `https://gudangai-rudy-live69.rudivirawan69.workers.dev/` |
 | Alias legacy (masih di ALLOWED_ORIGINS) | `https://gudangai-rudy.rudivirawan69.workers.dev/` |
-| Domain nonaktif | `gudangai-rudy-pwa69.rudivirawan69.workers.dev` → 404 |
+| Domain nonaktif | `gudangai-rudy-live699.rudivirawan69.workers.dev` → 404 |
 
 Vercel (`gudangai-rudy-pwa.vercel.app` / `gudangai-rudy-pwa-live.vercel.app`) boleh tetap hidup sebagai cadangan, **bukan** sumber utama operasional.
 
-> Nama `gudangai-rudy-pwa6` diselaraskan dengan **Cloudflare Workers Builds** agar tidak ada override nama di CI dan ALLOWED_ORIGINS tidak putus.
+> Nama `gudangai-rudy-live69` diselaraskan dengan **Cloudflare Workers Builds** agar tidak ada override nama di CI dan ALLOWED_ORIGINS tidak putus.
 
 ## Mengapa Cloudflare
 
@@ -39,7 +39,7 @@ Alur deploy:
 1. Build PWA (menyuntikkan `VITE_SUPABASE_*` dari Environment secrets)
 2. Validasi secret GitHub Environment `production`
 3. Dry-run Wrangler
-4. Deploy kode + assets Worker `gudangai-rudy-pwa6`
+4. Deploy kode + assets Worker `gudangai-rudy-live69`
 5. Set secret Worker secara non-interaktif (`wrangler secret put`) — **sekali jalan, tahan deploy berikutnya**
 
 ### Secret wajib di GitHub Environment `production`
@@ -63,7 +63,7 @@ Variabel non-rahasia (`AI_MODEL`, `ALLOWED_ORIGINS`, `GUDANGAI_SHEETS_API_URL`, 
 ## Health check cepat
 
 ```bash
-curl -s https://gudangai-rudy-pwa6.rudivirawan69.workers.dev/api/agent/health | jq .
+curl -s https://gudangai-rudy-live69.rudivirawan69.workers.dev/api/agent/health | jq .
 ```
 
 Harapan produksi sehat:
@@ -73,7 +73,7 @@ Harapan produksi sehat:
 
 ## Setelah buka di HP
 
-1. Buka **https://gudangai-rudy-pwa6.rudivirawan69.workers.dev/**
+1. Buka **https://gudangai-rudy-live69.rudivirawan69.workers.dev/**
 2. Login Supabase (email/password) seperti di Vercel
 3. Settings PWA: URL API Apps Script + secret jika masih dipakai jalur Sheets langsung dari browser
 4. Install ke Home Screen dari URL Cloudflare
@@ -81,8 +81,8 @@ Harapan produksi sehat:
 
 ## Pemulihan jika deploy gagal / origin putus
 
-1. Pastikan `wrangler.jsonc` → `name: "gudangai-rudy-pwa6"`
-2. Pastikan `ALLOWED_ORIGINS` memuat hostname `gudangai-rudy-pwa6`
+1. Pastikan `wrangler.jsonc` → `name: "gudangai-rudy-live69"`
+2. Pastikan `ALLOWED_ORIGINS` memuat hostname `gudangai-rudy-live69`
 3. Pastikan Environment secrets `production` lengkap
 4. Jalankan ulang workflow_dispatch
 5. Cek `/api/agent/health` → `dataToolsConfigured` harus `true` setelah secret Sheets terpasang
