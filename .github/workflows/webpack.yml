@@ -2,24 +2,26 @@ name: GudangAI RUDY CI
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   pull_request:
-    branches: [ "main" ]
+    branches: ["main"]
+
+permissions:
+  contents: read
 
 jobs:
   build:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-
       - name: Use Node.js 22
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22.x
           cache: npm
-
       - name: Install dependencies
-        run: npm install --no-audit --no-fund
-
+        run: npm ci --no-audit --no-fund
+      - name: Test agent worker
+        run: npm run test:agent
       - name: Build Vite production
         run: npm run build
