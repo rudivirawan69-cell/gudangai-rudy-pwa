@@ -15,8 +15,7 @@
     "GUDANGAI_SHEETS_API_URL": "https://script.google.com/macros/s/AKfycbxYNipdWCeg1800-D4iA0ZDtO0Yy9RxQ0hcjZfJNO15mU0bSjSS6KiwkbSzcbJYhg8VIA/exec",
     "AI_MODEL": "@cf/meta/llama-3.1-8b-instruct-fast",
     "ANTHROPIC_FALLBACK_ENABLED": "false",
-    "ALLOWED_ORIGINS": "https://gudangai-rudy.rudivirawan69.workers.dev,https://gudangai-rudy-pwa-live.vercel.app,https://gudangai-rudy-pwa.vercel.app,https://rudivirawan69-cell.github.io",
-    "SUPABASE_URL": "https://cbeosysruwkfwgklziog.supabase.co"
+    "ALLOWED_ORIGINS": "https://gudangai-rudy.rudivirawan69.workers.dev,https://gudangai-rudy-pwa-live.vercel.app,https://gudangai-rudy-pwa.vercel.app,https://rudivirawan69-cell.github.io"
   },
   "previews": {}
 }
