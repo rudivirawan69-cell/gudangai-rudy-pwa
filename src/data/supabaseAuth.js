@@ -1,20 +1,21 @@
 const SESSION_KEY = 'gudangai_supabase_session_v1';
-const SUPABASE_URL = String(import.meta.env.VITE_SUPABASE_URL || '').replace(/\/+$/, '');
-const SUPABASE_PUBLISHABLE_KEY = String(import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || '').trim();
+const SUPABASE_URL = String(import.meta.env.VITE_SUPABASE_URL || 'https://cbeosysruwkfwgklziog.supabase.co').replace(/\/+$/, '');
+const SUPABASE_PUBLISHABLE_KEY = String(import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_nrVxMRbrQihkzwFmWEs7QA_PlVFDWOz').trim();
 
 export function isSupabaseConfigured() {
   return Boolean(SUPABASE_URL && SUPABASE_PUBLISHABLE_KEY);
 }
 
-function authError(message, status = 0) {
+function authError(message, status = 0, code = 'AUTH_ERROR') {
   const error = new Error(message || 'Autentikasi Supabase gagal.');
   error.status = status;
+  error.code = code;
   return error;
 }
 
 async function authRequest(path, { method = 'GET', body, accessToken, signal } = {}) {
   if (!isSupabaseConfigured()) {
-    throw authError('Konfigurasi Supabase belum tersedia. Atur VITE_SUPABASE_URL dan VITE_SUPABASE_PUBLISHABLE_KEY.');
+    throw authError('Konfigurasi Supabase belum tersedia. Atur VITE_SUPABASE_URL dan VITE_SUPABASE_PUBLISHABLE_KEY.', 0, 'AUTH_NOT_CONFIGURED');
   }
 
   let response;
@@ -31,18 +32,32 @@ async function authRequest(path, { method = 'GET', body, accessToken, signal } =
     });
   } catch (error) {
     error.networkError = true;
+    error.code = 'AUTH_PROVIDER_UNAVAILABLE';
+    error.status = error.status || 0;
+    error.message = error.message || 'Tidak dapat terhubung ke Supabase. Periksa koneksi internet atau pastikan project Supabase aktif (tidak dijeda).';
     throw error;
   }
 
   let payload = {};
-  try { payload = await response.json(); } catch (_) { /* response may be empty */ }
+  try { payload = await response.json(); } catch (_) {}
+
   if (!response.ok) {
-    const message = payload.msg || payload.message || payload.error_description || payload.error || (
-      response.status === 400 || response.status === 401
-        ? 'Email atau password tidak valid.'
-        : `Layanan autentikasi gagal (HTTP ${response.status}).`
-    );
-    throw authError(message, response.status);
+    const message = payload.msg || payload.message || payload.error_description || payload.error;
+    if (response.status >= 500 || response.status === 404) {
+      throw authError(
+        message || 'Layanan Supabase sedang tidak dapat dihubungi (project mungkin dijeda atau ada gangguan jaringan).',
+        response.status,
+        'AUTH_PROVIDER_UNAVAILABLE'
+      );
+    }
+    if (response.status === 400 || response.status === 401 || response.status === 403) {
+      throw authError(
+        message || 'Email atau password tidak valid, atau sesi sudah berakhir. Silakan login kembali.',
+        response.status,
+        'INVALID_CREDENTIALS'
+      );
+    }
+    throw authError(message || `Layanan autentikasi gagal (HTTP ${response.status}).`, response.status, 'AUTH_ERROR');
   }
   return payload;
 }
@@ -77,7 +92,7 @@ function persistSession(session) {
 }
 
 export function clearStoredSession() {
-  try { localStorage.removeItem(SESSION_KEY); } catch (_) { /* ignore */ }
+  try { localStorage.removeItem(SESSION_KEY); } catch (_) {}
 }
 
 export async function signInWithPassword(email, password) {
