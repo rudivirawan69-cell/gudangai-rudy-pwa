@@ -1,0 +1,5 @@
+# Local-only values; copy to .dev.vars and never commit real credentials.
+SUPABASE_URL=https://cbeosysruwkfwgklziog.supabase.co
+SUPABASE_PUBLISHABLE_KEY=replace-with-project-publishable-key
+GUDANGAI_SHEETS_API_SECRET=replace-with-apps-script-gateway-secret
+ALLOWED_ORIGINS=https://gudangai-rudy-pwa-live.vercel.app,https://gudangai-rudy.rudivirawan69.workers.dev
