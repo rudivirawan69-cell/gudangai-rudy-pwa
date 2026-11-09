@@ -1,5 +1,5 @@
 const DEFAULT_MODEL = '@cf/meta/llama-3.1-8b-instruct';
-const ANTHROPIC_MODEL = 'claude-3-5-haiku-latest';
+const ANTHROPIC_MODEL = 'claude-haiku-5-5';
 const MAX_MESSAGE_LENGTH = 4000;
 const MAX_HISTORY_ITEMS = 8;
 const LIVE_DATA_CHAR_BUDGET = 3500;
@@ -12,11 +12,21 @@ const READ_ONLY_ACTIONS = new Set([
 ]);
 
 const LIVE_INTENTS = [
-  { action: 'getDashboardData', pattern: /dashboard|ringkasan|rangkuman|kondisi gudang|overview/i },
-  { action: 'getLowStock', pattern: /stok (menipis|kritis|rendah|habis)|low ?stock|di bawah minimum|hampir habis|kritis/i },
-  { action: 'getStatusPO', pattern: /\bpo\b|purchase order|status po|pembelian/i },
-  { action: 'getTransactionHistory', pattern: /riwayat|histori|history|transaksi (terakhir|hari ini|kemarin)|barang (masuk|keluar|rusak)/i },
-  { action: 'getSystemLog', pattern: /system log|log sistem|log error|audit log/i },
+  { action: 'getDashboardData', pattern: /dashboard|ringkasan|rangkuman|kondisi gudang|overview|laporan harian|briefing/i },
+  { action: 'getLowStock', pattern: /stok (menipis|kritis|rendah|habis)|low ?stock|di bawah minimum|hampir habis|kritis|restock|perlu (beli|order)|rekomendasi (beli|order|po)/i },
+  { action: 'getStatusPO', pattern: /\bpo\b|purchase order|status po|pembelian|belum datang|tertunda/i },
+  { action: 'getTransactionHistory', pattern: /riwayat|histori|history|transaksi (terakhir|hari ini|kemarin)|barang (masuk|keluar|rusak)|rusak|selisih|anomali/i },
+  { action: 'getSystemLog', pattern: /system log|log sistem|log error|audit log|timeout|gagal sinkron|antrian sinkron/i },
+];
+
+const SKILL_RULES_TAMBAHAN = [
+  '9. SISA STOK = kolom Stock Akhir. Jangan pernah memakai Stock Awal sebagai sisa stok di CV, PT, maupun Bahan Baku.',
+  '10. SKILL Prioritas Restock: dari data stok kritis, urutkan dari yang paling mendesak (selisih terhadap minimum terbesar), kelompokkan per entitas, lalu beri usulan qty sebagai DRAFT REVIEW dengan alasan singkat.',
+  '11. SKILL Ringkasan Harian: format tetap (1) Stok kritis, (2) PO tertunda, (3) Transaksi terakhir, (4) Hal yang perlu dicek, (5) Tindakan operator. Setiap bagian wajib menyebut action sumber dan readAt.',
+  '12. SKILL Deteksi Anomali: tandai sebagai KANDIDAT (bukan kesimpulan) bila ada saldo negatif, kode atau nama hampir kembar (misal Chiken Wing Crispy vs Chiken Wing), barang rusak tinggi, atau PO tanpa penerimaan. Minta operator memverifikasi di sheet sebelum tindakan.',
+  '13. SKILL Draft PO: tulis tabel ringkas (kode, nama, entitas, qty usulan, alasan) berlabel DRAFT REVIEW; jangan menyatakan PO sudah dibuat.',
+  '14. SKILL Klarifikasi: jika pertanyaan tidak menyebut entitas (CV/PT/Bahan Baku) dan jawabannya bergantung pada itu, tanyakan satu pertanyaan singkat sebelum menganalisis.',
+  '15. SKILL Diagnosis Error: jika operator melaporkan error agent/sinkronisasi, jelaskan kemungkinan penyebab berurutan (auth Supabase, Worker, Apps Script, spreadsheet) dan minta cek /api/agent/health?deep=1 dulu.',
 ];
 
 const SKILL_RULES = [
@@ -29,6 +39,7 @@ const SKILL_RULES = [
   '6. Kamu tidak dapat menulis, mengubah, atau menghapus data. Untuk perubahan, susun draft rekomendasi yang diperiksa dan dijalankan operator lewat halaman PWA; jangan mengklaim sudah menjalankannya.',
   '7. Bila ada transaksi yang timeout, jangan sarankan kirim ulang sebelum memeriksa transactionId/batchId dan System Log.',
   '8. Mode offline hanya untuk snapshot dan draft REVIEW; tidak ada sinkronisasi otomatis.',
+  ...SKILL_RULES_TAMBAHAN,
 ].join('\n');
 
 function configuredSheets(env) {
@@ -63,13 +74,22 @@ async function callSheetsRead(env, action, params = {}) {
     try { payload = JSON.parse(text); } catch (_) {
       return { success: false, code: 'SHEETS_NON_JSON', error: 'Apps Script mengembalikan respons bukan JSON.' };
     }
-    if (!response.ok) return { success: false, code: 'SHEETS_HTTP_ERROR', error: `Apps Script HTTP ${response.status}`, detail: payload };
+    if (!response.ok) return { success: false, code: 'SHEETS_HTTP_ERROR', error: 'Apps Script HTTP ' + response.status, detail: payload };
     return { ...payload, source: 'Apps Script read-only gateway', action, readAt: new Date().toISOString() };
   } catch (error) {
     return { success: false, code: 'SHEETS_READ_FAILED', error: error?.name === 'AbortError' ? 'Pembacaan spreadsheet timeout.' : String(error?.message || error) };
   } finally {
     clearTimeout(timer);
   }
+}
+
+async function callSheetsReadWithRetry(env, action, params = {}) {
+  const first = await callSheetsRead(env, action, params);
+  if (first?.success === false && ['SHEETS_READ_FAILED'].includes(first.code)) {
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    return callSheetsRead(env, action, params);
+  }
+  return first;
 }
 
 function allowedOrigins(request, env) {
@@ -90,18 +110,18 @@ function json(data, status = 200, origin = '') {
 
 export function detectLiveActions(message) {
   const text = String(message || '');
-  const matched = [];
+  const matched = new Set();
   for (const intent of LIVE_INTENTS) {
-    if (intent.pattern.test(text) && READ_ONLY_ACTIONS.has(intent.action)) matched.push(intent.action);
-    if (matched.length >= MAX_LIVE_ACTIONS) break;
+    if (intent.pattern.test(text) && READ_ONLY_ACTIONS.has(intent.action)) matched.add(intent.action);
+    if (matched.size >= MAX_LIVE_ACTIONS) break;
   }
-  return matched;
+  return Array.from(matched);
 }
 
 async function gatherLiveData(env, message) {
   const actions = detectLiveActions(message);
   const results = await Promise.all(actions.map(async (action) => {
-    const raw = await callSheetsRead(env, action);
+    const raw = await callSheetsReadWithRetry(env, action);
     const ok = raw?.success !== false;
     const { source, action: _action, readAt, ...data } = raw || {};
     return {
@@ -117,7 +137,7 @@ async function gatherLiveData(env, message) {
 }
 
 function truncate(text, limit) {
-  return text.length > limit ? `${text.slice(0, limit)} …[dipotong]` : text;
+  return text.length > limit ? text.slice(0, limit) + ' …[dipotong]' : text;
 }
 
 export function liveDataBlock(live) {
@@ -125,9 +145,9 @@ export function liveDataBlock(live) {
     return 'DATA LIVE: tidak ada untuk pertanyaan ini. Jawab hanya dari konteks yang diberikan operator dan jangan mengklaim membaca spreadsheet.';
   }
   const parts = live.results.map((item) => (item.ok
-    ? `[${item.action} | dibaca ${item.readAt} | ${item.source}]\n${truncate(JSON.stringify(item.data), LIVE_DATA_CHAR_BUDGET)}`
-    : `[${item.action} | GAGAL ${item.code || 'UNKNOWN'}] Data belum terkonfirmasi: ${item.error || 'tidak ada detail'}`));
-  return `DATA LIVE (read-only):\n${parts.join('\n\n')}`;
+    ? '[' + item.action + ' | dibaca ' + item.readAt + ' | ' + item.source + ']\n' + truncate(JSON.stringify(item.data), LIVE_DATA_CHAR_BUDGET)
+    : '[' + item.action + ' | GAGAL ' + (item.code || 'UNKNOWN') + '] Data belum terkonfirmasi: ' + (item.error || 'tidak ada detail')));
+  return 'DATA LIVE (read-only):\n' + parts.join('\n\n');
 }
 
 function systemPrompt(context = {}, liveBlock = '') {
@@ -138,7 +158,7 @@ function systemPrompt(context = {}, liveBlock = '') {
     'Jika data tidak cukup, jelaskan data yang kurang dan minta operator memeriksa halaman/sumber yang tepat.',
     SKILL_RULES,
     liveBlock,
-    `Konteks operasi: ${JSON.stringify(context).slice(0, 3500)}`,
+    'Konteks operasi: ' + JSON.stringify(context).slice(0, 3500),
   ].filter(Boolean).join('\n');
 }
 
@@ -166,7 +186,7 @@ function extractText(result) {
 async function runWorkersAI(env, messages) {
   if (!env.AI || typeof env.AI.run !== 'function') throw new Error('Workers AI binding AI belum tersedia pada Worker.');
   const model = String(env.AI_MODEL || DEFAULT_MODEL);
-  const result = await env.AI.run(model, { messages, max_tokens: 700 });
+  const result = await env.AI.run(model, { messages, max_tokens: 900 });
   const reply = extractText(result);
   if (!reply) throw new Error('Workers AI mengembalikan jawaban kosong.');
   return { reply, model, provider: 'cloudflare-workers-ai' };
@@ -180,7 +200,7 @@ async function runAnthropicFallback(env, messages, system) {
     body: JSON.stringify({ model: ANTHROPIC_MODEL, max_tokens: 700, system, messages }),
   });
   const data = await upstream.json().catch(() => ({}));
-  if (!upstream.ok) throw new Error(data?.error?.message || `Anthropic API HTTP ${upstream.status}`);
+  if (!upstream.ok) throw new Error(data?.error?.message || 'Anthropic API HTTP ' + upstream.status);
   const reply = extractText(data);
   if (!reply) throw new Error('Anthropic mengembalikan jawaban kosong.');
   return { reply, model: data?.model || ANTHROPIC_MODEL, provider: 'anthropic-fallback' };
@@ -190,13 +210,13 @@ async function runNineRouter(env, messages) {
   const apiKey = String(env.NINE_ROUTER_API_KEY || '').trim();
   const model = String(env.NINE_ROUTER_MODEL || '').trim();
   if (!apiKey || !model) throw new Error('9Router belum dikonfigurasi: Secret NINE_ROUTER_API_KEY dan variable NINE_ROUTER_MODEL wajib tersedia.');
-  const upstream = await fetch('https://9router.com/v1/chat/completions', {
-    method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${apiKey}` },
+  const upstream = await fetchWithTimeout('https://9router.com/v1/chat/completions', {
+    method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer ' + apiKey },
     body: JSON.stringify({ model, messages, max_tokens: 900 }),
-  });
+  }, 25000);
   const data = await upstream.json().catch(() => ({}));
   if (!upstream.ok) {
-    const message = data?.error?.message || data?.message || `9Router API HTTP ${upstream.status}`;
+    const message = data?.error?.message || data?.message || '9Router API HTTP ' + upstream.status;
     throw new Error(String(message).slice(0, 240));
   }
   const reply = String(data?.choices?.[0]?.message?.content || '').trim();
@@ -204,29 +224,76 @@ async function runNineRouter(env, messages) {
   return { reply, model: data?.model || model, provider: '9router' };
 }
 
+const AUTH_CACHE = new Map(); // token -> { userId, exp }
+const AUTH_CACHE_MS = 60_000;
+
+async function fetchWithTimeout(url, options = {}, ms = 8000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function normalizeSupabaseUrl(raw) {
+  let v = String(raw || '').trim().replace(/\/+$/, '').replace(/\/(rest|auth)\/v1.*$/i, '');
+  if (v && !/^https?:\/\//i.test(v)) v = 'https://' + v;
+  return v;
+}
+
 async function verifySupabaseAccessToken(request, env) {
   const authorization = request.headers.get('Authorization') || '';
   const match = authorization.match(/^Bearer\s+(.+)$/i);
   if (!match) return { ok: false, status: 401, code: 'AUTH_REQUIRED', error: 'Silakan login untuk menggunakan Agent GudangAI.' };
-  const supabaseUrl = String(env.SUPABASE_URL || '').replace(/\/+$/, '');
+  const token = match[1];
+
+  const supabaseUrl = normalizeSupabaseUrl(env.SUPABASE_URL);
   const anonKey = String(env.SUPABASE_ANON_KEY || env.SUPABASE_PUBLISHABLE_KEY || '').trim();
-  if (!supabaseUrl || !anonKey) return { ok: false, status: 503, code: 'AUTH_NOT_CONFIGURED', error: 'Verifikasi sesi Supabase belum dikonfigurasi pada Worker.' };
-  try {
-    const response = await fetch(`${supabaseUrl}/auth/v1/user`, {
-      method: 'GET', headers: { apikey: anonKey, Authorization: `Bearer ${match[1]}` },
-    });
-    if (!response.ok) return { ok: false, status: 401, code: 'INVALID_SESSION', error: 'Sesi login tidak valid atau sudah berakhir. Silakan login kembali.' };
-    const user = await response.json().catch(() => null);
-    if (!user?.id) return { ok: false, status: 401, code: 'INVALID_SESSION', error: 'Supabase tidak mengembalikan identitas pengguna yang valid.' };
-    return { ok: true, userId: user.id };
-  } catch (_) {
-    return { ok: false, status: 503, code: 'AUTH_PROVIDER_UNAVAILABLE', error: 'Layanan verifikasi Supabase sedang tidak dapat dihubungi.' };
+  if (!supabaseUrl || !anonKey) {
+    return { ok: false, status: 503, code: 'AUTH_NOT_CONFIGURED', error: 'Verifikasi sesi Supabase belum dikonfigurasi pada Worker.' };
   }
+
+  const cached = AUTH_CACHE.get(token);
+  if (cached && cached.exp > Date.now()) return { ok: true, userId: cached.userId, cached: true };
+
+  const invalid = { ok: false, status: 401, code: 'INVALID_SESSION', error: 'Sesi login tidak valid atau sudah berakhir. Silakan login kembali.' };
+  let lastError = '';
+
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const response = await fetchWithTimeout(supabaseUrl + '/auth/v1/user', {
+        method: 'GET',
+        headers: { apikey: anonKey, Authorization: 'Bearer ' + token },
+      }, 8000);
+
+      if (response.status === 401 || response.status === 403) return invalid;
+
+      if (response.ok) {
+        const user = await response.json().catch(() => null);
+        if (!user?.id) return invalid;
+        if (AUTH_CACHE.size > 200) AUTH_CACHE.clear();
+        AUTH_CACHE.set(token, { userId: user.id, exp: Date.now() + AUTH_CACHE_MS });
+        return { ok: true, userId: user.id };
+      }
+      lastError = 'HTTP ' + response.status;
+    } catch (error) {
+      lastError = error?.name === 'AbortError' ? 'timeout' : String(error?.message || error).slice(0, 120);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 400));
+  }
+
+  return {
+    ok: false, status: 503, code: 'AUTH_PROVIDER_UNAVAILABLE',
+    error: 'Layanan verifikasi Supabase sedang tidak dapat dihubungi. Pastikan project Supabase aktif (tidak dijeda) dan SUPABASE_URL benar.',
+    detail: lastError,
+  };
 }
 
 async function handleAgent(request, env, origin) {
   const auth = await verifySupabaseAccessToken(request, env);
-  if (!auth.ok) return json({ success: false, code: auth.code, error: auth.error }, auth.status, origin);
+  if (!auth.ok) return json({ success: false, code: auth.code, error: auth.error, ...(auth.detail ? { detail: auth.detail } : {}) }, auth.status, origin);
   const body = await request.json().catch(() => null);
   const message = String(body?.message || '').trim();
   if (!message) return json({ success: false, code: 'MESSAGE_REQUIRED', error: 'Pertanyaan belum diisi.' }, 400, origin);
@@ -286,7 +353,7 @@ async function handleAgent(request, env, origin) {
 
 async function handleReadOnlyData(request, env, origin) {
   const auth = await verifySupabaseAccessToken(request, env);
-  if (!auth.ok) return json({ success: false, code: auth.code, error: auth.error }, auth.status, origin);
+  if (!auth.ok) return json({ success: false, code: auth.code, error: auth.error, ...(auth.detail ? { detail: auth.detail } : {}) }, auth.status, origin);
   const body = await request.json().catch(() => null);
   const action = String(body?.action || '').trim();
   if (!READ_ONLY_ACTIONS.has(action)) return json({ success: false, code: 'READ_ACTION_NOT_ALLOWED', error: 'Action tidak diizinkan untuk gateway read-only.' }, 400, origin);
@@ -311,6 +378,14 @@ export default {
     }
     if (url.pathname === '/api/agent/health') {
       if (request.method !== 'GET') return json({ success: false, error: 'Method not allowed' }, 405, corsOrigin);
+      let supabaseReachable = null, supabaseStatus = null;
+      if (url.searchParams.get('deep') === '1') {
+        try {
+          const r = await fetchWithTimeout(normalizeSupabaseUrl(env.SUPABASE_URL) + '/auth/v1/health',
+            { headers: { apikey: String(env.SUPABASE_ANON_KEY || env.SUPABASE_PUBLISHABLE_KEY || '') } }, 6000);
+          supabaseStatus = r.status; supabaseReachable = r.ok;
+        } catch (e) { supabaseReachable = false; supabaseStatus = String(e?.message || e).slice(0, 80); }
+      }
       return json({
         success: true, mode: 'hybrid',
         primary: env.NINE_ROUTER_API_KEY && env.NINE_ROUTER_MODEL ? '9router' : 'cloudflare-workers-ai',
@@ -320,6 +395,8 @@ export default {
         anthropicFallbackEnabled: env.ANTHROPIC_FALLBACK_ENABLED === 'true' && Boolean(env.ANTHROPIC_API_KEY),
         authRequired: true,
         authConfigured: Boolean(env.SUPABASE_URL && (env.SUPABASE_ANON_KEY || env.SUPABASE_PUBLISHABLE_KEY)),
+        supabaseReachable,
+        supabaseStatus,
         dataToolsConfigured: configuredSheets(env),
         dataToolsMode: 'read_only_allowlist',
         agentStage: configuredSheets(env) ? 'read_only_live_data' : 'analysis_only',
