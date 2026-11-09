@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import worker, { detectLiveActions, liveDataBlock } from '../worker.js';
 
-const ORIGIN = 'https://gudangai-rudy-pwa6.rudivirawan69.workers.dev';
+const ORIGIN = 'https://gudangai-rudy-live69.rudivirawan69.workers.dev';
 const SUPABASE_URL = 'https://project.supabase.co';
 const validEnv = {
   SUPABASE_URL,
