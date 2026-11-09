@@ -44,35 +44,7 @@ jobs:
         env:
           CLOUDFLARE_WORKERS: "true"
 
-      - name: Validate Cloudflare secrets
-        shell: bash
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
-          GUDANGAI_SHEETS_API_SECRET: ${{ secrets.GUDANGAI_SHEETS_API_SECRET }}
-        run: |
-          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
-            echo "Missing Cloudflare deployment secrets."
-            exit 1
-          fi
-          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ]; then
-            echo "Missing SUPABASE_URL or SUPABASE_ANON_KEY. Agent deployment blocked to avoid an unauthenticated endpoint."
-            exit 1
-          fi
-          if [ -z "$GUDANGAI_SHEETS_API_SECRET" ]; then
-            echo "Missing GUDANGAI_SHEETS_API_SECRET. Read-only data bridge deployment is blocked."
-            exit 1
-          fi
-
-      - name: Validate Cloudflare Worker config
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: npx wrangler@4.156.0 deploy --config wrangler.jsonc --dry-run
-
-      - name: Deploy Worker with encrypted Supabase secrets
+      - name: Validate Cloudflare secrets presence
         shell: bash
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -82,26 +54,63 @@ jobs:
           GUDANGAI_SHEETS_API_SECRET: ${{ secrets.GUDANGAI_SHEETS_API_SECRET }}
         run: |
           set -euo pipefail
-          umask 077
-          secrets_file="$RUNNER_TEMP/gudangai-worker-secrets.json"
-          trap 'rm -f "$secrets_file"' EXIT
-          node - "$secrets_file" <<'NODE'
-          const fs = require('node:fs');
-          const file = process.argv[2];
-          const values = {
-            SUPABASE_URL: process.env.SUPABASE_URL,
-            SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY,
-            GUDANGAI_SHEETS_API_SECRET: process.env.GUDANGAI_SHEETS_API_SECRET,
-          };
-          if (!values.SUPABASE_URL || !values.SUPABASE_ANON_KEY || !values.GUDANGAI_SHEETS_API_SECRET) {
-            throw new Error('Required Worker secrets are missing.');
+          missing=()
+          [ -z "${CLOUDFLARE_API_TOKEN:-}" ] && missing+=("CLOUDFLARE_API_TOKEN")
+          [ -z "${CLOUDFLARE_ACCOUNT_ID:-}" ] && missing+=("CLOUDFLARE_ACCOUNT_ID")
+          [ -z "${SUPABASE_URL:-}" ] && missing+=("SUPABASE_URL")
+          [ -z "${SUPABASE_ANON_KEY:-}" ] && missing+=("SUPABASE_ANON_KEY")
+          [ -z "${GUDANGAI_SHEETS_API_SECRET:-}" ] && missing+=("GUDANGAI_SHEETS_API_SECRET")
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "Missing required GitHub Environment secrets (production): ${missing[*]}"
+            echo "Set them under Settings → Environments → production → Environment secrets."
+            exit 1
+          fi
+          echo "All required secrets are present in the GitHub Environment."
+
+      - name: Validate Cloudflare Worker config (dry-run)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          npx wrangler@4.156.0 deploy --config wrangler.jsonc --dry-run
+
+      - name: Deploy Worker code and assets
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          echo "Deploying Worker code + assets (secrets applied in next step)..."
+          npx wrangler@4.156.0 deploy --config wrangler.jsonc
+
+      - name: Apply Worker secrets (non-interactive)
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          GUDANGAI_SHEETS_API_SECRET: ${{ secrets.GUDANGAI_SHEETS_API_SECRET }}
+        run: |
+          set -euo pipefail
+          put_secret() {
+            local name="$1"
+            local value="$2"
+            if [ -z "$value" ]; then
+              echo "Refusing to set empty secret: $name"
+              exit 1
+            fi
+            echo "Setting secret: $name"
+            printf '%s' "$value" | npx wrangler@4.156.0 secret put "$name" --config wrangler.jsonc
           }
-          fs.writeFileSync(file, JSON.stringify(values), { mode: 0o600 });
-          NODE
-          npx wrangler@4.156.0 deploy --config wrangler.jsonc --secrets-file "$secrets_file"
+          put_secret "SUPABASE_URL" "$SUPABASE_URL"
+          put_secret "SUPABASE_ANON_KEY" "$SUPABASE_ANON_KEY"
+          put_secret "GUDANGAI_SHEETS_API_SECRET" "$GUDANGAI_SHEETS_API_SECRET"
+          echo "Worker secrets applied successfully."
 
       - name: Report deployed commit
         run: |
-          echo "Cloudflare production deployment requested for commit ${GITHUB_SHA}"
+          echo "Cloudflare production deployment completed for commit ${GITHUB_SHA}"
           echo "Worker: gudangai-rudy"
           echo "URL: https://gudangai-rudy.rudivirawan69.workers.dev/"
