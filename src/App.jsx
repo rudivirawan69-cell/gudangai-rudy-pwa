@@ -8,7 +8,7 @@ import { useSheetUpdate } from './hooks/useSheetUpdate';
 import { useBootstrap } from './hooks/useBootstrap';
 import {
   LayoutDashboard, Package, PackagePlus, Clock, Settings, ClipboardList,
-  WifiOff, AlertTriangle, Loader2, Mail, RefreshCw, BrainCircuit,
+  WifiOff, AlertTriangle, Loader2, Mail, RefreshCw, BrainCircuit, MoreHorizontal,
 } from 'lucide-react';
 
 const DashboardPage = lazy(() => import('./pages/DashboardPage'));
@@ -51,15 +51,21 @@ class ErrorBoundary extends Component {
   }
 }
 
-const TABS = [
+const MAIN_TABS = [
   { id: 'dashboard', label: 'Beranda', icon: LayoutDashboard, chip: 'bg-cyan-500/25' },
   { id: 'stok', label: 'Stok', icon: Package, chip: 'bg-blue-500/25' },
   { id: 'input', label: 'Input', icon: PackagePlus, chip: 'bg-emerald-500/25' },
   { id: 'po', label: 'PO', icon: ClipboardList, chip: 'bg-violet-500/25' },
-  { id: 'ai', label: 'AI', icon: BrainCircuit, chip: 'bg-orange-500/25' },
-  { id: 'riwayat', label: 'Riwayat', icon: Clock, chip: 'bg-amber-500/25' },
-  { id: 'settings', label: 'Atur', icon: Settings, chip: 'bg-slate-500/25' },
+  { id: 'more', label: 'Lainnya', icon: MoreHorizontal, chip: 'bg-slate-500/25' },
 ];
+
+const MORE_TABS = [
+  { id: 'ai', label: 'Agent Rubee', icon: BrainCircuit, chip: 'bg-orange-500/25' },
+  { id: 'riwayat', label: 'Riwayat', icon: Clock, chip: 'bg-amber-500/25' },
+  { id: 'settings', label: 'Pengaturan', icon: Settings, chip: 'bg-slate-500/25' },
+];
+
+const MORE_IDS = new Set([...MORE_TABS.map((t) => t.id), 'sync']);
 
 const TAB_ACCENT = {
   dashboard: 'from-cyan-400 to-cyan-600',
@@ -106,6 +112,37 @@ function ConnBanner({ online, hasUrl, status, message, syncing }) {
     );
   }
   return null;
+}
+
+function MoreSheet({ open, onClose, onNavigate, activeId }) {
+  if (!open) return null;
+  return (
+    <div className="more-sheet-backdrop" onClick={onClose}>
+      <div className="more-sheet" role="dialog" aria-label="Menu lainnya" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+        <div className="sheet-handle" aria-hidden="true" />
+        {MORE_TABS.map((t) => {
+          const Icon = t.icon;
+          const isActive = activeId === t.id;
+          return (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => { onNavigate(t.id); onClose(); }}
+              className={`more-row${isActive ? ' is-active' : ''}`}
+            >
+              <span className={`more-row-icon ${t.chip}`}>
+                <Icon className="w-5 h-5" strokeWidth={2.25} />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-bold text-[var(--text-main,#0f172a)]">{t.label}</span>
+                <span className="block text-[11px] text-[var(--text-muted,#475569)]">{TAB_SUBTITLE[t.id]}</span>
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 /**
@@ -231,6 +268,7 @@ function AppShell() {
   const { user, loading } = useAuth();
   const [tab, setTab] = useState('dashboard');
   const [pageKey, setPageKey] = useState(0);
+  const [moreOpen, setMoreOpen] = useState(false);
   const tabRef = useRef('dashboard');
   const { online, hasUrl, status, message, syncing, checkHealth } = useConnection({ pollMs: 90000 });
   const sheetLabel = useSheetUpdate();
@@ -278,9 +316,9 @@ function AppShell() {
     default: page = <DashboardPage onNavigate={goTab} />;
   }
 
-  // Halaman Antrian ('sync') adalah turunan Atur → tab Atur tetap tampak aktif di navigasi.
-  const navTab = tab === 'sync' ? 'settings' : tab;
-  const navIndex = Math.max(0, TABS.findIndex((t) => t.id === navTab));
+  // Halaman Antrian ('sync') dan menu sekunder → tab 'Lainnya' tetap aktif.
+  const navTab = MORE_IDS.has(tab) ? 'more' : tab;
+  const navIndex = Math.max(0, MAIN_TABS.findIndex((t) => t.id === navTab));
 
   return (
     <div className="app-shell min-h-screen text-[var(--text-main,#10232b)]">
@@ -313,17 +351,20 @@ function AppShell() {
           </ErrorBoundary>
         </div>
       </main>
-      <nav className="nav-bar nav-bar-6 fixed bottom-0 left-0 right-0 safe-bottom z-40" aria-label="Navigasi utama">
-        <div className="w-full max-w-none mx-0 flex relative" style={{ '--nav-index': navIndex, '--nav-count': TABS.length }}>
-          {TABS.map((t) => {
+      <nav className="nav-bar fixed bottom-0 left-0 right-0 safe-bottom z-40" aria-label="Navigasi utama">
+        <div className="w-full max-w-none mx-0 flex relative" style={{ '--nav-index': navIndex, '--nav-count': MAIN_TABS.length }}>
+          {MAIN_TABS.map((t) => {
             const Icon = t.icon;
             const isActive = navTab === t.id;
+            const onClick = t.id === 'more' ? () => setMoreOpen(true) : () => goTab(t.id);
             return (
               <button
                 key={t.id}
                 type="button"
-                onClick={() => goTab(t.id)}
+                onClick={onClick}
                 aria-current={isActive ? 'page' : undefined}
+                aria-haspopup={t.id === 'more' ? 'dialog' : undefined}
+                aria-expanded={t.id === 'more' ? moreOpen : undefined}
                 className={`nav-btn flex-1 flex flex-col items-center pt-2 pb-1.5 relative min-w-0 ${
                   isActive ? 'is-active' : 'is-inactive'
                 }`}
@@ -336,14 +377,15 @@ function AppShell() {
                 }`}>
                   {t.label}
                 </span>
-                {isActive && (
-                  <span className={`nav-underline absolute bottom-0 left-1/2 -translate-x-1/2 w-6 h-[3px] rounded-full bg-gradient-to-r ${TAB_ACCENT[t.id]}`} />
+                {isActive && t.id !== 'more' && (
+                  <span className={`nav-underline absolute bottom-0 left-1/2 -translate-x-1/2 w-6 h-[3px] rounded-full bg-gradient-to-r ${TAB_ACCENT[t.id] || 'from-slate-400 to-slate-600'}`} />
                 )}
               </button>
             );
           })}
         </div>
       </nav>
+      <MoreSheet open={moreOpen} onClose={() => setMoreOpen(false)} onNavigate={goTab} activeId={tab} />
       <SpeedInsights />
     </div>
   );
