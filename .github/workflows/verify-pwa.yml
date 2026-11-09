@@ -32,7 +32,7 @@ jobs:
       - name: Validate Agent Worker syntax and Wrangler AI binding
         run: |
           node --check worker.js
-          node -e "const c=JSON.parse(require('node:fs').readFileSync('wrangler.jsonc','utf8')); if(c.ai?.binding !== 'AI') process.exit(1); if(c.vars?.ANTHROPIC_FALLBACK_ENABLED !== 'false') process.exit(1)"
+          node --input-type=module -e "import fs from 'node:fs'; const raw=fs.readFileSync('wrangler.jsonc','utf8'); const newline=raw.indexOf(String.fromCharCode(10)); if(newline < 0 || !raw.startsWith('{//')) throw new Error('Unexpected wrangler.jsonc header'); const c=JSON.parse('{'+raw.slice(newline+1)); if(c.name !== 'gudangai-rudy-pwa69') throw new Error('Unexpected Worker name: '+c.name); if(c.ai?.binding !== 'AI') throw new Error('AI binding must be AI'); if(c.vars?.ANTHROPIC_FALLBACK_ENABLED !== 'false') throw new Error('Anthropic fallback must remain disabled');"
       - name: Test Agent Hybrid routing and safety
         run: npm run test:agent
       - name: Validate Apps Script candidate syntax
