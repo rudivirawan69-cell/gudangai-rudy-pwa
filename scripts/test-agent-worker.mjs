@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import worker from '../worker.js';
+import worker, { detectLiveActions, liveDataBlock } from '../worker.js';
 
 const ORIGIN = 'https://gudangai-rudy-pwa69.rudivirawan69.workers.dev';
 const SUPABASE_URL = 'https://project.supabase.co';
@@ -227,4 +227,81 @@ test('rejects empty messages after session validation', async () => {
     assert.equal(response.status, 400);
     assert.equal((await response.json()).code, 'MESSAGE_REQUIRED');
   });
+});
+
+const SHEETS_URL = 'https://sheets.example/exec';
+const liveEnv = { ...validEnv, GUDANGAI_SHEETS_API_URL: SHEETS_URL, GUDANGAI_SHEETS_API_SECRET: 'server-secret' };
+
+async function runLive(message, { env = liveEnv, sheetsResponse } = {}) {
+  const originalFetch = globalThis.fetch;
+  const sheetCalls = [];
+  let systemText = '';
+  globalThis.fetch = async (url, options) => {
+    if (String(url) === `${SUPABASE_URL}/auth/v1/user`) return new Response(JSON.stringify({ id: 'u1' }), { status: 200 });
+    if (String(url) === SHEETS_URL) {
+      const body = JSON.parse(options.body); sheetCalls.push(body);
+      return sheetsResponse ? sheetsResponse(body) : new Response(JSON.stringify({ success: true, rows: [{ kode: 'X-1', qty: 3 }] }), { status: 200 });
+    }
+    throw new Error(`unexpected fetch ${url}`);
+  };
+  try {
+    const response = await worker.fetch(makeRequest('/api/agent', { method: 'POST', body: { message } }), {
+      ...env, AI: { run: async (_model, { messages }) => { systemText = messages[0].content; return { response: 'ok' }; } },
+    });
+    return { response, payload: await response.json(), sheetCalls, systemText };
+  } finally { globalThis.fetch = originalFetch; }
+}
+
+test('detectLiveActions maps read-only intents without parameters and caps at two', () => {
+  assert.deepEqual(detectLiveActions('ringkasan dashboard dan stok menipis'), ['getDashboardData', 'getLowStock']);
+  assert.deepEqual(detectLiveActions('status PO dan riwayat barang masuk dan log sistem'), ['getStatusPO', 'getTransactionHistory']);
+  assert.deepEqual(detectLiveActions('buatkan SOP cold storage'), []);
+});
+
+test('data questions trigger live read-only read and include provenance', async () => {
+  const { response, payload, sheetCalls, systemText } = await runLive('Tolong ringkasan dashboard hari ini');
+  assert.equal(response.status, 200); assert.equal(sheetCalls.length, 1);
+  assert.equal(sheetCalls[0].action, 'getDashboardData'); assert.equal(sheetCalls[0].client.mode, 'read_only');
+  assert.equal(payload.dataSources[0].action, 'getDashboardData'); assert.equal(payload.dataSources[0].ok, true);
+  assert.ok(payload.dataSources[0].readAt); assert.match(systemText, /DATA LIVE \(read-only\)/);
+  assert.match(systemText, /Pisahkan entitas CV dan PT/);
+});
+
+test('server secret never appears in prompt or response', async () => {
+  const { payload, systemText } = await runLive('stok menipis');
+  assert.equal(systemText.includes('server-secret'), false);
+  assert.equal(JSON.stringify(payload).includes('server-secret'), false);
+});
+
+test('non-data questions do not call spreadsheet', async () => {
+  const { sheetCalls, payload, systemText } = await runLive('Buatkan SOP pembersihan cold storage');
+  assert.equal(sheetCalls.length, 0); assert.deepEqual(payload.dataSources, []);
+  assert.match(systemText, /DATA LIVE: tidak ada/);
+});
+
+test('unconfigured gateway marks data unconfirmed while agent still answers', async () => {
+  const { response, payload, sheetCalls, systemText } = await runLive('status PO', { env: { ...liveEnv, GUDANGAI_SHEETS_API_URL: '' } });
+  assert.equal(response.status, 200); assert.equal(sheetCalls.length, 0);
+  assert.equal(payload.dataSources[0].ok, false); assert.equal(payload.dataSources[0].code, 'DATA_TOOLS_NOT_CONFIGURED');
+  assert.match(systemText, /GAGAL DATA_TOOLS_NOT_CONFIGURED/);
+});
+
+test('non-JSON upstream response is treated as unconfirmed', async () => {
+  const { payload, systemText } = await runLive('stok menipis', { sheetsResponse: () => new Response('<html>login</html>', { status: 200 }) });
+  assert.equal(payload.dataSources[0].ok, false); assert.equal(payload.dataSources[0].code, 'SHEETS_NON_JSON');
+  assert.match(systemText, /belum terkonfirmasi/);
+});
+
+test('large live data is truncated within the per-action budget', () => {
+  const big = { ok: true, action: 'getLowStock', source: 's', readAt: 't', data: { rows: 'x'.repeat(10000) } };
+  const block = liveDataBlock({ results: [big] });
+  assert.match(block, /\[dipotong\]/); assert.ok(block.length < 4000);
+});
+
+test('health reports the live-data agent stage', async () => {
+  const response = await worker.fetch(makeRequest('/api/agent/health'), { ...liveEnv, AI: { run: async () => ({}) } });
+  const payload = await response.json();
+  assert.equal(payload.agentStage, 'read_only_live_data'); assert.ok(payload.liveIntentActions.includes('getLowStock'));
+  const off = await (await worker.fetch(makeRequest('/api/agent/health'), { ...liveEnv, GUDANGAI_SHEETS_API_URL: '', AI: { run: async () => ({}) } })).json();
+  assert.equal(off.agentStage, 'analysis_only');
 });
