@@ -63,7 +63,7 @@ async function callSheetsRead(env, action, params = {}) {
     try { payload = JSON.parse(text); } catch (_) {
       return { success: false, code: 'SHEETS_NON_JSON', error: 'Apps Script mengembalikan respons bukan JSON.' };
     }
-    if (!response.ok) return { success: false, code: 'SHEETS_HTTP_ERROR', error: \`Apps Script HTTP \${response.status}\`, detail: payload };
+    if (!response.ok) return { success: false, code: 'SHEETS_HTTP_ERROR', error: `Apps Script HTTP ${response.status}`, detail: payload };
     return { ...payload, source: 'Apps Script read-only gateway', action, readAt: new Date().toISOString() };
   } catch (error) {
     return { success: false, code: 'SHEETS_READ_FAILED', error: error?.name === 'AbortError' ? 'Pembacaan spreadsheet timeout.' : String(error?.message || error) };
@@ -117,7 +117,7 @@ async function gatherLiveData(env, message) {
 }
 
 function truncate(text, limit) {
-  return text.length > limit ? \`\${text.slice(0, limit)} …[dipotong]\` : text;
+  return text.length > limit ? `${text.slice(0, limit)} …[dipotong]` : text;
 }
 
 export function liveDataBlock(live) {
@@ -125,9 +125,9 @@ export function liveDataBlock(live) {
     return 'DATA LIVE: tidak ada untuk pertanyaan ini. Jawab hanya dari konteks yang diberikan operator dan jangan mengklaim membaca spreadsheet.';
   }
   const parts = live.results.map((item) => (item.ok
-    ? \`[\${item.action} | dibaca \${item.readAt} | \${item.source}]\n\${truncate(JSON.stringify(item.data), LIVE_DATA_CHAR_BUDGET)}\`
-    : \`[\${item.action} | GAGAL \${item.code || 'UNKNOWN'}] Data belum terkonfirmasi: \${item.error || 'tidak ada detail'}\`));
-  return \`DATA LIVE (read-only):\n\${parts.join('\n\n')}\`;
+    ? `[${item.action} | dibaca ${item.readAt} | ${item.source}]\n${truncate(JSON.stringify(item.data), LIVE_DATA_CHAR_BUDGET)}`
+    : `[${item.action} | GAGAL ${item.code || 'UNKNOWN'}] Data belum terkonfirmasi: ${item.error || 'tidak ada detail'}`));
+  return `DATA LIVE (read-only):\n${parts.join('\n\n')}`;
 }
 
 function systemPrompt(context = {}, liveBlock = '') {
@@ -138,7 +138,7 @@ function systemPrompt(context = {}, liveBlock = '') {
     'Jika data tidak cukup, jelaskan data yang kurang dan minta operator memeriksa halaman/sumber yang tepat.',
     SKILL_RULES,
     liveBlock,
-    \`Konteks operasi: \${JSON.stringify(context).slice(0, 3500)}\`,
+    `Konteks operasi: ${JSON.stringify(context).slice(0, 3500)}`,
   ].filter(Boolean).join('\n');
 }
 
@@ -180,7 +180,7 @@ async function runAnthropicFallback(env, messages, system) {
     body: JSON.stringify({ model: ANTHROPIC_MODEL, max_tokens: 700, system, messages }),
   });
   const data = await upstream.json().catch(() => ({}));
-  if (!upstream.ok) throw new Error(data?.error?.message || \`Anthropic API HTTP \${upstream.status}\`);
+  if (!upstream.ok) throw new Error(data?.error?.message || `Anthropic API HTTP ${upstream.status}`);
   const reply = extractText(data);
   if (!reply) throw new Error('Anthropic mengembalikan jawaban kosong.');
   return { reply, model: data?.model || ANTHROPIC_MODEL, provider: 'anthropic-fallback' };
@@ -191,12 +191,12 @@ async function runNineRouter(env, messages) {
   const model = String(env.NINE_ROUTER_MODEL || '').trim();
   if (!apiKey || !model) throw new Error('9Router belum dikonfigurasi: Secret NINE_ROUTER_API_KEY dan variable NINE_ROUTER_MODEL wajib tersedia.');
   const upstream = await fetch('https://9router.com/v1/chat/completions', {
-    method: 'POST', headers: { 'content-type': 'application/json', authorization: \`Bearer \${apiKey}\` },
+    method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${apiKey}` },
     body: JSON.stringify({ model, messages, max_tokens: 900 }),
   });
   const data = await upstream.json().catch(() => ({}));
   if (!upstream.ok) {
-    const message = data?.error?.message || data?.message || \`9Router API HTTP \${upstream.status}\`;
+    const message = data?.error?.message || data?.message || `9Router API HTTP ${upstream.status}`;
     throw new Error(String(message).slice(0, 240));
   }
   const reply = String(data?.choices?.[0]?.message?.content || '').trim();
@@ -212,8 +212,8 @@ async function verifySupabaseAccessToken(request, env) {
   const anonKey = String(env.SUPABASE_ANON_KEY || env.SUPABASE_PUBLISHABLE_KEY || '').trim();
   if (!supabaseUrl || !anonKey) return { ok: false, status: 503, code: 'AUTH_NOT_CONFIGURED', error: 'Verifikasi sesi Supabase belum dikonfigurasi pada Worker.' };
   try {
-    const response = await fetch(\`\${supabaseUrl}/auth/v1/user\`, {
-      method: 'GET', headers: { apikey: anonKey, Authorization: \`Bearer \${match[1]}\` },
+    const response = await fetch(`${supabaseUrl}/auth/v1/user`, {
+      method: 'GET', headers: { apikey: anonKey, Authorization: `Bearer ${match[1]}` },
     });
     if (!response.ok) return { ok: false, status: 401, code: 'INVALID_SESSION', error: 'Sesi login tidak valid atau sudah berakhir. Silakan login kembali.' };
     const user = await response.json().catch(() => null);
