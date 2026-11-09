@@ -8,6 +8,12 @@ const BATCH_CHUNK_SIZE = 35;
 const BATCH_TIMEOUT_MS = 120000;
 const SINGLE_TIMEOUT_MS = 60000;
 const SCHEMA_VERSION = '1.0';
+const DETERMINISTIC_BATCH_REJECTS = new Set([
+  'PRECHECK_REJECTED', 'INVALID_DATE', 'DATE_REQUIRED', 'ENTITY_REQUIRED',
+  'ENTITY_MISMATCH', 'CODE_ENTITY_MISMATCH', 'CODE_REQUIRED', 'INVALID_QTY',
+  'SHEET_NOT_ALLOWED', 'SHEET_NOT_FOUND', 'PROTECTED_FIELD', 'UNKNOWN_FIELD',
+  'DUPLICATE_MASTER_ITEM', 'DUPLICATE_ITEM', 'QUEUE_APPROVAL_REQUIRED',
+]);
 const SAFE_WRITE_BACKEND_RE = /STOCK-READONLY|STOCK-SOURCE-LOCKED|6\.6\.5\+?(?:BULK[-_]?STABLE|DEPLOY[-_]?READY)|6\.6\.[5-9]|V?6\.6\.[5-9]|7\.0\.\d+|PERFORMANCE[-_]?CANDIDATE|RECONSTRUCTION|BULK[-_]?STABLE|DEPLOY[-_]?READY/i;
 
 const APPLIED_KEY = 'gudangai_applied';
@@ -161,9 +167,26 @@ export function getWriteCircuitState() {
   return { failures: 0, openedAt: 0, lastError: '', open: false, retryAfterMs: 0 };
 }
 let _safeBackendCache = { ok: false, at: 0, health: null };
-async function assertSafeWriteBackend() {
+function assertRequestedPeriod(health, requestedTanggal) {
+  const active = health?.data?.activePeriod || health?.data?.activeMonth || health?.data?.data?.activePeriod || health?.data?.data?.activeMonth;
+  if (active && (active.bulan || active.month) && (active.tahun || active.year)) {
+    const requested = normalizeTanggal(requestedTanggal);
+    const requestedKey = requested.slice(0, 7);
+    const activeKey = String(active.tahun || active.year).padStart(4, '0') + '-' + String(active.bulan || active.month).padStart(2, '0');
+    if (requestedKey !== activeKey) {
+      const mismatch = new Error('WRITE DITAHAN: periode backend ' + activeKey + ' tidak cocok dengan tanggal transaksi ' + requestedKey + '. Perbarui koneksi API sebelum mengirim.');
+      mismatch.code = 'BACKEND_PERIOD_MISMATCH';
+      mismatch.noQueue = true;
+      throw mismatch;
+    }
+  }
+}
+async function assertSafeWriteBackend(requestedTanggal) {
   const now = Date.now();
-  if (_safeBackendCache.ok && (now - _safeBackendCache.at) < 60000) return _safeBackendCache.health;
+  if (_safeBackendCache.ok && (now - _safeBackendCache.at) < 60000) {
+    assertRequestedPeriod(_safeBackendCache.health, requestedTanggal);
+    return _safeBackendCache.health;
+  }
   const health = await healthCheck();
   const version = String(health?.data?.version ?? health?.data?.data?.version ?? health?.data?.title ?? '').trim();
   if (!health?.ok) {
@@ -171,6 +194,7 @@ async function assertSafeWriteBackend() {
     throw new Error('WRITE DITAHAN: backend tidak terverifikasi' + (detail ? ' — ' + detail : '') + '. Tidak ada transaksi yang dikirim.');
   }
   if (!SAFE_WRITE_BACKEND_RE.test(version)) throw new Error('WRITE DITAHAN: backend belum LOCK Stock CV/PT. Versi: ' + (version || 'tidak diketahui'));
+  assertRequestedPeriod(health, requestedTanggal);
   if (/6\.6\.5|BULK[-_]?STABLE|DEPLOY[-_]?READY/i.test(version)) _batchSupported = true;
   _safeBackendCache = { ok: true, at: now, health };
   return health;
@@ -364,6 +388,7 @@ async function submitBatchChunk(action, entity, chunkItems, tanggal) {
   // mungkin masih memproses batch pertama; antrikan identity yang sama untuk rekonsiliasi.
   const data = await postJson(payload, { retries: 1, timeoutMs: BATCH_TIMEOUT_MS });
   const rawResults = data?.results || data?.data?.results || [];
+  const backendCode = String(data?.code || data?.data?.code || '').trim().toUpperCase();
   // Map identity → clientItemId from normalized (wire intentionally omits clientItemId).
   // Keys: transactionId (TX-CI-...), requestId (CI-...), and bare clientItemId.
   const cidByIdentity = new Map();
@@ -374,14 +399,41 @@ async function submitBatchChunk(action, entity, chunkItems, tanggal) {
     cidByIdentity.set('NC-' + cid, cid);
   }
   const results = Array.isArray(rawResults) ? rawResults.map((r) => {
+    const resultIndex = Number(r?.batchIndex) - 1;
+    const indexedItem = Number.isInteger(resultIndex) && resultIndex >= 0 && resultIndex < normalized.length
+      ? normalized[resultIndex] : null;
     const clientItemId = r?.clientItemId
       || cidByIdentity.get(String(r?.transactionId || ''))
       || cidByIdentity.get(String(r?.requestId || ''))
-      || cidByIdentity.get(String(r?.nonce || ''));
+      || cidByIdentity.get(String(r?.nonce || ''))
+      || indexedItem?.clientItemId;
     const ok = r?.success === true || r?.skipped === true || r?.idempotent === true ||
       r?.status === 'APPLIED' || r?.status === 'OK' || r?.status === 'SUCCESS' || r?.status === 'DUPLICATE';
     return { ...r, clientItemId, success: ok };
   }) : [];
+
+  // Validation/rejection is final for this payload. Do not turn it into an
+  // uncertain write and do not place it in the outbox.
+  if (!data?.success && DETERMINISTIC_BATCH_REJECTS.has(backendCode)) {
+    const validationByIndex = new Map((data?.validationErrors || data?.data?.validationErrors || [])
+      .map((item) => [Number(item?.index) - 1, item?.error || data?.error || backendCode]));
+    return {
+      success: false,
+      backendRejected: true,
+      deterministic: true,
+      code: backendCode,
+      successCount: 0,
+      failCount: normalized.length,
+      results: normalized.map((item, index) => ({
+        success: false,
+        clientItemId: item.clientItemId,
+        error: validationByIndex.get(index) || data?.error || backendCode,
+        code: backendCode,
+        queued: false,
+        queueStored: false,
+      })),
+    };
+  }
 
   // Backend dapat mengembalikan hanya counter tanpa array results. Bentuk ulang
   // hasil parsial agar item yang sudah benar-benar ditulis tidak masuk antrean.
@@ -443,8 +495,16 @@ async function submitItems(action, entity, items, tanggal, options = {}) {
 
   // Backend health is cached for 60 seconds; do not pay this round-trip for local APPLIED items.
   try {
-    await assertSafeWriteBackend();
+    await assertSafeWriteBackend(tanggal);
   } catch (err) {
+    if (err?.noQueue) {
+      const msg = err.message || 'Write ditahan karena konfigurasi backend tidak cocok.';
+      return {
+        success: false, count: alreadyApplied.length, failed: list.length, queuedCount: 0,
+        total: originalList.length, clientElapsedMs: Date.now() - clientStartedAt,
+        results: [...confirmedResults, ...list.map((it) => ({ success: false, queued: false, queueStored: false, clientItemId: it.clientItemId, code: err.code, error: msg }))],
+      };
+    }
     const queuedIds = options.fromQueue ? [] : enqueue(action, entity, list, { tanggal });
     const queuedSet = new Set(queuedIds);
     const msg = err?.message || 'Backend write belum terverifikasi';
@@ -474,6 +534,10 @@ async function submitItems(action, entity, items, tanggal, options = {}) {
       emitProgress(Math.min(i + chunk.length, originalList.length), originalList.length, { successCount: totalSuccess, failCount: totalFail, queuedCount: totalQueued });
       const failedIds = new Set((batchRes.results || []).filter(r => !r.success && !r.skipped && r.clientItemId).map(r => r.clientItemId));
       const knownIds = new Set((batchRes.results || []).map(r => r.clientItemId).filter(Boolean));
+      if (batchRes.backendRejected) {
+        emitProgress(Math.min(i + chunk.length, originalList.length), originalList.length, { successCount: totalSuccess, failCount: totalFail, queuedCount: totalQueued });
+        continue;
+      }
       const queueItems = chunk.filter(it => failedIds.has(it.clientItemId) || !knownIds.has(it.clientItemId));
       if (queueItems.length) {
         const queuedIds = options.fromQueue ? [] : enqueue(action, entity, queueItems, { tanggal });
