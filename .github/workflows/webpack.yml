@@ -1,4 +1,4 @@
-name: GudangAI RUDY CI and Cloudflare Deploy
+name: GudangAI RUDY CI
 
 on:
   push:
@@ -25,23 +25,3 @@ jobs:
         run: npm run test:agent
       - name: Build Vite production
         run: npm run build
-
-  deploy-worker:
-    needs: build
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - name: Use Node.js 22
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-        with:
-          node-version: 22.x
-      - name: Install dependencies
-        run: npm ci --no-audit --no-fund
-      - name: Build PWA assets
-        run: npm run build
-      - name: Deploy Cloudflare Worker
-        run: npx --yes wrangler@4.158.0 deploy
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
