@@ -111,6 +111,16 @@ const stockStatusSource = readFileSync(stockStatusPath, 'utf8');
 
 assert.match(apiSource, /postJson\(payload,\s*\{\s*retries:\s*1,\s*timeoutMs:\s*BATCH_TIMEOUT_MS\s*\}\)/,
   'Ambiguous batch writes must not be retried automatically while the first Apps Script request may still be running.');
+assert.match(apiSource, /Number\(r\?\.batchIndex\) - 1/,
+  'Batch results must map by batchIndex when the backend omits clientItemId.');
+assert.match(apiSource, /backendRejected: true/,
+  'Deterministic batch rejects must be returned explicitly, not treated as uncertain writes.');
+assert.match(apiSource, /if \(batchRes\.backendRejected\)/,
+  'Deterministic batch rejects must not be enqueued for retry.');
+assert.match(apiSource, /BACKEND_PERIOD_MISMATCH/,
+  'Writes must be blocked when the requested date is outside the backend active period.');
+assert.match(apiSource, /err\?\.noQueue[\s\S]*queuedCount:\s*0/,
+  'Period mismatch must remain a visible rejection and must not enter the outbox.');
 assert.match(apiSource, /import \{ classifyStockLevel \} from '\.\/stockStatus'/);
 assert.match(stockStatusSource, /stock < 10/);
 assert.match(stockStatusSource, /stock < 20/);
