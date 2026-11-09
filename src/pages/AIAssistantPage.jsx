@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { ArrowDown, ArrowRight, Bot, Boxes, ClipboardList, FileSearch, PackageCheck, Send, ShieldCheck, Sparkles, Thermometer, Trash2, X } from 'lucide-react';
 
-const AGENT_API = (import.meta.env.VITE_GUDANGAI_AGENT_API || 'https://gudangai-rudy.rudivirawan69.workers.dev').replace(/\/$/, '');
+const AGENT_API = (import.meta.env.VITE_GUDANGAI_AGENT_API || 'https://gudangai-rudy-pwa6.rudivirawan69.workers.dev').replace(/\/$/, '');
 const MAX_HISTORY = 8;
 // Jarak (px) dari dasar daftar pesan yang masih dianggap "sedang membaca pesan terbaru".
 const STICK_THRESHOLD = 96;
