@@ -1,0 +1,39 @@
+/* ── 8. MORE SHEET (nav 5+Lainnya) ── */
+.more-sheet-backdrop {
+  position: fixed; inset: 0; z-index: 60;
+  background: var(--backdrop-bg, rgba(8, 28, 34, 0.45));
+  display: flex; align-items: flex-end; justify-content: center;
+  animation: moreFade 0.18s ease;
+}
+.more-sheet {
+  width: 100%; max-width: 480px;
+  background: var(--more-sheet-bg, var(--surface, #ffffff));
+  border-top-left-radius: 20px; border-top-right-radius: 20px;
+  padding: 8px 16px calc(16px + env(safe-area-inset-bottom, 0px));
+  border: 1px solid var(--border, #e2e8f0);
+  animation: moreSlide 0.22s var(--ease-out, cubic-bezier(0.22, 1, 0.36, 1));
+}
+.sheet-handle {
+  width: 40px; height: 4px; border-radius: 999px;
+  background: var(--sheet-handle, #d4dfe2);
+  margin: 4px auto 10px;
+}
+.more-row {
+  display: flex; align-items: center; gap: 12px; width: 100%;
+  min-height: var(--tap-min, 44px);
+  padding: 10px 8px; border: none; background: transparent;
+  border-bottom: 1px solid var(--more-row-border, var(--border, #e6edef));
+  text-align: left; cursor: pointer;
+}
+.more-row:last-child { border-bottom: none; }
+.more-row:active { background: var(--more-row-active-bg, rgba(0, 0, 0, 0.04)); }
+.more-row.is-active { background: var(--more-row-active-bg, #eefafa); }
+.more-row-icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 40px; height: 40px; border-radius: 12px; flex-shrink: 0;
+}
+@keyframes moreFade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes moreSlide { from { transform: translateY(100%); } to { transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) {
+  .more-sheet, .more-sheet-backdrop { animation: none; }
+}
