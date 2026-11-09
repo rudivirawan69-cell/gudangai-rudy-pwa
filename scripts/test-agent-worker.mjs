@@ -9,7 +9,8 @@ const validEnv = {
   SUPABASE_ANON_KEY: 'test-anon-key',
   ALLOWED_ORIGINS: ORIGIN,
 };
-const makeRequest = (path, { method = 'GET', body, origin = ORIGIN, token = 'test-access-token' } = {}) =>
+let tokenCounter = 0;
+const makeRequest = (path, { method = 'GET', body, origin = ORIGIN, token = 'test-access-token-' + (++tokenCounter) } = {}) =>
   new Request(`${ORIGIN}${path}`, {
     method,
     headers: {
