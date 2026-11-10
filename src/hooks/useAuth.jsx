@@ -158,9 +158,15 @@ export function AuthProvider({ children }) {
   }, [session?.access_token, applySession]);
 
   const login = useCallback(async (email, password) => {
-    const nextSession = await signInWithPassword(email, password);
-    applySession(nextSession, 'authenticated');
-    return true;
+    try {
+      const nextSession = await signInWithPassword(email, password);
+      applySession(nextSession, 'authenticated');
+      return true;
+    } catch (error) {
+      if (!error?.code) error.code = 'AUTH_ERROR';
+      if (!error?.status) error.status = 0;
+      throw error;
+    }
   }, [applySession]);
 
   const loginLocal = useCallback((pin) => {

@@ -2,14 +2,15 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import worker, { detectLiveActions, liveDataBlock } from '../worker.js';
 
-const ORIGIN = 'https://gudangai-rudy-pwa6.rudivirawan69.workers.dev';
+const ORIGIN = 'https://gudangai-rudy-live69.rudivirawan69.workers.dev';
 const SUPABASE_URL = 'https://project.supabase.co';
 const validEnv = {
   SUPABASE_URL,
   SUPABASE_ANON_KEY: 'test-anon-key',
   ALLOWED_ORIGINS: ORIGIN,
 };
-const makeRequest = (path, { method = 'GET', body, origin = ORIGIN, token = 'test-access-token' } = {}) =>
+let tokenCounter = 0;
+const makeRequest = (path, { method = 'GET', body, origin = ORIGIN, token = 'test-access-token-' + (++tokenCounter) } = {}) =>
   new Request(`${ORIGIN}${path}`, {
     method,
     headers: {
