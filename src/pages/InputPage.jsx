@@ -632,11 +632,11 @@ export default function InputPage() {
       });
       const totalPending = failedItems.length + zeroItems.length;
       if (queuedItems.length || failedItems.length || zeroItems.length) {
-        pushNotification({ type: failedItems.length ? 'warning' : 'success', title: 'Hasil pengiriman', body: confirmedItems.length + ' terkonfirmasi · ' + queuedItems.length + ' masuk Antrian Sinkronisasi · ' + totalPending + ' belum terkonfirmasi.' });
+        pushNotification({ type: failedItems.length ? 'warning' : 'success', title: 'Hasil pengiriman', body: confirmedItems.length + ' terkonfirmasi · ' + queuedItems.length + ' masuk antrean sinkronisasi · ' + totalPending + ' belum terkonfirmasi.' });
         setStatusBanner(confirmedItems.length + ' terkonfirmasi · ' + queuedItems.length + ' masuk Antrian Sinkronisasi · ' + totalPending + ' belum terkonfirmasi (tetap di keranjang)');
       } else {
         pushNotification({ type: 'success', title: 'Transaksi selesai', body: confirmedItems.length + ' item terkonfirmasi ditulis backend.' });
-        setStatusBanner(confirmedItems.length + ' terkonfirmasi · 0 masuk Antrian Sinkronisasi · 0 belum terkonfirmasi');
+        setStatusBanner(confirmedItems.length + ' terkonfirmasi · 0 masuk antrean sinkronisasi · 0 belum terkonfirmasi');
       }
       setCart(cart.filter((item) => Number(item.qty) <= 0 || failedItems.some((x) => x.clientItemId === item.clientItemId)));
       if (!failedItems.length && !zeroItems.length) { setAccuracy(null); setPdfReview([]); setReviewSourceLabel('PDF'); }

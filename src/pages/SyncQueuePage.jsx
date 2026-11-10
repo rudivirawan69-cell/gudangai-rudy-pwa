@@ -205,9 +205,9 @@ export default function SyncQueuePage({ onBack }) {
           <ArrowLeft className="w-5 h-5" />
         </button>
         <div className="min-w-0 flex-1">
-          <h1 className="text-base font-bold text-slate-900">Antrian Sinkronisasi</h1>
+          <h1 className="text-base font-bold text-slate-900">Antrean Sinkronisasi</h1>
           <p className="text-[11px] text-slate-500">
-            {total === 0 ? 'Tidak ada item pending' : `${total} item di keranjang antrian`}
+            {total === 0 ? 'Tidak ada item tertunda' : `${total} item dalam antrean`}
           </p>
         </div>
       </div>
@@ -245,7 +245,7 @@ export default function SyncQueuePage({ onBack }) {
               <div className="flex items-center gap-2">
                 <ClipboardList className="w-5 h-5 text-cyan-700" />
                 <div>
-                  <p className="text-sm font-bold text-cyan-900">Keranjang Antrian</p>
+                  <p className="text-sm font-bold text-cyan-900">Daftar Antrean</p>
                   <p className="text-[11px] text-cyan-800/80">{total} item · belum dikirim ulang ke server</p>
                 </div>
               </div>
@@ -374,7 +374,7 @@ export default function SyncQueuePage({ onBack }) {
           )}
           {lastSyncReport.remaining.length > 0 && (
             <div>
-              <p className="text-[11px] font-bold text-amber-700 mb-1.5">MASIH ANTRIAN</p>
+              <p className="text-[11px] font-bold text-amber-700 mb-1.5">MASIH DALAM ANTREAN</p>
               <div className="space-y-1.5">
                 {lastSyncReport.remaining.map((row) => (
                   <div key={'p-' + row.key} className="flex items-center justify-between gap-2 rounded-xl bg-amber-50 border border-amber-100 px-3 py-2">

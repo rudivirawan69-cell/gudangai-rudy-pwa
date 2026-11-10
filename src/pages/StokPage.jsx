@@ -118,7 +118,7 @@ export default function StokPage() {
           <p className="stock-page-kicker">Monitoring persediaan</p>
           <h1 className="stock-page-title text-lg font-extrabold">Data Stok</h1>
         </div>
-        <button type="button" onClick={() => refresh?.({ force: true })} className="stock-refresh-btn h-10 w-10 rounded-xl border flex items-center justify-center" aria-label="Refresh data stok" title="Refresh data stok">
+        <button type="button" onClick={() => refresh?.({ force: true })} className="stock-refresh-btn h-10 w-10 rounded-xl border flex items-center justify-center" aria-label="Muat ulang data stok" title="Muat ulang data stok">
           <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
         </button>
       </div>

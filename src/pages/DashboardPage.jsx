@@ -546,7 +546,7 @@ function Movement7Days({ history }) {
     <div className="dashboard-chart-wrap">
       <div className="flex items-center justify-between mb-2.5">
         <div>
-          <p className="text-sm font-extrabold text-slate-900">Analisa</p>
+          <p className="text-sm font-extrabold text-slate-900">Analisis</p>
           <p className="text-[11px] text-slate-500">Pergerakan barang 7 hari terakhir</p>
         </div>
         <span className="text-[10px] font-bold text-cyan-700 bg-cyan-50 border border-cyan-100 rounded-full px-2 py-1">7 HARI</span>
@@ -710,7 +710,7 @@ function StatusPOCard({ data, loading, error, onRefresh, onConfirm, confirmingId
     const hasCV = (Number(arrivalItem.poCV) || 0) > 0;
     const hasPT = (Number(arrivalItem.poPT) || 0) > 0;
     if (hasCV && hasPT) {
-      setArrivalError('Item ini memiliki PO CV dan PT sekaligus. Konfirmasi dipause sampai backend menyediakan sisa qty per entitas agar tidak salah mencatat stok.');
+      setArrivalError('Item ini memiliki PO CV dan PT sekaligus. Konfirmasi ditangguhkan sementara hingga backend menyediakan sisa kuantitas per entitas, agar pencatatan stok tidak keliru.');
       return;
     }
     const qty = Number(arrivalQty);

@@ -13,7 +13,7 @@ const DEFAULT_STATE = {
   ],
   dailyTasks: [
     { id: 't1', title: 'Pemeriksaan Suhu Cold Storage A & B', done: true },
-    { id: 't2', title: 'Stock Opname Harian Item Kritis (Min. Stock)', done: false },
+    { id: 't2', title: 'Stok Opname Harian untuk Item Kritis (Stok Minimum)', done: false },
     { id: 't3', title: 'Penerimaan Supplier Jam 13:00 WIB', done: false },
   ],
   offToday: [
@@ -21,9 +21,9 @@ const DEFAULT_STATE = {
     { id: 'o2', initials: 'BP', name: 'Pak Bambang', status: 'Off Reguler' },
   ],
   meeting: {
-    title: 'Evaluasi Operational Q4',
+    title: 'Evaluasi Operasional Kuartal IV',
     time: '14:00 - 15:30 WIB',
-    participants: 'Peserta: Pak Hery, Pak Supri, & Leader Shift Gudang Pusat.',
+    participants: 'Peserta: Pak Hery, Pak Supri, dan Ketua Regu Gudang Pusat.',
   },
   projects: [
     { id: 'p1', name: 'Integrasi Barcode Scanner PWA', progress: 75 },
