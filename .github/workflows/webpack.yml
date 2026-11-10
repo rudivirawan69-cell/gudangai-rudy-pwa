@@ -123,6 +123,18 @@ jobs:
           put_secret "SUPABASE_ANON_KEY" "$SUPABASE_ANON_KEY"
           put_secret "GUDANGAI_SHEETS_API_SECRET" "$GUDANGAI_SHEETS_API_SECRET"
 
+
+      - name: Verify live Worker health and Supabase configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          URL="https://gudangai-rudy-pwa-69.rudivirawan69.workers.dev"
+          response="$(curl --fail --silent --show-error --retry 12 --retry-delay 5 --retry-all-errors "$URL/api/agent/health")"
+          node -e 'const d=JSON.parse(process.argv[1]); if(d.success !== true) throw new Error("Worker health did not return success"); if(d.deploymentTarget !== "https://gudangai-rudy-pwa-69.rudivirawan69.workers.dev") throw new Error("Unexpected deployment target: "+d.deploymentTarget); if(d.authConfigured !== true) throw new Error("Supabase Auth runtime configuration is missing"); console.log("Live Worker health OK; Supabase Auth configured; target:", d.deploymentTarget);' "$response"
+          headers="$(curl --silent --show-error --dump-header - --output /dev/null --request OPTIONS --header "Origin: $URL" --header "Access-Control-Request-Method: POST" "$URL/api/agent")"
+          printf '%s' "$headers" | grep -qi "access-control-allow-origin: $URL"
+          echo "Worker CORS preflight OK for canonical production origin."
+
       - name: Confirm production deployment target
         run: |
           echo "Deployment commit: ${GITHUB_SHA}"
