@@ -1,9 +1,6 @@
-// wrangler.jsonc — Worker produksi Cloudflare Builds (gudangai-rudy-pwa-69)
-// Secret TIDAK ditulis di sini. Set lewat CI (wrangler secret put) atau:
-//   wrangler secret put GUDANGAI_SHEETS_API_SECRET
-//   wrangler secret put SUPABASE_ANON_KEY
-//   wrangler secret put SUPABASE_URL
-//   wrangler secret put NINE_ROUTER_API_KEY   (opsional)
+// wrangler.jsonc — Worker produksi Cloudflare (gudangai-rudy-pwa-69)
+// SUPABASE_URL, SUPABASE_ANON_KEY, dan GUDANGAI_SHEETS_API_SECRET
+// dipasang sebagai encrypted Worker secrets oleh workflow webpack.yml.
 {
   "name": "gudangai-rudy-pwa-69",
   "compatibility_date": "2026-10-04",
@@ -24,7 +21,6 @@
     "GUDANGAI_SHEETS_API_URL": "https://script.google.com/macros/s/AKfycbxYNipdWCeg1800-D4iA0ZDtO0Yy9RxQ0hcjZfJNO15mU0bSjSS6KiwkbSzcbJYhg8VIA/exec",
     "AI_MODEL": "@cf/meta/llama-3.1-8b-instruct-fast",
     "ANTHROPIC_FALLBACK_ENABLED": "false",
-    "SUPABASE_URL": "https://cbeosysruwkfwgklziog.supabase.co",
     "SUPABASE_PUBLISHABLE_KEY": "sb_publishable_nrVxMRbrQihkzwFmWEs7QA_PlVFDWOz",
     "ALLOWED_ORIGINS": "https://gudangai-rudy-pwa-69.rudivirawan69.workers.dev"
   }
