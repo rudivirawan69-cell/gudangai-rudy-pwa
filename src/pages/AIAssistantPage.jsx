@@ -8,12 +8,12 @@ const MAX_HISTORY = 8;
 const STICK_THRESHOLD = 96;
 
 const SKILLS = [
-  { id: 'stock', title: 'Analisis Stok', description: 'Evaluasi stok aman, kritis, dan kebutuhan item.', icon: Boxes, prompt: 'Bantu analisis data stok berikut. Pisahkan fakta, risiko, dan rekomendasi. Jangan mengarang angka atau saldo.\n\nTempel data stok di bawah ini:' },
-  { id: 'purchasing', title: 'Purchasing & PO', description: 'Tinjau kebutuhan pembelian dan prioritas PO.', icon: ClipboardList, prompt: 'Bantu evaluasi rencana purchasing/PO berikut. Periksa kebutuhan, prioritas, potensi overstock, dan data yang masih kurang. Jangan membuat atau mengirim PO.\n\nTempel data PO/kebutuhan:' },
-  { id: 'audit', title: 'Audit Transaksi', description: 'Periksa konsistensi catatan masuk, keluar, dan rusak.', icon: FileSearch, prompt: 'Bantu audit transaksi gudang berikut. Cari duplikasi, anomali jumlah, tanggal, dan informasi yang belum lengkap. Jangan mengubah transaksi.\n\nTempel data transaksi:' },
+  { id: 'stock', title: 'Analisis Stok', description: 'Evaluasi stok aman, kritis, dan kebutuhan item.', icon: Boxes, prompt: 'Analisis data stok gudang melalui sumber live read-only yang tersedia. Jika data live tidak tersedia, minta operator menempelkan data stok. Pisahkan fakta, risiko, dan rekomendasi; jangan mengarang angka atau saldo.' },
+  { id: 'purchasing', title: 'Purchasing & PO', description: 'Tinjau kebutuhan pembelian dan prioritas PO.', icon: ClipboardList, prompt: 'Evaluasi kebutuhan purchasing dan status PO berdasarkan data read-only yang tersedia. Jika data live tidak tersedia, minta operator menempelkan data PO atau kebutuhan. Periksa prioritas, potensi overstock, dan data yang masih kurang. Jangan membuat atau mengirim PO.' },
+  { id: 'audit', title: 'Audit Transaksi', description: 'Periksa konsistensi catatan masuk, keluar, dan rusak.', icon: FileSearch, prompt: 'Audit transaksi gudang berdasarkan riwayat read-only yang tersedia. Jika data live tidak tersedia, minta operator menempelkan data transaksi. Cari duplikasi, anomali jumlah, tanggal, dan informasi yang belum lengkap. Jangan mengubah transaksi.' },
   { id: 'cold', title: 'Cold Storage', description: 'Checklist kondisi, risiko, dan tindak lanjut.', icon: Thermometer, prompt: 'Buat analisis kondisi cold storage berdasarkan catatan berikut. Bedakan fakta dan dugaan, lalu susun tindakan prioritas. Jangan mengasumsikan suhu sensor yang tidak diberikan.\n\nTempel catatan kondisi:' },
   { id: 'sop', title: 'SOP & Checklist', description: 'Susun langkah kerja dan pemeriksaan operator.', icon: ShieldCheck, prompt: 'Susun SOP/checklist operasional gudang yang ringkas, berurutan, dan mudah dijalankan untuk kebutuhan berikut:' },
-  { id: 'report', title: 'Laporan Operasional', description: 'Rangkum progres, kendala, dan rencana tindak lanjut.', icon: PackageCheck, prompt: 'Bantu susun laporan operasional gudang dari catatan berikut. Kelompokkan hasil, kendala, risiko, dan tindak lanjut. Jangan menambah fakta yang tidak tersedia.\n\nTempel catatan:' },
+  { id: 'report', title: 'Laporan Operasional', description: 'Rangkum progres, kendala, dan rencana tindak lanjut.', icon: PackageCheck, prompt: 'Susun laporan operasional gudang berdasarkan data read-only yang tersedia dan catatan operator. Jika sumber live tidak tersedia, minta catatan atau data pendukung. Kelompokkan hasil, kendala, risiko, dan tindak lanjut. Jangan menambah fakta yang tidak tersedia.' },
 ];
 
 function getReply(payload) {
@@ -110,7 +110,7 @@ export default function AIAssistantPage({ onNavigate }) {
             skill: activeSkill,
             permissions: 'read_only',
             capabilities: ['analisis data yang diberikan operator', 'rekomendasi purchasing dan PO', 'audit catatan transaksi', 'checklist cold storage', 'SOP operasional', 'ringkasan laporan'],
-            constraints: ['tidak memiliki akses baca langsung ke Google Sheets', 'tidak menulis atau mengubah transaksi', 'jangan mengarang stok, kode, jumlah, PO, atau jadwal', 'minta data sumber bila diperlukan'],
+            constraints: ['membaca data gudang hanya melalui gateway server read-only yang diizinkan; tidak mengakses spreadsheet secara langsung', 'tidak menulis atau mengubah stok, transaksi, maupun PO', 'jangan mengarang stok, kode, jumlah, status PO, atau jadwal', 'jika sumber live gagal atau belum tersedia, nyatakan data belum terkonfirmasi dan minta data pendukung'],
           },
         }),
       });
@@ -245,7 +245,7 @@ export default function AIAssistantPage({ onNavigate }) {
             {loading ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" /> : <Send className="h-4 w-4" />}
           </button>
         </div>
-        <p className="px-2 pt-1.5 text-[10px] text-slate-400">Analisis dari data yang Anda kirim; tidak membaca atau mengubah Google Sheets. Jangan kirim PIN, password, atau API key.</p>
+        <p className="px-2 pt-1.5 text-[10px] text-slate-400">Data gudang dibaca hanya melalui koneksi server read-only yang tersedia atau dari data yang Anda kirim. Rubee tidak dapat mengubah stok, transaksi, maupun PO. Jangan kirim PIN, password, atau API key.</p>
       </form>
     </section>
   );
