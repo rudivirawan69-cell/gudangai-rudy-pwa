@@ -45,7 +45,7 @@ const env = {
   },
 };
 
-function request(path, { method = 'GET', token = 'valid-test-token', origin = 'https://rudivirawan69-cell.github.io', ip = '198.51.100.10', body, headers = {} } = {}) {
+function request(path, { method = 'GET', token = 'valid-test-token', origin = 'https://gudangai-rudy-pwa-69.rudivirawan69.workers.dev', ip = '198.51.100.10', body, headers = {} } = {}) {
   const requestHeaders = { Origin: origin, 'CF-Connecting-IP': ip, ...headers };
   if (token) requestHeaders.Authorization = 'Bearer ' + token;
   if (body !== undefined) requestHeaders['Content-Type'] = 'application/json';

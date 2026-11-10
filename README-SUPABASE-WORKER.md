@@ -1,11 +1,13 @@
 # GudangAI RUDY — Cloudflare Worker + Supabase
 
-## Production target
+## Production target (canonical)
 
-- Worker: `gudangai-rudy`
-- URL: `https://gudangai-rudy.rudivirawan69.workers.dev`
+- Worker: `gudangai-rudy-pwa-69`
+- URL: `https://gudangai-rudy-pwa-69.rudivirawan69.workers.dev`
 - Supabase project: `https://cbeosysruwkfwgklziog.supabase.co`
 - Google Sheets gateway: configured by `GUDANGAI_SHEETS_API_URL` in `wrangler.jsonc`
+
+All production PWA, AI API, smoke-test, and deployment references must use this canonical Worker hostname. Do not use the legacy `gudangai-rudy`, `gudangai-rudy-pwa69`, Vercel, or GitHub Pages hosts as production targets. Localhost is allowed only for local development.
 
 ## Authentication
 
@@ -38,4 +40,4 @@ Copy `.dev.vars.example` to `.dev.vars`, then supply local-only values. Never co
 
 ## CI/CD
 
-Pull requests run the agent test and Vite production build. A push to `main` runs the same checks and then deploys the Worker using GitHub Actions secrets `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`.
+Pull requests run the agent test and Vite production build. A push to `main` runs the same checks and then deploys the canonical Worker using GitHub Actions secrets `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`.
