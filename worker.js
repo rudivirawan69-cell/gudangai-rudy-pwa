@@ -9,6 +9,8 @@ const READ_ONLY_ACTIONS = new Set([
   'getAllStock', 'getStockAll', 'getStockByCode', 'searchByName',
   'getLowStock', 'getTransactionHistory', 'getStatusPO', 'getPOStatus',
   'getSystemLog', 'bootstrap',
+  // EXTRA dari agentSkills.js (V6.6.5 real-time)
+  'getStockDelta', 'getSyncMetrics', 'getLastUpdate', 'getPOAnalysis',
 ]);
 
 const LIVE_INTENTS = [
@@ -17,7 +19,47 @@ const LIVE_INTENTS = [
   { action: 'getStatusPO', pattern: /\bpo\b|purchase order|status po|pembelian/i },
   { action: 'getTransactionHistory', pattern: /riwayat|histori|history|transaksi (terakhir|hari ini|kemarin)|barang (masuk|keluar|rusak)/i },
   { action: 'getSystemLog', pattern: /system log|log sistem|log error|audit log/i },
+  // EXTRA LIVE_INTENTS dari agentSkills.js
+  { action: 'getStockDelta', pattern: /perubahan (stok|terakhir)|yang (baru|berubah) (saja|hari ini)|delta|sinkronisasi|apa yang berubah/i },
+  { action: 'getSyncMetrics', pattern: /metrik (sync|sinkronisasi)|performa (sync|koneksi)|seberapa sering (error|gagal)|kesehatan (sync|sistem)/i },
+  { action: 'getPOAnalysis', pattern: /analisis po|rekomendasi (po|pembelian)|apa yang (harus|perlu) (di)?(pesan|beli)/i },
+  { action: 'getConfig', pattern: /periode aktif|bulan (aktif|berjalan)|konfigurasi|timezone|versi backend/i },
 ];
+
+const STRUCTURE_KNOWLEDGE = `
+STRUKTUR SISTEM GUDANGAI-69 (sumber kebenaran: Spreadsheet, versi backend 6.6.5)
+
+A. ENTITAS & KODE
+- Tiga entitas stok: CV, PT, WK. Prefix kode: CV-xxxx, PT-xxxx, WK-xxxx.
+- Stock CV & Stock PT adalah MASTER read-only. Script tidak pernah menulis ke sheet master.
+- Divisi: DAPUR1, DAPUR2, MIE, PACKING, CS, BAHAN BAKU, REKANAN.
+- BAHAN BAKU membaca Sisa Stok dari sheet "Stock Bahan Baku"; divisi lain dari Stock CV/PT.
+
+B. SHEET TRANSAKSI (Barang masuk / Barang keluar / Barang Rusak)
+- Header di baris 3; data mulai baris 4. Kolom tulis: B..G.
+- Kolom D & E DILINDUNGI — script TIDAK menulis ke sana. Nama & Satuan terisi otomatis VLOOKUP.
+- Tanggal transaksi wajib berada dalam bulan aktif spreadsheet.
+- Max QTY per transaksi: 100.000.
+
+C. SHEET LAIN
+- Config: PERIODE_AKTIF (YYYY-MM), TIMEZONE GMT+7, SPREADSHEET_ID, VERSION, LAST_PERIOD_CHANGE, PO_WEEK_KEY.
+- Dashboard: seksi 4 = Status PO minggu ini; seksi 5 = arsip PO minggu lalu.
+- purchase order: tanggal baris 4, header baris 5, data mulai baris 6.
+- Idempotency Ledger & System Log (WRITE_TRANSACTION) untuk delta-sync.
+
+D. ALUR PURCHASE ORDER (PO)
+- PO mingguan otomatis Senin 08:00.
+- Status item PO: MENUNGGU, SEBAGIAN, SELESAI. Progress = qtyDatang/totalPO.
+- Kedatangan dicatat sebagai Barang masuk dengan keterangan "DATANG PO <NoPO> [ITEM : nn]".
+
+E. MODEL SINKRONISASI REAL-TIME
+- Versi: masterVersion & stockVersion (SHA-256 pendek).
+- Klien ping tiap 60 detik; jika versi berubah → getStockDelta(sinceTimestamp).
+- Delta hanya mengembalikan item yang berubah. Circuit breaker 5 gagal / 2 menit.
+
+F. KEAMANAN
+- Semua POST wajib secret. GET hanya read-only. Dedup via fingerprint + Idempotency Ledger.
+`.trim();
 
 const SKILL_RULES = [
   'ATURAN AGENT (mode read_only):',
@@ -29,6 +71,14 @@ const SKILL_RULES = [
   '6. Kamu tidak dapat menulis, mengubah, atau menghapus data. Untuk perubahan, susun draft rekomendasi yang diperiksa dan dijalankan operator lewat halaman PWA; jangan mengklaim sudah menjalankannya.',
   '7. Bila ada transaksi yang timeout, jangan sarankan kirim ulang sebelum memeriksa transactionId/batchId dan System Log.',
   '8. Mode offline hanya untuk snapshot dan draft REVIEW; tidak ada sinkronisasi otomatis.',
+  'ATURAN SKILL STRUKTURAL (tambahan):',
+  '9. Pahami peta sheet. Saat ditanya data, tunjuk sheet/aksi sumber yang relevan.',
+  '10. Jika ditanya "apa yang berubah", gunakan getStockDelta dan jelaskan per kunci entitas|kode; sebutkan sinceTimestamp.',
+  '11. Bedakan tiga tingkat kepastian: LIVE (sebut readAt), SNAPSHOT (sebut waktu), TIDAK TERKONFIRMASI (sebut code error).',
+  '12. Status PO hanya MENUNGGU / SEBAGIAN / SELESAI. Progress = qtyDatang/totalPO.',
+  '13. Periode/bulan → getConfig PERIODE_AKTIF. Transaksi di luar bulan aktif ditolak backend.',
+  '14. Rekomendasi pembelian → getPOAnalysis + getLowStock; sebutkan keterbatasan data parsial.',
+  '15. Angka PWA beda dengan spreadsheet → diagnosis: (1) getLastUpdate, (2) getStockDelta, (3) System Log.',
 ].join('\n');
 
 function configuredSheets(env) {
@@ -136,6 +186,7 @@ function systemPrompt(context = {}, liveBlock = '') {
     'Jawab dalam Bahasa Indonesia, singkat, akurat, dan berorientasi tindakan operator.',
     'Jangan mengubah master data atau melakukan transaksi stok. Kamu hanya memberi analisis dan rekomendasi.',
     'Jika data tidak cukup, jelaskan data yang kurang dan minta operator memeriksa halaman/sumber yang tepat.',
+    STRUCTURE_KNOWLEDGE,
     SKILL_RULES,
     liveBlock,
     `Konteks operasi: ${JSON.stringify(context).slice(0, 3500)}`,

@@ -6,6 +6,7 @@ import LoginPage from './pages/LoginPage';
 import { useConnection } from './hooks/useConnection';
 import { useSheetUpdate } from './hooks/useSheetUpdate';
 import { useBootstrap } from './hooks/useBootstrap';
+import { startRealtimeSync, syncNow } from './data/realTimeSync';
 import {
   LayoutDashboard, Package, PackagePlus, Clock, Settings, ClipboardList,
   WifiOff, AlertTriangle, Loader2, Mail, RefreshCw, BrainCircuit, MoreHorizontal,
@@ -273,6 +274,30 @@ function AppShell() {
   const { online, hasUrl, status, message, syncing, checkHealth } = useConnection({ pollMs: 90000 });
   const sheetLabel = useSheetUpdate();
   useBootstrap();
+
+  // Real-time sync coordinator (ping 60s + delta on change + fast poll after write)
+  useEffect(() => {
+    const stop = startRealtimeSync({
+      onStockUpdate: (items, meta) => {
+        // Broadcast agar useStock / halaman stok bisa refresh
+        window.dispatchEvent(new CustomEvent('gudangai-stock-refresh', {
+          detail: { items, mode: meta?.mode || 'DELTA', meta },
+        }));
+      },
+      onStatus: (s) => {
+        // Optional: bisa dihubungkan ke ConnBanner di masa depan
+        if (s?.state === 'error' || s?.state === 'circuit_open') {
+          console.warn('[realTimeSync]', s);
+        }
+      },
+    });
+    // Ekspos syncNow agar InputPage / api.js bisa memanggil setelah write sukses
+    window.__gudangai_syncNow = syncNow;
+    return () => {
+      stop();
+      delete window.__gudangai_syncNow;
+    };
+  }, []);
 
   // Pindah tab. Mengetuk tab yang sedang aktif hanya menggulir ke atas (tanpa memuat ulang halaman).
   const goTab = (id) => {

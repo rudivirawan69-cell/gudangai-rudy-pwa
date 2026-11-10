@@ -575,6 +575,15 @@ async function submitItems(action, entity, items, tanggal, options = {}) {
   } else {
     pushNotification({ type: 'success', title: 'Transaksi selesai', body: totalSuccess + ' item berhasil ditulis tanpa antrian.' });
   }
+  // Setelah write sukses, minta realTimeSync menarik delta segera (polling cepat 2 menit).
+  if (totalSuccess > 0) {
+    try {
+      if (typeof window !== 'undefined' && typeof window.__gudangai_syncNow === 'function') {
+        window.__gudangai_syncNow();
+      }
+      window.dispatchEvent(new CustomEvent('gudangai-stock-refresh', { detail: { reason: 'write-success', count: totalSuccess } }));
+    } catch (_) { /* non-critical */ }
+  }
   return {
     success: totalSuccess === originalList.length,
     partial: totalSuccess > 0 && totalSuccess < originalList.length,
