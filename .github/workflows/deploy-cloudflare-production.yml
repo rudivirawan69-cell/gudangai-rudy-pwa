@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - feature/worker-ai-cost-safe-hardening-20261104
+      - fix/worker-auth-stability-20261110
   workflow_dispatch:
 
 permissions:
@@ -43,7 +44,6 @@ jobs:
         run: npm run build
         env:
           CLOUDFLARE_WORKERS: "true"
-          # Public client config (safe to bake into frontend bundle)
           VITE_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
           VITE_GUDANGAI_AI_API_BASE: "https://gudangai-rudy-live69.rudivirawan69.workers.dev"
@@ -108,7 +108,6 @@ jobs:
             echo "Setting secret: $name"
             printf '%s' "$value" | npx wrangler@4.156.0 secret put "$name" --config wrangler.jsonc
           }
-          # Runtime secrets (encrypted on Cloudflare; never in wrangler.jsonc)
           put_secret "SUPABASE_URL" "$SUPABASE_URL"
           put_secret "SUPABASE_ANON_KEY" "$SUPABASE_ANON_KEY"
           put_secret "GUDANGAI_SHEETS_API_SECRET" "$GUDANGAI_SHEETS_API_SECRET"
