@@ -1,9 +1,7 @@
 name: Deploy GudangAI RUDY PWA to Cloudflare Pages
 
 on:
-  push:
-    branches:
-      - main
+  # Legacy Pages deploy is manual-only; production is the single Worker domain.
   workflow_dispatch:
 
 permissions:
