@@ -1,0 +1,68 @@
+/* GudangAI RUDY — 3D Shadow Cleanup
+   Satu sistem elevasi bersih untuk Soft Light, Deep Ocean, Graphite Titanium.
+   Diimpor paling akhir setelah ui-theme-regression-fix.css.
+   Perubahan visual saja; tidak mengubah logika aplikasi.
+*/
+html[data-theme="soft_light"] {
+  --shadow-3d-card: 0 4px 14px rgba(28, 61, 83, .075);
+  --shadow-3d-raised: 0 7px 18px rgba(28, 61, 83, .10);
+  --shadow-3d-pressed: inset 0 1px 4px rgba(28, 61, 83, .10);
+  --shadow-3d-nav: 0 -4px 16px rgba(28, 61, 83, .065);
+}
+html[data-theme="deep_ocean"] {
+  --shadow-3d-card: 0 5px 16px rgba(0, 0, 0, .22);
+  --shadow-3d-raised: 0 8px 22px rgba(0, 0, 0, .29);
+  --shadow-3d-pressed: inset 0 1px 5px rgba(0, 0, 0, .28);
+  --shadow-3d-nav: 0 -5px 18px rgba(0, 0, 0, .22);
+}
+html[data-theme="graphite_titanium"] {
+  --shadow-3d-card: 0 5px 16px rgba(0, 0, 0, .25);
+  --shadow-3d-raised: 0 8px 22px rgba(0, 0, 0, .32);
+  --shadow-3d-pressed: inset 0 1px 5px rgba(0, 0, 0, .30);
+  --shadow-3d-nav: 0 -5px 18px rgba(0, 0, 0, .26);
+}
+/* Satu bayangan utama per surface, hindari double-shadow. */
+html[data-theme] .page-content :is(
+  .card, .surface, .section-card, .section-card-header, .stat-tile,
+  .stock-card, .dashboard-panel, .dashboard-total-card, .dashboard-po-card,
+  .dashboard-header-card, .menu-group, .menu-row, .page-header,
+  .po-hub-card, .po-item-card, .stock-metric-surface,
+  .division-status-card, .po-shortcut, .more-sheet, .more-row,
+  .ops-card, .ops-notes-card
+) {
+  box-shadow: var(--shadow-3d-card) !important;
+  text-shadow: none !important;
+  transition: box-shadow 180ms ease, border-color 180ms ease,
+    background-color 180ms ease !important;
+}
+@media (hover: hover) and (pointer: fine) {
+  html[data-theme] .page-content :is(
+    .card, .surface, .section-card, .stat-tile, .stock-card, .ops-card
+  ):hover {
+    box-shadow: var(--shadow-3d-raised) !important;
+  }
+}
+html[data-theme] .page-content :is(
+  .card-interactive, .pressable, .stat-tile, .ops-card
+):active {
+  box-shadow: var(--shadow-3d-pressed) !important;
+}
+html[data-theme] .nav-bar {
+  box-shadow: var(--shadow-3d-nav) !important;
+}
+html[data-theme] :is(.nav-icon-wrap, .settings-menu-icon, .theme-picker-btn) {
+  box-shadow: var(--shadow-3d-card) !important;
+  text-shadow: none !important;
+}
+html[data-theme] .nav-btn.is-active .nav-icon-wrap,
+html[data-theme] .theme-picker-btn.is-active,
+html[data-theme] .theme-picker-btn[aria-pressed="true"] {
+  box-shadow: var(--shadow-3d-card), 0 0 0 1px var(--accent-soft) !important;
+}
+html[data-theme] .more-sheet-backdrop { box-shadow: none !important; }
+@media (prefers-reduced-motion: reduce) {
+  html[data-theme] .page-content :is(
+    .card, .surface, .section-card, .stat-tile, .stock-card,
+    .ops-card, .ops-notes-card
+  ) { transition: none !important; }
+}
