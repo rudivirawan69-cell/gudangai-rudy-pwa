@@ -65,7 +65,7 @@ export default function LoginPage() {
                 <span className="mb-1.5 block text-xs font-semibold text-white/85">Password</span>
                 <div className="flex gap-2">
                   <input type={showPassword ? 'text' : 'password'} autoComplete="current-password" required value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Password akun Supabase" className="min-w-0 flex-1 rounded-xl border border-white/20 bg-slate-950/35 px-3.5 py-3 text-sm text-white outline-none placeholder:text-white/40 focus:border-cyan-300" />
-                  <button type="button" onClick={() => setShowPassword((value) => !value)} className="rounded-xl border border-white/20 px-3 text-xs font-semibold text-white/80">{showPassword ? 'Sembunyi' : 'Lihat'}</button>
+                  <button type="button" onClick={() => setShowPassword((value) => !value)} className="rounded-xl border border-white/20 px-3 text-xs font-semibold text-white/80">{showPassword ? 'Sembunyikan' : 'Lihat'}</button>
                 </div>
               </label>
               {error && <p role="alert" className="rounded-xl border border-rose-300/40 bg-rose-500/10 p-3 text-xs text-rose-100">{error}</p>}
