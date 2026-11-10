@@ -26,6 +26,6 @@
     "ANTHROPIC_FALLBACK_ENABLED": "false",
     "SUPABASE_URL": "https://cbeosysruwkfwgklziog.supabase.co",
     "SUPABASE_PUBLISHABLE_KEY": "sb_publishable_nrVxMRbrQihkzwFmWEs7QA_PlVFDWOz",
-    "ALLOWED_ORIGINS": "https://gudangai-rudy-pwa-69.rudivirawan69.workers.dev,https://gudangai-rudy-pwa6.rudivirawan69.workers.dev,https://gudangai-rudy.rudivirawan69.workers.dev,https://gudangai-rudy-pwa-live.vercel.app,https://gudangai-rudy-pwa.vercel.app,https://rudivirawan69-cell.github.io"
+    "ALLOWED_ORIGINS": "https://gudangai-rudy-pwa-69.rudivirawan69.workers.dev"
   }
 }
