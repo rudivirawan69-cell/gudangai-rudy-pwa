@@ -9,7 +9,7 @@ const STORAGE_KEY = 'gudangai_home_notes_v1';
 const CATEGORIES = [
   { id: 'tambahan-order', label: 'Tambahan Order', short: 'Order', Icon: ClipboardPlus, tone: 'amber', hint: 'Contoh: tambahan order ayam fillet 20 kg' },
   { id: 'jadwal-off', label: 'Jadwal Off', short: 'Off', Icon: CalendarDays, tone: 'emerald', hint: 'Contoh: jadwal off Andi, Jumat' },
-  { id: 'jadwal-meeting', label: 'Jadwal Meeting', short: 'Meeting', Icon: Users, tone: 'indigo', hint: 'Contoh: meeting evaluasi stok pukul 14.00' },
+  { id: 'jadwal-meeting', label: 'Jadwal Rapat', short: 'Rapat', Icon: Users, tone: 'indigo', hint: 'Contoh: rapat evaluasi stok pukul 14.00' },
   { id: 'kirim-luar-kota', label: 'Kirim Luar Kota', short: 'Pengiriman', Icon: Truck, tone: 'sky', hint: 'Contoh: pengiriman ke Malang, Senin 10.00' },
 ];
 
