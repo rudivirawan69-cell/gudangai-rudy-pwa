@@ -1,43 +1,69 @@
 # GudangAI RUDY — Cloudflare Worker + Supabase
 
-## Production target (canonical)
+## Production target (single canonical domain)
 
+- **PWA and API:** https://gudangai-rudy-pwa-69.rudivirawan69.workers.dev/
 - Worker: `gudangai-rudy-pwa-69`
-- URL: `https://gudangai-rudy-pwa-69.rudivirawan69.workers.dev`
+- Entrypoint: `worker.js`
 - Supabase project: `https://cbeosysruwkfwgklziog.supabase.co`
-- Google Sheets gateway: configured by `GUDANGAI_SHEETS_API_URL` in `wrangler.jsonc`
 
-All production PWA, AI API, smoke-test, and deployment references must use this canonical Worker hostname. Do not use the legacy `gudangai-rudy`, `gudangai-rudy-pwa69`, Vercel, or GitHub Pages hosts as production targets. Localhost is allowed only for local development.
+This is the only production hostname for the PWA and API. Do not use legacy Worker hostnames (`gudangai-rudy-pwa6`, `gudangai-rudy`, `gudangai-rudy-pwa69`), Pages `*.pages.dev`, Vercel, or GitHub Pages as production targets.
+
+## Deployment
+
+The only production deployment workflow is `.github/workflows/webpack.yml`.
+
+- Pull requests run validation and build only.
+- A push to `main` runs verification, production build, Wrangler dry-run, Worker/assets deployment, runtime secret setup, live health check, and CORS check.
+- Manual deployment: GitHub Actions → **GudangAI RUDY CI and Cloudflare Production Deploy** → Run workflow on `main`.
+
+No other workflow should deploy the PWA to Pages or another hostname.
 
 ## Authentication
 
 The PWA sends the Supabase session access token as `Authorization: Bearer <access_token>`.
 The Worker verifies it against `/auth/v1/user` using the project's publishable API key.
 Protected routes include `/api/agent`, `/api/claude`, and `/api/data`.
-Do not use a Supabase service-role/secret key for this verification path. No service-role key is required.
+Never put a Supabase service-role/secret key in browser code or any `VITE_*` variable.
 
-## Worker secrets
+## GitHub Environment secrets
 
-Set the publishable key as a Worker secret (not a source-code value):
+Configure these under Settings → Environments → `production`:
 
-```bash
-npx wrangler secret put SUPABASE_PUBLISHABLE_KEY
-```
+- `CLOUDFLARE_API_TOKEN`
+- `CLOUDFLARE_ACCOUNT_ID`
+- `SUPABASE_URL`
+- `SUPABASE_PUBLISHABLE_KEY` (or legacy `SUPABASE_ANON_KEY`)
+- `GUDANGAI_SHEETS_API_SECRET`
 
-The read-only Apps Script gateway also requires `GUDANGAI_SHEETS_API_SECRET` as a Worker secret.
-The project URL is a non-secret variable in `wrangler.jsonc`.
+Cloudflare token must be valid for the matching account and authorized to edit/deploy Workers. Never paste secret values into source code or chat.
+
+## Worker runtime configuration
+
+Encrypted Worker secrets managed by the deployment workflow:
+- `SUPABASE_URL`
+- `SUPABASE_ANON_KEY` (value sourced from the project's publishable key)
+- `GUDANGAI_SHEETS_API_SECRET`
+
+Non-secret vars and bindings:
+- `GUDANGAI_SHEETS_API_URL`
+- `AI_MODEL`
+- `ANTHROPIC_FALLBACK_ENABLED`
+- `SUPABASE_PUBLISHABLE_KEY`
+- `ALLOWED_ORIGINS`
+- Workers AI binding `AI`
 
 ## Endpoints
 
 - `GET /api/agent/health` — public health/configuration status
-- `POST /api/agent` — authenticated read-only agent
+- `POST /api/agent` — authenticated read-only Agent
 - `POST /api/claude` — compatibility alias, authenticated
 - `POST /api/data` — authenticated allowlisted read-only Sheets actions
 
 ## Local development
 
-Copy `.dev.vars.example` to `.dev.vars`, then supply local-only values. Never commit `.dev.vars`.
+Copy `.dev.vars.example` to `.dev.vars` and supply local-only values. Never commit `.dev.vars`.
 
-## CI/CD
+## Important deployment rule
 
-Pull requests run the agent test and Vite production build. A push to `main` runs the same checks and then deploys the canonical Worker using GitHub Actions secrets `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`.
+A Git commit changing `.env.example` or documentation does not change the live Worker. Production changes are complete only after the canonical workflow deploys successfully and its post-deploy health/CORS checks pass.
