@@ -46,7 +46,7 @@ jobs:
           # Public client config (safe to bake into frontend bundle)
           VITE_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
-          VITE_GUDANGAI_AI_API_BASE: "https://gudangai-rudy-pwa6.rudivirawan69.workers.dev"
+          VITE_GUDANGAI_AI_API_BASE: "https://gudangai-rudy-pwa-69.rudivirawan69.workers.dev"
 
       - name: Validate Cloudflare secrets presence
         shell: bash
@@ -85,7 +85,7 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           set -euo pipefail
-          echo "Deploying Worker gudangai-rudy-pwa6 (code + assets)..."
+          echo "Deploying Worker gudangai-rudy-pwa-69 (code + assets)..."
           npx wrangler@4.156.0 deploy --config wrangler.jsonc
 
       - name: Apply Worker secrets (non-interactive, durable)
@@ -117,5 +117,5 @@ jobs:
       - name: Report deployed commit
         run: |
           echo "Cloudflare production deployment completed for commit ${GITHUB_SHA}"
-          echo "Worker: gudangai-rudy-pwa6"
-          echo "URL: https://gudangai-rudy-pwa6.rudivirawan69.workers.dev/"
+          echo "Worker: gudangai-rudy-pwa-69"
+          echo "URL: https://gudangai-rudy-pwa-69.rudivirawan69.workers.dev/"
