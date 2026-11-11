@@ -1,6 +1,16 @@
 const SESSION_KEY = 'gudangai_supabase_session_v1';
-const SUPABASE_URL = String(import.meta.env.VITE_SUPABASE_URL || '').replace(/\/+$/, '');
-const SUPABASE_PUBLISHABLE_KEY = String(import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || '').trim();
+
+// Production fallbacks so the client always has Supabase credentials even when
+// build-time VITE_* env vars were not injected (e.g. incomplete Cloudflare Builds).
+const FALLBACK_SUPABASE_URL = 'https://cbeosysruwkfwgklziog.supabase.co';
+const FALLBACK_SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_nrVxMRbrQihkzwFmWEs7QA_PlVFDWOz';
+
+const SUPABASE_URL = String(
+  import.meta.env.VITE_SUPABASE_URL || FALLBACK_SUPABASE_URL || ''
+).replace(/\/+$/, '');
+const SUPABASE_PUBLISHABLE_KEY = String(
+  import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || FALLBACK_SUPABASE_PUBLISHABLE_KEY || ''
+).trim();
 
 export function isSupabaseConfigured() {
   return Boolean(SUPABASE_URL && SUPABASE_PUBLISHABLE_KEY);
