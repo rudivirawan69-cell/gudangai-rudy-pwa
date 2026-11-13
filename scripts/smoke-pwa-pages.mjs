@@ -55,6 +55,19 @@ try {
 
   await page.addInitScript(({ inputDraft, poDraft }) => {
     localStorage.setItem('gudangai_user', JSON.stringify({ name: 'Operator Uji', role: 'owner', loginAt: new Date().toISOString() }));
+    localStorage.setItem('gudangai_supabase_session_v1', JSON.stringify({
+      access_token: 'ci-mock-access-token',
+      refresh_token: 'ci-mock-refresh-token',
+      token_type: 'bearer',
+      expires_in: 3600,
+      expires_at: Math.floor(Date.now() / 1000) + 3600,
+      user: {
+        id: 'ci-auth-user-001',
+        email: 'operator@example.test',
+        app_metadata: { role: 'owner' },
+        user_metadata: { full_name: 'Operator Uji' },
+      },
+    }));
     localStorage.setItem('gudangai_api_url', location.origin + '/mock-api');
     localStorage.setItem('gudangai_api_secret', 'ci-mock-secret');
     localStorage.setItem('gudangai_input_draft_v1', JSON.stringify(inputDraft));
@@ -70,6 +83,20 @@ try {
       csItems: [{ kode: 'CV-0001', nama: 'Ayam Fillet Dada', entity: 'CV', satuan: 'Pack', size: '1 kg', sisa: 5, aman: 10, qty: 5, tglKedatangan: '2026-11-03', divisi: 'CS' }],
       prodItems: [],
     },
+  });
+
+  // CI-only Supabase Auth fixture: exercise the authenticated app shell without real credentials.
+  await page.route('**/auth/v1/user', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        id: 'ci-auth-user-001',
+        email: 'operator@example.test',
+        app_metadata: { role: 'owner' },
+        user_metadata: { full_name: 'Operator Uji' },
+      }),
+    });
   });
 
   await page.route('https://gudangai-rudy-pwa-69.rudivirawan69.workers.dev/api/agent/health', async (route) => {
