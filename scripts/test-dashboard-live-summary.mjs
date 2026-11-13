@@ -81,6 +81,14 @@ const dashApi = api.slice(api.indexOf('export async function getDashboardData()'
 assert.doesNotMatch(dashApi, /fetchStock\(/);
 assert.equal(wrangler.name, 'gudangai-rudy-pwa-69');
 
+
+const dashboardPage = readFileSync(new URL('../src/pages/DashboardPage.jsx', import.meta.url), 'utf8');
+assert.doesNotMatch(dashboardPage, /191-item contract|\|\| 191|191 item/);
+assert.match(dashboardPage, /dashboardData\?\.totalItemAktif \?\? dashboardData\?\.totalItem \?\? null/);
+assert.match(dashboardPage, /Ringkasan Dashboard Live tidak tersedia\. Angka divisi tidak dihitung dari stok lokal/);
+assert.doesNotMatch(dashboardPage.slice(dashboardPage.indexOf('function DivisionStatus3D'), dashboardPage.indexOf('function normalizeMatch')), /localMap|classifyItem\(it\)/);
+assert.match(dashboardPage, /Dashboard Live belum berhasil diperbarui/);
+
 console.log('PASS Dashboard Live dynamic summary: 193 baseline, 194 after added item, mismatch fail-closed');
 console.log('PASS Bahan Baku included in getAllStock and PWA dashboard fallback removed');
 console.log('PASS canonical Cloudflare Worker target: ' + wrangler.name);
