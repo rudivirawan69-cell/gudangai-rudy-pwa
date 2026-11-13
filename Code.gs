@@ -416,7 +416,7 @@ function doPost(e) {
       case "ping": return jsonResponse(getHealthStatus_(body));
       case "healthCheck": return jsonResponse(getHealthStatus_(body));
       case "getStockDelta": return jsonResponse(getStockDelta(body));
-      case "getStatusPO": return jsonResponse(getStatusPO());
+      case "getStatusPO": return jsonResponse(getStatusPO(body));
       case "recordPOArrival": return jsonResponse(recordPOArrival(body));
       case "getPORequestStatus": return jsonResponse(getPORequestStatus(body));
       case "refreshDashboardPO": return jsonResponse(refreshDashboardPOSection_());
@@ -3771,7 +3771,8 @@ function recordPOArrival(body) {
   return { success: true, status: "APPLIED", code: "PO_ARRIVAL_APPLIED", itemNo: found.no, nama: found.nama, kode: kode, entitas: entitas, qtyDatangBaru: qty, transactionId: tx.transactionId, readBack: tx.readBack || null, message: "Kedatangan PO tercatat sebagai Barang masuk." };
 }
 
-function getStatusPO() {
+function getStatusPO(body) {
+  body = body || {};
   const ss = getSS();
   const po = ss.getSheetByName('purchase order');
   const masuk = ss.getSheetByName('Barang masuk');
@@ -3846,9 +3847,18 @@ function getStatusPO() {
     else { itemMenunggu++; totalAktif++; }
     const cvCandidates = allStockForPO_.filter(function(it) { return it.entitas === "CV" && normalizePONameKey_(it.nama) === normalizePONameKey_(nama); });
     const ptCandidates = allStockForPO_.filter(function(it) { return it.entitas === "PT" && normalizePONameKey_(it.nama) === normalizePONameKey_(nama); });
+    const tglKedatanganDate = parseTransactionDate_(r[7]);
+    const tglKedatangan = tglKedatanganDate
+      ? Utilities.formatDate(tglKedatanganDate, TIMEZONE, "yyyy-MM-dd")
+      : null;
     items.push({
-      no: no, nama: nama, totalPO: total, poCV: poCV, poPT: poPT, kodeCV: cvCandidates.length === 1 ? cvCandidates[0].kode : null, kodePT: ptCandidates.length === 1 ? ptCandidates[0].kode : null,
+      no: no, itemNo: no, nama: nama, totalPO: total, qtyPO: total,
+      poCV: poCV, poPT: poPT,
+      kodeCV: cvCandidates.length === 1 ? cvCandidates[0].kode : null,
+      kodePT: ptCandidates.length === 1 ? ptCandidates[0].kode : null,
       qtyDatang: datang, qtyBelumDatang: belumDatang, status: status,
+      tanggalPO: info.tanggal ? Utilities.formatDate(info.tanggal, TIMEZONE, "yyyy-MM-dd") : null,
+      tglKedatangan: tglKedatangan,
       // kodeUnik tetap disediakan untuk label, tetapi pembacaan tanggal tidak bergantung padanya.
       kodeUnik: noPO ? ('No : ' + noPO + '[ ITEM : ' + String(no).padStart(2, '0') + ' ]') : null,
       progressPct: total ? Math.min(100, Math.round(datang / total * 1000) / 10) : 0
