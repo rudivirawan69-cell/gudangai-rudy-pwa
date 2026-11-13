@@ -2,23 +2,11 @@
  * ============================================================
  * realTimeSync.js — Klien Sinkronisasi Real-Time PWA <-> Code.gs
  * GudangAI RUDY V6.6.5 (kompatibel kontrak bootstrap/delta/versi)
- *
- * Cara pakai (di App.jsx atau main.jsx):
- *   import { startRealtimeSync, syncNow, getSyncState } from './data/realTimeSync';
- *   useEffect(() => {
- *     const stop = startRealtimeSync({
- *       onStockUpdate: (items, meta) => setStockItems(items),
- *       onStatus: (s) => setConnStatus(s),
- *     });
- *     return stop;
- *   }, []);
- *   // Setelah addTransaction sukses:
- *   await syncNow(); // tarik delta segera, tanpa menunggu heartbeat
  * ============================================================
  */
 
-const HEARTBEAT_SEC = 60;            // selaras SYNC_HEARTBEAT_INTERVAL_SEC di Code.gs
-const FAST_POLL_SEC = 5;             // polling cepat sesaat setelah write lokal
+const HEARTBEAT_SEC = 60;
+const FAST_POLL_SEC = 5;
 const FAST_POLL_WINDOW_MS = 2 * 60 * 1000;
 const CIRCUIT_THRESHOLD = 5;
 const CIRCUIT_WINDOW_MS = 2 * 60 * 1000;
@@ -28,7 +16,6 @@ const LS_ENDPOINT = 'gudangai_api_url';
 const LS_SECRET = 'gudangai_api_secret';
 const LS_SYNC_STATE = 'gudangai_sync_state_v1';
 
-// ---- Konfigurasi sumber (sama dengan SettingsPage PWA) ----
 export function getEndpoint() {
   return (localStorage.getItem(LS_ENDPOINT) || window.__GUDANGAI_API_URL__ || '').trim();
 }
@@ -43,6 +30,15 @@ function saveState(patch) {
   const next = { ...loadState(), ...patch };
   localStorage.setItem(LS_SYNC_STATE, JSON.stringify(next));
   return next;
+}
+
+function emitSheetUpdated(iso) {
+  try {
+    const lastUpdate = iso || new Date().toISOString();
+    window.dispatchEvent(new CustomEvent('gudangai-sheet-updated', {
+      detail: { lastUpdate, lastUpdateISO: lastUpdate, updatedAt: lastUpdate },
+    }));
+  } catch (_) { /* ignore */ }
 }
 
 let _failures = [];
@@ -72,7 +68,6 @@ async function apiPost(action, params = {}) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   try {
-    // text/plain = "simple request" => tanpa preflight CORS (kontrak Code.gs).
     const res = await fetch(endpoint, {
       method: 'POST',
       headers: { 'content-type': 'text/plain;charset=utf-8' },
@@ -105,29 +100,33 @@ async function apiPost(action, params = {}) {
   }
 }
 
-// Bootstrap penuh: master + stok + dashboard + PO dalam sekali panggil.
 async function fullBootstrap() {
   const data = await apiPost('bootstrap', { entitas: 'ALL' });
+  const lastUpdateISO = data.lastUpdateISO || data.lastUpdate || new Date().toISOString();
   const st = saveState({
     masterVersion: data.masterVersion || null,
     stockVersion: data.stockVersion || null,
-    lastUpdateISO: data.lastUpdateISO || data.lastUpdate || new Date().toISOString(),
+    lastUpdateISO,
+    lastSyncISO: new Date().toISOString(),
     bootstrappedAt: new Date().toISOString(),
   });
+  emitSheetUpdated(lastUpdateISO);
   return { data, state: st };
 }
 
-// Delta: hanya barang yang berubah sejak sinkronisasi terakhir (hemat kuota).
 async function pullDelta() {
   const st = loadState();
   const since = st.lastSyncISO || st.lastUpdateISO;
   if (!since) return fullBootstrap();
   const delta = await apiPost('getStockDelta', { sinceTimestamp: since, entitas: 'ALL' });
+  const lastSyncISO = new Date().toISOString();
   saveState({
-    lastSyncISO: new Date().toISOString(),
+    lastSyncISO,
+    lastUpdateISO: delta.lastUpdateISO || delta.lastUpdate || lastSyncISO,
     masterVersion: delta.masterVersion || st.masterVersion,
     stockVersion: delta.stockVersion || st.stockVersion,
   });
+  emitSheetUpdated(delta.lastUpdateISO || delta.lastUpdate || lastSyncISO);
   return delta;
 }
 
@@ -141,7 +140,6 @@ async function tick() {
     }
     const st = loadState();
     try {
-      // Ping murah tiap heartbeat; bandingkan versi — hanya tarik data bila berubah.
       const ping = await apiPost('ping');
       const changed = ping.stockVersion !== st.stockVersion || ping.masterVersion !== st.masterVersion;
       const stale = !st.bootstrappedAt;
@@ -156,7 +154,9 @@ async function tick() {
         }
         _listeners.onStatus?.({ state: 'online', mode: 'delta', count: delta.count ?? 0, failures: _failures.length });
       } else {
-        saveState({ lastSyncISO: new Date().toISOString() });
+        const lastSyncISO = new Date().toISOString();
+        saveState({ lastSyncISO });
+        emitSheetUpdated(ping.lastUpdateISO || ping.lastUpdate || lastSyncISO);
         _listeners.onStatus?.({ state: 'online', mode: 'idle', failures: 0 });
       }
     } catch (e) {
@@ -172,7 +172,6 @@ function scheduleNext() {
   _timer = setTimeout(async () => { await tick(); scheduleNext(); }, (fast ? FAST_POLL_SEC : HEARTBEAT_SEC) * 1000);
 }
 
-/** Mulai loop sinkronisasi. Mengembalikan fungsi stop. */
 export function startRealtimeSync({ onStockUpdate, onStatus } = {}) {
   _listeners = { onStockUpdate, onStatus };
   const onVis = () => { if (!document.hidden) { syncNow(); } };
@@ -191,14 +190,12 @@ export function startRealtimeSync({ onStockUpdate, onStatus } = {}) {
   };
 }
 
-/** Sinkronisasi segera. Panggil setelah write lokal (addTransaction/dsb) berhasil. */
 export async function syncNow() {
   _fastUntil = Date.now() + FAST_POLL_WINDOW_MS;
   await tick();
   scheduleNext();
 }
 
-/** Terapkan hasil delta ke cache stok lokal (map entitas|kode -> item). */
 export function applyDeltaToCache(cache, items) {
   const next = { ...(cache || {}) };
   (items || []).forEach((it) => {
