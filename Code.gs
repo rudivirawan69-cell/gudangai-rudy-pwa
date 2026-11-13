@@ -2562,7 +2562,37 @@ function getDashboardData() {
 
 function getDashboard() { return getDashboardData(); }
 
-function toNumber_(v) { const n = Number(String(v).replace(/[^0-9,.-]/g, "").replace(/,/g, ".")); return isNaN(n) ? 0 : n; }
+function toNumber_(v) {
+  if (typeof v === "number") return isFinite(v) ? v : 0;
+  let s = String(v == null ? "" : v).trim().replace(/[^0-9.,-]/g, "");
+  if (!s || s === "-") return 0;
+
+  const hasDot = s.indexOf(".") >= 0;
+  const hasComma = s.indexOf(",") >= 0;
+
+  if (hasDot && hasComma) {
+    // Pemisah terakhir dianggap desimal: 1.234,5 atau 1,234.5.
+    if (s.lastIndexOf(",") > s.lastIndexOf(".")) {
+      s = s.replace(/\./g, "").replace(",", ".");
+    } else {
+      s = s.replace(/,/g, "");
+    }
+  } else if (hasDot) {
+    // Format Indonesia: 1.000 = 1000; 12.500.000 = 12500000.
+    if (/^-?\d{1,3}(\.\d{3})+$/.test(s) && !/^-?0\./.test(s)) {
+      s = s.replace(/\./g, "");
+    }
+  } else if (hasComma) {
+    if (/^-?\d{1,3}(,\d{3})+$/.test(s)) {
+      s = s.replace(/,/g, "");
+    } else {
+      s = s.replace(",", ".");
+    }
+  }
+
+  const n = Number(s);
+  return isFinite(n) ? n : 0;
+}
 function percent_(n, d) { return d ? Math.round((n / d) * 1000) / 10 : 0; }
 function normalizeDivision_(v) { return String(v || "LAINNYA").trim().toUpperCase().replace(/DAPUR1/g, "DAPUR 1").replace(/DAPUR2/g, "DAPUR 2") || "LAINNYA"; }
 
@@ -2863,7 +2893,62 @@ function generatePORecommendations() {
   }).sort(function(a, b) { return b.kurang - a.kurang; });
 }
 
+function getPOOverwriteGuard_() {
+  const sheet = getSS().getSheetByName("purchase order");
+  if (!sheet || findPODataEndRow(sheet, PO_DATA_START_ROW) < PO_DATA_START_ROW) {
+    return { safe: true, pendingCount: 0, reason: "PO kosong" };
+  }
+
+  const status = getStatusPO();
+  if (!status || status.success !== true) {
+    return {
+      safe: false,
+      code: "PO_STATUS_UNAVAILABLE",
+      error: "PO tidak ditimpa karena status PO aktif gagal dibaca.",
+      reviewRequired: true
+    };
+  }
+
+  const pending = (status.items || []).filter(function(item) {
+    return String(item.status || "").toUpperCase() !== "SELESAI" &&
+      Number(item.qtyBelumDatang || 0) > 0;
+  });
+
+  if (pending.length) {
+    return {
+      safe: false,
+      code: "PO_PENDING_PREVENT_OVERWRITE",
+      error: "PO tidak ditimpa: masih ada " + pending.length +
+        " item MENUNGGU/SEBAGIAN dengan total sisa " +
+        Number(status.summary && status.summary.totalSisaQty || 0) + ".",
+      pendingCount: pending.length,
+      pendingItems: pending.map(function(item) {
+        return {
+          no: item.no,
+          nama: item.nama,
+          status: item.status,
+          qtyBelumDatang: item.qtyBelumDatang
+        };
+      }),
+      noPO: status.noPO || null,
+      tanggalPO: status.tanggalPO || null,
+      reviewRequired: true
+    };
+  }
+
+  return { safe: true, pendingCount: 0, reason: "Tidak ada item PO tertunda" };
+}
+
 function writePORecommendations() {
+  const overwriteGuard = getPOOverwriteGuard_();
+  if (!overwriteGuard.safe) {
+    return Object.assign({
+      success: false,
+      status: "BLOCKED",
+      message: "Penulisan rekomendasi PO dibatalkan agar PO aktif tidak hilang."
+    }, overwriteGuard);
+  }
+
   const ss = getSS();
   const sheet = ss.getSheetByName("purchase order");
   if (!sheet) return { success: false, error: "Sheet 'purchase order' tidak ditemukan" };
