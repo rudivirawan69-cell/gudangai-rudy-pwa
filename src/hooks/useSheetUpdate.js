@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { getDashboardData } from '../data/api';
+import { formatTanggal } from '../utils/formatTanggal';
 
 const EVENT_NAME = 'gudangai-sheet-updated';
 const BOOTSTRAP_EVENT = 'gudangai-bootstrap-updated';
@@ -7,46 +8,18 @@ const STOCK_EVENT = 'gudangai-stock-refresh';
 const LS_SYNC_STATE = 'gudangai_sync_state_v1';
 const LS_BOOTSTRAP_AT = 'gudangai_bootstrap_at';
 
-/** Format timestamp → label yang bisa dibaca formatSheetLabel di App (ada HH:MM). */
 function formatUpdate(value) {
   if (value === undefined || value === null || value === '') return '';
-  if (typeof value === 'string' && /^\d{1,2}[:.]\d{2}/.test(value.trim())) {
-    return value.trim();
-  }
-  let date;
-  if (typeof value === 'number') {
-    date = new Date(value < 1e12 ? value * 1000 : value);
-  } else {
-    date = new Date(value);
-  }
-  if (Number.isNaN(date.getTime())) {
-    const s = String(value).trim();
-    return s || '';
-  }
-  // Format padat berisi jam agar formatSheetLabel bisa hitung "X mnt lalu"
-  const parts = new Intl.DateTimeFormat('id-ID', {
-    timeZone: 'Asia/Jakarta',
-    day: '2-digit',
-    month: 'short',
-    hour: '2-digit',
-    minute: '2-digit',
-    hourCycle: 'h23',
-  }).formatToParts(date);
-  const get = (t) => parts.find((p) => p.type === t)?.value || '';
-  return `${get('day')} ${get('month')} ${get('hour')}:${get('minute')} WIB`;
+  // Pertahankan string yang sudah berisi jam HH:MM untuk formatSheetLabel relatif
+  if (typeof value === 'string' && /\d{1,2}[:.]\d{2}/.test(value)) return value.trim();
+  return formatTanggal(value, 'sync') || String(value);
 }
 
 function pickTimestamp(obj) {
   if (!obj || typeof obj !== 'object') return null;
   const candidates = [
-    obj.lastUpdate,
-    obj.lastUpdatedAt,
-    obj.lastUpdated,
-    obj.lastUpdateISO,
-    obj.updatedAt,
-    obj.timestamp,
-    obj.readAt,
-    obj.label,
+    obj.lastUpdate, obj.lastUpdatedAt, obj.lastUpdated, obj.lastUpdateISO,
+    obj.updatedAt, obj.timestamp, obj.readAt, obj.label, obj.diambilPada,
   ];
   for (const c of candidates) {
     if (c !== undefined && c !== null && c !== '') return c;
@@ -75,46 +48,48 @@ function fromLocalCaches() {
 
 /**
  * Label header "Update Sheet".
- * Sumber (berurutan):
- * 1. Event gudangai-sheet-updated / bootstrap / stock-refresh
- * 2. getDashboardData().lastUpdate*
- * 3. Cache realTimeSync / bootstrap di localStorage
+ * Tidak menampilkan "Belum ada data" jika API pernah sukses — pakai waktu ambil data.
  */
 export function useSheetUpdate() {
   const [label, setLabel] = useState(() => {
     const cached = fromLocalCaches();
     return cached ? formatUpdate(cached) : '';
   });
+  const [syncState, setSyncState] = useState('idle'); // idle | loading | ok | error
 
   useEffect(() => {
     let active = true;
     let inFlight = false;
 
-    const apply = (raw) => {
-      if (!active || raw === undefined || raw === null || raw === '') return;
-      const formatted = formatUpdate(raw);
-      if (formatted) setLabel(formatted);
+    const apply = (raw, state = 'ok') => {
+      if (!active) return;
+      if (raw !== undefined && raw !== null && raw !== '') {
+        const formatted = formatUpdate(raw);
+        if (formatted) setLabel(formatted);
+      }
+      setSyncState(state);
     };
 
     const refresh = async () => {
       if (inFlight) return;
       inFlight = true;
+      if (!label) setSyncState('loading');
       try {
         const data = await getDashboardData();
         if (!active) return;
         if (data && data.success !== false) {
           const value = pickTimestamp(data) || pickTimestamp(data.data) || pickTimestamp(data.meta);
-          if (value) {
-            apply(value);
-            return;
-          }
+          // API sukses: selalu isi waktu (jangan biarkan kosong)
+          apply(value || new Date().toISOString(), 'ok');
+          return;
         }
-        // Fallback cache lokal bila API tidak mengirim lastUpdate
         const local = fromLocalCaches();
-        if (local) apply(local);
+        if (local) apply(local, 'error');
+        else setSyncState('error');
       } catch (_) {
         const local = fromLocalCaches();
-        if (local) apply(local);
+        if (local) apply(local, 'error');
+        else if (active) setSyncState('error');
       } finally {
         inFlight = false;
       }
@@ -122,29 +97,25 @@ export function useSheetUpdate() {
 
     const onSheetUpdated = (event) => {
       const detail = event?.detail;
-      if (typeof detail === 'string') {
-        apply(detail);
-      } else {
+      if (typeof detail === 'string') apply(detail, 'ok');
+      else {
         const value = pickTimestamp(detail);
-        if (value) apply(value);
+        apply(value || new Date().toISOString(), 'ok');
       }
       refresh();
     };
 
     const onBootstrap = (event) => {
-      const value = pickTimestamp(event?.detail) || Date.now();
-      apply(value);
+      apply(pickTimestamp(event?.detail) || Date.now(), 'ok');
     };
 
     const onStock = (event) => {
       const meta = event?.detail?.meta;
-      const value = pickTimestamp(meta) || pickTimestamp(event?.detail) || Date.now();
-      apply(value);
+      apply(pickTimestamp(meta) || pickTimestamp(event?.detail) || Date.now(), 'ok');
     };
 
-    // Seed dari cache lalu tarik live
     const local = fromLocalCaches();
-    if (local) apply(local);
+    if (local) apply(local, 'ok');
     refresh();
 
     const timer = window.setInterval(refresh, 60000);
@@ -161,6 +132,8 @@ export function useSheetUpdate() {
     };
   }, []);
 
+  // Prefiks status untuk AppHeader jika ingin dipakai nanti
+  if (syncState === 'loading' && !label) return 'Memuat data…';
   return label;
 }
 
