@@ -2623,9 +2623,21 @@ function readDashboardLiveSummary_() {
   }
   if (!top || !div.length) return null;
   const statusTotal = top.aman + top.waspada + top.kritis;
-  const divisionTotal = div.reduce(function(sum, item) { return sum + item.total; }, 0);
-  if (!Number.isFinite(top.totalItem) || top.totalItem <= 0 || statusTotal !== top.totalItem || divisionTotal !== top.totalItem) {
-    console.error("Dashboard Live tidak konsisten: total=" + top.totalItem + ", status=" + statusTotal + ", divisi=" + divisionTotal);
+  const divisionTotals = div.reduce(function(sum, item) {
+    sum.total += item.total;
+    sum.aman += item.aman;
+    sum.waspada += item.waspada;
+    sum.kritis += item.kritis;
+    if (item.total !== item.aman + item.waspada + item.kritis) sum.invalidRows++;
+    return sum;
+  }, { total: 0, aman: 0, waspada: 0, kritis: 0, invalidRows: 0 });
+  if (!Number.isFinite(top.totalItem) || top.totalItem <= 0 ||
+      statusTotal !== top.totalItem || divisionTotals.total !== top.totalItem ||
+      divisionTotals.aman !== top.aman || divisionTotals.waspada !== top.waspada ||
+      divisionTotals.kritis !== top.kritis || divisionTotals.invalidRows > 0) {
+    console.error("Dashboard Live tidak konsisten: total=" + top.totalItem +
+      ", status=" + statusTotal + ", divisi=" + divisionTotals.total +
+      ", statusDivisi=" + [divisionTotals.aman, divisionTotals.waspada, divisionTotals.kritis].join("/"));
     return null;
   }
   return { success: true, sumber: "Dashboard Live", diambilPada: nowWIB_(), summary: top, statusPerDivisi: div };
