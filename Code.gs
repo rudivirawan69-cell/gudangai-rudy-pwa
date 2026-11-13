@@ -36,8 +36,9 @@
  * CATATAN PENTING:
  * - Kolom D & E DILINDUNGI — script TIDAK menulis ke kolom ini
  * - Nama & Satuan diisi otomatis oleh VLOOKUP di sheet
- * - Total master data transaksi: 191 item; Stock CV + Stock PT tetap source of truth master.
- * - Data Stok Per Divisi: khusus BAHAN BAKU membaca Sisa Stok dari sheet "Stock Bahan Baku" (28 item); divisi lain tetap dari Stock CV/PT.
+ * - Ringkasan item/status/divisi dibaca dinamis dari label pada "Dashboard Live"; total tidak di-hardcode.
+ * - Baseline November 2026 yang diverifikasi pengguna: 193 item (Aman 100, Waspada 17, Kritis 76); angka ini bukan konstanta program.
+ * - API stok menggabungkan Stock CV + Stock PT + Stock Bahan Baku; sumber Bahan Baku dibaca dinamis berdasarkan header.
  *
  * TRIGGER (via setupEnvironment):
  * - sendDailyStockReport     → setiap hari jam 07:00
@@ -1861,38 +1862,66 @@ function getStockByCode(kode, requestedEntitas) {
 }
 
 function getAllStock(entitas) {
-  const ss = getSS();
-  const sheets = entitas === "CV" ? ["Stock CV"] : entitas === "PT" ? ["Stock PT"] : ["Stock CV", "Stock PT"];
-  const items = [];
+  const ss = getSS(), requested = String(entitas || "ALL").trim().toUpperCase();
+  const includeCV = requested !== "PT", includePT = requested !== "CV";
+  const sheets = [];
+  if (includeCV) sheets.push("Stock CV");
+  if (includePT) sheets.push("Stock PT");
+  const byIdentity = Object.create(null), order = [];
 
   sheets.forEach(function(name) {
     const sheet = ss.getSheetByName(name);
     if (!sheet) return;
-    const headerRow = 3;
-    const last = sheet.getLastRow();
-    if (last <= headerRow) return;
-    const headers = sheet.getRange(headerRow, 1, 1, sheet.getLastColumn()).getValues()[0];
-    const data = sheet.getRange(headerRow + 1, 1, last - headerRow, sheet.getLastColumn()).getValues();
-    const label = name === "Stock CV" ? "CV" : "PT";
-
-    data.forEach(function(row) {
-      const kode = String(row[headers.findIndex(h => String(h).toLowerCase().includes("kode"))] || "").trim();
-      if (!kode || kode.startsWith("Total")) return;
-      const item = { kode: kode, entitas: label };
-      headers.forEach(function(h, idx) {
-        const key = String(h).toLowerCase().trim();
-        if (key.includes("nama")) item.nama = row[idx];
-        if (key.includes("satuan")) item.satuan = row[idx];
-        if (key.includes("stock akhir")) item.stockAkhir = clampStockToZero_(row[idx]);
-        if (key.includes("stock aman")) item.stockAman = row[idx];
-        if (key.includes("stock value") || key.includes("nilai stok") || key.includes("nilai stock") || key.includes("value")) item.stockValue = row[idx];
-        if (key.includes("divisi")) item.divisi = row[idx];
+    const headerRow = 3, last = sheet.getLastRow(), lastCol = sheet.getLastColumn();
+    if (last <= headerRow || lastCol < 1) return;
+    const headers = sheet.getRange(headerRow, 1, 1, lastCol).getValues()[0];
+    const findCol = function(patterns) {
+      return headers.findIndex(function(h) {
+        const value = String(h || "").toLowerCase().trim();
+        return patterns.some(function(p) { return value.indexOf(p) >= 0; });
       });
-      items.push(item);
+    };
+    const cKode = findCol(["kode"]); if (cKode < 0) return;
+    const cNama = findCol(["nama"]), cSatuan = findCol(["satuan"]);
+    const cAkhir = findCol(["stock akhir", "sisa stok", "sisa stock"]);
+    const cAman = findCol(["stock aman", "stok aman"]);
+    const cValue = findCol(["stock value", "nilai stok", "nilai stock", "value"]);
+    const cDivisi = findCol(["divisi"]);
+    const data = sheet.getRange(headerRow + 1, 1, last - headerRow, lastCol).getValues();
+    const label = name === "Stock CV" ? "CV" : "PT";
+    data.forEach(function(row) {
+      const kode = String(row[cKode] || "").trim();
+      if (!kode || /^total\b/i.test(kode)) return;
+      const item = { kode: kode, entitas: label };
+      if (cNama >= 0) item.nama = row[cNama];
+      if (cSatuan >= 0) item.satuan = row[cSatuan];
+      if (cAkhir >= 0) item.stockAkhir = clampStockToZero_(row[cAkhir]);
+      if (cAman >= 0) item.stockAman = toNumber_(row[cAman]);
+      if (cValue >= 0) item.stockValue = toNumber_(row[cValue]);
+      if (cDivisi >= 0) item.divisi = row[cDivisi];
+      const key = label + "|" + kode;
+      if (!byIdentity[key]) order.push(key);
+      byIdentity[key] = item;
     });
   });
 
-  return { success: true, count: items.length, items: items };
+  const bb = getBahanBakuStockMap_();
+  if (!bb || !bb.success) return {
+    success: false, code: "BAHAN_BAKU_SOURCE_UNAVAILABLE",
+    error: bb && bb.error ? bb.error : 'Gagal membaca sheet "Stock Bahan Baku"', count: 0, items: []
+  };
+  bb.items.forEach(function(item) {
+    const entity = String(item.entitas || "").toUpperCase();
+    if ((requested === "CV" && entity !== "CV") || (requested === "PT" && entity !== "PT")) return;
+    const key = (entity || "UNKNOWN") + "|" + item.kode;
+    if (!byIdentity[key]) order.push(key);
+    const previous = byIdentity[key] || {};
+    byIdentity[key] = Object.assign({}, previous, item, {
+      stockAkhir: item.stockAkhir, divisi: "BAHAN BAKU", entitas: entity || previous.entitas || ""
+    });
+  });
+  const items = order.map(function(key) { return byIdentity[key]; }).filter(Boolean);
+  return { success: true, count: items.length, items: items, sources: { cv: includeCV, pt: includePT, bahanBaku: bb.count } };
 }
 
 function getLowStock() {
@@ -2192,76 +2221,56 @@ function getHeaderIndex(sheet, headerRow, headerName) {
 function getBahanBakuStockMap_() {
   const ss = getSS();
   const sh = ss.getSheetByName("Stock Bahan Baku");
-  if (!sh) {
-    return { success: false, error: 'Sheet "Stock Bahan Baku" tidak ditemukan', map: {}, count: 0, codes: [] };
-  }
+  if (!sh) return { success: false, error: 'Sheet "Stock Bahan Baku" tidak ditemukan', map: {}, count: 0, codes: [], items: [] };
+  const lastRow = sh.getLastRow(), lastCol = sh.getLastColumn();
+  if (lastRow < 2 || lastCol < 1) return { success: false, error: 'Sheet "Stock Bahan Baku" kosong', map: {}, count: 0, codes: [], items: [] };
 
-  const lastRow = sh.getLastRow();
-  const lastCol = sh.getLastColumn();
-  if (lastRow < 2 || lastCol < 1) {
-    return { success: false, error: 'Sheet "Stock Bahan Baku" kosong', map: {}, count: 0, codes: [] };
-  }
-
-  // Cari header pada beberapa baris pertama: wajib ada Kode + Stock Akhir/Sisa Stock.
-  const scanRows = Math.min(5, lastRow);
-  const top = sh.getRange(1, 1, scanRows, lastCol).getValues();
-  let headerRow = -1;
-  let headers = [];
-  let idxKode = -1;
-  let idxStock = -1;
-
+  const top = sh.getRange(1, 1, Math.min(8, lastRow), lastCol).getValues();
+  let headerRow = -1, headers = [], idxKode = -1, idxStock = -1;
   for (let r = 0; r < top.length; r++) {
     const h = top[r].map(function(v) { return String(v || "").toLowerCase().trim(); });
     const k = h.findIndex(function(v) { return v.indexOf("kode") >= 0; });
     const st = h.findIndex(function(v) {
-      return v.indexOf("stock akhir") >= 0 ||
-             v.indexOf("sisa stock") >= 0 ||
-             v.indexOf("sisa stok") >= 0 ||
-             v === "sisa";
+      return v.indexOf("stock akhir") >= 0 || v.indexOf("sisa stock") >= 0 || v.indexOf("sisa stok") >= 0 || v === "sisa";
     });
-    if (k >= 0 && st >= 0) {
-      headerRow = r + 1;
-      headers = h;
-      idxKode = k;
-      idxStock = st;
-      break;
-    }
+    if (k >= 0 && st >= 0) { headerRow = r + 1; headers = h; idxKode = k; idxStock = st; break; }
   }
+  if (headerRow < 0) return { success: false, error: 'Header "Kode" dan "Stock Akhir/Sisa Stock" tidak ditemukan di "Stock Bahan Baku"', map: {}, count: 0, codes: [], items: [] };
 
-  if (headerRow < 0) {
-    return {
-      success: false,
-      error: 'Header "Kode" dan "Stock Akhir/Sisa Stock" tidak ditemukan di "Stock Bahan Baku"',
-      map: {}, count: 0, codes: []
-    };
-  }
-
-  const rows = sh.getRange(headerRow + 1, 1, lastRow - headerRow, lastCol).getValues();
-  const map = {};
-  const codes = [];
-
+  const findCol = function(patterns) { return headers.findIndex(function(h) { return patterns.some(function(p) { return h.indexOf(p) >= 0; }); }); };
+  const idxNama = findCol(["nama barang", "nama"]), idxSatuan = findCol(["satuan"]);
+  const idxAman = findCol(["stock aman", "stok aman", "minimum"]);
+  const idxValue = findCol(["stock value", "nilai stok", "nilai stock", "value"]);
+  const idxSize = findCol(["size", "ukuran"]), idxEntitas = findCol(["entitas", "entity"]);
+  const rows = sh.getRange(headerRow + 1, 1, Math.max(0, lastRow - headerRow), lastCol).getValues();
+  const map = Object.create(null), byCode = Object.create(null);
   rows.forEach(function(row) {
     const kode = String(row[idxKode] || "").trim();
     if (!kode || /^total\b/i.test(kode) || /^kode\b/i.test(kode)) return;
-
-    const raw = row[idxStock];
-    const num = Number(raw);
-    // Angka valid = stok. Sel kosong dianggap 0; teks error tidak dianggap valid.
-    const stock = raw === "" || raw == null ? 0 : (isFinite(num) ? num : null);
-    if (stock === null) return;
-
-    map[kode] = clampStockToZero_(stock);
-    codes.push(kode);
+    const raw = row[idxStock], rawText = String(raw == null ? "" : raw).trim();
+    if (rawText && !/[0-9]/.test(rawText)) return;
+    const stock = rawText ? toNumber_(raw) : 0;
+    const upper = kode.toUpperCase();
+    let entitas = "";
+    if (/^BBCV[-_]/.test(upper) || /^CV[-_]/.test(upper)) entitas = "CV";
+    else if (/^BBPT[-_]/.test(upper) || /^(PT|WK|MM)[-_]/.test(upper)) entitas = "PT";
+    else if (idxEntitas >= 0) {
+      const e = String(row[idxEntitas] || "").trim().toUpperCase();
+      if (e === "CV" || e === "PT") entitas = e;
+    }
+    const item = {
+      kode: kode, nama: idxNama >= 0 ? String(row[idxNama] || "").trim() : "",
+      satuan: idxSatuan >= 0 ? String(row[idxSatuan] || "").trim() : "",
+      stockAkhir: clampStockToZero_(stock), stockAman: idxAman >= 0 ? toNumber_(row[idxAman]) : 0,
+      divisi: "BAHAN BAKU", entitas: entitas
+    };
+    if (idxValue >= 0) item.stockValue = toNumber_(row[idxValue]);
+    if (idxSize >= 0) item.size = String(row[idxSize] || "").trim();
+    map[kode] = item.stockAkhir; byCode[kode] = item;
   });
-
-  return {
-    success: true,
-    sheet: "Stock Bahan Baku",
-    headerRow: headerRow,
-    count: codes.length,
-    codes: codes,
-    map: map
-  };
+  const items = Object.keys(byCode).map(function(k) { return byCode[k]; });
+  const codes = Object.keys(byCode);
+  return { success: true, sheet: "Stock Bahan Baku", headerRow: headerRow, count: items.length, codes: codes, map: map, items: items };
 }
 
 /**
@@ -2590,110 +2599,81 @@ function nowWIB_() {
 }
 
 function readDashboardLiveSummary_() {
-  const ss = getSS();
-  const sh = ss && ss.getSheetByName("Dashboard Live");
+  const ss = getSS(), sh = ss && ss.getSheetByName("Dashboard Live");
   if (!sh) return null;
-  const v = sh.getRange(1, 1, 30, 7).getDisplayValues();
-  let top = null;
-  const div = [];
+  const lastRow = sh.getLastRow(), lastCol = sh.getLastColumn();
+  if (lastRow < 2 || lastCol < 2) return null;
+  const v = sh.getRange(1, 1, lastRow, lastCol).getDisplayValues();
+  let top = null; const div = [];
   for (let i = 0; i < v.length; i++) {
-    const row = v[i].map(function(c) { return String(c || "").trim().toUpperCase(); });
+    const row = v[i].map(function(c) { return String(c || "").trim().toUpperCase().replace(/\s+/g, " "); });
     if (row[0] === "TOTAL ITEM" && v[i + 1]) {
       const n = v[i + 1].map(toNumber_);
-      top = {
-        totalItem: n[0], aman: n[1], waspada: n[2], kritis: n[3],
-        totalSisaStok: n[4], poBelumSelesai: n[5]
-      };
+      top = { totalItem: n[0], aman: n[1], waspada: n[2], kritis: n[3], totalSisaStok: n[4], poBelumSelesai: n[5] };
     }
     if (row[0] === "DIVISI" && row[1] === "TOTAL ITEM") {
       for (let j = i + 1; j < v.length; j++) {
         const nama = String(v[j][0] || "").trim();
-        if (!nama || /^TOTAL$/i.test(nama)) break;
-        div.push({
-          divisi: nama,
-          total: toNumber_(v[j][1]),
-          aman: toNumber_(v[j][2]),
-          waspada: toNumber_(v[j][3]),
-          kritis: toNumber_(v[j][4])
-        });
+        if (!nama || /^TOTAL\b/i.test(nama)) break;
+        div.push({ divisi: nama, total: toNumber_(v[j][1]), aman: toNumber_(v[j][2]), waspada: toNumber_(v[j][3]), kritis: toNumber_(v[j][4]) });
       }
+      break;
     }
   }
-  return top ? {
-    success: true,
-    sumber: "Dashboard Live",
-    diambilPada: nowWIB_(),
-    summary: top,
-    statusPerDivisi: div
-  } : null;
+  if (!top || !div.length) return null;
+  const statusTotal = top.aman + top.waspada + top.kritis;
+  const divisionTotal = div.reduce(function(sum, item) { return sum + item.total; }, 0);
+  if (!Number.isFinite(top.totalItem) || top.totalItem <= 0 || statusTotal !== top.totalItem || divisionTotal !== top.totalItem) {
+    console.error("Dashboard Live tidak konsisten: total=" + top.totalItem + ", status=" + statusTotal + ", divisi=" + divisionTotal);
+    return null;
+  }
+  return { success: true, sumber: "Dashboard Live", diambilPada: nowWIB_(), summary: top, statusPerDivisi: div };
 }
 
 function getDashboardData() {
   const live = readDashboardLiveSummary_();
-  if (!live) {
-    return {
-      success: false,
-      code: "DASHBOARD_LIVE_SUMMARY_NOT_FOUND",
-      error: "Ringkasan Dashboard Live tidak ditemukan. Data dashboard tidak dihitung ulang dari Stock CV/PT."
-    };
-  }
+  if (!live || live.success !== true) return {
+    success: false, code: "DASHBOARD_LIVE_SUMMARY_INVALID",
+    error: "Ringkasan Dashboard Live tidak ditemukan atau tidak konsisten. Dashboard tidak memakai hitung ulang sebagai pengganti."
+  };
   const all = getAllStock("ALL");
-  if (!all.success) return { success: false, error: "Gagal membaca detail Stock CV/PT" };
+  if (!all || all.success !== true) return {
+    success: false, code: all && all.code || "STOCK_SOURCE_UNAVAILABLE",
+    error: all && all.error || "Gagal membaca sumber stok CV/PT/Bahan Baku."
+  };
+  if (Number(all.count) !== Number(live.summary.totalItem)) return {
+    success: false, code: "DASHBOARD_STOCK_COUNT_MISMATCH",
+    error: "Jumlah item sumber stok tidak sama dengan Dashboard Live. Data dashboard ditahan agar tidak menampilkan angka yang berbeda.",
+    dashboardLiveTotal: live.summary.totalItem, stockSourceTotal: all.count, sources: all.sources || null
+  };
 
-  const kritisItems = [];
-  let totalStock = live.summary.totalSisaStok;
+  const kritisItems = [], totalStock = live.summary.totalSisaStok;
   let totalValueCV = 0, totalValuePT = 0;
   all.items.forEach(function(item) {
-    const akhir = Number(item.stockAkhir) || 0;
-    const aman = Number(item.stockAman) || 0;
+    const akhir = Number(item.stockAkhir) || 0, aman = Number(item.stockAman) || 0;
     const statusClass = classifyDashboardStock_(akhir, aman);
     if (item.entitas === "CV") totalValueCV += toNumber_(item.stockValue || item.nilaiStok || 0);
-    else totalValuePT += toNumber_(item.stockValue || item.nilaiStok || 0);
-    if (statusClass === "kritis") {
-      kritisItems.push({
-        kode: item.kode, nama: item.nama, divisi: normalizeDivision_(item.divisi || "LAINNYA"),
-        sisa: akhir, aman: aman, kurang: Math.max(0, aman - akhir),
-        status: "KRITIS", entitas: item.entitas
-      });
-    }
+    else if (item.entitas === "PT") totalValuePT += toNumber_(item.stockValue || item.nilaiStok || 0);
+    if (statusClass === "kritis") kritisItems.push({
+      kode: item.kode, nama: item.nama, divisi: normalizeDivision_(item.divisi || "LAINNYA"),
+      sisa: akhir, aman: aman, kurang: Math.max(0, aman - akhir), status: "KRITIS", entitas: item.entitas
+    });
   });
-
   kritisItems.sort(function(a, b) { return b.kurang - a.kurang; });
-  const activity = getTodayActivity_();
-  const trend = getSevenDayTrend_();
-  const po = getPOStatus_();
-  const top = live.summary;
-  const total = top.totalItem;
+  const activity = getTodayActivity_(), trend = getSevenDayTrend_(), po = getPOStatus_();
+  const top = live.summary, total = top.totalItem;
   const status = { aman: top.aman, waspada: top.waspada, kritis: top.kritis };
   return {
-    success: true,
-    generatedAt: new Date().toISOString(),
-    lastUpdate: live.diambilPada,
-    activeMonth: getActiveMonth(),
-    sumberRingkasan: live.sumber,
-    totalItem: total,
-    totalItemAktif: total,
-    totalStok: totalStock,
-    aman: status.aman,
-    stabil: status.aman,
-    waspada: status.waspada,
-    kritis: status.kritis,
-    status: {
-      aman: status.aman, waspada: status.waspada, kritis: status.kritis,
-      percentages: {
-        aman: percent_(status.aman, total),
-        waspada: percent_(status.waspada, total),
-        kritis: percent_(status.kritis, total)
-      }
-    },
-    statusPerDivisi: live.statusPerDivisi,
-    top10Kritis: kritisItems.slice(0, 10),
-    aktivitasHariIni: activity,
-    trend7Hari: trend,
-    distribusiStatus: status,
+    success: true, generatedAt: new Date().toISOString(), lastUpdate: live.diambilPada,
+    activeMonth: getActiveMonth(), sumberRingkasan: live.sumber,
+    totalItem: total, totalItemAktif: total, jumlahItemSumber: all.count, totalStok: totalStock,
+    aman: status.aman, stabil: status.aman, waspada: status.waspada, kritis: status.kritis,
+    status: { aman: status.aman, waspada: status.waspada, kritis: status.kritis,
+      percentages: { aman: percent_(status.aman, total), waspada: percent_(status.waspada, total), kritis: percent_(status.kritis, total) } },
+    statusPerDivisi: live.statusPerDivisi, top10Kritis: kritisItems.slice(0, 10),
+    aktivitasHariIni: activity, trend7Hari: trend, distribusiStatus: status,
     nilaiStok: { cv: totalValueCV, pt: totalValuePT, selisih: totalValueCV - totalValuePT },
-    poBelumSelesaiDashboardLive: top.poBelumSelesai,
-    statusPO: po
+    poBelumSelesaiDashboardLive: top.poBelumSelesai, statusPO: po
   };
 }
 function getDashboard() { return getDashboardData(); }
