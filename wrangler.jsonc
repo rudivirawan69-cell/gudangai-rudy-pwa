@@ -25,7 +25,7 @@
     "AI_MODEL": "@cf/meta/llama-3.1-8b-instruct-fast",
     "ANTHROPIC_FALLBACK_ENABLED": "false",
     "SUPABASE_PUBLISHABLE_KEY": "sb_publishable_nrVxMRbrQihkzwFmWEs7QA_PlVFDWOz",
-    "ALLOWED_ORIGINS": "https://gudangai-rudy-pwa-69.rudivirawan69.workers.dev",
+    "ALLOWED_ORIGINS": "https://gudangai-rudy-pwa-69.rudivirawan69.workers.dev,https://gudangai-rudy-pwa-live.vercel.app",
     "CACHE_VERSI": "2"
   }
   // Setelah membuat KV namespace di dashboard Cloudflare, tambahkan:
