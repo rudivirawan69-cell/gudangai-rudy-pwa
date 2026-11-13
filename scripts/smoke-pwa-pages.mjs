@@ -141,11 +141,15 @@ try {
     ['Beranda', 'Status per Divisi'],
     ['Stok', 'Data Stok'],
     ['Input', 'Draft transaksi dipulihkan'],
-    ['PO', 'Draft PO dipulihkan'],
-    ['AI', 'Agent Rubee Intelligence'],
-    ['Riwayat', 'Transaksi'],
-    ['Atur', 'Mode Tampilan'],
+    ['Agent', 'Agent Rubee Intelligence'],
   ];
+  const openMorePage = async (label, marker) => {
+    await page.locator('nav.nav-bar button').filter({ hasText: 'Lainnya' }).first().click();
+    const sheet = page.locator('.more-sheet');
+    await sheet.waitFor({ state: 'visible', timeout: 5000 });
+    await sheet.locator('button').filter({ hasText: label }).first().click();
+    await page.getByText(marker, { exact: false }).first().waitFor({ state: 'visible', timeout: 10000 });
+  };
 
   const viewports = [
     { width: 360, height: 800 },
@@ -199,9 +203,12 @@ try {
       await assertNoHorizontalOverflow(label, viewport);
     }
 
-    // The non-tab synchronization page must also render at each width.
-    await page.evaluate(() => window.dispatchEvent(new CustomEvent('gudangai-navigate', { detail: { tab: 'sync' } })));
-    await page.getByText('Antrian Sinkronisasi', { exact: false }).first().waitFor({ state: 'visible', timeout: 10000 });
+    // Hidden destinations are reached through the actual 5th navigation item.
+    await openMorePage('Riwayat', 'Transaksi');
+    await assertNoHorizontalOverflow('Riwayat', viewport);
+    await openMorePage('Pengaturan', 'Mode Tampilan');
+    await assertNoHorizontalOverflow('Pengaturan', viewport);
+    await openMorePage('Antrian Sinkronisasi', 'Antrian Sinkronisasi');
     await assertNoHorizontalOverflow('Antrian Sinkronisasi', viewport);
   }
 
@@ -225,7 +232,7 @@ try {
     }, theme);
     await page.reload({ waitUntil: 'domcontentloaded' });
     await page.locator('nav.nav-bar').waitFor({ state: 'visible', timeout: 15000 });
-    for (const [label, marker] of [['Beranda', 'Status per Divisi'], ['Stok', 'TOTAL ITEM'], ['Input', 'Draft transaksi dipulihkan']]) {
+    for (const [label, marker] of [['Beranda', 'Status per Divisi'], ['Stok', 'Data Stok'], ['Input', 'Draft transaksi dipulihkan'], ['Agent', 'Agent Rubee Intelligence']]) {
       await page.locator('nav.nav-bar button').filter({ hasText: label }).first().click();
       await page.getByText(marker, { exact: false }).first().waitFor({ state: 'visible', timeout: 10000 });
       const themeState = await page.evaluate(() => ({
@@ -249,19 +256,18 @@ try {
     ['Beranda', 'Status per Divisi', 'beranda'],
     ['Stok', 'Data Stok', 'stok'],
     ['Input', 'Draft transaksi dipulihkan', 'input'],
-    ['Atur', 'Mode Tampilan', 'atur'],
+    ['Agent', 'Agent Rubee Intelligence', 'agent'],
   ];
   const visualViewports = [
     { width: 390, height: 844, label: 'mobile' },
     { width: 1366, height: 768, label: 'desktop' },
   ];
-  await page.locator('nav.nav-bar button').filter({ hasText: 'Atur' }).first().click();
+  await openMorePage('Pengaturan', 'Mode Tampilan');
   const themeButtons = page.locator('.theme-picker-btn');
   assert.equal(await themeButtons.count(), 3, 'Settings must expose exactly three theme controls.');
   const navigationCountBeforeToggle = mainFrameNavigations;
   for (let i = 0; i < 10; i += 1) {
     const index = i % 3;
-    await page.locator('nav.nav-bar button').filter({ hasText: 'Atur' }).first().click();
     await page.locator('.theme-picker-btn').nth(index).click();
     const expected = ['soft_light', 'deep_ocean', 'graphite_titanium'][index];
     await page.waitForFunction((value) => document.documentElement.dataset.theme === value, expected);
@@ -272,7 +278,7 @@ try {
     'Theme switching caused a document navigation/reload.');
 
   for (const theme of ['soft_light', 'deep_ocean', 'graphite_titanium']) {
-    await page.locator('nav.nav-bar button').filter({ hasText: 'Atur' }).first().click();
+    await openMorePage('Pengaturan', 'Mode Tampilan');
     const themeIndex = ['soft_light', 'deep_ocean', 'graphite_titanium'].indexOf(theme);
     await page.locator('.theme-picker-btn').nth(themeIndex).click();
     await page.waitForFunction((value) => document.documentElement.dataset.theme === value, theme);
@@ -307,7 +313,7 @@ try {
   await page.getByText('Draft transaksi dipulihkan', { exact: false }).waitFor({ state: 'visible' });
 
   assert.deepEqual(pageErrors, [], 'Uncaught browser errors were detected during page smoke tests.');
-  console.log('PASS: all seven navigation pages + sync queue + Data Stock CV/PT/division behavior + full-screen edges + Input draft recovery + five viewport widths + three themes.');
+  console.log('PASS: four primary tabs + MoreSheet destinations + Data Stock CV/PT/division behavior + full-screen edges + Input draft recovery + five viewport widths + three themes.');
 } finally {
   await browser.close();
   server.kill('SIGTERM');
