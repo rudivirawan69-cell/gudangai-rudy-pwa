@@ -36,9 +36,11 @@ STRUKTUR SISTEM GUDANGAI-69 (sumber kebenaran: Spreadsheet, versi backend 6.6.5)
 
 A. ENTITAS & KODE
 - Tiga entitas stok: CV, PT, WK. Prefix kode: CV-xxxx, PT-xxxx, WK-xxxx.
-- Stock CV & Stock PT adalah MASTER read-only (191 item total). Script tidak pernah menulis ke sheet master.
-- Divisi: DAPUR1, DAPUR2, MIE, PACKING, CS, BAHAN BAKU, REKANAN (7 tabel divisi).
-- BAHAN BAKU membaca Sisa Stok dari sheet khusus "Stock Bahan Baku" (28 item); divisi lain dari Stock CV/PT.
+- Stock CV & Stock PT adalah master read-only; jumlah CV+PT baseline November 2026 = 165 item.
+- Stock Bahan Baku adalah sumber terpisah (baseline 28 item). getAllStock(ALL) menggabungkan kode CV + PT + Bahan Baku tanpa menggabungkan SKU CV/PT yang namanya sama.
+- Total Dashboard Live baseline November 2026 = 193 item; status baseline = Aman 100, Waspada 17, Kritis 76. Angka ini tidak boleh di-hardcode: baca ringkasan Dashboard Live dan ikut berubah saat item baru ditambahkan.
+- Stok Gabungan Per Divisi adalah tampilan alternatif yang menggabungkan nama produk CV+PT (baseline 113 produk). Label yang benar: Gabungan CV+PT (113 produk); jangan pernah menjumlahkannya ke total master 193.
+- Divisi Dashboard Live baseline: DAPUR 1 28, DAPUR 2 17, MIE 10, PACKING 57, CS 45, BAHAN BAKU 28, REKANAN 8.
 
 B. SHEET TRANSAKSI (Barang masuk / Barang keluar / Barang Rusak)
 - Header di baris 3; data mulai baris 4. Kolom tulis: B..G (WRITE_COLUMNS=6).
