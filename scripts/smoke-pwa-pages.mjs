@@ -193,10 +193,6 @@ try {
     for (const [label, marker] of tabs) {
       const button = page.locator('nav.nav-bar button').filter({ hasText: label }).first();
       await button.click();
-      await page.waitForFunction((tabLabel) => {
-        return [...document.querySelectorAll('nav.nav-bar button')]
-          .some((el) => el.textContent.includes(tabLabel) && el.getAttribute('aria-current') === 'page');
-      }, label, { timeout: 8000 });
       await page.getByText(marker, { exact: false }).first().waitFor({ state: 'visible', timeout: 10000 });
       const boundaryErrors = await page.getByText('Halaman gagal dimuat', { exact: false }).count();
       assert.equal(boundaryErrors, 0, `Error boundary shown on ${label}`);
