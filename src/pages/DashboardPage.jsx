@@ -109,46 +109,28 @@ function DonutPO({ complete, progress, pending, size = 140 }) {
   );
 }
 
-function DivisionStatus3D({ items, sourceRows }) {
+function DivisionStatus3D({ sourceRows }) {
   const rows = useMemo(() => {
-    // Spreadsheet aggregate is preferred, but never let a stale/empty aggregate
-    // blank the PWA chart. Merge it with the live CV+PT stock source.
-    const localMap = {};
-    DIVISIONS.forEach((d) => { localMap[d] = { divisi: d, total: 0, aman: 0, waspada: 0, kritis: 0 }; });
-    (items || []).forEach((it) => {
-      const d = String(it.divisi || 'LAINNYA').trim() || 'LAINNYA';
-      if (!localMap[d]) localMap[d] = { divisi: d, total: 0, aman: 0, waspada: 0, kritis: 0 };
-      localMap[d].total += 1;
-      const cls = classifyItem(it);
-      localMap[d][cls] += 1;
-    });
-
+    // Dashboard Live adalah satu-satunya sumber angka total/status per divisi.
+    // Jangan membentuk angka pengganti dari daftar stok lokal jika ringkasan gagal.
     const remoteMap = {};
     (Array.isArray(sourceRows) ? sourceRows : []).forEach((r) => {
       const d = String(r.divisi || r.division || 'LAINNYA').trim() || 'LAINNYA';
       remoteMap[d] = {
         divisi: d,
-        total: Number(r.total || r.totalItem || 0) || 0,
-        aman: Number(r.aman || 0) || 0,
-        waspada: Number(r.waspada || 0) || 0,
-        kritis: Number(r.kritis || 0) || 0,
+        total: Number(r.total ?? r.totalItem ?? 0) || 0,
+        aman: Number(r.aman ?? 0) || 0,
+        waspada: Number(r.waspada ?? 0) || 0,
+        kritis: Number(r.kritis ?? 0) || 0,
       };
     });
-
-    const names = new Set([...Object.keys(localMap), ...Object.keys(remoteMap)]);
-    return [...names]
-      .map((d) => {
-        const remote = remoteMap[d];
-        const local = localMap[d];
-        if (remote && remote.total > 0) return remote;
-        return local || { divisi: d, total: 0, aman: 0, waspada: 0, kritis: 0 };
-      })
+    return Object.values(remoteMap)
       .filter((r) => r.total > 0)
       .sort((a, b) => (b.kritis / b.total) - (a.kritis / a.total) || b.total - a.total);
-  }, [items, sourceRows]);
+  }, [sourceRows]);
 
   if (rows.length === 0) {
-    return <p className="text-[12px] text-slate-400 text-center py-4">Belum ada data divisi</p>;
+    return <p className="text-[12px] text-slate-500 text-center py-4">Ringkasan Dashboard Live tidak tersedia. Angka divisi tidak dihitung dari stok lokal.</p>;
   }
 
   return (
@@ -623,14 +605,15 @@ function StockComparison({ cv, pt }) {
 }
 
 function DashboardTotals({ totalItem }) {
-  const itemCount = totalItem || 191;
+  const parsedTotal = Number(totalItem);
+  const itemCount = totalItem == null ? null : (Number.isFinite(parsedTotal) && parsedTotal >= 0 ? parsedTotal : null);
   return (
     <div className="grid grid-cols-2 gap-3">
       <div className="dashboard-total-card border-cyan-100">
         <div className="flex items-start justify-between gap-2"><span className="dashboard-icon-badge dashboard-icon-cyan"><Package className="w-4 h-4" /></span><span className="text-[9px] font-extrabold text-slate-400">MASTER</span></div>
         <p className="text-[10px] font-bold uppercase tracking-wider text-cyan-700 mt-2">Total Item</p>
-        <p className="text-2xl font-extrabold text-slate-900 tabular-nums mt-1">{itemCount}</p>
-        <p className="text-[10px] text-slate-500 mt-0.5">SKU aktif</p>
+        <p className="text-2xl font-extrabold text-slate-900 tabular-nums mt-1">{itemCount == null ? '—' : itemCount.toLocaleString('id-ID')}</p>
+        <p className="text-[10px] text-slate-500 mt-0.5">{itemCount == null ? 'Menunggu Dashboard Live' : 'SKU aktif · Dashboard Live'}</p>
       </div>
       <div className="dashboard-total-card border-orange-100">
         <div className="flex items-start justify-between gap-2"><span className="dashboard-icon-badge dashboard-icon-orange"><Users className="w-4 h-4" /></span><span className="text-[9px] font-extrabold text-slate-400">JARINGAN</span></div>
@@ -1001,9 +984,9 @@ export default function DashboardPage({ onNavigate }) {
   const { user } = useAuth();
 
   // DASHBOARD MASTER SOURCE:
-  // CV + PT tetap menjadi sumber utama masing-masing entitas.
-  // ALL membaca agregat backend yang juga memasukkan 28 item Stock Bahan Baku,
-  // sehingga total dashboard kembali mengikuti 191 item.
+  // Ringkasan total/status/divisi hanya berasal dari Dashboard Live.
+  // ALL membaca Stock CV + Stock PT + Stock Bahan Baku untuk daftar item.
+  // Baseline November 2026 adalah 193, tetapi angka tidak di-hardcode agar item baru otomatis terhitung.
   // Tidak ada penulisan ke sheet stok dari halaman Dashboard.
   const stockAll = useStock('ALL');
   const stockCV = useStock('CV');
@@ -1020,6 +1003,7 @@ export default function DashboardPage({ onNavigate }) {
   const [poLoading, setPoLoading] = useState(true);
   const [poError, setPoError] = useState('');
   const [dashboardData, setDashboardData] = useState(null);
+  const [dashboardError, setDashboardError] = useState('');
   const [confirmingId, setConfirmingId] = useState(null);
   const [confirmMsg, setConfirmMsg] = useState('');
   const poSignatureRef = useRef('');
@@ -1123,9 +1107,12 @@ export default function DashboardPage({ onNavigate }) {
           dashboardSignatureRef.current = signature;
           setDashboardData(res);
         }
+        setDashboardError('');
+      } else {
+        setDashboardError(res?.error || 'Ringkasan Dashboard Live tidak tersedia.');
       }
-    } catch (_) {
-      // The local stock view remains available if the read-only aggregate is unavailable.
+    } catch (err) {
+      setDashboardError(err?.message || 'Gagal membaca Dashboard Live.');
     }
   }, []);
 
@@ -1195,9 +1182,11 @@ export default function DashboardPage({ onNavigate }) {
     }
   }, [loadPO, poData?.noPO, stockAll.refresh, stockCV.refresh, stockPT.refresh]);
 
-  // 191-item contract: show the backend master count, while keeping a safe
-  // local fallback if an older cached deployment temporarily returns less.
-  const dashboardTotalItem = Number(dashboardData?.totalItemAktif ?? dashboardData?.totalItem ?? allItems.length) || allItems.length;
+  // No local fallback: totals must never diverge from the Dashboard Live source.
+  const dashboardTotalItem = dashboardData?.totalItemAktif ?? dashboardData?.totalItem ?? null;
+  const dashboardCriticalCount = dashboardData
+    ? Number(dashboardData.kritis ?? dashboardData.status?.kritis ?? 0)
+    : null;
 
   const pending = useMemo(() => {
     try {
@@ -1217,7 +1206,7 @@ export default function DashboardPage({ onNavigate }) {
     <div className="dashboard-shell w-full max-w-6xl mx-auto px-3 sm:px-5 lg:px-7 pt-4 pb-24 space-y-4">
       <HomeReminderModule
         onNavigate={onNavigate}
-        criticalCount={stats.kritis}
+        criticalCount={dashboardCriticalCount}
         userName={name}
       />
 
@@ -1225,6 +1214,12 @@ export default function DashboardPage({ onNavigate }) {
 
       {confirmMsg && (
         <p className="rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-[11px] font-semibold text-emerald-700">{confirmMsg}</p>
+      )}
+      {dashboardError && (
+        <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] font-semibold text-amber-800" role="status">
+          Dashboard Live belum berhasil diperbarui: {dashboardError}
+          {dashboardData ? ' Menampilkan pembacaan Dashboard Live terakhir yang berhasil.' : ' Total dan status ditahan; tidak diganti hitungan lokal.'}
+        </p>
       )}
 
       <section className="grid grid-cols-1 xl:grid-cols-2 gap-4" aria-label="Ringkasan operasional">
@@ -1260,7 +1255,7 @@ export default function DashboardPage({ onNavigate }) {
               <span className="text-slate-400">Ring = % kritis</span>
             </div>
           </div>
-          <DivisionStatus3D items={allItems} sourceRows={dashboardData?.statusPerDivisi} />
+          <DivisionStatus3D sourceRows={dashboardData?.statusPerDivisi} />
         </div>
       </details>
 
