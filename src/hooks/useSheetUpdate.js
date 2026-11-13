@@ -13,6 +13,12 @@ function formatUpdate(value) {
   return formatTanggal(value, 'sync') || String(value);
 }
 
+function pickTimestamp(obj) {
+  if (!obj || typeof obj !== 'object') return null;
+  // Hanya field yang diisi backend dari Data Stok Per Divisi!A2.
+  return obj.sheetUpdatedAt || obj.data?.sheetUpdatedAt || obj.meta?.sheetUpdatedAt || null;
+}
+
 function fromLocalCaches() {
   try {
     return localStorage.getItem(LS_SHEET_TIMESTAMP) || null;
@@ -23,7 +29,7 @@ function fromLocalCaches() {
 
 /**
  * Label header "Update Sheet".
- * Tidak menampilkan "Belum ada data" jika API pernah sukses — pakai waktu ambil data.
+ * Header hanya menampilkan timestamp asli dari Data Stok Per Divisi!A2.
  */
 export function useSheetUpdate() {
   const [label, setLabel] = useState(() => {
@@ -72,6 +78,7 @@ export function useSheetUpdate() {
       }
     };
 
+    // Event hanya memicu pembacaan ulang; waktu event/polling bukan timestamp spreadsheet.
     const onSheetUpdated = () => refresh();
     const onBootstrap = () => refresh();
     const onStock = () => refresh();

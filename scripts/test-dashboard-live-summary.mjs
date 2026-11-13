@@ -78,6 +78,16 @@ assert.equal(makeReader(invalidDivision)(), null, 'division status totals must m
 
 assert.match(code.slice(code.indexOf('function getAllStock'), code.indexOf('function getLowStock')), /getBahanBakuStockMap_/);
 assert.match(code, /DASHBOARD_STOCK_COUNT_MISMATCH/);
+const sheetTimestampReader = extractFunction(code, 'readDivisionSheetUpdateTimestamp_');
+const readSheetTimestamp = new Function('getSS', sheetTimestampReader + '; return readDivisionSheetUpdateTimestamp_;')(
+  () => ({ getSheetByName: () => ({ getLastRow: () => 2, getRange: () => ({ getDisplayValue: () => 'Sisa Stok = Stock Akhir CV/PT | Update terakhir: 2026-11-13 18:20:45' }) }) })
+);
+assert.equal(readSheetTimestamp(), '2026-11-13 18:20:45', 'timestamp must come from Data Stok Per Divisi A2');
+assert.match(code, /sheetUpdatedAt: sheetUpdatedAt, lastUpdate: sheetUpdatedAt/);
+const headerSync = fs.readFileSync('src/hooks/useSheetUpdate.js', 'utf8');
+assert.match(headerSync, /return obj\.sheetUpdatedAt \|\| obj\.data\?\.sheetUpdatedAt \|\| obj\.meta\?\.sheetUpdatedAt/);
+assert.doesNotMatch(headerSync, /pickTimestamp\(obj\).*lastUpdate/);
+
 assert.doesNotMatch(code, /Total master data transaksi: 191/);
 assert.match(api, /DASHBOARD_LIVE_READ_FAILED/);
 assert.doesNotMatch(api, /buildDashboardFallbackFromStock/);
