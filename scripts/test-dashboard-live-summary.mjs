@@ -4,6 +4,8 @@ import assert from 'node:assert/strict';
 const code = fs.readFileSync('Code.gs', 'utf8');
 const api = fs.readFileSync('src/data/api.js', 'utf8');
 const wranglerText = fs.readFileSync('wrangler.jsonc', 'utf8');
+const worker = fs.readFileSync('worker.js', 'utf8');
+const agentSkills = fs.readFileSync('cloudflare/agentSkills.js', 'utf8');
 const wrangler = JSON.parse(wranglerText.replace(/^\s*\/\/.*$/gm, '').replace(/,\s*([}\]])/g, '$1'));
 
 function extractFunction(source, name) {
@@ -29,6 +31,8 @@ new Function(code);
 const toNumberSource = extractFunction(code, 'toNumber_');
 const readerSource = extractFunction(code, 'readDashboardLiveSummary_');
 const toNumber = new Function(toNumberSource + '; return toNumber_;')();
+assert.equal(toNumber('1.000'), 1000, 'Indonesian thousands separator must not be parsed as decimal');
+assert.equal(toNumber('1.234,5'), 1234.5, 'Indonesian decimal and thousands separators must parse correctly');
 const makeReader = (rows) => new Function('getSS', 'toNumber_', 'nowWIB_', readerSource + '; return readDashboardLiveSummary_;')(
   () => ({ getSheetByName: () => ({
     getLastRow: () => rows.length,
@@ -80,6 +84,11 @@ assert.doesNotMatch(api, /buildDashboardFallbackFromStock/);
 const dashApi = api.slice(api.indexOf('export async function getDashboardData()'), api.indexOf('export async function confirmPOStatus'));
 assert.doesNotMatch(dashApi, /fetchStock\(/);
 assert.equal(wrangler.name, 'gudangai-rudy-pwa-69');
+assert.match(worker, /Baseline November 2026: 193 item/);
+assert.match(worker, /tampilan alternatif 113 produk/);
+assert.match(worker, /getDashboardData dari Dashboard Live/);
+assert.match(agentSkills, /193 item/);
+assert.match(agentSkills, /Gabungan CV\+PT \(113 produk\)/);
 
 
 const dashboardPage = fs.readFileSync(new URL('../src/pages/DashboardPage.jsx', import.meta.url), 'utf8');
