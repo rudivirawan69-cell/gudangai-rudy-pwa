@@ -1,5 +1,7 @@
 # GudangAI Master Data Synchronization Guide
 
+> **Catatan pembaruan produksi (13 November 2026):** Angka lama 189/191 pada bagian analisis historis dan snapshot `master.js`/`src/data/master.js` bukan total produksi aktif. Total utama mengikuti Dashboard Live secara dinamis; baseline saat ini 193 (165 CV+PT + 28 Bahan Baku). Tampilan alternatif `Stok Gabungan Per Divisi` adalah 113 produk dan tidak dijumlahkan ke total utama.
+
 ## 📋 Status Saat Ini
 
 ### Masalah yang Terdeteksi
