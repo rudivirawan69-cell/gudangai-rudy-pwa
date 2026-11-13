@@ -193,7 +193,13 @@ try {
     for (const [label, marker] of tabs) {
       const button = page.locator('nav.nav-bar button').filter({ hasText: label }).first();
       await button.click();
-      await page.getByText(marker, { exact: false }).first().waitFor({ state: 'visible', timeout: 10000 });
+      const visibleMarker = page.getByText(marker, { exact: false }).last();
+      try {
+        await visibleMarker.waitFor({ state: 'visible', timeout: 10000 });
+      } catch (error) {
+        const bodyText = (await page.locator('body').innerText().catch(() => '')).slice(0, 1600);
+        throw new Error(`Page marker not visible: ${label} at ${viewport.width}px; expected "${marker}". Body: ${bodyText}. Cause: ${error.message}`);
+      }
       const boundaryErrors = await page.getByText('Halaman gagal dimuat', { exact: false }).count();
       assert.equal(boundaryErrors, 0, `Error boundary shown on ${label}`);
       await assertNoHorizontalOverflow(label, viewport);
