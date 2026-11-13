@@ -6,9 +6,11 @@ import { chromium } from 'playwright';
 const HOST = 'http://127.0.0.1:4173';
 
 function hexRgb(value) {
-  const match = String(value).trim().match(/^#([0-9a-f]{6})$/i);
-  assert.ok(match, `Expected a six-digit hex color token, received: ${value}`);
-  const hex = match[1];
+  const match = String(value).trim().match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
+  assert.ok(match, `Expected a 3- or 6-digit hex color token, received: ${value}`);
+  const hex = match[1].length === 3
+    ? match[1].split('').map((channel) => channel + channel).join('')
+    : match[1];
   return [0, 2, 4].map((offset) => parseInt(hex.slice(offset, offset + 2), 16) / 255);
 }
 
