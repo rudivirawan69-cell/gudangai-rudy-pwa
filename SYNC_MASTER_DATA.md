@@ -14,7 +14,7 @@
 |------|-----------|-----------|-------|--------|
 | `/master.js` | 47 items | 59 items | 106 + WK | ✅ LENGKAP |
 | `/src/data/master.js` | 40 items | 9 items | 49 | ❌ TERPOTONG |
-| BACKEND (Code.gs V6.6.5) | Dinamis dari Sheet | Dinamis dari Sheet | 191 | ✅ SUMBER TRUTH |
+| BACKEND (Code.gs aktif) | CV/PT + Bahan Baku | Dinamis dari Dashboard Live | 193 baseline Nov 2026 | ✅ SUMBER TRUTH DINAMIS |
 
 #### 3. **Perbedaan Item Spesifik**
 
@@ -94,7 +94,7 @@ Rename atau dokumentasi bahwa ini adalah **LEGACY** file.
 ```
 BACKEND (Code.gs V6.6.5)
 └─ Stock CV + Stock PT sheets (COLD STORAGE spreadsheet)
-   └─ 191 master items
+   └─ 193 item pada baseline November 2026 (dinamis; tidak di-hardcode)
       └─ API: doPost(action: "bootstrap")
          └─ PWA /bootstrap endpoint
             └─ getAllStock() API call
@@ -150,7 +150,7 @@ export function useBootstrap() {
 #### Checklist Sinkronisasi
 
 - [ ] `/src/data/master.js` memiliki 47 CV + 59 PT = 106 items (minimum)
-- [ ] BACKEND returns 191 items via `bootstrap` action
+- [ ] BACKEND returns all current CV + PT + Bahan Baku items via `bootstrap`; baseline November 2026 = 193, count follows additions automatically
 - [ ] `alias-config.json` dapat diakses dari PWA build
 - [ ] API endpoint `?action=bootstrap` returns `masterVersion` + `stockVersion`
 - [ ] PWA localStorage caching works correctly
@@ -183,22 +183,25 @@ curl "https://<YOUR_BACKEND_URL>?action=bootstrap&secret=<API_SECRET>"
 ### BACKEND Master Data (Code.gs V6.6.5 - AUTHORITATIVE)
 
 ```
-Total: 191 items
+Dashboard Live baseline November 2026: 193 item (dinamis, bukan konstanta).
 
-Categories:
-├── CV (Cold Storage) - 47 items
-│   ├── CS (Cold Storage) - 19 items
-│   ├── DAPUR 1 - 6 items
-│   ├── DAPUR 2 - 8 items
-│   ├── MIE - 5 items
-│   ├── PACKING - 25 items
-│   └── BAHAN BAKU - 3 items (sample)
-│
-├── PT (Partner/Vendor) - 59 items
-│   └── Similar structure to CV
-│
-└── WK-* + MM-* (Special variants) - Additional items
-    └── Specialized suppliers/recipes
+Sumber:
+- Stock CV + Stock PT: 165 SKU dihitung terpisah menurut entitas/kode.
+- Stock Bahan Baku: 28 SKU dari sheet khusus.
+- Total utama: 165 + 28 = 193 SKU.
+- Status utama: Aman 100, Waspada 17, Kritis 76.
+- Divisi: DAPUR 1 28, DAPUR 2 17, MIE 10, PACKING 57, CS 45, BAHAN BAKU 28, REKANAN 8.
+
+Tampilan alternatif:
+- Stok Gabungan Per Divisi: 113 produk setelah nama CV+PT yang sama digabung.
+- Label tampilan: Gabungan CV+PT (113 produk).
+- Angka 113 adalah hitungan alternatif; jangan ditambahkan ke 193 dan jangan dipakai sebagai total master.
+
+Aturan:
+- readDashboardLiveSummary_ membaca total/status/divisi berdasarkan label pada Dashboard Live.
+- getAllStock(ALL) mengembalikan kode CV + PT + Bahan Baku.
+- Jumlah 193 hanya baseline saat ini. Penambahan/penghapusan item mengikuti sumber dan Dashboard Live secara otomatis.
+- Jika total sumber stok tidak sama dengan Dashboard Live, endpoint dashboard harus fail-closed, bukan menghitung ulang atau menampilkan angka perkiraan.
 ```
 
 ### Sync Mapping
