@@ -5,45 +5,20 @@ import { formatTanggal } from '../utils/formatTanggal';
 const EVENT_NAME = 'gudangai-sheet-updated';
 const BOOTSTRAP_EVENT = 'gudangai-bootstrap-updated';
 const STOCK_EVENT = 'gudangai-stock-refresh';
-const LS_SYNC_STATE = 'gudangai_sync_state_v1';
-const LS_BOOTSTRAP_AT = 'gudangai_bootstrap_at';
+const LS_SHEET_TIMESTAMP = 'gudangai_sheet_timestamp_v1';
 
 function formatUpdate(value) {
   if (value === undefined || value === null || value === '') return '';
-  // Pertahankan string yang sudah berisi jam HH:MM untuk formatSheetLabel relatif
   if (typeof value === 'string' && /\d{1,2}[:.]\d{2}/.test(value)) return value.trim();
   return formatTanggal(value, 'sync') || String(value);
 }
 
-function pickTimestamp(obj) {
-  if (!obj || typeof obj !== 'object') return null;
-  const candidates = [
-    obj.lastUpdate, obj.lastUpdatedAt, obj.lastUpdated, obj.lastUpdateISO,
-    obj.updatedAt, obj.timestamp, obj.readAt, obj.label, obj.diambilPada,
-  ];
-  for (const c of candidates) {
-    if (c !== undefined && c !== null && c !== '') return c;
-  }
-  return null;
-}
-
 function fromLocalCaches() {
   try {
-    const syncRaw = localStorage.getItem(LS_SYNC_STATE);
-    if (syncRaw) {
-      const st = JSON.parse(syncRaw);
-      const t = st.lastSyncISO || st.lastUpdateISO || st.bootstrappedAt;
-      if (t) return t;
-    }
-  } catch (_) { /* ignore */ }
-  try {
-    const bootAt = localStorage.getItem(LS_BOOTSTRAP_AT);
-    if (bootAt) {
-      const n = Number(bootAt);
-      if (Number.isFinite(n) && n > 0) return n;
-    }
-  } catch (_) { /* ignore */ }
-  return null;
+    return localStorage.getItem(LS_SHEET_TIMESTAMP) || null;
+  } catch (_) {
+    return null;
+  }
 }
 
 /**
@@ -65,7 +40,10 @@ export function useSheetUpdate() {
       if (!active) return;
       if (raw !== undefined && raw !== null && raw !== '') {
         const formatted = formatUpdate(raw);
-        if (formatted) setLabel(formatted);
+        if (formatted) {
+          setLabel(formatted);
+          try { localStorage.setItem(LS_SHEET_TIMESTAMP, String(raw)); } catch (_) { /* ignore */ }
+        }
       }
       setSyncState(state);
     };
@@ -79,8 +57,7 @@ export function useSheetUpdate() {
         if (!active) return;
         if (data && data.success !== false) {
           const value = pickTimestamp(data) || pickTimestamp(data.data) || pickTimestamp(data.meta);
-          // API sukses: selalu isi waktu (jangan biarkan kosong)
-          apply(value || new Date().toISOString(), 'ok');
+          apply(value, 'ok');
           return;
         }
         const local = fromLocalCaches();
@@ -95,24 +72,9 @@ export function useSheetUpdate() {
       }
     };
 
-    const onSheetUpdated = (event) => {
-      const detail = event?.detail;
-      if (typeof detail === 'string') apply(detail, 'ok');
-      else {
-        const value = pickTimestamp(detail);
-        apply(value || new Date().toISOString(), 'ok');
-      }
-      refresh();
-    };
-
-    const onBootstrap = (event) => {
-      apply(pickTimestamp(event?.detail) || Date.now(), 'ok');
-    };
-
-    const onStock = (event) => {
-      const meta = event?.detail?.meta;
-      apply(pickTimestamp(meta) || pickTimestamp(event?.detail) || Date.now(), 'ok');
-    };
+    const onSheetUpdated = () => refresh();
+    const onBootstrap = () => refresh();
+    const onStock = () => refresh();
 
     const local = fromLocalCaches();
     if (local) apply(local, 'ok');

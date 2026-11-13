@@ -5,6 +5,7 @@ import { ThemeProvider } from './hooks/useTheme';
 import LoginPage from './pages/LoginPage';
 import { useConnection } from './hooks/useConnection';
 import { useSheetUpdate } from './hooks/useSheetUpdate';
+import { formatSpreadsheetTimestamp } from './utils/sheetTimestamp';
 import { useBootstrap } from './hooks/useBootstrap';
 import { startRealtimeSync, syncNow } from './data/realTimeSync';
 import { getPendingQueue } from './data/api';
@@ -134,30 +135,10 @@ function MoreSheet({ open, onClose, onNavigate, activeId, pendingCount }) {
   );
 }
 
-function formatSheetLabel(label, now) {
-  if (!label) return 'Belum ada data dari spreadsheet';
-  const m = String(label).match(/(\d{1,2})[:.](\d{2})/);
-  if (!m) return label;
-  const [h, min] = [Number(m[1]), Number(m[2])];
-  const labelMin = h * 60 + min;
-  const nowMin = now.getHours() * 60 + now.getMinutes();
-  const diff = nowMin - labelMin;
-  if (diff < 0) return `Hari ini ${m[1]}:${m[2]}`;
-  if (diff === 0) return 'Baru saja diperbarui';
-  if (diff < 60) return `${diff} mnt lalu`;
-  return `${Math.floor(diff / 60)} j ${diff % 60} mnt lalu`;
-}
-
 function AppHeader({ user, tab, onOpenSettings, online, status, sheetLabel, onRefresh }) {
   const [refreshing, setRefreshing] = useState(false);
-  const [now, setNow] = useState(() => new Date());
   const photo = (user?.photo && String(user.photo).length > 40) ? user.photo : DEFAULT_PROFILE_PHOTO;
   const connected = online && status !== 'offline' && status !== 'error';
-
-  useEffect(() => {
-    const t = setInterval(() => setNow(new Date()), 30000);
-    return () => clearInterval(t);
-  }, []);
 
   const handleRefresh = async () => {
     if (refreshing) return;
@@ -186,7 +167,7 @@ function AppHeader({ user, tab, onOpenSettings, online, status, sheetLabel, onRe
               <span aria-hidden="true" className="opacity-40">·</span>
               <span className="flex items-center gap-1 min-w-0">
                 <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${sheetLabel ? 'bg-emerald-500' : 'bg-slate-400'}`} />
-                <span className="truncate" title={sheetLabel || undefined}>Update: <strong className="text-[var(--text-main,#0f172a)] font-bold">{formatSheetLabel(sheetLabel, now)}</strong></span>
+                <span className="truncate" title={sheetLabel || undefined}>Update: <strong className="text-[var(--text-main,#0f172a)] font-bold">{formatSpreadsheetTimestamp(sheetLabel)}</strong></span>
               </span>
             </div>
           </div>
