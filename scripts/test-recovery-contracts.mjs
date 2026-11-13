@@ -137,7 +137,10 @@ assert.match(inputPage, /Draft transaksi dipulihkan/);
 assert.match(poSource, /gudangai_po_draft_v1/);
 assert.match(poSource, /const poDate = localISODate\(\)/);
 assert.match(appSource, /function AppHeader\(\{ user, tab, onOpenSettings, online, status, sheetLabel, onRefresh \}\)/);
-assert.match(appSource, /const \[now, setNow\] = useState\(\(\) => new Date\(\)\)/);
+assert.match(appSource, /formatSpreadsheetTimestamp\(sheetLabel\)/);
+const sheetTimestampSource = readFileSync(new URL('../src/utils/sheetTimestamp.js', import.meta.url), 'utf8');
+assert.match(sheetTimestampSource, /Asia\/Jakarta/);
+assert.match(apiSource, /cache:\s*['"]no-store['"]/);
 assert.doesNotMatch(queueSource, /Math\.random\(\)/, 'Queue item fallback keys must be deterministic.');
 
 

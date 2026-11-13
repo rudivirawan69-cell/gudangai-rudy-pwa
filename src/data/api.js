@@ -88,7 +88,7 @@ async function fetchWithRetry(url, options = {}, retries = RETRY_COUNT, timeoutM
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      const res = await fetch(url, { ...options, signal: controller.signal });
+      const res = await fetch(url, { ...options, cache: 'no-store', signal: controller.signal });
       clearTimeout(timer);
       if (!res.ok) throw new Error('HTTP ' + res.status);
       return res;

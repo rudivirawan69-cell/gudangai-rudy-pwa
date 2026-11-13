@@ -33,10 +33,10 @@ function saveState(patch) {
 }
 
 function emitSheetUpdated(iso) {
+  if (!iso) return;
   try {
-    const lastUpdate = iso || new Date().toISOString();
     window.dispatchEvent(new CustomEvent('gudangai-sheet-updated', {
-      detail: { lastUpdate, lastUpdateISO: lastUpdate, updatedAt: lastUpdate },
+      detail: { lastUpdate: iso, lastUpdateISO: iso, updatedAt: iso },
     }));
   } catch (_) { /* ignore */ }
 }
@@ -70,6 +70,7 @@ async function apiPost(action, params = {}) {
   try {
     const res = await fetch(endpoint, {
       method: 'POST',
+      cache: 'no-store',
       headers: { 'content-type': 'text/plain;charset=utf-8' },
       body: JSON.stringify({
         action, secret,
@@ -102,7 +103,8 @@ async function apiPost(action, params = {}) {
 
 async function fullBootstrap() {
   const data = await apiPost('bootstrap', { entitas: 'ALL' });
-  const lastUpdateISO = data.lastUpdateISO || data.lastUpdate || new Date().toISOString();
+  const previousState = loadState();
+  const lastUpdateISO = data.lastUpdateISO || data.lastUpdate || previousState.lastUpdateISO || null;
   const st = saveState({
     masterVersion: data.masterVersion || null,
     stockVersion: data.stockVersion || null,
@@ -120,13 +122,14 @@ async function pullDelta() {
   if (!since) return fullBootstrap();
   const delta = await apiPost('getStockDelta', { sinceTimestamp: since, entitas: 'ALL' });
   const lastSyncISO = new Date().toISOString();
+  const lastUpdateISO = delta.lastUpdateISO || delta.lastUpdate || st.lastUpdateISO || null;
   saveState({
     lastSyncISO,
-    lastUpdateISO: delta.lastUpdateISO || delta.lastUpdate || lastSyncISO,
+    lastUpdateISO,
     masterVersion: delta.masterVersion || st.masterVersion,
     stockVersion: delta.stockVersion || st.stockVersion,
   });
-  emitSheetUpdated(delta.lastUpdateISO || delta.lastUpdate || lastSyncISO);
+  emitSheetUpdated(lastUpdateISO);
   return delta;
 }
 
@@ -156,7 +159,7 @@ async function tick() {
       } else {
         const lastSyncISO = new Date().toISOString();
         saveState({ lastSyncISO });
-        emitSheetUpdated(ping.lastUpdateISO || ping.lastUpdate || lastSyncISO);
+        emitSheetUpdated(ping.lastUpdateISO || ping.lastUpdate || st.lastUpdateISO);
         _listeners.onStatus?.({ state: 'online', mode: 'idle', failures: 0 });
       }
     } catch (e) {
