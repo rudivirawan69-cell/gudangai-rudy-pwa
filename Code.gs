@@ -3805,7 +3805,7 @@ function getStatusPO(body) {
       const namaMasuk = String(r[2] || '').trim(); // kolom Nama di sheet transaksi (display)
       if (!ket || qty <= 0) return;
       const ketUpper = ket.toUpperCase();
-      if (ketUpper.indexOf('RETUR') >= 0 || /^DARI\\b/.test(ketUpper)) return;
+      if (ketUpper.indexOf('RETUR') >= 0 || /^DARI\b/.test(ketUpper)) return;
       if (info.tanggal) {
         const tanggalMasuk = parseTransactionDate_(r[0]);
         if (tanggalMasuk) {
