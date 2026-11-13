@@ -2582,8 +2582,21 @@ function stampVisibleUpdateTimestamp_(formatted) {
   });
 }
 
+function readDivisionSheetUpdateTimestamp_() {
+  try {
+    const sh = getSS().getSheetByName("Data Stok Per Divisi");
+    if (!sh || sh.getLastRow() < 2) return "";
+    const label = String(sh.getRange("A2").getDisplayValue() || "").trim();
+    const match = label.match(/Update terakhir:\s*(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2})/i);
+    return match ? match[1] : "";
+  } catch (e) {
+    console.error("Gagal membaca timestamp Data Stok Per Divisi: " + e.message);
+    return "";
+  }
+}
+
 function getLastUpdateTimestamp() {
-  return PropertiesService.getScriptProperties().getProperty("LAST_UPDATE") || "N/A";
+  return readDivisionSheetUpdateTimestamp_() || "N/A";
 }
 
 function classifyDashboardStock_(stockAkhir, stockAman) {
@@ -2675,8 +2688,11 @@ function getDashboardData() {
   const activity = getTodayActivity_(), trend = getSevenDayTrend_(), po = getPOStatus_();
   const top = live.summary, total = top.totalItem;
   const status = { aman: top.aman, waspada: top.waspada, kritis: top.kritis };
+  const sheetUpdatedAt = readDivisionSheetUpdateTimestamp_();
   return {
-    success: true, generatedAt: new Date().toISOString(), lastUpdate: live.diambilPada,
+    success: true, generatedAt: new Date().toISOString(),
+    sheetUpdatedAt: sheetUpdatedAt, lastUpdate: sheetUpdatedAt,
+    dashboardReadAt: live.diambilPada,
     activeMonth: getActiveMonth(), sumberRingkasan: live.sumber,
     totalItem: total, totalItemAktif: total, jumlahItemSumber: all.count, totalStok: totalStock,
     aman: status.aman, stabil: status.aman, waspada: status.waspada, kritis: status.kritis,
