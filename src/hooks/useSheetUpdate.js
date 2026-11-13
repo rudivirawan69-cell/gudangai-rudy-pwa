@@ -18,8 +18,7 @@ function formatUpdate(value) {
 function pickTimestamp(obj) {
   if (!obj || typeof obj !== 'object') return null;
   const candidates = [
-    obj.lastUpdate, obj.lastUpdatedAt, obj.lastUpdated, obj.lastUpdateISO,
-    obj.updatedAt, obj.timestamp, obj.readAt, obj.label, obj.diambilPada,
+    obj.sheetUpdatedAt, obj.spreadsheetUpdatedAt, obj.divisionSheetUpdatedAt,
   ];
   for (const c of candidates) {
     if (c !== undefined && c !== null && c !== '') return c;
@@ -79,8 +78,10 @@ export function useSheetUpdate() {
         if (!active) return;
         if (data && data.success !== false) {
           const value = pickTimestamp(data) || pickTimestamp(data.data) || pickTimestamp(data.meta);
-          // API sukses: selalu isi waktu (jangan biarkan kosong)
-          apply(value || new Date().toISOString(), 'ok');
+          // Hanya timestamp yang dibaca dari A2 sheet Data Stok Per Divisi yang sah.
+          // Jangan mengganti waktu update spreadsheet dengan waktu polling/API.
+          if (value) apply(value, 'ok');
+          else setSyncState('error');
           return;
         }
         const local = fromLocalCaches();
@@ -100,18 +101,22 @@ export function useSheetUpdate() {
       if (typeof detail === 'string') apply(detail, 'ok');
       else {
         const value = pickTimestamp(detail);
-        apply(value || new Date().toISOString(), 'ok');
+        if (value) apply(value, 'ok');
       }
       refresh();
     };
 
     const onBootstrap = (event) => {
-      apply(pickTimestamp(event?.detail) || Date.now(), 'ok');
+      const value = pickTimestamp(event?.detail);
+      if (value) apply(value, 'ok');
+      refresh();
     };
 
     const onStock = (event) => {
       const meta = event?.detail?.meta;
-      apply(pickTimestamp(meta) || pickTimestamp(event?.detail) || Date.now(), 'ok');
+      const value = pickTimestamp(meta) || pickTimestamp(event?.detail);
+      if (value) apply(value, 'ok');
+      refresh();
     };
 
     const local = fromLocalCaches();
