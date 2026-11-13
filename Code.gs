@@ -2909,6 +2909,18 @@ function getPOOverwriteGuard_() {
     };
   }
 
+  // Tanpa NO PO, kedatangan tidak bisa dipasangkan secara andal ke PO aktif.
+  // Jangan izinkan generator menghapus daftar lama berdasarkan fallback nama barang.
+  if (!String(status.noPO || "").trim()) {
+    return {
+      safe: false,
+      code: "PO_NUMBER_REQUIRED_PREVENT_OVERWRITE",
+      error: "PO tidak ditimpa: nomor NO PO pada baris 4/5 belum terbaca. Lengkapi NO PO agar kedatangan dapat dicocokkan dengan benar.",
+      reviewRequired: true,
+      tanggalPO: status.tanggalPO || null
+    };
+  }
+
   const pending = (status.items || []).filter(function(item) {
     return String(item.status || "").toUpperCase() !== "SELESAI" &&
       Number(item.qtyBelumDatang || 0) > 0;
