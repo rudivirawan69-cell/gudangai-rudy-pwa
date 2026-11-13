@@ -258,31 +258,16 @@ export async function getStatusPO() {
     return { success: false, error: err?.message || 'Gagal status PO' };
   }
 }
-function buildDashboardFallbackFromStock(items) {
-  const map = {};
-  for (const it of (Array.isArray(items) ? items : [])) {
-    const divisi = String(it.divisi || 'LAINNYA').trim() || 'LAINNYA';
-    if (!map[divisi]) map[divisi] = { divisi, total: 0, aman: 0, waspada: 0, kritis: 0 };
-    map[divisi].total += 1;
-    const stok = Number(it.stok ?? it.stockAkhir ?? 0) || 0;
-    const cls = classifyStockLevel(stok);
-    map[divisi][cls] += 1;
-  }
-  return Object.values(map).filter((r) => r.total > 0);
-}
 export async function getDashboardData() {
   try {
     const data = await getJson('getDashboard');
-    if (data && data.success !== false) return data;
-    throw new Error(data?.error || 'Dashboard aggregate kosong');
+    if (!data || data.success !== true) return {
+      success: false, code: data?.code || 'DASHBOARD_LIVE_UNAVAILABLE',
+      error: data?.error || 'Dashboard Live tidak mengembalikan ringkasan valid.',
+    };
+    return data;
   } catch (err) {
-    try {
-      const [cv, pt] = await Promise.all([fetchStock('CV'), fetchStock('PT')]);
-      const items = [...(cv || []), ...(pt || [])];
-      return { success: true, version: 'PWA-LIVE-STOCK-FALLBACK', statusPerDivisi: buildDashboardFallbackFromStock(items), source: 'live-stock-cv-pt' };
-    } catch (fallbackErr) {
-      return { success: false, error: fallbackErr?.message || err?.message || 'Gagal mengambil dashboard' };
-    }
+    return { success: false, code: 'DASHBOARD_LIVE_READ_FAILED', error: err?.message || 'Gagal membaca ringkasan Dashboard Live.' };
   }
 }
 export async function confirmPOStatus(payload) {
