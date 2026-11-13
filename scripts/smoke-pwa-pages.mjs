@@ -195,7 +195,7 @@ try {
       await button.click();
       await page.waitForFunction((tabLabel) => {
         return [...document.querySelectorAll('nav.nav-bar button')]
-          .some((el) => el.textContent.includes(tabLabel) && el.classList.contains('is-active'));
+          .some((el) => el.textContent.includes(tabLabel) && el.getAttribute('aria-current') === 'page');
       }, label, { timeout: 8000 });
       await page.getByText(marker, { exact: false }).first().waitFor({ state: 'visible', timeout: 10000 });
       const boundaryErrors = await page.getByText('Halaman gagal dimuat', { exact: false }).count();
