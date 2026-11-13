@@ -9,7 +9,9 @@ const probe = `
     date: parseTanggal(instant),
     timestamp: formatWaktuSinkron(instant),
     serial: parseTanggal(25569),
-    dateOnly: parseTanggal('2026-11-13'),\n    longMonth: parseTanggal('9 NOVEMBER 2026'),\n    shortMonth: parseTanggal('13-Nov-2026')
+    dateOnly: parseTanggal('2026-11-13'),
+    longMonth: parseTanggal('9 NOVEMBER 2026'),
+    shortMonth: parseTanggal('13-Nov-2026')
   }));
 `;
 
@@ -26,7 +28,9 @@ for (const timezone of ['UTC', 'Asia/Jakarta', 'America/Los_Angeles']) {
       date: '2026-11-13',
       timestamp: '13 Nov 2026, 01.00 WIB',
       serial: '1970-01-01',
-      dateOnly: '2026-11-13',\n      longMonth: '2026-11-09',\n      shortMonth: '2026-11-13',
+      dateOnly: '2026-11-13',
+      longMonth: '2026-11-09',
+      shortMonth: '2026-11-13',
     });
   });
 }
