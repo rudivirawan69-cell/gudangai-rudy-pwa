@@ -82,7 +82,7 @@ assert.doesNotMatch(dashApi, /fetchStock\(/);
 assert.equal(wrangler.name, 'gudangai-rudy-pwa-69');
 
 
-const dashboardPage = readFileSync(new URL('../src/pages/DashboardPage.jsx', import.meta.url), 'utf8');
+const dashboardPage = fs.readFileSync(new URL('../src/pages/DashboardPage.jsx', import.meta.url), 'utf8');
 assert.doesNotMatch(dashboardPage, /191-item contract|\|\| 191|191 item/);
 assert.match(dashboardPage, /dashboardData\?\.totalItemAktif \?\? dashboardData\?\.totalItem \?\? null/);
 assert.match(dashboardPage, /Ringkasan Dashboard Live tidak tersedia\. Angka divisi tidak dihitung dari stok lokal/);
