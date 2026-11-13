@@ -69,6 +69,8 @@ assert.equal(result194.statusPerDivisi.reduce((n, x) => n + x.total, 0), 194);
 
 const invalid = rows193.map(r => [...r]); invalid[1][3] = '75';
 assert.equal(makeReader(invalid)(), null, 'inconsistent Dashboard Live must fail closed');
+const invalidDivision = rows193.map(r => [...r]); invalidDivision[5][2] = '8';
+assert.equal(makeReader(invalidDivision)(), null, 'division status totals must match the top summary');
 
 assert.match(code.slice(code.indexOf('function getAllStock'), code.indexOf('function getLowStock')), /getBahanBakuStockMap_/);
 assert.match(code, /DASHBOARD_STOCK_COUNT_MISMATCH/);
