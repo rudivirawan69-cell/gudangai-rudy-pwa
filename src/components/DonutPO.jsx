@@ -1,24 +1,21 @@
-/** Donut Status PO — pusat = % Qty datang; label Menunggu/Sebagian/Selesai; largest remainder. */
-export default function DonutPO({ complete = 0, progress = 0, pending = 0, qtyDatang = 0, qtyTotal = 0, size = 140 }) {
+/** Donut Status PO — label Menunggu/Sebagian/Selesai, pusat = % Qty datang */
+export default function DonutPO({ complete = 0, progress = 0, pending = 0, qtyDatang = 0, qtyPO = 0, size = 140 }) {
   const rawTotal = complete + progress + pending;
   const total = Math.max(1, rawTotal);
-  const rawPcts = rawTotal > 0
-    ? [complete, progress, pending].map((v) => (v / rawTotal) * 100)
-    : [0, 0, 0];
-  const floors = rawPcts.map((v) => Math.floor(v * 10) / 10);
+  const raw = [complete, progress, pending].map((v) => (v / total) * 100);
+  const floors = raw.map((v) => Math.floor(v * 10) / 10);
   let used = floors.reduce((a, b) => a + b, 0);
-  const order = rawPcts.map((v, i) => ({ i, r: v - floors[i] })).sort((a, b) => b.r - a.r);
+  const order = raw.map((v, i) => ({ i, r: v - floors[i] })).sort((a, b) => b.r - a.r);
   const pcts = floors.slice();
-  let k = 0;
-  while (Math.round((100 - used) * 10) > 0 && k < order.length) {
-    pcts[order[k].i] = Math.round((pcts[order[k].i] + 0.1) * 10) / 10;
+  let guard = 0;
+  while (Math.round((100 - used) * 10) > 0 && guard < 20) {
+    const t = order[guard % order.length];
+    pcts[t.i] = Math.round((pcts[t.i] + 0.1) * 10) / 10;
     used = Math.round((used + 0.1) * 10) / 10;
-    k += 1;
+    guard += 1;
   }
   const [cPct, pPct, nPct] = pcts;
-  const center = qtyTotal > 0
-    ? Math.round((qtyDatang / qtyTotal) * 1000) / 10
-    : (rawTotal > 0 ? Math.round((complete / total) * 1000) / 10 : 0);
+  const qtyPct = qtyPO > 0 ? Math.round((qtyDatang / qtyPO) * 1000) / 10 : 0;
   const r = 52;
   const circ = 2 * Math.PI * r;
   const seg = (pct) => (pct / 100) * circ;
@@ -54,12 +51,17 @@ export default function DonutPO({ complete = 0, progress = 0, pending = 0, qtyDa
           })}
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <p className="text-3xl font-extrabold text-slate-900 tabular-nums leading-none">{rawTotal > 0 ? center : '—'}</p>
+          <p className="text-3xl font-extrabold text-slate-900 tabular-nums leading-none">{rawTotal > 0 ? `${qtyPct}%` : '—'}</p>
           <p className="text-[11px] text-slate-500 font-semibold mt-1">{rawTotal > 0 ? 'Qty datang' : 'Belum ada PO'}</p>
         </div>
       </div>
       {rawTotal === 0 && (
         <p className="text-center text-[10px] text-slate-400 mt-2">Belum ada data PO aktif pada sumber Status PO.</p>
+      )}
+      {rawTotal > 0 && (
+        <p className="text-center text-[10px] text-slate-400 mt-2 tabular-nums">
+          {complete}/{progress}/{pending} item · {cPct}% / {pPct}% / {nPct}%
+        </p>
       )}
     </div>
   );
