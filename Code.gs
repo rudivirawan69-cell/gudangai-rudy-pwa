@@ -2604,20 +2604,21 @@ function readDashboardLiveSummary_() {
   const lastRow = sh.getLastRow(), lastCol = sh.getLastColumn();
   if (lastRow < 2 || lastCol < 2) return null;
   const v = sh.getRange(1, 1, lastRow, lastCol).getDisplayValues();
-  let top = null; const div = [];
+  let top = null, divFound = false;
+  const div = [];
   for (let i = 0; i < v.length; i++) {
     const row = v[i].map(function(c) { return String(c || "").trim().toUpperCase().replace(/\s+/g, " "); });
     if (row[0] === "TOTAL ITEM" && v[i + 1]) {
       const n = v[i + 1].map(toNumber_);
       top = { totalItem: n[0], aman: n[1], waspada: n[2], kritis: n[3], totalSisaStok: n[4], poBelumSelesai: n[5] };
     }
-    if (row[0] === "DIVISI" && row[1] === "TOTAL ITEM") {
+    if (!divFound && row[0] === "DIVISI" && row[1] === "TOTAL ITEM") {
+      divFound = true;
       for (let j = i + 1; j < v.length; j++) {
         const nama = String(v[j][0] || "").trim();
         if (!nama || /^TOTAL\b/i.test(nama)) break;
         div.push({ divisi: nama, total: toNumber_(v[j][1]), aman: toNumber_(v[j][2]), waspada: toNumber_(v[j][3]), kritis: toNumber_(v[j][4]) });
       }
-      break;
     }
   }
   if (!top || !div.length) return null;
@@ -2629,7 +2630,6 @@ function readDashboardLiveSummary_() {
   }
   return { success: true, sumber: "Dashboard Live", diambilPada: nowWIB_(), summary: top, statusPerDivisi: div };
 }
-
 function getDashboardData() {
   const live = readDashboardLiveSummary_();
   if (!live || live.success !== true) return {
