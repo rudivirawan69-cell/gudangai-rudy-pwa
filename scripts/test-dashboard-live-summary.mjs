@@ -100,6 +100,9 @@ const divisionEnd = dashboardPage.indexOf('\nfunction ', divisionStart + 10);
 const divisionBody = dashboardPage.slice(divisionStart, divisionEnd > divisionStart ? divisionEnd : dashboardPage.length);
 assert.doesNotMatch(divisionBody, /localMap|classifyItem\(it\)/);
 assert.match(dashboardPage, /Dashboard Live belum berhasil diperbarui/);
+assert.match(dashboardPage, /function DashboardStatusSummary\(\{ data \}\)/);
+assert.match(dashboardPage, /data\?\.status\?\.\[item\.key\] \?\? data\?\.\[item\.key\]/);
+assert.match(dashboardPage, /DashboardStatusSummary data=\{dashboardData\}/);
 
 console.log('PASS Dashboard Live dynamic summary: 193 baseline, 194 after added item, mismatch fail-closed');
 console.log('PASS Bahan Baku included in getAllStock and PWA dashboard fallback removed');
