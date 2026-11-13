@@ -26,14 +26,23 @@ assert.match(body('refreshDashboardPOSection_'), /const currentTop = PO_START_RO
 assert.match(body('refreshDashboardPOSection_'), /dashboardClearPOArea_\(sh, currentTop, clearEnd\);/);
 assert.doesNotMatch(body('refreshDashboardPOSection_'), /getRange\(\s*(?:2[89]|3\d|4[0-5])\s*,[\s\S]{0,100}(?:clearContent|setValues|setValue)\(/);
 
-// Production Code.gs visible dashboard ranges must stop at row 27; rows 28–45 are protected.
-const productionWriterStart = productionGs.indexOf('function writeDashboardData693_');
-assert.notEqual(productionWriterStart, -1, 'Missing production dashboard writer');
-const productionWriterEnd = productionGs.indexOf('\nfunction ', productionWriterStart + 10);
-const productionWriter = productionGs.slice(productionWriterStart, productionWriterEnd > productionWriterStart ? productionWriterEnd : productionGs.length);
-assert.match(productionWriter, /getRange\('A26:F27'\)\.setValues/);
-assert.doesNotMatch(productionWriter, /getRange\('A(?:2[89]|3\d|4[0-5]):/,
-  'Visible dashboard writes must not extend into critical rows 28–45');
+// Production Code.gs now reads the authoritative Dashboard Live summary (read-only).
+// The previous writeDashboardData693_ contract is obsolete and must not be recreated as a second source.
+const liveReaderStart = productionGs.indexOf('function readDashboardLiveSummary_(');
+assert.notEqual(liveReaderStart, -1, 'Missing production Dashboard Live summary reader');
+const liveReaderEnd = productionGs.indexOf('\nfunction ', liveReaderStart + 10);
+const liveReader = productionGs.slice(liveReaderStart, liveReaderEnd > liveReaderStart ? liveReaderEnd : productionGs.length);
+assert.match(liveReader, /getRange\(1, 1, lastRow, lastCol\)\.getDisplayValues\(\)/);
+assert.doesNotMatch(liveReader, /\.setValue\(|\.setValues\(|\.clearContent\(/,
+  'Dashboard Live summary reader must remain read-only');
+const productionDashboardStart = productionGs.indexOf('function getDashboardData()');
+assert.notEqual(productionDashboardStart, -1, 'Missing production getDashboardData');
+const productionDashboardEnd = productionGs.indexOf('\nfunction ', productionDashboardStart + 10);
+const productionDashboard = productionGs.slice(productionDashboardStart, productionDashboardEnd > productionDashboardStart ? productionDashboardEnd : productionGs.length);
+assert.match(productionDashboard, /readDashboardLiveSummary_\(\)/);
+assert.match(productionDashboard, /DASHBOARD_STOCK_COUNT_MISMATCH/);
+assert.doesNotMatch(productionDashboard, /aman\s*\+\+|waspada\s*\+\+|kritis\s*\+\+/,
+  'Dashboard summary must not recalculate status totals from stock rows');
 
 // Stock-shortage message must be human-readable and shared by single/bulk paths.
 const holdStart = gs.indexOf('function formatStockShortageHold_(');
