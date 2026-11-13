@@ -1,0 +1,123 @@
+/* ============================================================
+   app-ui-v2.css — Gaya tambahan UI v2 (FAB, badge, toast, skeleton)
+   Import di src/main.jsx: import './app-ui-v2.css';
+   (letakkan setelah index.css / theme imports agar menang kaskade)
+   ============================================================ */
+
+/* --- FAB Input tengah di bottom nav --- */
+.nav-fab { padding-bottom: env(safe-area-inset-bottom, 0px); }
+.nav-fab-btn {
+  width: 56px;
+  height: 56px;
+  margin-top: -22px;            /* mengambang di atas bar */
+  border-radius: 9999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  background: linear-gradient(145deg, #10b981, #059669);
+  box-shadow: 0 8px 20px rgba(16, 185, 129, 0.45), 0 2px 6px rgba(0, 0, 0, 0.25);
+  border: 3px solid var(--bg-elevated, #ffffff);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.2s ease;
+}
+.nav-fab-btn.is-active {
+  background: linear-gradient(145deg, #34d399, #10b981);
+  box-shadow: 0 10px 24px rgba(16, 185, 129, 0.55), 0 2px 6px rgba(0, 0, 0, 0.25);
+}
+.nav-fab:active .nav-fab-btn { transform: scale(0.92); }
+
+/* --- Badge antrian sinkron di tab Lainnya --- */
+.nav-badge {
+  position: absolute;
+  top: 2px;
+  right: calc(50% - 20px);
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 9999px;
+  background: #f59e0b;
+  color: #451a03;
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 16px;
+  text-align: center;
+  border: 2px solid var(--bg-elevated, #ffffff);
+  pointer-events: none;
+}
+.more-row-badge {
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 9999px;
+  background: #f59e0b;
+  color: #451a03;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 20px;
+  text-align: center;
+}
+
+/* --- Toast delta stok --- */
+.delta-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 92px;                 /* di atas bottom nav + FAB */
+  transform: translateX(-50%);
+  z-index: 45;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 9999px;
+  background: var(--bg-elevated, #ffffff);
+  color: var(--text-main, #0f172a);
+  border: 1px solid var(--border, #e2e8f0);
+  box-shadow: 0 8px 24px rgba(2, 6, 23, 0.18);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  animation: deltaToastIn 0.25s ease;
+}
+@keyframes deltaToastIn {
+  from { opacity: 0; transform: translateX(-50%) translateY(8px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+/* --- Animasi error login --- */
+@keyframes shakeX {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-4px); }
+  40% { transform: translateX(4px); }
+  60% { transform: translateX(-3px); }
+  80% { transform: translateX(2px); }
+}
+
+/* --- Skeleton screen --- */
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background: var(--bg-muted, #eef2f7);
+  border-radius: 12px;
+}
+.skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.55), transparent);
+  animation: skeletonShimmer 1.4s infinite;
+}
+@keyframes skeletonShimmer {
+  100% { transform: translateX(100%); }
+}
+.skeleton-card { height: 84px; margin-bottom: 10px; }
+.skeleton-line { height: 12px; margin-bottom: 8px; }
+.skeleton-line.w-60 { width: 60%; }
+.skeleton-line.w-40 { width: 40%; }
+.skeleton-block { height: 140px; margin-bottom: 12px; }
+
+/* Tema gelap: shimmer lebih halus */
+[data-theme="deep_ocean"] .skeleton::after,
+[data-theme="graphite_titanium"] .skeleton::after {
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.12), transparent);
+}
