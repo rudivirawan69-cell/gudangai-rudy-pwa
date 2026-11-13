@@ -136,8 +136,8 @@ assert.match(inputPage, /gudangai_input_draft_v1/);
 assert.match(inputPage, /Draft transaksi dipulihkan/);
 assert.match(poSource, /gudangai_po_draft_v1/);
 assert.match(poSource, /const poDate = localISODate\(\)/);
-assert.match(appSource, /function AppHeader\(\{ user, tab, onOpenSettings, online, status \}\)/);
-assert.match(appSource, /const \[liveTime, setLiveTime\] = useState\('—'\)/);
+assert.match(appSource, /function AppHeader\(\{ user, tab, onOpenSettings, online, status, sheetLabel, onRefresh \}\)/);
+assert.match(appSource, /const \[now, setNow\] = useState\(\(\) => new Date\(\)\)/);
 assert.doesNotMatch(queueSource, /Math\.random\(\)/, 'Queue item fallback keys must be deterministic.');
 
 
