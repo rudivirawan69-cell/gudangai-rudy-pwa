@@ -2647,7 +2647,7 @@ function readDivisionSheetUpdateTimestamp_() {
     const sh = getSS().getSheetByName("Data Stok Per Divisi");
     if (!sh || sh.getLastRow() < 2) return "";
     const label = String(sh.getRange("A2").getDisplayValue() || "").trim();
-    const match = label.match(/Update terakhir:\\s*(\\d{4}-\\d{2}-\\d{2}\\s+\\d{2}:\\d{2}:\\d{2})/i);
+    const match = label.match(/Update terakhir:\s*(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2})/i);
     return match ? match[1] : "";
   } catch (e) {
     console.error("Gagal membaca timestamp Data Stok Per Divisi: " + e.message);
