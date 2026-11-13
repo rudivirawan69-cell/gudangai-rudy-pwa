@@ -1,6 +1,9 @@
 // wrangler.jsonc — Worker produksi Cloudflare (gudangai-rudy-pwa-69)
-// SUPABASE_URL, SUPABASE_ANON_KEY, dan GUDANGAI_SHEETS_API_SECRET
-// dipasang sebagai encrypted Worker secrets oleh workflow webpack.yml.
+// Secret TIDAK ditulis di sini.
+// Set lewat CI (wrangler secret put) atau dashboard:
+//   GUDANGAI_SHEETS_API_SECRET, SUPABASE_URL, SUPABASE_ANON_KEY / SUPABASE_PUBLISHABLE_KEY,
+//   ADMIN_TOKEN, CACHE_VERSI (opsional, default "1")
+// Binding KV (opsional): CACHE → namespace untuk cache berversi
 {
   "name": "gudangai-rudy-pwa-69",
   "compatibility_date": "2026-10-04",
@@ -22,6 +25,11 @@
     "AI_MODEL": "@cf/meta/llama-3.1-8b-instruct-fast",
     "ANTHROPIC_FALLBACK_ENABLED": "false",
     "SUPABASE_PUBLISHABLE_KEY": "sb_publishable_nrVxMRbrQihkzwFmWEs7QA_PlVFDWOz",
-    "ALLOWED_ORIGINS": "https://gudangai-rudy-pwa-69.rudivirawan69.workers.dev"
+    "ALLOWED_ORIGINS": "https://gudangai-rudy-pwa-69.rudivirawan69.workers.dev",
+    "CACHE_VERSI": "2"
   }
+  // Setelah membuat KV namespace di dashboard Cloudflare, tambahkan:
+  // "kv_namespaces": [
+  //   { "binding": "CACHE", "id": "GANTI_DENGAN_ID_NAMESPACE" }
+  // ]
 }
