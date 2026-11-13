@@ -1,14 +1,14 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   User, Link2, KeyRound, Settings as SettingsIcon, LogOut, Shield,
-  CheckCircle2, XCircle, ChevronRight, Cloud, Palette, Sun, Moon, Layers,
+  CheckCircle2, XCircle, ChevronRight, Palette, Sun, Moon, Layers, Eye, EyeOff, Mail,
 } from 'lucide-react';
 import { useAuth, DEFAULT_PROFILE_PHOTO } from '../hooks/useAuth';
 import { useBootstrapRevision } from '../hooks/useBootstrapRevision';
 import { useTheme } from '../hooks/useTheme';
 import {
   getApiUrl, setApiUrl, getApiSecret, setApiSecret, healthCheck,
-  getPendingQueue, clearSyncedQueue,
+  getPendingQueue,
 } from '../data/api';
 
 const THEME_ICONS = {
@@ -18,11 +18,46 @@ const THEME_ICONS = {
 };
 
 const AVATAR_SRC = DEFAULT_PROFILE_PHOTO;
+const PHOTO_MAX_EDGE = 512;
+const PHOTO_QUALITY = 0.72;
 
 function formatConnLabel(data) {
   if (!data) return 'Terhubung';
   const v = data.version || data.data?.version || '';
   return v ? `Terhubung · ${v}` : 'Terhubung';
+}
+
+/** Kompres foto ke dataURL JPEG (max edge 512px) agar localStorage tidak membengkak. */
+function compressImageFile(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Gagal membaca file foto.'));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('Format foto tidak didukung.'));
+      img.onload = () => {
+        const scale = Math.min(1, PHOTO_MAX_EDGE / Math.max(img.width, img.height));
+        const w = Math.max(1, Math.round(img.width * scale));
+        const h = Math.max(1, Math.round(img.height * scale));
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(String(reader.result || ''));
+          return;
+        }
+        ctx.drawImage(img, 0, 0, w, h);
+        try {
+          resolve(canvas.toDataURL('image/jpeg', PHOTO_QUALITY));
+        } catch {
+          resolve(String(reader.result || ''));
+        }
+      };
+      img.src = String(reader.result || '');
+    };
+    reader.readAsDataURL(file);
+  });
 }
 
 function MenuRow({ icon: Icon, iconBg, title, subtitle, onClick, right, danger }) {
@@ -70,16 +105,16 @@ export default function SettingsPage({ onNavigate }) {
   const { theme, setTheme, themes, meta } = useTheme();
   const [apiUrl, setApiUrlState] = useState('');
   const [apiSecret, setApiSecretState] = useState('');
+  const [showSecret, setShowSecret] = useState(false);
   const [connStatus, setConnStatus] = useState('idle');
   const [connMessage, setConnMessage] = useState('');
   const [username, setUsername] = useState(user?.name || '');
   const [profileMsg, setProfileMsg] = useState('');
   const [photoPreview, setPhotoPreview] = useState('');
+  const [photoBusy, setPhotoBusy] = useState(false);
   const [newPin, setNewPin] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
   const [pinMsg, setPinMsg] = useState('');
-  const [syncing, setSyncing] = useState(false);
-  const [syncResult, setSyncResult] = useState(null);
   const [pendingCount, setPendingCount] = useState(0);
   const [panel, setPanel] = useState(null);
   const [showLogout, setShowLogout] = useState(false);
@@ -125,19 +160,29 @@ export default function SettingsPage({ onNavigate }) {
     setConnMessage('URL & secret disimpan.');
   };
 
-  const handlePhotoPick = (e) => {
+  const handlePhotoPick = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 1.5 * 1024 * 1024) {
-      setProfileMsg('Foto max 1,5 MB.');
+    if (!file.type.startsWith('image/')) {
+      setProfileMsg('Pilih file gambar (JPG/PNG/WebP).');
       return;
     }
-    const reader = new FileReader();
-    reader.onload = () => {
-      setPhotoPreview(String(reader.result || ''));
-      setProfileMsg('Foto siap — tekan Simpan Profil.');
-    };
-    reader.readAsDataURL(file);
+    if (file.size > 8 * 1024 * 1024) {
+      setProfileMsg('Foto terlalu besar (max 8 MB sebelum kompresi).');
+      return;
+    }
+    setPhotoBusy(true);
+    setProfileMsg('Mengompresi foto…');
+    try {
+      const dataUrl = await compressImageFile(file);
+      setPhotoPreview(dataUrl);
+      setProfileMsg('Foto siap (sudah dikompresi) — tekan Simpan Profil.');
+    } catch (err) {
+      setProfileMsg(err.message || 'Gagal memproses foto.');
+    } finally {
+      setPhotoBusy(false);
+      e.target.value = '';
+    }
   };
 
   const handleSaveProfile = () => {
@@ -167,6 +212,8 @@ export default function SettingsPage({ onNavigate }) {
     connStatus === 'testing' ? 'Menguji...' :
     'Uji koneksi ke Apps Script';
 
+  const isSupabaseSession = Boolean(user?.email);
+
   return (
     <div className="space-y-3 pb-6">
       <div className="flex items-center gap-3 rounded-2xl bg-white/95 border border-slate-200 shadow-sm px-3.5 py-3">
@@ -175,7 +222,22 @@ export default function SettingsPage({ onNavigate }) {
           <p className="text-base font-extrabold text-slate-900 truncate">{user?.name || 'Rudi'}</p>
           <p className="text-[11px] text-slate-600 font-medium">{user?.email || 'Mode lokal · AI nonaktif'}</p>
         </div>
-        <span className="status-pill status-pill-neutral shrink-0">{user?.email ? "Supabase" : "Lokal"}</span>
+        <span className="status-pill status-pill-neutral shrink-0">{isSupabaseSession ? 'Supabase' : 'Lokal'}</span>
+      </div>
+
+      <div className="rounded-2xl border border-cyan-200/80 bg-cyan-50/80 px-3.5 py-3 space-y-1.5">
+        <div className="flex items-center gap-2">
+          <Shield className="w-4 h-4 text-cyan-700 shrink-0" />
+          <p className="text-xs font-bold text-cyan-900">Dua lapisan autentikasi</p>
+        </div>
+        <p className="text-[11px] text-cyan-900/80 leading-relaxed">
+          <strong>Supabase</strong> memverifikasi identitas operator (login email/password) dan membuka akses Agent AI.
+          <strong> PIN lokal</strong> hanya mengunci perangkat ini — tidak dipakai untuk server, spreadsheet, atau AI.
+          API Secret terpisah untuk koneksi Apps Script.
+        </p>
+        <p className="text-[10px] text-cyan-800/70">
+          Sesi aktif: {isSupabaseSession ? 'Supabase (email terverifikasi)' : 'Lokal (kompatibilitas PWA lama)'}
+        </p>
       </div>
 
       <div className="card p-3.5 space-y-3">
@@ -240,10 +302,10 @@ export default function SettingsPage({ onNavigate }) {
           <div className="flex items-center gap-3">
             <Avatar name={username} photo={photoPreview || user?.photo} size="lg" />
             <div className="flex-1 min-w-0">
-              <p className="text-[11px] text-slate-500 mb-1.5">Foto profil (disimpan di perangkat)</p>
-              <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-cyan-50 text-cyan-700 text-xs font-semibold border border-cyan-200 cursor-pointer">
-                Ganti foto
-                <input type="file" accept="image/*" className="hidden" onChange={handlePhotoPick} />
+              <p className="text-[11px] text-slate-500 mb-1.5">Foto profil (dikompresi otomatis, disimpan di perangkat)</p>
+              <label className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-cyan-50 text-cyan-700 text-xs font-semibold border border-cyan-200 cursor-pointer ${photoBusy ? 'opacity-60 pointer-events-none' : ''}`}>
+                {photoBusy ? 'Memproses…' : 'Ganti foto'}
+                <input type="file" accept="image/*" className="hidden" onChange={handlePhotoPick} disabled={photoBusy} />
               </label>
             </div>
           </div>
@@ -251,7 +313,7 @@ export default function SettingsPage({ onNavigate }) {
             <p className="text-xs font-semibold text-slate-600 mb-1">Nama tampilan</p>
             <input value={username} onChange={(e) => setUsername(e.target.value)} className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm" placeholder="Nama" />
           </div>
-          <button type="button" onClick={handleSaveProfile} className="w-full py-2.5 rounded-xl bg-cyan-700 text-white text-sm font-semibold">Simpan Profil</button>
+          <button type="button" onClick={handleSaveProfile} disabled={photoBusy} className="w-full py-2.5 rounded-xl bg-cyan-700 text-white text-sm font-semibold disabled:opacity-50">Simpan Profil</button>
           {profileMsg && <p className="text-xs text-emerald-600">{profileMsg}</p>}
         </div>
       )}
@@ -264,7 +326,25 @@ export default function SettingsPage({ onNavigate }) {
           </div>
           <div>
             <p className="text-xs font-semibold text-slate-600 mb-1">API Secret</p>
-            <input type="password" value={apiSecret} onChange={(e) => setApiSecretState(e.target.value)} className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm" placeholder="Secret dari Script Properties" />
+            <div className="flex gap-2">
+              <input
+                type={showSecret ? 'text' : 'password'}
+                value={apiSecret}
+                onChange={(e) => setApiSecretState(e.target.value)}
+                className="min-w-0 flex-1 px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm font-mono"
+                placeholder="Secret dari Script Properties"
+                autoComplete="off"
+              />
+              <button
+                type="button"
+                onClick={() => setShowSecret((v) => !v)}
+                aria-pressed={showSecret}
+                aria-label={showSecret ? 'Sembunyikan secret' : 'Tampilkan secret'}
+                className="shrink-0 w-11 rounded-xl border border-slate-200 bg-slate-50 flex items-center justify-center text-slate-600 active:scale-95"
+              >
+                {showSecret ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
           </div>
           <div className="flex gap-2">
             <button type="button" onClick={handleSaveUrl} className="flex-1 py-2.5 rounded-xl bg-slate-800 text-white text-sm font-semibold">Simpan</button>
@@ -289,11 +369,17 @@ export default function SettingsPage({ onNavigate }) {
       )}
 
       {panel === 'about' && (
-        <div className="info-box p-4 text-[11px] leading-relaxed space-y-1">
+        <div className="info-box p-4 text-[11px] leading-relaxed space-y-2">
           <p className="font-semibold text-slate-700">GudangAI RUDY</p>
           <p>Cold Storage Nasi Goreng 69 · CV & PT</p>
           <p>Frontend PWA · Backend Google Apps Script V6.6.5+BULK-STABLE</p>
           <p>3 mode tampilan: Arctic Professional · Deep Ocean · Graphite Titanium</p>
+          <div className="flex items-center gap-1.5 pt-1 border-t border-slate-200/80">
+            <Mail className="w-3.5 h-3.5 text-cyan-700 shrink-0" />
+            <a className="text-cyan-700 hover:underline font-medium" href="mailto:rudivirawan69@gmail.com">
+              rudivirawan69@gmail.com
+            </a>
+          </div>
         </div>
       )}
 
@@ -303,7 +389,10 @@ export default function SettingsPage({ onNavigate }) {
 
       <div className="info-box px-3 py-2.5 flex items-start gap-2">
         <Shield className="w-3.5 h-3.5 text-slate-300 shrink-0 mt-0.5" />
-        <p className="text-[10px] text-slate-400 leading-relaxed">{user?.email ? 'Sesi operator diverifikasi oleh Supabase.' : 'Mode lokal hanya untuk kompatibilitas PWA lama.'} PIN lokal tidak memberi hak akses server atau AI. Jangan bagikan API Secret.</p>
+        <p className="text-[10px] text-slate-400 leading-relaxed">
+          {isSupabaseSession ? 'Sesi operator diverifikasi oleh Supabase.' : 'Mode lokal hanya untuk kompatibilitas PWA lama.'}
+          {' '}PIN lokal tidak memberi hak akses server atau AI. Jangan bagikan API Secret.
+        </p>
       </div>
 
       {showLogout && (
