@@ -4,7 +4,6 @@ import { useAuth } from '../hooks/useAuth';
 import {
   getPendingQueue, getStatusPO, getDashboardData, confirmPOStatus, getLocalHistory, getApiUrl, getApiSecret,
 } from '../data/api';
-import { DIVISIONS } from '../data/master';
 import { classifyStockLevel } from '../data/stockStatus';
 import HomeReminderModule from '../components/HomeReminderModule';
 import HomeAgentAssistant from '../components/HomeAgentAssistant';
