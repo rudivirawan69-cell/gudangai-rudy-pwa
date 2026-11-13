@@ -2,12 +2,12 @@
 
 ## Production target (single canonical domain)
 
-- **PWA and API:** https://gudangai-rudy-pwa-69.rudivirawan69.workers.dev/
+- **PWA assets and Agent API:** https://gudangai-rudy-pwa-69.rudivirawan69.workers.dev/
 - Worker: `gudangai-rudy-pwa-69`
 - Entrypoint: `worker.js`
 - Supabase project: `https://cbeosysruwkfwgklziog.supabase.co`
 
-This is the only production hostname for the PWA and API. Do not use legacy Worker hostnames (`gudangai-rudy-pwa6`, `gudangai-rudy`, `gudangai-rudy-pwa69`), Pages `*.pages.dev`, Vercel, or GitHub Pages as production targets.
+This is the only production hostname for the PWA assets and Agent API. The existing general stock/transaction module in `src/data/api.js` still calls the Apps Script Web App directly to preserve its current write contract; it has not yet been migrated to a Worker write proxy. Do not describe the Worker as the current transaction writer. Do not use legacy Worker hostnames (`gudangai-rudy-pwa6`, `gudangai-rudy`, `gudangai-rudy-pwa69`), Pages `*.pages.dev`, Vercel, or GitHub Pages as production targets.
 
 ## Deployment
 
@@ -23,7 +23,7 @@ No other workflow should deploy the PWA to Pages or another hostname.
 
 The PWA sends the Supabase session access token as `Authorization: Bearer <access_token>`.
 The Worker verifies it against `/auth/v1/user` using the project's publishable API key.
-Protected routes include `/api/agent`, `/api/claude`, and `/api/data`.
+Protected routes include `/api/agent`, `/api/claude`, and `/api/data`. The PWA Agent currently uses `/api/agent`; `/api/data` is the authenticated read-only Sheets bridge. The general PWA stock/transaction API remains on the configured Apps Script Web App until a separate write-proxy migration is implemented and tested.
 Never put a Supabase service-role/secret key in browser code or any `VITE_*` variable.
 
 ## GitHub Environment secrets
