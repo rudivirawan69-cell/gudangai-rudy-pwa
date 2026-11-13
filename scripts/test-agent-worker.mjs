@@ -305,3 +305,76 @@ test('health reports the live-data agent stage', async () => {
   const off = await (await worker.fetch(makeRequest('/api/agent/health'), { ...liveEnv, GUDANGAI_SHEETS_API_URL: '', AI: { run: async () => ({}) } })).json();
   assert.equal(off.agentStage, 'analysis_only');
 });
+
+
+test('GET /api/getStatusPO filters the single active PO by PO date and returns overdue fields', async () => {
+  const originalFetch = globalThis.fetch;
+  const today = (await import('../tanggal.js')).parseTanggal(new Date());
+  const yesterdayDate = new Date(new Date(today + 'T12:00:00+07:00').getTime() - 86400000);
+  const yesterday = (await import('../tanggal.js')).parseTanggal(yesterdayDate);
+  const tomorrowDate = new Date(new Date(today + 'T12:00:00+07:00').getTime() + 86400000);
+  const tomorrow = (await import('../tanggal.js')).parseTanggal(tomorrowDate);
+  const calls = [];
+  globalThis.fetch = async (url, options) => {
+    if (String(url) === `${SUPABASE_URL}/auth/v1/user`) {
+      return new Response(JSON.stringify({ id: 'po-user' }), { status: 200 });
+    }
+    assert.equal(String(url), SHEETS_URL);
+    calls.push(JSON.parse(options.body));
+    return new Response(JSON.stringify({
+      success: true, tanggalPO: '9 NOVEMBER 2026',
+      summary: { totalItem: 3 },
+      items: [
+        { no: 1, nama: 'Item Menunggu', totalPO: 10, qtyDatang: 0, status: 'MENUNGGU', tglKedatangan: yesterday },
+        { no: 2, nama: 'Item Sebagian', totalPO: 10, qtyDatang: 5, status: 'SEBAGIAN', tglKedatangan: tomorrow },
+        { no: 3, nama: 'Item Selesai', totalPO: 10, qtyDatang: 10, status: 'SELESAI', tglKedatangan: yesterday },
+      ],
+    }), { status: 200, headers: { 'content-type': 'application/json' } });
+  };
+  try {
+    const response = await worker.fetch(makeRequest('/api/getStatusPO?from=2026-11-16&to=2026-11-22'), liveEnv);
+    const payload = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(payload.ringkasan.totalItem, 0);
+    assert.equal(payload.tertunda.totalItem, 2);
+    assert.deepEqual(payload.tertunda.items.map((item) => item.status), ['MENUNGGU', 'SEBAGIAN']);
+    assert.equal(payload.tertunda.items[0].tglKedatangan, yesterday);
+    assert.equal(payload.tertunda.items[0].terlambat, yesterday < today);
+    assert.equal(payload.tertunda.items[1].terlambat, false);
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].action, 'getStatusPO');
+  } finally { globalThis.fetch = originalFetch; }
+});
+
+test('GET /api/getPOTerlambat returns only unfinished items with arrival date before WIB today', async () => {
+  const originalFetch = globalThis.fetch;
+  const today = (await import('../tanggal.js')).parseTanggal(new Date());
+  const yesterday = (await import('../tanggal.js')).parseTanggal(new Date(new Date(today + 'T12:00:00+07:00').getTime() - 86400000));
+  globalThis.fetch = async (url) => {
+    if (String(url) === `${SUPABASE_URL}/auth/v1/user`) return new Response(JSON.stringify({ id: 'po-user' }), { status: 200 });
+    return new Response(JSON.stringify({
+      success: true, tanggalPO: today,
+      items: [
+        { no: 1, nama: 'Terlambat', totalPO: 2, qtyDatang: 0, status: 'MENUNGGU', tglKedatangan: yesterday },
+        { no: 2, nama: 'Selesai', totalPO: 2, qtyDatang: 2, status: 'SELESAI', tglKedatangan: yesterday },
+        { no: 3, nama: 'Belum jatuh tempo', totalPO: 2, qtyDatang: 0, status: 'MENUNGGU', tglKedatangan: today },
+      ],
+    }), { status: 200, headers: { 'content-type': 'application/json' } });
+  };
+  try {
+    const response = await worker.fetch(makeRequest('/api/getPOTerlambat?periode=minggu-ini'), liveEnv);
+    const payload = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(payload.totalItem, 1);
+    assert.equal(payload.items[0].nama, 'Terlambat');
+    assert.equal(payload.items[0].terlambat, true);
+  } finally { globalThis.fetch = originalFetch; }
+});
+
+test('PO endpoints reject incomplete date ranges after authentication', async () => {
+  await withSupabaseAuth(async () => {
+    const response = await worker.fetch(makeRequest('/api/getStatusPO?from=2026-11-09'), liveEnv);
+    assert.equal(response.status, 400);
+    assert.equal((await response.json()).code, 'INVALID_PO_PERIOD');
+  });
+});
