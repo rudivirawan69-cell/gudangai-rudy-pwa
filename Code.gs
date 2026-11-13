@@ -3804,6 +3804,16 @@ function getStatusPO(body) {
       const ket = String(r[5] || '').trim();
       const namaMasuk = String(r[2] || '').trim(); // kolom Nama di sheet transaksi (display)
       if (!ket || qty <= 0) return;
+      const ketUpper = ket.toUpperCase();
+      if (ketUpper.indexOf('RETUR') >= 0 || /^DARI\\b/.test(ketUpper)) return;
+      if (info.tanggal) {
+        const tanggalMasuk = parseTransactionDate_(r[0]);
+        if (tanggalMasuk) {
+          const poKey = Utilities.formatDate(info.tanggal, TIMEZONE, 'yyyy-MM-dd');
+          const masukKey = Utilities.formatDate(tanggalMasuk, TIMEZONE, 'yyyy-MM-dd');
+          if (masukKey < poKey) return;
+        }
+      }
       if (reIndex) {
         const m = ket.match(reIndex);
         if (m) {
