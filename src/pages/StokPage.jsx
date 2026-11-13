@@ -55,7 +55,9 @@ export default function StokPage() {
   const [openDivisi, setOpenDivisi] = useState(null);
 
   const entityItems = useMemo(
-    () => (items || []).filter((it) => String(it.entity || it.entitas || 'CV').toUpperCase() === entity),
+    () => (items || []).filter((it) => entity === 'BAHAN BAKU'
+      ? String(it.divisi || '').toUpperCase().includes('BAHAN')
+      : String(it.entity || it.entitas || 'CV').toUpperCase() === entity),
     [items, entity]
   );
 
@@ -123,11 +125,11 @@ export default function StokPage() {
         </button>
       </div>
 
-      <div className="stock-entity-tabs grid grid-cols-2 gap-1 rounded-xl border p-1">
-        {['CV', 'PT'].map((e) => (
+      <div className="stock-entity-tabs grid grid-cols-3 gap-1 rounded-xl border p-1">
+        {['CV', 'PT', 'BAHAN BAKU'].map((e) => (
           <button key={e} type="button" onClick={() => { setEntity(e); setOpenDivisi(null); setFilterStatus('all'); }}
-            className={`stock-entity-tab rounded-lg py-2.5 text-sm font-extrabold transition ${entity === e ? 'is-active' : ''}`} aria-pressed={entity === e}>
-            {e}
+            className={`stock-entity-tab rounded-lg py-2.5 text-[11px] sm:text-sm font-extrabold transition ${entity === e ? 'is-active' : ''}`} aria-pressed={entity === e}>
+            {e === 'BAHAN BAKU' ? 'Bahan Baku' : e}
           </button>
         ))}
       </div>
