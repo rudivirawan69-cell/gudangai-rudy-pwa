@@ -9,6 +9,7 @@
     "lint": "oxlint src",
     "test": "vitest run",
     "test:agent": "node --test scripts/test-agent-worker.mjs",
+    "test:dates": "node --test scripts/test-tanggal.mjs",
     "preview": "vite preview",
     "write-icons": "node scripts/write-icons.mjs",
     "predev": "node scripts/assemble-api.mjs && node scripts/write-icons.mjs",
