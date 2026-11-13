@@ -154,16 +154,28 @@ assert.match(apiSource, /const alreadyApplied = originalList\.filter/, 'Locally 
 assert.ok(apiSource.includes(String.raw`7\.0\.\d+|PERFORMANCE[-_]?CANDIDATE|RECONSTRUCTION`),
   'Trusted 7.0 performance/reconstruction backend versions must remain write-compatible.');
 const bulkSource = gs.slice(gs.indexOf('function bulkTransaction(body) {'), gs.indexOf('\nfunction ', gs.indexOf('function bulkTransaction(body) {') + 10));
-assert.match(gs, /function appendIdempotencyRecordsIndexed_\(/);
-assert.match(gs, /function writeIdempotencyRecordsByRow_\(/);
-assert.match(bulkSource, /appendIdempotencyRecordsIndexed_\(pendingNewClaims/);
-assert.match(bulkSource, /writeIdempotencyRecordsByRow_\(plannedLedgerUpdates/);
-const planWriteIndex = bulkSource.indexOf('writeIdempotencyRecordsByRow_(plannedLedgerUpdates');
-const planFlushIndex = bulkSource.indexOf('SpreadsheetApp.flush();', planWriteIndex);
-const transactionWriteIndex = bulkSource.indexOf('sheet.getRange(startRow, 2', planFlushIndex);
-assert.ok(planWriteIndex >= 0 && planFlushIndex > planWriteIndex && transactionWriteIndex > planFlushIndex,
-  'Write-ahead ledger plan must be flushed before transaction sheet writes.');
-assert.match(bulkSource, /writeIdempotencyRecordsByRow_\(finalLedgerUpdates/);
+assert.match(gs, /function buildLedgerIndex_\(/);
+assert.match(gs, /Math\.min\(5000,/);
+assert.match(gs, /let _ledgerSheet = null/);
+assert.match(bulkSource, /var ledgerIdx = buildLedgerIndex_\(\)/);
+assert.match(bulkSource, /var recs = Object\.create\(null\)/);
+assert.match(bulkSource, /ledgerIdx\.byTx/);
+assert.match(bulkSource, /ledgerIdx\.byNonce/);
+assert.doesNotMatch(bulkSource, /findIdempotencyRecord_\(/,
+  'Bulk path must use its preloaded ledger index rather than repeated sheet scans.');
+assert.match(bulkSource, /readBackTransactionByIdentity_\([\s\S]*?sheetName, prior\)/);
+assert.match(bulkSource, /var duplicateKey = String\(tx\.transactionId/);
+assert.match(bulkSource, /BULK_MAX_ITEMS/);
+assert.match(bulkSource, /CHUNK_TOO_LARGE/);
+assert.match(bulkSource, /if \(response\.success\) \{ try \{ batchCache\.put/);
+const reservationIndex = bulkSource.indexOf('updateIdempotencyRecord_(reserveRecord, { dataRow: startRow + reserveIndex');
+const transactionWriteIndex = bulkSource.indexOf('sheet.getRange(startRow, 2');
+assert.ok(reservationIndex >= 0 && transactionWriteIndex > reservationIndex,
+  'Ledger row reservation must be persisted before transaction-sheet writes.');
+assert.match(gs, /function reconcileBatch_\(/);
+assert.match(gs, /function readBackByRecord_\(/);
+assert.match(gs, /retryable: !!rb\.rowEmpty/);
+assert.match(gs, /case "reconcileBatch": return jsonResponse\(reconcileBatch_\(body\)\)/);
 const stockStatusMatch = stockStatusSource.match(/export function classifyStockLevel\(value\)\s*\{([\s\S]*?)\n\}/);
 assert.ok(stockStatusMatch, 'Missing shared stock status function');
 const classifyStockLevel = new Function('value', stockStatusMatch[1]);
