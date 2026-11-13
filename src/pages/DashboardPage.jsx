@@ -624,6 +624,30 @@ function DashboardTotals({ totalItem }) {
   );
 }
 
+function DashboardStatusSummary({ data }) {
+  const values = [
+    { key: 'aman', label: 'Aman', tone: 'text-emerald-700 bg-emerald-50 border-emerald-100' },
+    { key: 'waspada', label: 'Waspada', tone: 'text-amber-700 bg-amber-50 border-amber-100' },
+    { key: 'kritis', label: 'Kritis', tone: 'text-red-700 bg-red-50 border-red-100' },
+  ];
+  const hasSummary = Boolean(data && data.success !== false);
+  return (
+    <section className="grid grid-cols-3 gap-2" aria-label="Status total dari Dashboard Live">
+      {values.map((item) => {
+        const raw = data?.status?.[item.key] ?? data?.[item.key];
+        const count = raw == null || !Number.isFinite(Number(raw)) ? null : Number(raw);
+        return (
+          <div key={item.key} className={`rounded-xl border p-3 text-center ${item.tone}`}>
+            <p className="text-[9px] font-extrabold uppercase tracking-wide">{item.label}</p>
+            <p className="mt-1 text-xl font-extrabold tabular-nums">{hasSummary && count != null ? count.toLocaleString('id-ID') : '—'}</p>
+            <p className="text-[9px] font-semibold opacity-70">item</p>
+          </div>
+        );
+      })}
+    </section>
+  );
+}
+
 function POQuickActions({ onNavigate, onSelect, activeView, currentCount = 0, previousCount = 0, confirmCount = 0 }) {
   const actions = [
     { id: 'generate', title: 'PO', subtitle: 'Generate dan simpan PO', Icon: FilePlus2, count: null, action: () => onNavigate?.('po') },
@@ -1229,6 +1253,7 @@ export default function DashboardPage({ onNavigate }) {
           <StockComparison cv={stats.cv} pt={stats.pt} />
         </div>
         <div className="xl:col-span-2"><DashboardTotals totalItem={dashboardTotalItem} /></div>
+        <div className="xl:col-span-2"><DashboardStatusSummary data={dashboardData} /></div>
       </section>
 
       <details className="dashboard-greeting-card group rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
