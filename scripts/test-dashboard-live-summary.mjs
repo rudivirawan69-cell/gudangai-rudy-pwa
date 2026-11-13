@@ -86,7 +86,10 @@ const dashboardPage = fs.readFileSync(new URL('../src/pages/DashboardPage.jsx', 
 assert.doesNotMatch(dashboardPage, /191-item contract|\|\| 191|191 item/);
 assert.match(dashboardPage, /dashboardData\?\.totalItemAktif \?\? dashboardData\?\.totalItem \?\? null/);
 assert.match(dashboardPage, /Ringkasan Dashboard Live tidak tersedia\. Angka divisi tidak dihitung dari stok lokal/);
-assert.doesNotMatch(dashboardPage.slice(dashboardPage.indexOf('function DivisionStatus3D'), dashboardPage.indexOf('function normalizeMatch')), /localMap|classifyItem\(it\)/);
+const divisionStart = dashboardPage.indexOf('function DivisionStatus3D');
+const divisionEnd = dashboardPage.indexOf('\nfunction ', divisionStart + 10);
+const divisionBody = dashboardPage.slice(divisionStart, divisionEnd > divisionStart ? divisionEnd : dashboardPage.length);
+assert.doesNotMatch(divisionBody, /localMap|classifyItem\(it\)/);
 assert.match(dashboardPage, /Dashboard Live belum berhasil diperbarui/);
 
 console.log('PASS Dashboard Live dynamic summary: 193 baseline, 194 after added item, mismatch fail-closed');
