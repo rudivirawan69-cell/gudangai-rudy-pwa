@@ -33,8 +33,8 @@ function partsWIB(input) {
   const d = input instanceof Date ? input : new Date(input);
   if (Number.isNaN(d.getTime())) return null;
   // Gunakan UTC + offset agar konsisten di semua runtime
-  const utc = d.getTime() + d.getTimezoneOffset() * 60_000;
-  const wib = new Date(utc + WIB_OFFSET_MS);
+  // Konversi harus independen dari timezone host/runtime.
+  const wib = new Date(d.getTime() + WIB_OFFSET_MS);
   return {
     y: wib.getUTCFullYear(),
     m: wib.getUTCMonth() + 1,
@@ -63,9 +63,11 @@ export function parseTanggal(input) {
   if (typeof input === 'number' && Number.isFinite(input)) {
     // Serial tanggal Google Sheets (hari sejak 1899-12-30)
     // 1 = 1899-12-31, 25569 ≈ 1970-01-01
-    const ms = Math.round((input - 25569) * 86400 * 1000);
-    const p = partsWIB(new Date(ms));
-    return p ? `${p.y}-${pad2(p.m)}-${pad2(p.d)}` : null;
+    // Serial Sheets adalah tanggal kalender, bukan instant; jangan geser +7 jam.
+    const ms = Math.round(input * 86400 * 1000) + Date.UTC(1899, 11, 30);
+    const serialDate = new Date(ms);
+    if (Number.isNaN(serialDate.getTime())) return null;
+    return `${serialDate.getUTCFullYear()}-${pad2(serialDate.getUTCMonth() + 1)}-${pad2(serialDate.getUTCDate())}`;
   }
   const s = String(input).trim();
   if (!s) return null;
