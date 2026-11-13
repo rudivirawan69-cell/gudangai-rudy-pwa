@@ -2585,54 +2585,117 @@ function classifyDashboardStock_(stockAkhir, stockAman) {
   return "aman";
 }
 
-function getDashboardData() {
-  const all = getAllStock("ALL");
-  if (!all.success) return { success: false, error: "Gagal membaca Stock CV/PT" };
-  const status = { aman: 0, waspada: 0, kritis: 0 };
-  const kritisItems = [];
-  const divisions = {};
-  let totalStock = 0, totalValueCV = 0, totalValuePT = 0;
+function nowWIB_() {
+  return Utilities.formatDate(new Date(), "Asia/Jakarta", "yyyy-MM-dd'T'HH:mm:ssXXX");
+}
 
+function readDashboardLiveSummary_() {
+  const ss = getSS();
+  const sh = ss && ss.getSheetByName("Dashboard Live");
+  if (!sh) return null;
+  const v = sh.getRange(1, 1, 30, 7).getDisplayValues();
+  let top = null;
+  const div = [];
+  for (let i = 0; i < v.length; i++) {
+    const row = v[i].map(function(c) { return String(c || "").trim().toUpperCase(); });
+    if (row[0] === "TOTAL ITEM" && v[i + 1]) {
+      const n = v[i + 1].map(toNumber_);
+      top = {
+        totalItem: n[0], aman: n[1], waspada: n[2], kritis: n[3],
+        totalSisaStok: n[4], poBelumSelesai: n[5]
+      };
+    }
+    if (row[0] === "DIVISI" && row[1] === "TOTAL ITEM") {
+      for (let j = i + 1; j < v.length; j++) {
+        const nama = String(v[j][0] || "").trim();
+        if (!nama || /^TOTAL$/i.test(nama)) break;
+        div.push({
+          divisi: nama,
+          total: toNumber_(v[j][1]),
+          aman: toNumber_(v[j][2]),
+          waspada: toNumber_(v[j][3]),
+          kritis: toNumber_(v[j][4])
+        });
+      }
+    }
+  }
+  return top ? {
+    success: true,
+    sumber: "Dashboard Live",
+    diambilPada: nowWIB_(),
+    summary: top,
+    statusPerDivisi: div
+  } : null;
+}
+
+function getDashboardData() {
+  const live = readDashboardLiveSummary_();
+  if (!live) {
+    return {
+      success: false,
+      code: "DASHBOARD_LIVE_SUMMARY_NOT_FOUND",
+      error: "Ringkasan Dashboard Live tidak ditemukan. Data dashboard tidak dihitung ulang dari Stock CV/PT."
+    };
+  }
+  const all = getAllStock("ALL");
+  if (!all.success) return { success: false, error: "Gagal membaca detail Stock CV/PT" };
+
+  const kritisItems = [];
+  let totalStock = live.summary.totalSisaStok;
+  let totalValueCV = 0, totalValuePT = 0;
   all.items.forEach(function(item) {
     const akhir = Number(item.stockAkhir) || 0;
     const aman = Number(item.stockAman) || 0;
     const statusClass = classifyDashboardStock_(akhir, aman);
-    const divisi = normalizeDivision_(item.divisi || "LAINNYA");
-    if (!divisions[divisi]) divisions[divisi] = { divisi: divisi, total: 0, aman: 0, waspada: 0, kritis: 0 };
-    divisions[divisi].total++;
-    totalStock += akhir;
     if (item.entitas === "CV") totalValueCV += toNumber_(item.stockValue || item.nilaiStok || 0);
     else totalValuePT += toNumber_(item.stockValue || item.nilaiStok || 0);
     if (statusClass === "kritis") {
-      status.kritis++; divisions[divisi].kritis++;
-      kritisItems.push({ kode: item.kode, nama: item.nama, divisi: divisi, sisa: akhir, aman: aman, kurang: Math.max(0, aman - akhir), status: "KRITIS", entitas: item.entitas });
-    } else if (statusClass === "waspada") {
-      status.waspada++; divisions[divisi].waspada++;
-    } else {
-      status.aman++; divisions[divisi].aman++;
+      kritisItems.push({
+        kode: item.kode, nama: item.nama, divisi: normalizeDivision_(item.divisi || "LAINNYA"),
+        sisa: akhir, aman: aman, kurang: Math.max(0, aman - akhir),
+        status: "KRITIS", entitas: item.entitas
+      });
     }
   });
 
   kritisItems.sort(function(a, b) { return b.kurang - a.kurang; });
   const activity = getTodayActivity_();
   const trend = getSevenDayTrend_();
-  const divisionRows = Object.keys(divisions).map(function(k) { return divisions[k]; });
-  divisionRows.sort(function(a, b) { return b.total - a.total; });
   const po = getPOStatus_();
-  const total = all.count;
+  const top = live.summary;
+  const total = top.totalItem;
+  const status = { aman: top.aman, waspada: top.waspada, kritis: top.kritis };
   return {
-    success: true, generatedAt: new Date().toISOString(), lastUpdate: getLastUpdateTimestamp(), activeMonth: getActiveMonth(),
-    totalItem: total, totalItemAktif: total, totalStok: totalStock,
-    aman: status.aman, stabil: status.aman, waspada: status.waspada, kritis: status.kritis,
-    status: { aman: status.aman, waspada: status.waspada, kritis: status.kritis,
-      percentages: { aman: percent_(status.aman, total), waspada: percent_(status.waspada, total), kritis: percent_(status.kritis, total) } },
-    statusPerDivisi: divisionRows, top10Kritis: kritisItems.slice(0, 10),
-    aktivitasHariIni: activity, trend7Hari: trend, distribusiStatus: status,
+    success: true,
+    generatedAt: new Date().toISOString(),
+    lastUpdate: live.diambilPada,
+    activeMonth: getActiveMonth(),
+    sumberRingkasan: live.sumber,
+    totalItem: total,
+    totalItemAktif: total,
+    totalStok: totalStock,
+    aman: status.aman,
+    stabil: status.aman,
+    waspada: status.waspada,
+    kritis: status.kritis,
+    status: {
+      aman: status.aman, waspada: status.waspada, kritis: status.kritis,
+      percentages: {
+        aman: percent_(status.aman, total),
+        waspada: percent_(status.waspada, total),
+        kritis: percent_(status.kritis, total)
+      }
+    },
+    statusPerDivisi: live.statusPerDivisi,
+    top10Kritis: kritisItems.slice(0, 10),
+    aktivitasHariIni: activity,
+    trend7Hari: trend,
+    distribusiStatus: status,
     nilaiStok: { cv: totalValueCV, pt: totalValuePT, selisih: totalValueCV - totalValuePT },
+    poBelumSelesaiDashboardLive: top.poBelumSelesai,
     statusPO: po
   };
 }
-
 function getDashboard() { return getDashboardData(); }
 
 function toNumber_(v) {
