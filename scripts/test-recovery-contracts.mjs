@@ -38,26 +38,28 @@ function functionBody(source, name) {
   const end = source.indexOf('\nfunction ', start + 10);
   return source.slice(start, end > start ? end : source.length);
 }
-const onEdit = functionBody(gs, 'onEditRouter_');
-for (const sheet of ['Barang masuk', 'Barang keluar', 'Barang Rusak']) {
-  assert.ok(onEdit.includes('"' + sheet + '"'));
-}
-assert.match(onEdit, /const stockImpacting\s*=\s*stockSheets\.indexOf\(sheetName\)\s*>=\s*0\s*\|\|\s*transactionSheets\.indexOf\(sheetName\)\s*>=\s*0/);
-assert.ok(onEdit.indexOf('SpreadsheetApp.flush()') >= 0);
-assert.ok(!onEdit.includes('syncDivisionStockLightweight_()'),
-  'Manual edit must not run a full formula audit on every spreadsheet change.');
-assert.equal(gs.includes('function onEdit(e)'), false,
-  'V7 must expose only the installable onEditRouter_ handler, not a second simple trigger.');
+const onEdit = functionBody(gs, 'onEdit');
+assert.match(onEdit, /Stock CV/);
+assert.match(onEdit, /Stock PT/);
+assert.match(onEdit, /Stock awal/);
+assert.match(onEdit, /purchase order/);
+assert.match(onEdit, /clearMasterCache\(\)/);
+assert.match(onEdit, /markDataDirty_\(sheetName\)/);
+assert.match(onEdit, /updateLastUpdateTimestamp\(\)/);
+assert.match(onEdit, /syncDivisionStockLightweight_\(\)/);
+assert.match(onEdit, /refreshDashboardPOSection_\(/);
 const sync = functionBody(gs, 'syncDivisionStockLightweight_');
-assert.match(sync, /auditDivisionStockFormulaCells_\(\)/);
-assert.doesNotMatch(sync, /\.(?:setValue|setValues|setFormula|setFormulas|clearContent|clear)\s*\(/,
-  'Lightweight stock sync must not write spreadsheet cells.');
+assert.match(sync, /applyBahanBakuStockSource_\(stockMap\)/);
+assert.match(sync, /dest\.getRange\(u\.row, 6\)\.setValue\(u\.value\)/,
+  'Lightweight sync must update only the existing Sisa Stok cells.');
+assert.match(sync, /dest\.getRange\(2, 1\)\.setValue\(/,
+  'Lightweight sync must refresh its source/timestamp subtitle.');
 const rebuild = functionBody(gs, 'syncDivisionStock');
-assert.match(rebuild, /\.setFormulas\(/,
-  'The controlled division rebuild must restore formula-driven Sisa Stok cells.');
+assert.match(rebuild, /\.setValues\(/);
 assert.match(rebuild, /normalizeDivision_\(row\[idxDivisi\]\)/);
-assert.ok(rebuild.indexOf('dest.getRange(1, 6, oldRows, 1).clearContent()') >= 0);
-assert.match(gs, /function installManagedTriggers_\(spreadsheet\)/);
+assert.ok(rebuild.indexOf('dest.getRange(1, 1, oldRows, 7).clearContent()') >= 0);
+assert.match(gs, /ScriptApp\.newTrigger\("onEdit"\)/,
+  'setupEnvironment must install the spreadsheet edit trigger.');
 
 const resolverPath = new URL('../src/data/pdfDeterministicRules.js', import.meta.url);
 const resolverSource = readFileSync(resolverPath, 'utf8');
@@ -126,7 +128,9 @@ assert.match(stockStatusSource, /stock < 10/);
 assert.match(stockStatusSource, /stock < 20/);
 assert.match(stokSource, /classifyStockLevel/);
 assert.match(dashboardSource, /classifyStockLevel/);
-assert.match(apiSource, /const cls = classifyStockLevel\(stok\)/);
+assert.doesNotMatch(apiSource, /buildDashboardFallbackFromStock/);
+assert.match(apiSource, /DASHBOARD_LIVE_READ_FAILED/,
+  'Dashboard API must fail closed instead of rebuilding status counts from CV/PT stock.');
 assert.match(inputPage, /gudangai_input_draft_v1/);
 assert.match(inputPage, /Draft transaksi dipulihkan/);
 assert.match(poSource, /gudangai_po_draft_v1/);
