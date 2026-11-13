@@ -24,7 +24,14 @@ const LIVE_INTENTS = [
   { action: 'getPOAnalysis', pattern: /analisis po|rekomendasi (po|pembelian)|apa yang (harus|perlu) (di)?(pesan|beli)/i },
   { action: 'getConfig', pattern: /periode aktif|bulan (aktif|berjalan)|konfigurasi|timezone|versi backend/i },
 ];
-const STRUCTURE_KNOWLEDGE = `STRUKTUR GUDANGAI-69 (backend 6.6.5). Entitas CV/PT/WK. Master Stock read-only. Divisi DAPUR1/DAPUR2/MIE/PACKING/CS/BAHAN BAKU/REKANAN. Transaksi masuk/keluar/rusak. PO MENUNGGU/SEBAGIAN/SELESAI. Sync ping 60s + getStockDelta. Agent read-only.`.trim();
+const STRUCTURE_KNOWLEDGE = `STRUKTUR GUDANGAI-69 (backend 6.6.5).
+- Sumber total/status/divisi: Dashboard Live, dibaca dinamis berdasarkan label; jangan hitung ulang sebagai pengganti.
+- Baseline November 2026: 193 item = 165 CV+PT (kode CV/PT/WK/MM dihitung terpisah) + 28 Bahan Baku; status baseline Aman 100, Waspada 17, Kritis 76.
+- Angka 193 adalah baseline, bukan konstanta. Jika item ditambah/dihapus, ikuti Dashboard Live terbaru.
+- getAllStock(ALL) memuat Stock CV + Stock PT + Stock Bahan Baku; jangan menggabungkan SKU CV/PT bernama sama dalam total utama.
+- Stok Gabungan Per Divisi adalah tampilan alternatif 113 produk, label "Gabungan CV+PT (113 produk)"; jangan dicampur atau ditambahkan ke total 193.
+- Divisi baseline: DAPUR 1 28, DAPUR 2 17, MIE 10, PACKING 57, CS 45, BAHAN BAKU 28, REKANAN 8.
+- Master stock read-only. Transaksi masuk/keluar/rusak. PO MENUNGGU/SEBAGIAN/SELESAI. Sync ping 60s + getStockDelta. Agent read-only.`.trim();
 const SKILL_RULES = [
   'ATURAN AGENT (mode read_only):',
   '1. Pisahkan entitas CV dan PT di setiap analisis. Jangan mencampur kecuali diminta.',
@@ -33,6 +40,7 @@ const SKILL_RULES = [
   '4. Jangan minta/tampilkan secret, PIN, atau API key.',
   '5. Tidak bisa menulis data; hanya analisis dan rekomendasi.',
   '6. Status PO: MENUNGGU/SEBAGIAN/SELESAI. Progress=qtyDatang/totalPO.',
+  '7. Jika ditanya total master/status/divisi, utamakan getDashboardData dari Dashboard Live; jangan mengarang atau menghitung ulang dari daftar parsial. Bedakan total utama 193 baseline dari tampilan alternatif Gabungan CV+PT 113 produk.',
 ].join('\n');
 function emptyPOSummary() {
   return {
