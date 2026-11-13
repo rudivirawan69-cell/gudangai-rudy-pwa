@@ -371,8 +371,10 @@ test('GET /api/getPOTerlambat returns only unfinished items with arrival date be
   } finally { globalThis.fetch = originalFetch; }
 });
 
-test('PO endpoints reject incomplete date ranges', async () => {
-  const response = await worker.fetch(makeRequest('/api/getStatusPO?from=2026-11-09'), liveEnv);
-  assert.equal(response.status, 400);
-  assert.equal((await response.json()).code, 'INVALID_PO_PERIOD');
+test('PO endpoints reject incomplete date ranges after authentication', async () => {
+  await withSupabaseAuth(async () => {
+    const response = await worker.fetch(makeRequest('/api/getStatusPO?from=2026-11-09'), liveEnv);
+    assert.equal(response.status, 400);
+    assert.equal((await response.json()).code, 'INVALID_PO_PERIOD');
+  });
 });
