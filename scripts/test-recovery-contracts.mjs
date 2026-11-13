@@ -56,7 +56,8 @@ assert.match(sync, /dest\.getRange\(2, 1\)\.setValue\(/,
   'Lightweight sync must refresh its source/timestamp subtitle.');
 const rebuild = functionBody(gs, 'syncDivisionStock');
 assert.match(rebuild, /\.setValues\(/);
-assert.match(rebuild, /normalizeDivision_\(row\[idxDivisi\]\)/);
+assert.match(rebuild, /kode\.startsWith\("BBCV-"\).*?div = "BAHAN BAKU"/);
+assert.match(rebuild, /applyBahanBakuStockSource_\(stockMap\)/);
 assert.ok(rebuild.indexOf('dest.getRange(1, 1, oldRows, 7).clearContent()') >= 0);
 assert.match(gs, /ScriptApp\.newTrigger\("onEdit"\)/,
   'setupEnvironment must install the spreadsheet edit trigger.');
