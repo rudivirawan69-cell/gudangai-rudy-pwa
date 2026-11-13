@@ -1,3 +1,5 @@
+import { parseTanggal, resolvePeriode } from './tanggal.js';
+
 const DEFAULT_MODEL = '@cf/meta/llama-3.1-8b-instruct';
 const MAX_MESSAGE_LENGTH = 4000;
 const MAX_HISTORY_ITEMS = 8;
@@ -32,6 +34,106 @@ const SKILL_RULES = [
   '5. Tidak bisa menulis data; hanya analisis dan rekomendasi.',
   '6. Status PO: MENUNGGU/SEBAGIAN/SELESAI. Progress=qtyDatang/totalPO.',
 ].join('\n');
+function emptyPOSummary() {
+  return {
+    totalAktif: 0, totalKonfirmasi: 0, itemMenunggu: 0, itemSebagian: 0,
+    itemSelesai: 0, totalItem: 0, totalPOQty: 0, totalKonfirmasiQty: 0,
+    totalSisaQty: 0,
+  };
+}
+function summarizePOItems(items) {
+  const summary = emptyPOSummary();
+  for (const item of items) {
+    const total = Math.max(0, Number(item.totalPO ?? item.qtyPO ?? 0) || 0);
+    const arrived = Math.min(total, Math.max(0, Number(item.qtyDatang ?? 0) || 0));
+    summary.totalItem += 1;
+    summary.totalPOQty += total;
+    summary.totalKonfirmasiQty += arrived;
+    if (item.status === 'SELESAI') {
+      summary.itemSelesai += 1;
+      summary.totalKonfirmasi += 1;
+    } else if (item.status === 'SEBAGIAN') {
+      summary.itemSebagian += 1;
+      summary.totalAktif += 1;
+    } else {
+      summary.itemMenunggu += 1;
+      summary.totalAktif += 1;
+    }
+  }
+  summary.totalSisaQty = Math.max(0, summary.totalPOQty - summary.totalKonfirmasiQty);
+  return summary;
+}
+function normalizePOItem(item, todayWIB) {
+  const status = String(item?.status || 'MENUNGGU').trim().toUpperCase();
+  const tglKedatangan = parseTanggal(
+    item?.tglKedatangan ?? item?.tanggalKedatangan ?? item?.tgl_kedatangan ?? null
+  );
+  return {
+    ...item,
+    status,
+    tglKedatangan,
+    terlambat: status !== 'SELESAI' && Boolean(tglKedatangan && tglKedatangan < todayWIB),
+  };
+}
+function buildPOPeriodResponse(source, period, now = new Date()) {
+  if (!source || source.success === false) return source || {
+    success: false, code: 'PO_SOURCE_EMPTY', error: 'Sumber Status PO tidak mengembalikan data.',
+  };
+  const todayWIB = parseTanggal(now);
+  const tanggalPO = parseTanggal(source.tanggalPO ?? source.tanggalPo ?? null);
+  const sourceItems = Array.isArray(source.items) ? source.items : [];
+  const normalizedItems = sourceItems.map((item) => normalizePOItem(item, todayWIB));
+  const isInPeriod = Boolean(tanggalPO && tanggalPO >= period.from && tanggalPO <= period.to);
+  const isOlderThanPeriod = Boolean(tanggalPO && tanggalPO < period.from);
+  const items = isInPeriod ? normalizedItems : [];
+  const tertundaItems = isOlderThanPeriod
+    ? normalizedItems.filter((item) => item.status === 'MENUNGGU' || item.status === 'SEBAGIAN')
+    : [];
+  const ringkasan = summarizePOItems(items);
+  return {
+    ...source,
+    tanggalPO,
+    periode: { from: period.from, to: period.to, label: period.label, minggu: period.minggu ?? null },
+    sumber: source.sumber || 'purchase order aktif + Barang masuk; tampilan mengikuti Dashboard Live baris 55–64',
+    ringkasan,
+    summary: ringkasan,
+    items,
+    tertunda: {
+      totalItem: tertundaItems.length,
+      items: tertundaItems,
+    },
+  };
+}
+function resolvePORequestPeriod(url, now = new Date()) {
+  const from = url.searchParams.get('from');
+  const to = url.searchParams.get('to');
+  if (Boolean(from) !== Boolean(to)) {
+    return { error: 'Parameter from dan to harus dikirim berpasangan.' };
+  }
+  return resolvePeriode({ from, to, periode: url.searchParams.get('periode') || 'minggu-ini' }, now);
+}
+async function handleStatusPO(request, env, origin, url) {
+  const auth = await verifySupabaseAccessToken(request, env);
+  if (!auth.ok) return json({ success:false, code:auth.code, error:auth.error }, auth.status, origin);
+  const period = resolvePORequestPeriod(url);
+  if (period.error) return json({ success:false, code:'INVALID_PO_PERIOD', error:period.error }, 400, origin);
+  const raw = await callSheetsRead(env, 'getStatusPO');
+  if (raw?.success === false) {
+    return json({ ...raw, actor:auth.userId, permissions:'read_only' }, 502, origin);
+  }
+  const data = buildPOPeriodResponse(raw, period);
+  if (data?.success === false) return json(data, 502, origin);
+  if (url.pathname === '/api/getPOTerlambat') {
+    const active = [...(data.items || []), ...(data.tertunda?.items || [])];
+    const terlambat = active.filter((item) => item.terlambat);
+    return json({
+      success:true, status:'OK', tanggalHariIniWIB:parseTanggal(new Date()),
+      periode:data.periode, totalItem:terlambat.length, items:terlambat,
+      source:data.sumber, actor:auth.userId, permissions:'read_only',
+    }, 200, origin);
+  }
+  return json({ ...data, actor:auth.userId, permissions:'read_only' }, 200, origin);
+}
 function configuredSheets(env) {
   return Boolean(String(env.GUDANGAI_SHEETS_API_URL||'').trim().startsWith('https://') && String(env.GUDANGAI_SHEETS_API_SECRET||'').trim());
 }
@@ -233,6 +335,10 @@ export default {
         readOnlyActions:Array.from(READ_ONLY_ACTIONS),
         deploymentTarget:new URL(request.url).origin,
       }, 200, corsOrigin);
+    }
+    if (url.pathname === '/api/getStatusPO' || url.pathname === '/api/getPOTerlambat') {
+      if (request.method !== 'GET') return json({ success:false, error:'Method not allowed' }, 405, corsOrigin);
+      return handleStatusPO(request, env, corsOrigin, url);
     }
     if (url.pathname === '/api/data') {
       if (request.method !== 'POST') return json({ success:false, error:'Method not allowed' }, 405, corsOrigin);
