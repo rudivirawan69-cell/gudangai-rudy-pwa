@@ -383,6 +383,7 @@ function doPost(e) {
       case "addTransaction": return jsonResponse(addTransaction(body));
       case "addTransactionBatch": return jsonResponse(bulkTransaction(Object.assign({}, body, { transactions: body.transactions || body.items || body.rows })));
       case "bulkTransaction": return jsonResponse(bulkTransaction(body));
+      case "reconcileBatch": return jsonResponse(reconcileBatch_(body));
       case "getStock":
       case "getStockByCode": return jsonResponse(getStockByCode(body.kode || body.kodeBarang, body.entitas));
       case "getAllStock":
@@ -519,7 +520,11 @@ function normalizeIncomingRequest_(input) {
   return body;
 }
 
+const BULK_MAX_ITEMS = 35;
+let _ledgerSheet = null;
+
 function getIdempotencyLedgerSheet_() {
+  if (_ledgerSheet) return _ledgerSheet;
   const ss = getSS();
   let sheet = ss.getSheetByName(IDEMPOTENCY_SHEET_NAME);
   if (!sheet) sheet = ss.insertSheet(IDEMPOTENCY_SHEET_NAME);
@@ -541,7 +546,26 @@ function getIdempotencyLedgerSheet_() {
   const header = sheet.getRange(OPS_HEADER_ROW, 1, 1, IDEMPOTENCY_HEADERS.length).getValues()[0];
   if (header.join("|") !== IDEMPOTENCY_HEADERS.join("|")) sheet.getRange(OPS_HEADER_ROW, 1, 1, IDEMPOTENCY_HEADERS.length).setValues([IDEMPOTENCY_HEADERS]);
   try { sheet.setFrozenRows(OPS_HEADER_ROW); } catch (e) {}
+  _ledgerSheet = sheet;
   return sheet;
+}
+
+function buildLedgerIndex_() {
+  const idx = { byTx: Object.create(null), byNonce: Object.create(null) };
+  const sh = getIdempotencyLedgerSheet_();
+  if (!sh || sh.getLastRow() < OPS_DATA_START_ROW) return idx;
+  const last = sh.getLastRow();
+  const n = Math.min(5000, last - OPS_HEADER_ROW);
+  const start = Math.max(OPS_DATA_START_ROW, last - n + 1);
+  const rows = sh.getRange(start, 1, last - start + 1, IDEMPOTENCY_HEADERS.length).getValues();
+  rows.forEach(function(r, i) {
+    const rec = mapIdempotencyRow_(r, start + i);
+    const tx = String(rec.transactionId || "").trim();
+    const nonce = String(rec.nonce || "").trim();
+    if (tx) idx.byTx[tx] = rec;
+    if (nonce) idx.byNonce[nonce] = rec;
+  });
+  return idx;
 }
 
 function mapIdempotencyRow_(row, rowNumber) {
@@ -615,14 +639,14 @@ function appendIdentityMarker_(keterangan, transactionId, nonce) {
   return base.substring(0, MAX_KETERANGAN_LENGTH);
 }
 
-function readBackTransactionByIdentity_(identity, preferredSheet) {
+function readBackTransactionByIdentity_(identity, preferredSheet, preloadedRecord) {
   const targetId = String(identity && identity.transactionId || "").trim();
   const targetNonce = String(identity && identity.nonce || "").trim();
   if (!targetId && !targetNonce) return { matched: false, error: "IDENTITY_REQUIRED" };
 
   // The transaction sheet intentionally contains no technical identity marker.
   // The ledger's preallocated dataRow is therefore the only safe read-back locator.
-  const record = findIdempotencyRecord_(targetId, targetNonce);
+  const record = preloadedRecord || findIdempotencyRecord_(targetId, targetNonce);
   if (!record || !record.dataRow) {
     return { matched: false, transactionId: targetId || null, nonce: targetNonce || null, error: "LEDGER_ROW_NOT_RESERVED" };
   }
@@ -644,7 +668,7 @@ function readBackTransactionByIdentity_(identity, preferredSheet) {
   const r = sheet.getRange(rowNumber, 2, 1, 6).getValues()[0];
   const dateMatches = normalizeTransactionDateKey_(r[0]) === normalizeTransactionDateKey_(record.tanggal);
   const codeMatches = String(r[1] || "").trim() === String(record.kodeBarang || "").trim();
-  const qtyMatches = Number(r[4]) === Number(record.qty);
+  const qtyMatches = Number(r[4]) === Number(record.qty) || (Number(r[4]) === 0 && /HOLD/i.test(String(r[5] || "")));
   if (!dateMatches || !codeMatches || !qtyMatches) {
     return { matched: false, transactionId: targetId || null, nonce: targetNonce || null, row: rowNumber, error: "LEDGER_ROW_PAYLOAD_MISMATCH" };
   }
@@ -653,6 +677,45 @@ function readBackTransactionByIdentity_(identity, preferredSheet) {
     tanggal: normalizeTransactionDateKey_(r[0]), kodeBarang: String(r[1] || "").trim(),
     namaBarang: r[2], satuan: r[3], qty: Number(r[4]) || 0, keterangan: String(r[5] || ""),
     transactionId: record.transactionId || targetId || null, nonce: record.nonce || targetNonce || null
+  };
+}
+
+
+function readBackByRecord_(rec) {
+  const cfg = SHEET_CONFIG[rec.sheet];
+  const row = Number(rec.dataRow);
+  if (!cfg || !Number.isInteger(row) || row <= cfg.headerRow) return { matched: false, rowEmpty: false };
+  const sh = getSS().getSheetByName(rec.sheet);
+  if (!sh || row > sh.getMaxRows()) return { matched: false, rowEmpty: false };
+  const r = sh.getRange(row, 2, 1, 6).getValues()[0];
+  const empty = [r[0], r[1], r[4], r[5]].every(function(v) { return v === "" || v == null; });
+  const matched = normalizeTransactionDateKey_(r[0]) === normalizeTransactionDateKey_(rec.tanggal)
+    && String(r[1] || "").trim() === String(rec.kodeBarang || "").trim()
+    && (Number(r[4]) === Number(rec.qty) || (Number(r[4]) === 0 && /HOLD/i.test(String(r[5] || ""))));
+  return { matched: matched, rowEmpty: empty, row: row };
+}
+
+function reconcileBatch_(body) {
+  const ids = ((body && body.transactionIds) || []).map(function(x) { return String(x || "").trim(); }).filter(Boolean);
+  if (!ids.length) return { success: false, status: "REJECTED", code: "IDS_REQUIRED", error: "transactionIds wajib diisi." };
+  if (ids.length > 200) return { success: false, status: "REJECTED", code: "IDS_LIMIT", error: "Maksimal 200 ID." };
+  const idx = buildLedgerIndex_();
+  const out = ids.map(function(id) {
+    const rec = idx.byTx[id] || idx.byNonce[id];
+    if (!rec) return { transactionId: id, status: "NOT_FOUND", writeOccurred: false, retryable: true };
+    const rb = readBackByRecord_(rec);
+    if (rb.matched) {
+      if (rec.status !== "APPLIED") updateIdempotencyRecord_(rec, { status: "APPLIED", writeOccurred: true, errorCode: "" });
+      return { transactionId: id, status: "APPLIED", row: rb.row, writeOccurred: true, retryable: false };
+    }
+    return { transactionId: id, status: rec.status || "UNKNOWN", row: rb.row || null, writeOccurred: rb.rowEmpty ? false : "unknown", retryable: !!rb.rowEmpty };
+  });
+  const count = function(status) { return out.filter(function(x) { return x.status === status; }).length; };
+  return {
+    success: true, status: "OK", total: out.length,
+    applied: count("APPLIED"), notFound: count("NOT_FOUND"),
+    retryable: out.filter(function(x) { return x.retryable; }).length,
+    items: out, serverTime: new Date().toISOString()
   };
 }
 
@@ -1025,7 +1088,10 @@ function bulkTransaction(body) {
   }
   var list = (body && (body.transactions || body.items || body.rows)) || [];
   if (!list.length) return { success: false, error: "transactions array kosong" };
-  if (list.length > 200) return { success: false, error: "Batch melebihi batas 200 transaksi" };
+  if (list.length > BULK_MAX_ITEMS) {
+    return { success: false, status: "REJECTED", code: "CHUNK_TOO_LARGE", maxChunk: BULK_MAX_ITEMS, received: list.length,
+      error: "Maksimal " + BULK_MAX_ITEMS + " item per batch; kirim bertahap." };
+  }
 
   var batchId = String(body.batchId || body.transactionId || body.nonce || ("BATCH-" + Utilities.getUuid())).trim();
   var batchCache = CacheService.getScriptCache();
@@ -1033,8 +1099,12 @@ function bulkTransaction(body) {
   if (cachedBatch) {
     try {
       var previous = JSON.parse(cachedBatch);
-      previous.replayed = true;
-      return previous;
+      if (previous && previous.success === true) {
+        previous.replayed = true;
+        return previous;
+      }
+      // Cache kegagalan lama tidak boleh menghentikan retry.
+      batchCache.remove("batchResult_" + batchId);
     } catch (e) { batchCache.remove("batchResult_" + batchId); }
   }
 
@@ -1058,7 +1128,7 @@ function bulkTransaction(body) {
   // Preflight — validasi semua dulu tanpa write
   var prepared = [];
   var validationErrors = [];
-  var seenKeys = {};
+  var seenKeys = Object.create(null);
   for (var i = 0; i < list.length; i++) {
     var original = list[i] || {};
     var tx = Object.assign({}, original);
@@ -1074,9 +1144,9 @@ function bulkTransaction(body) {
       continue;
     }
     var normalizedKode = String(check.kode || tx.kodeBarang || tx.kode || "").trim();
-    var duplicateKey = String(tx.sheet) + "|" + normalizedKode + "|" + String(tx.qty);
+    var duplicateKey = String(tx.transactionId || "").trim();
     if (seenKeys[duplicateKey]) {
-      validationErrors.push({ index: i + 1, error: "Duplikat item dalam batch: " + normalizedKode + " qty " + tx.qty });
+      validationErrors.push({ index: i + 1, error: "transactionId ganda dalam batch: " + duplicateKey });
       continue;
     }
     seenKeys[duplicateKey] = true;
@@ -1085,7 +1155,6 @@ function bulkTransaction(body) {
   }
   if (validationErrors.length > 0) {
     var rejected = { success: false, status: "PRECHECK_REJECTED", batchId: batchId, total: list.length, validationErrors: validationErrors, results: [] };
-    batchCache.put("batchResult_" + batchId, JSON.stringify(rejected), DUP_CACHE_TTL_SEC);
     return rejected;
   }
 
@@ -1117,18 +1186,20 @@ function bulkTransaction(body) {
   var failCount = 0;
   var writeTouched = false;
   var rowsToWrite = [];
+  var ledgerIdx = buildLedgerIndex_();
+  var recs = Object.create(null);
 
   try {
     for (var p = 0; p < prepared.length; p++) {
       var item = prepared[p];
-      var prior = findIdempotencyRecord_(item.transactionId, item.nonce);
+      var prior = ledgerIdx.byTx[String(item.transactionId || "").trim()] || ledgerIdx.byNonce[String(item.nonce || "").trim()] || null;
       // Reconcile before every re-write. IN_PROGRESS/UNKNOWN may mean the previous
       // request actually committed but the client timed out before receiving the response.
       if (prior && prior.status !== "APPLIED") {
         try {
-          var priorReadBack = readBackTransactionByIdentity_({ transactionId: item.transactionId, nonce: item.nonce }, sheetName);
+          var priorReadBack = readBackTransactionByIdentity_({ transactionId: item.transactionId, nonce: item.nonce }, sheetName, prior);
           if (priorReadBack && priorReadBack.matched) {
-            updateIdempotencyRecord_(prior, { status: "APPLIED", dataRow: priorReadBack.row, writeOccurred: true, errorCode: "" });
+            recs[item.transactionId] = updateIdempotencyRecord_(prior, { status: "APPLIED", dataRow: priorReadBack.row, writeOccurred: true, errorCode: "" }) || prior;
             results.push({ success: true, status: "APPLIED", code: "READBACK_CONFIRMED", batchId: batchId, batchIndex: p + 1, transactionId: item.transactionId, nonce: item.nonce, requestId: item.requestId || "", clientItemId: item.clientItemId || item.requestId || "", sheet: sheetName, row: priorReadBack.row, kode: priorReadBack.kodeBarang, qty: priorReadBack.qty, replayed: true, writeOccurred: true });
             successCount++;
             continue;
@@ -1183,9 +1254,9 @@ function bulkTransaction(body) {
 
       try {
         if (prior) {
-          updateIdempotencyRecord_(prior, { status: "IN_PROGRESS", requestId: item.requestId || batchId, writeOccurred: false });
+          recs[item.transactionId] = updateIdempotencyRecord_(prior, { status: "IN_PROGRESS", requestId: item.requestId || batchId, writeOccurred: false });
         } else {
-          appendIdempotencyRecord_({
+          recs[item.transactionId] = appendIdempotencyRecord_({
             transactionId: item.transactionId, nonce: item.nonce,
             requestId: item.requestId || batchId, deviceId: (item.client && item.client.deviceId) || "",
             operation: "bulkTransaction", sheet: sheetName, entitas: entitas,
@@ -1209,7 +1280,7 @@ function bulkTransaction(body) {
       var replayResp = {
         success: true, status: "COMMITTED", batchId: batchId,
         total: prepared.length, successCount: successCount, failCount: 0,
-        results: results, replayed: true, execMs: Date.now() - t0
+        results: results, replayed: true, chunk: { size: prepared.length, max: BULK_MAX_ITEMS }, execMs: Date.now() - t0
       };
       batchCache.put("batchResult_" + batchId, JSON.stringify(replayResp), DUP_CACHE_TTL_SEC);
       return replayResp;
@@ -1229,11 +1300,12 @@ function bulkTransaction(body) {
       // A retry can then reconcile an uncertain write without searching user Keterangan.
       for (var reserveIndex = 0; reserveIndex < rowsToWrite.length; reserveIndex++) {
         var reserveItem = rowsToWrite[reserveIndex];
-        var reserveRecord = findIdempotencyRecord_(reserveItem.txId, reserveItem.nonce);
+        var reserveRecord = recs[reserveItem.txId];
         if (!reserveRecord) {
           throw new Error("IDEMPOTENCY_CLAIM_MISSING: " + reserveItem.txId);
         }
         var reservedRecord = updateIdempotencyRecord_(reserveRecord, { dataRow: startRow + reserveIndex, status: "IN_PROGRESS", writeOccurred: false });
+        recs[reserveItem.txId] = reservedRecord;
         if (!reservedRecord || Number(reservedRecord.dataRow) !== (startRow + reserveIndex)) {
           throw new Error("IDEMPOTENCY_ROW_RESERVATION_FAILED: " + reserveItem.txId);
         }
@@ -1263,8 +1335,8 @@ function bulkTransaction(body) {
         if (ok) {
           successCount++;
           try {
-            var rec = findIdempotencyRecord_(rw.txId, rw.nonce);
-            if (rec) updateIdempotencyRecord_(rec, { status: "APPLIED", dataRow: rowNum, writeOccurred: true, errorCode: "" });
+            var rec = recs[rw.txId];
+            if (rec) recs[rw.txId] = updateIdempotencyRecord_(rec, { status: "APPLIED", dataRow: rowNum, writeOccurred: true, errorCode: "" }) || rec;
           } catch (uErr) {}
           results.push({
             success: true, status: "APPLIED", code: "TRANSACTION_APPLIED",
@@ -1287,8 +1359,8 @@ function bulkTransaction(body) {
         } else {
           failCount++;
           try {
-            var rec2 = findIdempotencyRecord_(rw.txId, rw.nonce);
-            if (rec2) updateIdempotencyRecord_(rec2, { status: "UNKNOWN", dataRow: rowNum, writeOccurred: "unknown", errorCode: "VERIFY_FAILED" });
+            var rec2 = recs[rw.txId];
+            if (rec2) recs[rw.txId] = updateIdempotencyRecord_(rec2, { status: "UNKNOWN", dataRow: rowNum, writeOccurred: "unknown", errorCode: "VERIFY_FAILED" }) || rec2;
           } catch (u2) {}
           results.push({
             success: false, status: "UNKNOWN", code: "VERIFY_FAILED",
@@ -1320,6 +1392,7 @@ function bulkTransaction(body) {
     status: failCount === 0 ? "COMMITTED" : (writeTouched ? "PARTIAL_FAILURE_REVIEW_REQUIRED" : "FAILED"),
     batchId: batchId,
     total: prepared.length,
+    chunk: { size: prepared.length, max: BULK_MAX_ITEMS },
     successCount: successCount,
     failCount: failCount,
     failedIndex: failCount ? (results.length ? results[results.length - 1].batchIndex : null) : null,
@@ -1329,7 +1402,7 @@ function bulkTransaction(body) {
     execMs: Date.now() - t0,
     writeOccurred: writeTouched
   };
-  try { batchCache.put("batchResult_" + batchId, JSON.stringify(response), DUP_CACHE_TTL_SEC); } catch (cErr) {}
+  if (response.success) { try { batchCache.put("batchResult_" + batchId, JSON.stringify(response), DUP_CACHE_TTL_SEC); } catch (cErr) {} }
   try {
     writeAuditLogSecure("BULK_TRANSACTION", response.success ? "SUCCESS" : "PARTIAL_FAILURE", {
       batchId: batchId, total: prepared.length, successCount: successCount, failCount: failCount, execMs: response.execMs
@@ -1361,7 +1434,7 @@ function validateTransactionRequest_(tx, options) {
   if (Object.prototype.hasOwnProperty.call(tx, "namaBarang") || Object.prototype.hasOwnProperty.call(tx, "nama") || Object.prototype.hasOwnProperty.call(tx, "satuan")) {
     return { valid: false, status: "REJECTED", code: "PROTECTED_FIELD", error: "Kolom Nama Barang/Satuan diproteksi; kirim hanya tanggal, kodeBarang, qty, dan keterangan." };
   }
-  const allowed = ["action", "operation", "schemaVersion", "sheet", "entitas", "kodeBarang", "qty", "tanggal", "keterangan", "transactionId", "nonce", "holdTransactionId", "realisasiHoldId", "holdId", "requestId", "queueApproved", "client", "offlineContext", "secret", "_syncMode", "batchId", "deviceId"];
+  const allowed = ["action", "operation", "schemaVersion", "sheet", "entitas", "kodeBarang", "qty", "tanggal", "keterangan", "transactionId", "nonce", "holdTransactionId", "realisasiHoldId", "holdId", "requestId", "queueApproved", "client", "offlineContext", "secret", "_syncMode", "batchId", "deviceId", "clientItemId"];
   const unknown = Object.keys(tx).filter(function(k) { return allowed.indexOf(k) < 0 && k !== "payload"; });
   if (unknown.length) return { valid: false, status: "REJECTED", code: "UNKNOWN_FIELD", error: "Field tidak diizinkan: " + unknown.join(", ") };
   const kode = String(tx.kodeBarang || "").trim();
