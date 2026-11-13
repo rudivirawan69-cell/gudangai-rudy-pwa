@@ -1910,6 +1910,17 @@ function getAllStock(entitas) {
     success: false, code: "BAHAN_BAKU_SOURCE_UNAVAILABLE",
     error: bb && bb.error ? bb.error : 'Gagal membaca sheet "Stock Bahan Baku"', count: 0, items: []
   };
+  // Tampilan khusus BAHAN BAKU harus mengembalikan hanya sumber sheet ini.
+  // Entitas asal (CV/PT) tetap dipertahankan pada item; pembeda halaman adalah divisi.
+  if (requested === "BAHAN BAKU" || requested === "BAHAN_BAKU") {
+    const bahanItems = bb.items.map(function(item) {
+      return Object.assign({}, item, { divisi: "BAHAN BAKU" });
+    });
+    return {
+      success: true, count: bahanItems.length, items: bahanItems,
+      sources: { cv: false, pt: false, bahanBaku: bb.count }
+    };
+  }
   bb.items.forEach(function(item) {
     const entity = String(item.entitas || "").toUpperCase();
     if ((requested === "CV" && entity !== "CV") || (requested === "PT" && entity !== "PT")) return;
@@ -2231,7 +2242,7 @@ function getBahanBakuStockMap_() {
     const h = top[r].map(function(v) { return String(v || "").toLowerCase().trim(); });
     const k = h.findIndex(function(v) { return v.indexOf("kode") >= 0; });
     const st = h.findIndex(function(v) {
-      return v.indexOf("stock akhir") >= 0 || v.indexOf("sisa stock") >= 0 || v.indexOf("sisa stok") >= 0 || v === "sisa";
+      return v.indexOf("stock akhir") >= 0 || v.indexOf("stok akhir") >= 0 || v.indexOf("sisa stock") >= 0 || v.indexOf("sisa stok") >= 0 || v === "sisa";
     });
     if (k >= 0 && st >= 0) { headerRow = r + 1; headers = h; idxKode = k; idxStock = st; break; }
   }
