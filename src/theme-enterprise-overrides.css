@@ -1,110 +1,112 @@
-/* GUDANG-AI 69 — enterprise theme system, presentation only.
-   Keeps application structure, data, API, transactions and offline queue unchanged. */
-
+/* Theme cascade aligned with canonical src/styles/tokens.css values. */
 :root,
-html[data-theme="soft_light"] {
+html[data-theme="soft_light"],
+html[data-theme="light"] {
   color-scheme: light;
-  --bg-app: #f1f6fa;
-  --bg-app-grad: linear-gradient(180deg,#f8fbfd 0%,#edf4f8 55%,#e5eef5 100%);
-  --bg-elevated: #ffffff;
-  --bg-muted: #e7eff5;
-  --text-main: #203448;
-  --text-muted: #607487;
-  --text-on-accent: #ffffff;
-  --border: #dce7ef;
-  --accent: #247ba8;
-  --accent-strong: #195f87;
-  --accent-soft: rgba(36,123,168,.12);
-  --success: #16a36a;
-  --warning: #e6a23c;
-  --danger: #dc4545;
-  --stok-aman: #16a36a;
-  --stok-waspada: #e6a23c;
-  --stok-kritis: #dc4545;
-  --po-datang: #16a36a;
-  --po-sebagian: #e6a23c;
+  --bg-app: #e6e1d8;
+  --bg-app-grad: linear-gradient(180deg, #efebe3 0%, #e6e1d8 48%, #ddd7cc 100%);
+  --bg-elevated: #faf8f4;
+  --bg-muted: #ddd6cb;
+  --text-main: #1a1f2e;
+  --text-muted: #5c6578;
+  --text-on-accent: #1a1f2e;
+  --border: rgba(255,255,255,.88);
+  --accent: #f59e0b;
+  --accent-strong: #d97706;
+  --accent-soft: rgba(245,158,11,.16);
+  --success: #0d9488;
+  --warning: #d97706;
+  --danger: #e11d48;
+  --stok-aman: #0d9488;
+  --stok-waspada: #f59e0b;
+  --stok-kritis: #e11d48;
+  --po-datang: #0d9488;
+  --po-sebagian: #f59e0b;
   --po-belum: #94a3b8;
-  --nav-bg: rgba(255,255,255,.97);
-  --focus-ring: 0 0 0 3px rgba(36,123,168,.25);
-  --surface: #fff;
-  --ink: #203448;
-  --chart-line: #247ba8;
-  --chart-fill: rgba(36,123,168,.16);
-  --panel-dark: #18354d;
+  --nav-bg: rgba(250,248,244,.98);
+  --focus-ring: 0 0 0 3px rgba(245,158,11,.32);
+  --surface: #faf8f4;
+  --ink: #1a1f2e;
+  --chart-line: #0d9488;
+  --chart-fill: rgba(13,148,136,.18);
+  --panel-dark: #1e3a4c;
   --panel-dark-text: #f8fafc;
-  --field-bg: #f8fbfd;
-  --shadow-1: 0 5px 18px rgba(28,61,83,.07);
-  --shadow-2: 0 10px 26px rgba(28,61,83,.11);
+  --field-bg: #fdfbf7;
+  --shadow-1: var(--elev-1);
+  --shadow-2: var(--elev-2);
+  --shadow-press: var(--elev-press);
 }
-
-html[data-theme="deep_ocean"] {
+html[data-theme="deep_ocean"],
+html[data-theme="dark"] {
   color-scheme: dark;
-  --bg-app: #101b2d;
-  --bg-app-grad: linear-gradient(165deg,#0c1626 0%,#14243a 52%,#192d43 100%);
-  --bg-elevated: #17283d;
-  --bg-muted: #20364d;
-  --text-main: #f1f5f9;
-  --text-muted: #b7c7d8;
-  --text-on-accent: #071521;
-  --border: rgba(153,178,202,.2);
-  --accent: #35b9b0;
-  --accent-strong: #239b98;
-  --accent-soft: rgba(53,185,176,.16);
-  --success: #2dd4a0;
-  --warning: #f4bd55;
+  --bg-app: #071422;
+  --bg-app-grad: linear-gradient(165deg, #050f1a 0%, #0a1a2e 42%, #0f2744 100%);
+  --bg-elevated: #12263d;
+  --bg-muted: #0c1c30;
+  --text-main: #f8fafc;
+  --text-muted: #c5d4e8;
+  --text-on-accent: #061018;
+  --border: rgba(148,163,184,.22);
+  --accent: #38bdf8;
+  --accent-strong: #0ea5e9;
+  --accent-soft: rgba(56,189,248,.2);
+  --success: #2dd4bf;
+  --warning: #fbbf24;
   --danger: #fb7185;
-  --stok-aman: #2dd4a0;
-  --stok-waspada: #f4bd55;
+  --stok-aman: #2dd4bf;
+  --stok-waspada: #fbbf24;
   --stok-kritis: #fb7185;
-  --po-datang: #2dd4a0;
-  --po-sebagian: #f4bd55;
+  --po-datang: #2dd4bf;
+  --po-sebagian: #fbbf24;
   --po-belum: #94a3b8;
-  --nav-bg: rgba(18,35,54,.97);
-  --focus-ring: 0 0 0 3px rgba(53,185,176,.35);
-  --surface: #17283d;
-  --ink: #f1f5f9;
-  --chart-line: #35b9b0;
-  --chart-fill: rgba(53,185,176,.2);
-  --panel-dark: #0c1726;
+  --nav-bg: rgba(18,38,61,.98);
+  --focus-ring: 0 0 0 3px rgba(56,189,248,.4);
+  --surface: #12263d;
+  --ink: #f8fafc;
+  --chart-line: #38bdf8;
+  --chart-fill: rgba(56,189,248,.22);
+  --panel-dark: #0c1c30;
   --panel-dark-text: #f8fafc;
   --field-bg: #102238;
-  --shadow-1: 0 7px 22px rgba(0,0,0,.2);
-  --shadow-2: 0 12px 30px rgba(0,0,0,.28);
+  --shadow-1: var(--elev-1);
+  --shadow-2: var(--elev-2);
+  --shadow-press: var(--elev-press);
 }
-
-html[data-theme="graphite_titanium"] {
-  color-scheme: dark;
-  --bg-app: #171a20;
-  --bg-app-grad: linear-gradient(165deg,#14171c 0%,#202630 58%,#292f38 100%);
-  --bg-elevated: #252b34;
-  --bg-muted: #303844;
-  --text-main: #f1f3f5;
-  --text-muted: #b4bdc8;
-  --text-on-accent: #171a20;
-  --border: rgba(183,193,205,.2);
-  --accent: #d69a48;
-  --accent-strong: #b77a2e;
-  --accent-soft: rgba(214,154,72,.17);
-  --success: #35b987;
-  --warning: #e3a94f;
-  --danger: #f07171;
-  --stok-aman: #35b987;
-  --stok-waspada: #e3a94f;
-  --stok-kritis: #f07171;
-  --po-datang: #35b987;
-  --po-sebagian: #e3a94f;
-  --po-belum: #9ca6b2;
-  --nav-bg: rgba(31,36,44,.98);
-  --focus-ring: 0 0 0 3px rgba(214,154,72,.35);
-  --surface: #252b34;
-  --ink: #f1f3f5;
-  --chart-line: #d69a48;
-  --chart-fill: rgba(214,154,72,.2);
-  --panel-dark: #171a20;
-  --panel-dark-text: #f1f3f5;
-  --field-bg: #1c222b;
-  --shadow-1: 0 7px 22px rgba(0,0,0,.24);
-  --shadow-2: 0 12px 30px rgba(0,0,0,.32);
+html[data-theme="graphite_titanium"],
+html[data-theme="warm_productive"] {
+  color-scheme: light;
+  --bg-app: #e6edfa;
+  --bg-app-grad: linear-gradient(180deg, #f4f7ff 0%, #e6edfa 100%);
+  --bg-elevated: #eef3fc;
+  --bg-muted: #dbe5f6;
+  --text-main: #0f2747;
+  --text-muted: #4a5f80;
+  --text-on-accent: #ffffff;
+  --border: rgba(59,130,246,.14);
+  --accent: #3b82f6;
+  --accent-strong: #1d4ed8;
+  --accent-soft: rgba(59,130,246,.12);
+  --success: #166534;
+  --warning: #92400e;
+  --danger: #b91c1c;
+  --stok-aman: #166534;
+  --stok-waspada: #92400e;
+  --stok-kritis: #b91c1c;
+  --po-datang: #166534;
+  --po-sebagian: #92400e;
+  --po-belum: #64748b;
+  --nav-bg: rgba(238,243,252,.98);
+  --focus-ring: 0 0 0 3px rgba(59,130,246,.32);
+  --surface: #eef3fc;
+  --ink: #0f2747;
+  --chart-line: #3b82f6;
+  --chart-fill: rgba(59,130,246,.18);
+  --panel-dark: #102a52;
+  --panel-dark-text: #ffffff;
+  --field-bg: #f7f9ff;
+  --shadow-1: var(--elev-1);
+  --shadow-2: var(--elev-2);
+  --shadow-press: var(--elev-press);
 }
 
 /* Shared page shell and all reusable surfaces */
