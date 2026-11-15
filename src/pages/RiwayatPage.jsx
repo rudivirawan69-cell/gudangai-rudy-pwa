@@ -1,24 +1,36 @@
-import { useMemo, useState, useEffect, useCallback } from "react";
+import { memo, useMemo, useState, useEffect, useCallback, useDeferredValue, useRef } from "react";
 import "./riwayat.css";
 import { getLocalHistory, getPendingQueue } from "../data/api";
 import {
-  gabung, filterTx, kelompokkan, hitungStatus, keCSV, jamWIB, ringkasanTeks,
+  gabung, filterTx, kelompokkan, keCSV, ringkasanTeks, ringkasKatalog,
 } from "../data/riwayatAdapter.js";
 
 /**
- * RiwayatPage — redesain UI + integrasi App
- * Props: onNavigate (goTab)
- * Data lokal dari getLocalHistory(); remote belum dihubungkan.
+ * RiwayatPage — redesain + optimasi performa
+ * - Debounce pencarian (deferred)
+ * - Satu lintasan ringkasKatalog
+ * - Cache jam/hari/haystack di adapter
+ * - memo(Baris), callback stabil
+ * - Paginasi 40
  */
 
 const TIPE_LABEL = { masuk: "Masuk", keluar: "Keluar", rusak: "Rusak" };
 const ARAH = { masuk: "↓", keluar: "↑", rusak: "!" };
 const STATUS_LABEL = { terkirim: "Terkirim", antrian: "Antrian", gagal: "Gagal", lokal: "Lokal" };
 const ENT = ["semua", "CV", "PT", "Bahan Baku"];
+const TIPE_FILTERS = [
+  { id: "semua", label: "Semua" },
+  { id: "masuk", label: "Masuk" },
+  { id: "keluar", label: "Keluar" },
+  { id: "rusak", label: "Rusak" },
+];
+const STATUS_FILTERS = ["semua", "terkirim", "antrian", "gagal", "lokal"];
 const DENSITY_KEY = "gudangai:riwayat:density:v1";
 const BATCH = 40;
+const EMPTY = [];
 
-const fmt = (n) => new Intl.NumberFormat("id-ID", { maximumFractionDigits: 2 }).format(n);
+const fmt = (n) =>
+  new Intl.NumberFormat("id-ID", { maximumFractionDigits: 2 }).format(n);
 
 function judul(t) {
   const a = t.items[0];
@@ -26,15 +38,16 @@ function judul(t) {
   return t.jumlahItem > 1 ? `${nama} +${t.jumlahItem - 1} lainnya` : nama;
 }
 
-function Baris({ t, buka, onToggle, onRetry, onCopy, ringkas }) {
+const Baris = memo(function Baris({ t, buka, onToggle, onRetry, onCopy, ringkas }) {
   return (
     <article className={`rw-row rw-${t.tipe}${buka ? " is-open" : ""}${ringkas ? " is-compact" : ""}`}>
-      <button type="button" className="rw-row-head" onClick={onToggle} aria-expanded={buka}>
+      <button type="button" className="rw-row-head" onClick={onToggle} aria-expanded={buka} data-id={t.id}>
         <span className="rw-ico" aria-hidden="true">{ARAH[t.tipe] || "·"}</span>
         <span className="rw-main">
           <b>{judul(t)}</b>
           <small>
-            {TIPE_LABEL[t.tipe] || t.tipe || "?"} · {t.entitas ?? "?"} · {fmt(t.totalQty)} total · {jamWIB(t.ts)}
+            {TIPE_LABEL[t.tipe] || t.tipe || "?"} · {t.entitas ?? "?"} · {fmt(t.totalQty)} total ·{" "}
+            {t.jamLabel || "--.--"}
           </small>
         </span>
         <span className={`rw-pill rw-s-${t.status}`}>{STATUS_LABEL[t.status] || t.status}</span>
@@ -42,7 +55,7 @@ function Baris({ t, buka, onToggle, onRetry, onCopy, ringkas }) {
       {buka && (
         <div className="rw-detail">
           <ul>
-            {(t.items || []).map((i, n) => (
+            {(t.items || EMPTY).map((i, n) => (
               <li key={n}>
                 <span>
                   {i.nama || i.kode}
@@ -69,41 +82,15 @@ function Baris({ t, buka, onToggle, onRetry, onCopy, ringkas }) {
       )}
     </article>
   );
-}
+});
 
 export default function RiwayatPage({ onNavigate }) {
   const [tick, setTick] = useState(0);
-  const local = useMemo(() => {
-    try {
-      return getLocalHistory() || [];
-    } catch {
-      return [];
-    }
-  }, [tick]);
-
-  const queueCount = useMemo(() => {
-    try {
-      return (getPendingQueue() || []).length;
-    } catch {
-      return 0;
-    }
-  }, [tick]);
-
-  const remote = undefined;
-  const loading = false;
-  const error = null;
-  const onRefresh = useCallback(() => {
-    setTick((n) => n + 1);
-  }, []);
-  const onOpenQueue = useCallback(() => {
-    onNavigate?.("sync");
-  }, [onNavigate]);
-  const onRetry = undefined;
-
   const [tipe, setTipe] = useState("semua");
   const [entitas, setEntitas] = useState("semua");
   const [status, setStatus] = useState("semua");
   const [q, setQ] = useState("");
+  const qDeferred = useDeferredValue(q);
   const [openId, setOpenId] = useState(null);
   const [limit, setLimit] = useState(BATCH);
   const [ringkas, setRingkas] = useState(() => {
@@ -114,6 +101,26 @@ export default function RiwayatPage({ onNavigate }) {
     }
   });
   const [toast, setToast] = useState("");
+  const toastTimer = useRef(null);
+
+  const local = useMemo(() => {
+    try {
+      return getLocalHistory() || EMPTY;
+    } catch {
+      return EMPTY;
+    }
+  }, [tick]);
+
+  const queueCount = useMemo(() => {
+    try {
+      return (getPendingQueue() || EMPTY).length;
+    } catch {
+      return 0;
+    }
+  }, [tick]);
+
+  const onRefresh = useCallback(() => setTick((n) => n + 1), []);
+  const onOpenQueue = useCallback(() => onNavigate?.("sync"), [onNavigate]);
 
   useEffect(() => {
     try {
@@ -123,57 +130,78 @@ export default function RiwayatPage({ onNavigate }) {
 
   useEffect(() => {
     setLimit(BATCH);
-  }, [tipe, entitas, status, q]);
+    setOpenId(null);
+  }, [tipe, entitas, status, qDeferred]);
 
-  const semua = useMemo(() => gabung(local, remote || []), [local, remote]);
-  const cntStatus = useMemo(() => hitungStatus(semua.filter((t) => !t.anomali)), [semua]);
-  const cntTipe = useMemo(() => {
-    const c = { semua: 0, masuk: 0, keluar: 0, rusak: 0 };
-    semua.filter((t) => !t.anomali).forEach((t) => {
-      c.semua += 1;
-      if (c[t.tipe] != null) c[t.tipe] += 1;
-    });
-    return c;
-  }, [semua]);
+  useEffect(() => () => {
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+  }, []);
+
+  const semua = useMemo(() => gabung(local, EMPTY), [local]);
+
+  const katalog = useMemo(() => ringkasKatalog(semua), [semua]);
+  const cntStatus = katalog.status;
+  const cntTipe = katalog.tipe;
+  const anomaliTotal = katalog.anomali;
 
   const tersaring = useMemo(
-    () => filterTx(semua, { tipe, entitas, status, q }),
-    [semua, tipe, entitas, status, q]
+    () => filterTx(semua, { tipe, entitas, status, q: qDeferred }),
+    [semua, tipe, entitas, status, qDeferred]
   );
+
   const { hari, anomali: listAnomali } = useMemo(() => kelompokkan(tersaring), [tersaring]);
-  const anomali = listAnomali?.length || 0;
+  const anomali = listAnomali.length || anomaliTotal;
+
+  const totalValid = useMemo(
+    () => hari.reduce((a, h) => a + h.items.length, 0),
+    [hari]
+  );
 
   const tampil = useMemo(() => {
     let sisa = limit;
     const out = [];
-    for (const h of hari) {
-      if (sisa <= 0) break;
-      const items = h.items.slice(0, sisa);
-      out.push({ ...h, items });
-      sisa -= items.length;
+    for (let i = 0; i < hari.length && sisa > 0; i++) {
+      const h = hari[i];
+      if (sisa >= h.items.length) {
+        out.push(h);
+        sisa -= h.items.length;
+      } else {
+        out.push({ ...h, items: h.items.slice(0, sisa) });
+        sisa = 0;
+      }
     }
     return out;
   }, [hari, limit]);
 
-  const totalValid = hari.reduce((a, h) => a + h.items.length, 0);
   const nAntrian = queueCount || cntStatus.antrian || 0;
   const adaFilter = tipe !== "semua" || entitas !== "semua" || status !== "semua" || q.trim() !== "";
 
-  const info = (t) => {
+  const info = useCallback((t) => {
     setToast(t);
-    setTimeout(() => setToast(""), 2000);
-  };
-  const salin = useCallback(async (t) => {
-    try {
-      await navigator.clipboard.writeText(ringkasanTeks(t));
-      info("Disalin");
-    } catch {
-      info("Gagal menyalin");
-    }
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToast(""), 2000);
   }, []);
 
-  const ekspor = () => {
-    const csv = keCSV(tersaring.filter((t) => !t.anomali));
+  const salin = useCallback(
+    async (t) => {
+      try {
+        await navigator.clipboard.writeText(ringkasanTeks(t));
+        info("Disalin");
+      } catch {
+        info("Gagal menyalin");
+      }
+    },
+    [info]
+  );
+
+  const onToggle = useCallback((e) => {
+    const id = e.currentTarget?.dataset?.id;
+    if (!id) return;
+    setOpenId((prev) => (prev === id ? null : id));
+  }, []);
+
+  const ekspor = useCallback(() => {
+    const csv = keCSV(tersaring);
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -182,14 +210,16 @@ export default function RiwayatPage({ onNavigate }) {
     a.click();
     URL.revokeObjectURL(url);
     info("CSV diunduh");
-  };
+  }, [tersaring, info]);
 
-  const resetFilter = () => {
+  const resetFilter = useCallback(() => {
     setTipe("semua");
     setEntitas("semua");
     setStatus("semua");
     setQ("");
-  };
+  }, []);
+
+  const more = useCallback(() => setLimit((n) => n + BATCH), []);
 
   return (
     <div className="rw-page">
@@ -251,12 +281,7 @@ export default function RiwayatPage({ onNavigate }) {
 
       <div className="rw-filters">
         <div className="rw-chips" role="group" aria-label="Jenis transaksi">
-          {[
-            { id: "semua", label: "Semua" },
-            { id: "masuk", label: "Masuk" },
-            { id: "keluar", label: "Keluar" },
-            { id: "rusak", label: "Rusak" },
-          ].map((x) => (
+          {TIPE_FILTERS.map((x) => (
             <button
               key={x.id}
               type="button"
@@ -281,7 +306,7 @@ export default function RiwayatPage({ onNavigate }) {
           ))}
         </div>
         <div className="rw-chips" role="group" aria-label="Status kirim">
-          {["semua", "terkirim", "antrian", "gagal", "lokal"].map((s) => (
+          {STATUS_FILTERS.map((s) => (
             <button
               key={s}
               type="button"
@@ -300,6 +325,8 @@ export default function RiwayatPage({ onNavigate }) {
           placeholder="Cari kode / nama / keterangan…"
           value={q}
           onChange={(e) => setQ(e.target.value)}
+          autoComplete="off"
+          spellCheck={false}
         />
         {q && (
           <button type="button" onClick={() => setQ("")} aria-label="Hapus">
@@ -311,31 +338,16 @@ export default function RiwayatPage({ onNavigate }) {
         </button>
       </div>
 
-      {error && (
-        <div className="rw-alert">
-          {error}{" "}
-          <button type="button" onClick={onRefresh}>
-            Coba lagi
-          </button>
-        </div>
-      )}
-
       {anomali > 0 && (
         <div className="rw-alert rw-soft">
           {anomali} entri tidak valid disembunyikan (qty 0 / tanpa item). Tidak dihapus dari perangkat.
         </div>
       )}
 
-      {loading && totalValid === 0 && <div className="rw-skel">{[0, 1, 2].map((i) => <div key={i} />)}</div>}
-
-      {!loading && totalValid === 0 && (
+      {totalValid === 0 && (
         <div className="rw-empty">
           <b>{adaFilter ? "Tidak ada hasil" : "Belum ada riwayat"}</b>
-          <p>
-            {adaFilter
-              ? "Ubah filter atau reset."
-              : "Transaksi berhasil akan muncul di sini."}
-          </p>
+          <p>{adaFilter ? "Ubah filter atau reset." : "Transaksi berhasil akan muncul di sini."}</p>
           {adaFilter && (
             <button type="button" className="rw-primary" onClick={resetFilter}>
               Reset filter
@@ -358,8 +370,8 @@ export default function RiwayatPage({ onNavigate }) {
               key={t.id}
               t={t}
               buka={openId === t.id}
-              onToggle={() => setOpenId(openId === t.id ? null : t.id)}
-              onRetry={onRetry}
+              onToggle={onToggle}
+              onRetry={undefined}
               onCopy={salin}
               ringkas={ringkas}
             />
@@ -368,7 +380,7 @@ export default function RiwayatPage({ onNavigate }) {
       ))}
 
       {totalValid > limit && (
-        <button type="button" className="rw-more" onClick={() => setLimit((n) => n + BATCH)}>
+        <button type="button" className="rw-more" onClick={more}>
           Tampilkan lebih banyak ({totalValid - limit} tersisa)
         </button>
       )}
