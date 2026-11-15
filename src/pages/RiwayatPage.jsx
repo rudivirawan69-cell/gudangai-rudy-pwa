@@ -1,202 +1,392 @@
-import { useState, useMemo } from 'react';
-import { getLocalHistory } from '../data/api';
+import { memo, useMemo, useState, useEffect, useCallback, useDeferredValue, useRef } from "react";
+import "./riwayat.css";
+import { getLocalHistory, getPendingQueue } from "../data/api";
 import {
-  Clock, ArrowUpRight, ArrowDownRight, Search,
-  AlertTriangle, Package, WifiOff, CheckCircle2, TrendingUp,
-} from 'lucide-react';
+  gabung, filterTx, kelompokkan, keCSV, ringkasanTeks, ringkasKatalog,
+} from "../data/riwayatAdapter.js";
 
-const TYPE_META = {
-  masuk: { label: 'Masuk', Icon: ArrowDownRight, color: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-200' },
-  keluar: { label: 'Keluar', Icon: ArrowUpRight, color: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-200' },
-  rusak: { label: 'Rusak', Icon: AlertTriangle, color: 'text-red-600', bg: 'bg-red-50', border: 'border-red-200' },
-};
+/**
+ * RiwayatPage — redesain + optimasi performa
+ * - Debounce pencarian (deferred)
+ * - Satu lintasan ringkasKatalog
+ * - Cache jam/hari/haystack di adapter
+ * - memo(Baris), callback stabil
+ * - Paginasi 40
+ */
 
-function qtySum(h) {
-  return (h.items || []).reduce((s, it) => s + (Number(it.qty) || 0), 0);
+const TIPE_LABEL = { masuk: "Masuk", keluar: "Keluar", rusak: "Rusak" };
+const ARAH = { masuk: "↓", keluar: "↑", rusak: "!" };
+const STATUS_LABEL = { terkirim: "Terkirim", antrian: "Antrian", gagal: "Gagal", lokal: "Lokal" };
+const ENT = ["semua", "CV", "PT", "Bahan Baku"];
+const TIPE_FILTERS = [
+  { id: "semua", label: "Semua" },
+  { id: "masuk", label: "Masuk" },
+  { id: "keluar", label: "Keluar" },
+  { id: "rusak", label: "Rusak" },
+];
+const STATUS_FILTERS = ["semua", "terkirim", "antrian", "gagal", "lokal"];
+const DENSITY_KEY = "gudangai:riwayat:density:v1";
+const BATCH = 40;
+const EMPTY = [];
+
+const fmt = (n) =>
+  new Intl.NumberFormat("id-ID", { maximumFractionDigits: 2 }).format(n);
+
+function judul(t) {
+  const a = t.items[0];
+  const nama = a?.nama || a?.kode || "(tanpa nama)";
+  return t.jumlahItem > 1 ? `${nama} +${t.jumlahItem - 1} lainnya` : nama;
 }
 
-function entryDate(h) {
-  const raw = h?.savedAt ?? h?.at ?? h?.timestamp ?? h?.createdAt ?? null;
-  if (raw == null || raw === '') return new Date();
-  const d = new Date(raw);
-  return Number.isNaN(d.getTime()) ? new Date() : d;
-}
+const Baris = memo(function Baris({ t, buka, onToggle, onRetry, onCopy, ringkas }) {
+  return (
+    <article className={`rw-row rw-${t.tipe}${buka ? " is-open" : ""}${ringkas ? " is-compact" : ""}`}>
+      <button type="button" className="rw-row-head" onClick={onToggle} aria-expanded={buka} data-id={t.id}>
+        <span className="rw-ico" aria-hidden="true">{ARAH[t.tipe] || "·"}</span>
+        <span className="rw-main">
+          <b>{judul(t)}</b>
+          <small>
+            {TIPE_LABEL[t.tipe] || t.tipe || "?"} · {t.entitas ?? "?"} · {fmt(t.totalQty)} total ·{" "}
+            {t.jamLabel || "--.--"}
+          </small>
+        </span>
+        <span className={`rw-pill rw-s-${t.status}`}>{STATUS_LABEL[t.status] || t.status}</span>
+      </button>
+      {buka && (
+        <div className="rw-detail">
+          <ul>
+            {(t.items || EMPTY).map((i, n) => (
+              <li key={n}>
+                <span>
+                  {i.nama || i.kode}
+                  {i.kode && i.nama ? <em> · {i.kode}</em> : null}
+                </span>
+                <b>
+                  {fmt(i.qty)} {i.satuan || ""}
+                </b>
+              </li>
+            ))}
+          </ul>
+          {t.keterangan ? <p className="rw-ket">{t.keterangan}</p> : null}
+          <div className="rw-actions">
+            <button type="button" onClick={() => onCopy(t)}>
+              Salin
+            </button>
+            {onRetry && (t.status === "gagal" || t.status === "antrian") && (
+              <button type="button" className="rw-primary" onClick={() => onRetry(t)}>
+                Kirim ulang
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+    </article>
+  );
+});
 
 export default function RiwayatPage({ onNavigate }) {
-  const [search, setSearch] = useState('');
-  const [filterType, setFilterType] = useState('all');
-  const [filterEntity, setFilterEntity] = useState('all');
-  const [dense, setDense] = useState(() => { try { return localStorage.getItem('gudangai_riwayat_density') !== 'comfortable'; } catch (_) { return true; } });
-  const [expandedId, setExpandedId] = useState(null);
-  const history = getLocalHistory();
-
-  const filtered = useMemo(() => {
-    let list = history;
-    if (filterType !== 'all') list = list.filter((h) => h.type === filterType);
-    if (filterEntity !== 'all') list = list.filter((h) => h.entity === filterEntity);
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      list = list.filter((h) =>
-        h.items?.some(
-          (i) =>
-            i.kode?.toLowerCase().includes(q) ||
-            i.nama?.toLowerCase().includes(q) ||
-            i.keterangan?.toLowerCase().includes(q)
-        ) ||
-        h.type?.includes(q) ||
-        h.entity?.toLowerCase().includes(q)
-      );
+  const [tick, setTick] = useState(0);
+  const [tipe, setTipe] = useState("semua");
+  const [entitas, setEntitas] = useState("semua");
+  const [status, setStatus] = useState("semua");
+  const [q, setQ] = useState("");
+  const qDeferred = useDeferredValue(q);
+  const [openId, setOpenId] = useState(null);
+  const [limit, setLimit] = useState(BATCH);
+  const [ringkas, setRingkas] = useState(() => {
+    try {
+      return localStorage.getItem(DENSITY_KEY) === "compact";
+    } catch {
+      return true;
     }
-    return list;
-  }, [history, search, filterType, filterEntity]);
+  });
+  const [toast, setToast] = useState("");
+  const toastTimer = useRef(null);
 
-  const grouped = useMemo(() => {
-    const groups = {};
-    filtered.forEach((h) => {
-      const d = entryDate(h);
-      const key = d.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'Asia/Jakarta' });
-      if (!groups[key]) groups[key] = [];
-      groups[key].push(h);
-    });
-    return Object.entries(groups).sort((a, b) => {
-      const da = entryDate(a[1][0]).getTime();
-      const db = entryDate(b[1][0]).getTime();
-      return db - da;
-    });
-  }, [filtered]);
+  const local = useMemo(() => {
+    try {
+      return getLocalHistory() || EMPTY;
+    } catch {
+      return EMPTY;
+    }
+  }, [tick]);
 
-  const typeFilters = [
-    { id: 'all', label: 'Semua' },
-    { id: 'masuk', label: 'Masuk' },
-    { id: 'keluar', label: 'Keluar' },
-    { id: 'rusak', label: 'Rusak' },
-  ];
+  const queueCount = useMemo(() => {
+    try {
+      return (getPendingQueue() || EMPTY).length;
+    } catch {
+      return 0;
+    }
+  }, [tick]);
+
+  const onRefresh = useCallback(() => setTick((n) => n + 1), []);
+  const onOpenQueue = useCallback(() => onNavigate?.("sync"), [onNavigate]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(DENSITY_KEY, ringkas ? "compact" : "comfortable");
+    } catch {}
+  }, [ringkas]);
+
+  useEffect(() => {
+    setLimit(BATCH);
+    setOpenId(null);
+  }, [tipe, entitas, status, qDeferred]);
+
+  useEffect(() => () => {
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+  }, []);
+
+  const semua = useMemo(() => gabung(local, EMPTY), [local]);
+
+  const katalog = useMemo(() => ringkasKatalog(semua), [semua]);
+  const cntStatus = katalog.status;
+  const cntTipe = katalog.tipe;
+  const anomaliTotal = katalog.anomali;
+
+  const tersaring = useMemo(
+    () => filterTx(semua, { tipe, entitas, status, q: qDeferred }),
+    [semua, tipe, entitas, status, qDeferred]
+  );
+
+  const { hari, anomali: listAnomali } = useMemo(() => kelompokkan(tersaring), [tersaring]);
+  const anomali = listAnomali.length || anomaliTotal;
+
+  const totalValid = useMemo(
+    () => hari.reduce((a, h) => a + h.items.length, 0),
+    [hari]
+  );
+
+  const tampil = useMemo(() => {
+    let sisa = limit;
+    const out = [];
+    for (let i = 0; i < hari.length && sisa > 0; i++) {
+      const h = hari[i];
+      if (sisa >= h.items.length) {
+        out.push(h);
+        sisa -= h.items.length;
+      } else {
+        out.push({ ...h, items: h.items.slice(0, sisa) });
+        sisa = 0;
+      }
+    }
+    return out;
+  }, [hari, limit]);
+
+  const nAntrian = queueCount || cntStatus.antrian || 0;
+  const adaFilter = tipe !== "semua" || entitas !== "semua" || status !== "semua" || q.trim() !== "";
+
+  const info = useCallback((t) => {
+    setToast(t);
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToast(""), 2000);
+  }, []);
+
+  const salin = useCallback(
+    async (t) => {
+      try {
+        await navigator.clipboard.writeText(ringkasanTeks(t));
+        info("Disalin");
+      } catch {
+        info("Gagal menyalin");
+      }
+    },
+    [info]
+  );
+
+  const onToggle = useCallback((e) => {
+    const id = e.currentTarget?.dataset?.id;
+    if (!id) return;
+    setOpenId((prev) => (prev === id ? null : id));
+  }, []);
+
+  const ekspor = useCallback(() => {
+    const csv = keCSV(tersaring);
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `riwayat-gudangai-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    info("CSV diunduh");
+  }, [tersaring, info]);
+
+  const resetFilter = useCallback(() => {
+    setTipe("semua");
+    setEntitas("semua");
+    setStatus("semua");
+    setQ("");
+  }, []);
+
+  const more = useCallback(() => setLimit((n) => n + BATCH), []);
 
   return (
-    <div className="px-3 pt-3 pb-24 space-y-3 max-w-lg mx-auto">
-      <div className="flex items-start justify-between gap-2">
+    <div className="rw-page">
+      <header className="rw-head">
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-wider text-cyan-600 page-kicker">Riwayat</p>
-          <h1 className="text-xl font-extrabold text-slate-900 page-title">Transaksi</h1>
-          <p className="text-[11px] text-slate-400 mt-0.5 page-sub">
-            {history.length} transaksi · lokal perangkat
+          <small>Log audit transaksi</small>
+          <h1>Riwayat</h1>
+          <p className="rw-sub">
+            {totalValid} valid
+            {anomali > 0 ? ` · ${anomali} tidak valid disembunyikan` : ""}
+            {" · "}
+            lokal perangkat
           </p>
         </div>
-        <div className="flex items-center gap-1.5 shrink-0">
-          <button type="button" onClick={() => onNavigate?.('sync')}
-            className="text-[10px] font-bold px-2.5 py-1.5 rounded-lg bg-amber-50 text-amber-700 border border-amber-200">
-            Antrian
+        <div className="rw-head-actions">
+          {nAntrian > 0 && (
+            <button type="button" className="rw-btn-queue" onClick={onOpenQueue}>
+              Antrian {nAntrian}
+            </button>
+          )}
+          <button
+            type="button"
+            className="rw-btn-ghost"
+            onClick={() => setRingkas((v) => !v)}
+            aria-pressed={ringkas}
+          >
+            {ringkas ? "Nyaman" : "Ringkas"}
           </button>
-          <button type="button" onClick={() => setDense((v) => {
-              const next = !v;
-              try { localStorage.setItem('gudangai_riwayat_density', next ? 'compact' : 'comfortable'); } catch (_) {}
-              return next;
-            })}
-            className="text-[10px] font-bold px-2.5 py-1.5 rounded-lg bg-white text-slate-600 border border-slate-200"
-            aria-pressed={dense}>
-            {dense ? 'Tampilan nyaman' : 'Tampilan ringkas'}
+          <button type="button" className="rw-btn-ghost" onClick={onRefresh} aria-label="Muat ulang">
+            ⟳
           </button>
         </div>
-      </div>
+      </header>
 
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Cari kode, nama, keterangan..."
-          className="w-full pl-10 pr-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm text-slate-900"
-        />
-      </div>
-
-      <div className="flex flex-wrap gap-1.5">
-        {typeFilters.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            onClick={() => setFilterType(t.id)}
-            className={`px-3 py-1.5 rounded-full text-[12px] font-bold border ${
-              filterType === t.id
-                ? 'bg-cyan-600 text-white border-cyan-600'
-                : 'bg-white text-slate-600 border-slate-200'
-            }`}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
-
-      <div className="flex flex-wrap gap-1.5">
-        {['all', 'CV', 'PT'].map((e) => (
-          <button
-            key={e}
-            type="button"
-            onClick={() => setFilterEntity(e)}
-            className={`px-3 py-1.5 rounded-full text-[12px] font-bold border ${
-              filterEntity === e
-                ? 'bg-cyan-600 text-white border-cyan-600'
-                : 'bg-white text-slate-600 border-slate-200'
-            }`}
-          >
-            {e === 'all' ? 'Semua' : e}
-          </button>
-        ))}
-      </div>
-
-      {filtered.length === 0 && (
-        <div className="rounded-2xl bg-white border border-slate-100 shadow-sm py-12 text-center">
-          <Clock className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-          <p className="text-sm font-semibold text-slate-500">Belum ada riwayat</p>
-          <p className="text-[11px] text-slate-400 mt-1">Transaksi berhasil akan muncul di sini</p>
+      {(cntStatus.gagal > 0 || cntStatus.antrian > 0) && status === "semua" && (
+        <div className="rw-banner">
+          <div>
+            <b>
+              {cntStatus.gagal > 0 ? `${cntStatus.gagal} gagal` : ""}
+              {cntStatus.gagal > 0 && cntStatus.antrian > 0 ? " · " : ""}
+              {cntStatus.antrian > 0 ? `${cntStatus.antrian} antrian` : ""}
+            </b>
+            <small>Filter atau buka Antrian Sinkronisasi</small>
+          </div>
+          <div className="rw-banner-btns">
+            {cntStatus.gagal > 0 && (
+              <button type="button" onClick={() => setStatus("gagal")}>
+                Lihat gagal
+              </button>
+            )}
+            {nAntrian > 0 && (
+              <button type="button" className="rw-primary" onClick={onOpenQueue}>
+                Antrian
+              </button>
+            )}
+          </div>
         </div>
       )}
 
-      {grouped.map(([day, items]) => (
-        <div key={day} className="space-y-2">
-          <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wide px-0.5">{day}</p>
-          {items.map((h, idx) => {
-            const meta = TYPE_META[h.type] || TYPE_META.masuk;
-            const Icon = meta.Icon;
-            const id = h.id || `${day}-${idx}`;
-            const open = expandedId === id;
-            return (
-              <div key={id} className={`rounded-2xl border shadow-sm bg-white overflow-hidden ${meta.border}`}>
-                <button
-                  type="button"
-                  onClick={() => setExpandedId(open ? null : id)}
-                  className={'w-full flex items-center gap-3 text-left ' + (dense ? 'px-3 py-2' : 'px-3 py-3')}
-                >
-                  <span className={(dense ? 'w-8 h-8' : 'w-9 h-9') + ' rounded-xl flex items-center justify-center shrink-0 ' + meta.bg + ' ' + meta.color}>
-                    <Icon className="w-4 h-4" />
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <p className={(dense ? 'text-[12px]' : 'text-[13px]') + ' font-bold text-slate-900 truncate'}>
-                      {meta.label} · {h.entity || '—'} · {h.items?.length || 0} item
-                    </p>
-                    <p className="text-[11px] text-slate-500 mt-0.5">
-                      Qty {qtySum(h).toLocaleString('id-ID')} · {entryDate(h).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta' })} WIB
-                    </p>
-                  </div>
-                  <span className="text-slate-400 text-lg font-bold">{open ? '−' : '+'}</span>
-                </button>
-                {open && (
-                  <div className={'px-3 border-t border-slate-100 space-y-1.5 ' + (dense ? 'pb-2 pt-1.5' : 'pb-3 pt-2')}>
-                    {(h.items || []).map((it, i) => (
-                      <div key={i} className="flex items-center justify-between gap-2 text-[12px]">
-                        <div className="min-w-0">
-                          <p className="font-semibold text-slate-800 truncate">{it.nama || it.kode}</p>
-                          <p className="text-[10px] text-slate-400 font-mono">{it.kode}</p>
-                        </div>
-                        <p className="font-bold tabular-nums text-slate-900 shrink-0">{Number(it.qty || 0).toLocaleString('id-ID')}</p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            );
-          })}
+      <div className="rw-filters">
+        <div className="rw-chips" role="group" aria-label="Jenis transaksi">
+          {TIPE_FILTERS.map((x) => (
+            <button
+              key={x.id}
+              type="button"
+              className={tipe === x.id ? "on" : ""}
+              onClick={() => setTipe(x.id)}
+            >
+              {x.label}
+              {x.id !== "semua" && cntTipe[x.id] != null ? <em>{cntTipe[x.id]}</em> : null}
+            </button>
+          ))}
         </div>
+        <div className="rw-chips" role="group" aria-label="Entitas">
+          {ENT.map((e) => (
+            <button
+              key={e}
+              type="button"
+              className={entitas === e ? "on" : ""}
+              onClick={() => setEntitas(e)}
+            >
+              {e === "semua" ? "Semua entitas" : e}
+            </button>
+          ))}
+        </div>
+        <div className="rw-chips" role="group" aria-label="Status kirim">
+          {STATUS_FILTERS.map((s) => (
+            <button
+              key={s}
+              type="button"
+              className={status === s ? "on" : ""}
+              onClick={() => setStatus(s)}
+            >
+              {s === "semua" ? "Semua status" : STATUS_LABEL[s] || s}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="rw-search">
+        <input
+          type="search"
+          placeholder="Cari kode / nama / keterangan…"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          autoComplete="off"
+          spellCheck={false}
+        />
+        {q && (
+          <button type="button" onClick={() => setQ("")} aria-label="Hapus">
+            ✕
+          </button>
+        )}
+        <button type="button" className="rw-btn-export" onClick={ekspor} title="Ekspor CSV">
+          CSV
+        </button>
+      </div>
+
+      {anomali > 0 && (
+        <div className="rw-alert rw-soft">
+          {anomali} entri tidak valid disembunyikan (qty 0 / tanpa item). Tidak dihapus dari perangkat.
+        </div>
+      )}
+
+      {totalValid === 0 && (
+        <div className="rw-empty">
+          <b>{adaFilter ? "Tidak ada hasil" : "Belum ada riwayat"}</b>
+          <p>{adaFilter ? "Ubah filter atau reset." : "Transaksi berhasil akan muncul di sini."}</p>
+          {adaFilter && (
+            <button type="button" className="rw-primary" onClick={resetFilter}>
+              Reset filter
+            </button>
+          )}
+        </div>
+      )}
+
+      {tampil.map((h) => (
+        <section key={h.key} className="rw-day">
+          <header className="rw-day-head">
+            <h2>{h.label}</h2>
+            <span>
+              {h.items.length} tx · ↓{h.ringkas?.masuk || 0} ↑{h.ringkas?.keluar || 0}
+              {(h.ringkas?.rusak || 0) > 0 ? ` !${h.ringkas.rusak}` : ""}
+            </span>
+          </header>
+          {h.items.map((t) => (
+            <Baris
+              key={t.id}
+              t={t}
+              buka={openId === t.id}
+              onToggle={onToggle}
+              onRetry={undefined}
+              onCopy={salin}
+              ringkas={ringkas}
+            />
+          ))}
+        </section>
       ))}
+
+      {totalValid > limit && (
+        <button type="button" className="rw-more" onClick={more}>
+          Tampilkan lebih banyak ({totalValid - limit} tersisa)
+        </button>
+      )}
+
+      <div className="rw-spacer" />
+      {toast && <div className="rw-toast">{toast}</div>}
     </div>
   );
 }
