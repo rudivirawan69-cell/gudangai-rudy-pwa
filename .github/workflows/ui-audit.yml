@@ -3,7 +3,11 @@ name: GudangAI UI audit (read-only)
 on:
   workflow_dispatch:
   pull_request:
+    branches: [main]
     paths:
+      - "index.html"
+      - "src/**/*.css"
+      - "src/**/*.jsx"
       - "scripts-audit/**"
       - ".github/workflows/ui-audit.yml"
 
