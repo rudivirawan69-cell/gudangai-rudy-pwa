@@ -53,7 +53,7 @@ function applyDomTheme(theme) {
   const activeTheme = normalizeTheme(theme);
   const root = document.documentElement;
   root.dataset.theme = activeTheme;
-  root.style.colorScheme = activeTheme === 'soft_light' ? 'light' : 'dark';
+  root.style.colorScheme = activeTheme === 'deep_ocean' ? 'dark' : 'light';
 
   const themeColorMeta = document.querySelector('meta[name="theme-color"]');
   if (themeColorMeta) {
@@ -90,8 +90,8 @@ export function ThemeProvider({ children }) {
   const value = useMemo(() => ({
     theme,
     meta: THEME_META[theme] || THEME_META.soft_light,
-    isDark: theme !== 'soft_light',
-    isLight: theme === 'soft_light',
+    isDark: theme === 'deep_ocean',
+    isLight: theme !== 'deep_ocean',
     isWarm: theme === 'graphite_titanium',
     isGraphite: theme === 'graphite_titanium',
     setTheme,
