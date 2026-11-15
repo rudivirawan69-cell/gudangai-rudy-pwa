@@ -38,6 +38,8 @@ for (const [file, source] of css) {
   }
 }
 const duplicates = [...selectorMap].filter(([, files]) => files.length > 1).map(([selector, files]) => ({ selector, count: files.length, files }));
+const themeSelectors = css.flatMap(([file, source]) => [...source.matchAll(/html\[data-theme\s*=\s*["']([^"']+)["']\]/g)].map((m) => ({ file, theme: m[1], selector: m[0] })));
+const uniqueThemeSelectors = [...new Map(themeSelectors.map((row) => [row.selector + '|' + row.file, row])).values()];
 const unusedCandidates = [...selectorMap].flatMap(([selector, files]) => {
   const atoms = [...selector.matchAll(/\.([_a-zA-Z][\w-]*)|#([_a-zA-Z][\w-]*)/g)].map((m) => m[1] || m[2]);
   return atoms.length && atoms.every((name) => !jsx.includes(name)) ? [{ selector, files }] : [];
@@ -58,7 +60,7 @@ const inventory = {
   cssFiles, cssCount: cssFiles.length, jsxCount: jsxFiles.length, mainImports,
   themeImportGraph: graphFiles,
   unimportedCssCandidates: cssFiles.filter((f) => !graphFiles.some((x) => x.file === f) && !mainImports.some((i) => path.posix.normalize(path.posix.join('src', i)) === f)),
-  duplicateSelectors: duplicates, selectorsWithoutLiteralJsxToken: unusedCandidates,
+  duplicateSelectors: duplicates, selectorsWithoutLiteralJsxToken: unusedCandidates, themeSelectors: uniqueThemeSelectors,
   hardcodedOutsideTokens: { totals, files: counts },
   elevationAudit: { declarations: elevationRows.reduce((n, row) => n + row.declarations.length, 0), nonTokenDeclarations: elevationAudit },
   ghostOverlayAudit: { appBgDefinitions: (read('src/index.css').match(/\.app-bg\s*\{/g) || []).length, appBgAfterDefinitions: (read('src/index.css').match(/\.app-bg::after\s*\{/g) || []).length, cardIconBeforeRule: /\.app-content[^{}]*\.card[^{}]*::before[^{}]*data:image\/svg\+xml/.test(read('src/index.css')) },
