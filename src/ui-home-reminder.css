@@ -16,7 +16,7 @@
 .home-reminder-module textarea:focus { border-color: var(--accent); box-shadow: var(--focus-ring); }
 .home-reminder-module .bg-slate-900 { background: var(--accent-strong) !important; color: var(--text-on-accent) !important; }
 .home-reminder-module [class~="hover:bg-slate-800"]:hover { filter: brightness(.96); }
-.home-reminder-module .shadow-sm { box-shadow: var(--shadow-1); }
+.home-reminder-module .shadow-sm { box-shadow: var(--elev-1); }
 html[data-theme="deep_ocean"] .home-reminder-module .bg-slate-50,
 html[data-theme="deep_ocean"] .home-reminder-module [class~="bg-slate-50/80"] { background: rgba(12, 28, 48, .86) !important; }
 html[data-theme="deep_ocean"] .home-reminder-module .border-slate-200,
