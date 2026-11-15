@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  parseWaktu, normTx, gabung, kelompokkan, filterTx, keCSV, kunciHari, labelHari, jamWIB, hitungStatus, normStatus,
+  parseWaktu, normTx, gabung, kelompokkan, filterTx, keCSV, kunciHari, labelHari, jamWIB, hitungStatus, normStatus, ringkasKatalog,
 } from "./riwayatAdapter.js";
 
 test("parseWaktu ISO dan epoch", () => {
@@ -11,7 +11,7 @@ test("parseWaktu ISO dan epoch", () => {
   assert.equal(parseWaktu(null), null);
 });
 
-test("normTx menandai anomali qty 0 / tanpa item", () => {
+test("normTx menandai anomali qty 0 / tanpa item + cache", () => {
   const a = normTx({ type: "masuk", entity: "CV", items: [], savedAt: Date.now() });
   assert.equal(a.anomali, true);
   const b = normTx({ type: "masuk", entity: "CV", items: [{ kode: "X", qty: 0 }], savedAt: Date.now() });
@@ -21,6 +21,9 @@ test("normTx menandai anomali qty 0 / tanpa item", () => {
   assert.equal(c.totalQty, 2);
   assert.equal(c.tipe, "keluar");
   assert.equal(c.entitas, "PT");
+  assert.ok(c.hariKey);
+  assert.ok(c.jamLabel);
+  assert.ok(c._hay.includes("y"));
 });
 
 test("gabung dedup by kunci", () => {
@@ -41,7 +44,7 @@ test("kelompokkan memisah anomali", () => {
   assert.ok(hari.length >= 1);
 });
 
-test("filterTx tipe/entitas/q", () => {
+test("filterTx tipe/entitas/q memakai haystack", () => {
   const list = gabung([
     { type: "masuk", entity: "CV", items: [{ kode: "BB-1", nama: "Bahan X", qty: 1 }], savedAt: Date.now() },
     { type: "keluar", entity: "PT", items: [{ kode: "P1", nama: "Produk", qty: 2 }], savedAt: Date.now() },
@@ -57,21 +60,25 @@ test("jamWIB dan kunciHari konsisten Asia/Jakarta", () => {
   assert.ok(jamWIB(ts).includes("23"));
 });
 
-test("labelHari Hari ini / Kemarin", () => {
+test("labelHari Hari ini", () => {
   const now = Date.now();
   assert.equal(labelHari(kunciHari(now), now), "Hari ini");
 });
 
-test("hitungStatus", () => {
+test("hitungStatus & ringkasKatalog", () => {
   const list = [
-    { status: "terkirim", anomali: false },
-    { status: "gagal", anomali: false },
-    { status: "antrian", anomali: false },
+    { status: "terkirim", tipe: "masuk", anomali: false },
+    { status: "gagal", tipe: "keluar", anomali: false },
+    { status: "antrian", tipe: "masuk", anomali: false },
+    { status: "lokal", tipe: "rusak", anomali: true },
   ];
   const c = hitungStatus(list);
   assert.equal(c.terkirim, 1);
   assert.equal(c.gagal, 1);
-  assert.equal(c.antrian, 1);
+  const k = ringkasKatalog(list);
+  assert.equal(k.anomali, 1);
+  assert.equal(k.tipe.masuk, 2);
+  assert.equal(k.status.gagal, 1);
 });
 
 test("keCSV header dan pemisah titik koma", () => {
