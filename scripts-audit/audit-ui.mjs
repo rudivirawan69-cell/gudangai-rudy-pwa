@@ -90,6 +90,15 @@ const md = [
 fs.writeFileSync(path.join(OUT, 'inventory.md'), md);
 
 const server = spawn(process.execPath, ['node_modules/vite/bin/vite.js', 'preview', '--host', '127.0.0.1', '--port', '4173', '--strictPort'], { stdio: 'ignore' });
+let previewReady = false;
+for (let attempt = 0; attempt < 60; attempt++) {
+  try {
+    const response = await fetch('http://127.0.0.1:4173/');
+    if (response.ok) { previewReady = true; break; }
+  } catch {}
+  await new Promise((resolve) => setTimeout(resolve, 500));
+}
+if (!previewReady) { server.kill('SIGTERM'); throw new Error('Vite preview tidak siap dalam 30 detik'); }
 const browser = await chromium.launch({ headless: true });
 const context = await browser.newContext({ serviceWorkers: 'block', viewport: { width: 412, height: 850 } });
 await context.route('**/*', (route) => {
