@@ -155,21 +155,20 @@ function AppHeader({ user, tab, onOpenSettings, online, status, sheetLabel, onRe
             <span className={`absolute bottom-0.5 right-0.5 w-2.5 h-2.5 rounded-full border-2 border-[var(--bg-elevated,#fff)] ${connected ? 'bg-emerald-500' : 'bg-amber-400'}`} />
           </button>
           <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2 min-w-0">
-              <h1 className="text-[13px] font-black tracking-wide text-[var(--text-main,#0f172a)] uppercase truncate leading-none">GUDANG-69 RUDI</h1>
-              <span aria-live="polite" className={`shrink-0 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[9px] font-bold ${connected ? 'bg-emerald-500/15 text-[color-mix(in_srgb,#047857_62%,var(--text-main,#0f172a))]' : 'bg-amber-500/15 text-[color-mix(in_srgb,#b45309_62%,var(--text-main,#0f172a))]'}`}>
-                <span className={`w-1.5 h-1.5 rounded-full ${connected ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
-                {connected ? 'Terhubung' : 'Cek koneksi'}
-              </span>
-            </div>
-            <div className="mt-1 flex items-center gap-1.5 min-w-0 text-[10px] font-medium text-[var(--text-muted,#475569)]">
-              <span className="truncate font-bold">{TAB_SUBTITLE[tab] || 'STATUS UPDATE REAL TIME'}</span>
-              <span aria-hidden="true" className="opacity-40">·</span>
-              <span className="flex items-center gap-1 min-w-0">
-                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${sheetLabel ? 'bg-emerald-500' : 'bg-slate-400'}`} />
-                <span className="truncate" title={sheetLabel || undefined}>Update: <strong className="text-[var(--text-main,#0f172a)] font-bold">{formatSpreadsheetTimestamp(sheetLabel)}</strong></span>
-              </span>
-            </div>
+            <h1 className="text-[13px] font-black tracking-wide text-[var(--text-main,#0f172a)] uppercase truncate leading-tight">
+              GUDANG-69 RUDI
+            </h1>
+            <p
+              className="mt-0.5 text-[10px] font-semibold text-[var(--text-muted,#475569)] truncate leading-tight"
+              title={sheetLabel || undefined}
+              aria-live="polite"
+            >
+              {sheetLabel
+                ? `Update ${formatSpreadsheetTimestamp(sheetLabel)}`
+                : connected
+                  ? 'Update — menunggu data spreadsheet'
+                  : 'Update — belum terhubung'}
+            </p>
           </div>
           <button type="button" onClick={handleRefresh} disabled={refreshing} className="shrink-0 w-10 h-10 rounded-xl bg-[var(--bg-muted,#f8fafc)] border border-[var(--border,#e2e8f0)] flex items-center justify-center active:scale-95 disabled:opacity-60" aria-label="Cek koneksi ke spreadsheet" title="Cek koneksi">
             <RefreshCw className={`w-3.5 h-3.5 text-[var(--text-muted,#475569)] ${refreshing ? 'animate-spin' : ''}`} />
