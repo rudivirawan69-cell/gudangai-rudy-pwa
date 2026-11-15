@@ -214,7 +214,8 @@ export default function StokPage() {
       m.get(d).push(i);
     });
     return [...m.entries()].sort(
-      ([, a], [, b]) => ringkas(b).kritis - ringkas(a).kritis || a[0].localeCompare(b[0], "id")
+      ([namaA, a], [namaB, b]) =>
+        ringkas(b).kritis - ringkas(a).kritis || String(namaA).localeCompare(String(namaB), "id")
     );
   }, [terfilter]);
 
