@@ -1,19 +1,18 @@
-import { useMemo, useState, useEffect, useCallback } from "react";
+import { memo, useMemo, useState, useEffect, useCallback, useDeferredValue } from "react";
 import "./stok.css";
 import { useStock } from "../hooks/useStock";
 import { ENTITAS, TIDAK_TERKLASIFIKASI, normalizeAll } from "../data/stokAdapter.js";
 
 /**
- * StokPage — redesain v2.1
- * - Tanpa 4 kartu KPI
- * - Chip divisi di bagian atas (filter utama)
- * - Ringkasan status satu baris + chip filter status sekunder
+ * StokPage — redesain v2.1 + optimasi render
+ * - memo(ItemRow/Divisi), deferred search, paginasi 60 item
  */
 
 const RANK = { kritis: 0, waspada: 1, aman: 2 };
 const LABEL = { kritis: "Kritis", waspada: "Waspada", aman: "Aman" };
 const CACHE_KEY = "gudangai:stok:snapshot:v1";
 const STALE_MENIT = 10;
+const BATCH = 60;
 
 const fmt = (n) =>
   new Intl.NumberFormat("id-ID", { maximumFractionDigits: 2 }).format(n);
@@ -47,7 +46,7 @@ function Bar({ c }) {
   );
 }
 
-function ItemRow({ it, onOpen }) {
+const ItemRow = memo(function ItemRow({ it, onOpen }) {
   const target = it.min > 0 ? it.min : null;
   const pct = target ? Math.min(100, Math.round((it.stok / target) * 100)) : 0;
   return (
@@ -68,13 +67,13 @@ function ItemRow({ it, onOpen }) {
       )}
     </button>
   );
-}
+});
 
-function Divisi({ nama, items, open, onToggle, onOpen }) {
+const Divisi = memo(function Divisi({ nama, items, open, onToggle, onOpen }) {
   const c = ringkas(items);
   return (
     <section className={`sk-div${open ? " is-open" : ""}`}>
-      <button type="button" className="sk-div-head" onClick={onToggle} aria-expanded={open}>
+      <button type="button" className="sk-div-head" onClick={() => onToggle(nama)} aria-expanded={open}>
         <div className="sk-div-title">
           <h3>{nama}</h3>
           <p>
@@ -89,13 +88,13 @@ function Divisi({ nama, items, open, onToggle, onOpen }) {
       {open && (
         <div className="sk-div-body">
           {items.map((it) => (
-            <ItemRow key={`${it.entitas}-${it.kode}-${it.nama}`} it={it} onOpen={onOpen} />
+            <ItemRow key={`${it.entitas}-${it.kode}`} it={it} onOpen={onOpen} />
           ))}
         </div>
       )}
     </section>
   );
-}
+});
 
 function Sheet({ it, onClose, onInput }) {
   if (!it) return null;
@@ -132,8 +131,15 @@ export default function StokPage() {
   const [divFilter, setDivFilter] = useState(null);
   const [filter, setFilter] = useState("semua");
   const [q, setQ] = useState("");
+  const qDeferred = useDeferredValue(q);
+  const [limit, setLimit] = useState(BATCH);
   const [open, setOpen] = useState({});
   const [detail, setDetail] = useState(null);
+  const onOpenItem = useCallback((it) => setDetail(it), []);
+  const onCloseSheet = useCallback(() => setDetail(null), []);
+  const onToggleDiv = useCallback((nama) => {
+    setOpen((prev) => ({ ...prev, [nama]: !prev[nama] }));
+  }, []);
   const [refreshing, setRefreshing] = useState(false);
   const [toast, setToast] = useState("");
   const [cache, setCache] = useState(null);
@@ -153,6 +159,10 @@ export default function StokPage() {
     setDivFilter(null);
     setFilter("semua");
   }, [entitas]);
+
+  useEffect(() => {
+    setLimit(BATCH);
+  }, [entitas, divFilter, filter, qDeferred]);
 
   const memakaiCache = !(rawItems && rawItems.length) && cache?.data?.length;
   const sumber = memakaiCache ? cache.data : rawItems || [];
@@ -188,23 +198,27 @@ export default function StokPage() {
   }, [perEntitas]);
 
   const terfilter = useMemo(() => {
-    const k = q.trim().toLowerCase();
+    const k = qDeferred.trim().toLowerCase();
     return perEntitas
       .filter((i) => !divFilter || i.divisi === divFilter)
       .filter((i) => filter === "semua" || i.status === filter)
-      .filter((i) => !k || i.nama.toLowerCase().includes(k) || String(i.kode).toLowerCase().includes(k))
+      .filter((i) => !k || (i.nama || "").toLowerCase().includes(k) || String(i.kode || "").toLowerCase().includes(k))
       .sort((a, b) => RANK[a.status] - RANK[b.status] || a.nama.localeCompare(b.nama));
-  }, [perEntitas, divFilter, filter, q]);
+  }, [perEntitas, divFilter, filter, qDeferred]);
 
   const divisi = useMemo(() => {
     const m = new Map();
-    terfilter.forEach((i) => m.set(i.divisi, [...(m.get(i.divisi) || []), i]));
+    terfilter.forEach((i) => {
+      const d = i.divisi || "Lainnya";
+      if (!m.has(d)) m.set(d, []);
+      m.get(d).push(i);
+    });
     return [...m.entries()].sort(
-      ([, a], [, b]) => ringkas(b).kritis - ringkas(a).kritis || a[0].divisi.localeCompare(b[0].divisi)
+      ([, a], [, b]) => ringkas(b).kritis - ringkas(a).kritis || a[0].localeCompare(b[0], "id")
     );
   }, [terfilter]);
 
-  const auto = q.trim() !== "" || filter !== "semua" || !!divFilter;
+  const auto = qDeferred.trim() !== "" || filter !== "semua" || !!divFilter;
   const isOpen = (d) => (auto ? true : !!open[d]);
 
   const segarkan = useCallback(async () => {
@@ -244,6 +258,25 @@ export default function StokPage() {
     } catch {}
   };
 
+  const { tampilDivisi, sisaItem } = useMemo(() => {
+    let sisa = limit;
+    const out = [];
+    let total = 0;
+    for (const pair of divisi) {
+      const items = pair[1];
+      total += items.length;
+      if (sisa <= 0) continue;
+      if (items.length <= sisa) {
+        out.push(pair);
+        sisa -= items.length;
+      } else {
+        out.push([pair[0], items.slice(0, sisa)]);
+        sisa = 0;
+      }
+    }
+    return { tampilDivisi: out, sisaItem: Math.max(0, total - limit) };
+  }, [divisi, limit]);
+
   const rel = relatif(waktu);
   const basi = !waktu || Date.now() - new Date(waktu).getTime() > STALE_MENIT * 60000;
   const kosong = !loading && semua.length === 0;
@@ -261,179 +294,87 @@ export default function StokPage() {
       <div className={`sk-conn sk-c-${koneksi}`}>
         <span className="sk-conn-dot" />
         <span className="sk-conn-txt">{teksKoneksi}</span>
-        <button
-          type="button"
-          className={`sk-refresh${refreshing || loading ? " spin" : ""}`}
-          onClick={segarkan}
-          aria-label="Muat ulang data"
-        >
+        <button type="button" className={`sk-refresh${refreshing ? " spin" : ""}`} onClick={segarkan} aria-label="Muat ulang">
           ⟳
         </button>
       </div>
 
       <header className="sk-head">
-        <div>
-          <small>Monitoring persediaan</small>
-          <h1>Data Stok</h1>
-        </div>
+        <small>Monitoring persediaan</small>
+        <h1>Data Stok</h1>
       </header>
 
-      <div className="sk-seg" role="tablist">
+      <div className="sk-seg" role="tablist" aria-label="Entitas">
         {tabs.map((e) => (
-          <button
-            key={e}
-            role="tab"
-            aria-selected={entitas === e}
-            className={entitas === e ? "on" : ""}
-            onClick={() => setEntitas(e)}
-          >
-            {e} <em>{cntEnt[e]}</em>
+          <button key={e} type="button" role="tab" aria-selected={entitas === e} className={entitas === e ? "on" : ""} onClick={() => setEntitas(e)}>
+            {e === TIDAK_TERKLASIFIKASI ? "Lainnya" : e}
+            {cntEnt[e] != null ? <em>{cntEnt[e]}</em> : null}
           </button>
         ))}
       </div>
 
-      {daftarDivisi.length > 0 && (
-        <div className="sk-div-chips" role="group" aria-label="Filter divisi">
-          <button
-            type="button"
-            className={!divFilter ? "on" : ""}
-            onClick={() => setDivFilter(null)}
-          >
-            Semua <em>{perEntitas.length}</em>
+      <div className="sk-div-chips" role="group" aria-label="Filter divisi">
+        <button type="button" className={!divFilter ? "on" : ""} onClick={() => setDivFilter(null)}>
+          Semua<em>{perEntitas.length}</em>
+        </button>
+        {daftarDivisi.map(({ nama, n }) => (
+          <button key={nama} type="button" className={divFilter === nama ? "on" : ""} onClick={() => setDivFilter(divFilter === nama ? null : nama)}>
+            {nama}<em>{n}</em>
           </button>
-          {daftarDivisi.map(({ nama, n }) => (
-            <button
-              key={nama}
-              type="button"
-              className={divFilter === nama ? "on" : ""}
-              onClick={() => setDivFilter(divFilter === nama ? null : nama)}
-            >
-              {nama} <em>{n}</em>
-            </button>
-          ))}
-        </div>
-      )}
+        ))}
+      </div>
 
       <div className="sk-status-row">
-        <p className="sk-status-sum">
-          <span className="t-kritis">{cnt.kritis} kritis</span>
-          <span aria-hidden="true"> · </span>
-          <span className="t-waspada">{cnt.waspada} waspada</span>
-          <span aria-hidden="true"> · </span>
-          <span className="t-aman">{cnt.aman} aman</span>
-          <span className="sk-status-total"> · {cnt.total} total</span>
-        </p>
-        <div className="sk-status-chips" role="group" aria-label="Filter status">
-          {[
-            { id: "semua", label: "Semua" },
-            { id: "kritis", label: "Kritis" },
-            { id: "waspada", label: "Waspada" },
-            { id: "aman", label: "Aman" },
-          ].map((s) => (
-            <button
-              key={s.id}
-              type="button"
-              className={filter === s.id ? "on" : ""}
-              onClick={() => setFilter(filter === s.id && s.id !== "semua" ? "semua" : s.id)}
-            >
-              {s.label}
+        <span className="sk-status-sum">
+          <b>{cnt.total}</b> item · <span className="t-kritis">{cnt.kritis} kritis</span> · <span className="t-waspada">{cnt.waspada} waspada</span> · <span className="t-aman">{cnt.aman} aman</span>
+        </span>
+        <div className="sk-chips" role="group" aria-label="Filter status">
+          {["semua", "kritis", "waspada", "aman"].map((s) => (
+            <button key={s} type="button" className={`${filter === s ? "on" : ""}${s !== "semua" ? ` sk-c-${s}` : ""}`} onClick={() => setFilter(s)}>
+              {s === "semua" ? "Semua" : LABEL[s]}
             </button>
           ))}
         </div>
       </div>
 
       <div className="sk-search">
-        <input
-          type="search"
-          inputMode="search"
-          placeholder="Cari kode / nama…"
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-        />
+        <input type="search" placeholder="Cari nama / kode…" value={q} onChange={(e) => setQ(e.target.value)} autoComplete="off" spellCheck={false} />
         {q && (
-          <button type="button" onClick={() => setQ("")} aria-label="Hapus pencarian">
-            ✕
-          </button>
+          <button type="button" onClick={() => setQ("")} aria-label="Hapus">✕</button>
         )}
       </div>
 
-      {daftarRestok.length > 0 && filter === "semua" && !q && (
-        <div className="sk-restok">
+      {restokItems.length > 0 && (
+        <div className="sk-banner">
           <div>
-            <b>{daftarRestok.length} item di bawah stok aman</b>
-            <small>
-              {restokItems.filter((i) => i.status === "kritis").length} kritis ·{" "}
-              {restokItems.filter((i) => i.status === "waspada").length} waspada
-            </small>
+            <b>{restokItems.length} item perlu restok</b>
+            <small>{divFilter ? `Divisi ${divFilter}` : "Semua divisi"} · {entitas}</small>
           </div>
-          <button type="button" onClick={bagikan}>
-            Bagikan
-          </button>
-        </div>
-      )}
-
-      {(laporan.hanyaAwal > 0 ||
-        laporan.tanpaEntitas > 0 ||
-        laporan.duplikat.length > 0 ||
-        laporan.statusBeda > 0 ||
-        (laporan.selisihTarget != null && laporan.selisihTarget !== 0)) && (
-        <div className="sk-alert">
-          Data perlu dicek:
-          {laporan.hanyaAwal > 0 && ` ${laporan.hanyaAwal} item hanya punya Stock Awal (bukan sisa).`}
-          {laporan.tanpaEntitas > 0 &&
-            ` ${laporan.tanpaEntitas} item belum terklasifikasi (lihat tab "Tidak terklasifikasi").`}
-          {laporan.duplikat.length > 0 &&
-            ` ${laporan.duplikat.length} baris duplikat diabaikan (entri pertama dipakai).`}
-          {laporan.statusBeda > 0 &&
-            ` ${laporan.statusBeda} status API berbeda dari aturan Dashboard.`}
-          {laporan.selisihTarget != null &&
-            laporan.selisihTarget !== 0 &&
-            ` Total unik ${laporan.total} (target 193, selisih ${laporan.selisihTarget > 0 ? "+" : ""}${laporan.selisihTarget}).`}
+          <button type="button" className="sk-primary" onClick={bagikan}>Bagikan</button>
         </div>
       )}
 
       {error && (
         <div className="sk-alert">
           {error}{" "}
-          <button type="button" onClick={segarkan}>
-            Coba lagi
-          </button>
+          <button type="button" onClick={segarkan}>Coba lagi</button>
         </div>
       )}
 
       <div className="sk-list-head">
-        <h2>
-          {divFilter || "Semua divisi"} · {entitas}
-        </h2>
+        <h2>{divFilter || "Semua divisi"} · {entitas}</h2>
         <span>{divisi.length} grup</span>
-        {!auto && divisi.length > 0 && (
-          <button
-            type="button"
-            onClick={() => {
-              const semuaTerbuka = divisi.every(([d]) => open[d]);
-              setOpen(Object.fromEntries(divisi.map(([d]) => [d, !semuaTerbuka])));
-            }}
-          >
-            {divisi.every(([d]) => open[d]) ? "Tutup semua" : "Buka semua"}
-          </button>
-        )}
       </div>
 
       {loading && semua.length === 0 && (
-        <div className="sk-skel">
-          {[0, 1, 2].map((i) => (
-            <div key={i} />
-          ))}
-        </div>
+        <div className="sk-skel">{[0, 1, 2].map((i) => <div key={i} />)}</div>
       )}
 
       {kosong && !error && (
         <div className="sk-empty">
           <b>Belum ada data stok</b>
           <p>Pastikan spreadsheet bulan berjalan terhubung, lalu muat ulang.</p>
-          <button type="button" className="sk-primary" onClick={segarkan}>
-            Muat ulang
-          </button>
+          <button type="button" className="sk-primary" onClick={segarkan}>Muat ulang</button>
         </div>
       )}
 
@@ -444,29 +385,24 @@ export default function StokPage() {
         </div>
       )}
 
-      {divisi.map(([nama, items]) => (
+      {tampilDivisi.map(([nama, items]) => (
         <Divisi
           key={nama}
           nama={nama}
           items={items}
           open={isOpen(nama)}
-          onToggle={() => setOpen((o) => ({ ...o, [nama]: !o[nama] }))}
-          onOpen={setDetail}
+          onToggle={onToggleDiv}
+          onOpen={onOpenItem}
         />
       ))}
+      {sisaItem > 0 && (
+        <button type="button" className="sk-more" onClick={() => setLimit((n) => n + BATCH)}>
+          Tampilkan lebih banyak ({sisaItem} item tersisa)
+        </button>
+      )}
 
       <div className="sk-spacer" />
-      <Sheet
-        it={detail}
-        onClose={() => setDetail(null)}
-        onInput={
-          onInput &&
-          ((i) => {
-            setDetail(null);
-            onInput(i);
-          })
-        }
-      />
+      <Sheet it={detail} onClose={onCloseSheet} onInput={onInput && ((i) => { setDetail(null); onInput(i); })} />
       {toast && <div className="sk-toast">{toast}</div>}
     </div>
   );
