@@ -1,0 +1,123 @@
+/* GudangAI RUDY — Halaman Stok. Flat, tanpa box-shadow/backdrop-filter berat
+   (menghindari efek "bayangan di belakang tampilan" saat ganti mode). */
+.sk-page{
+  /* Mengikuti variabel tema repo (soft_light / deep_ocean / graphite_titanium); fallback hanya bila variabel tidak ada */
+  --sk-bg:var(--bg-app,#f3f6fa); --sk-card:var(--bg-elevated,#fff); --sk-ink:var(--text-main,#0f1f33);
+  --sk-mut:var(--text-muted,#64748b); --sk-line:var(--border,#e2e8f0); --sk-brand:var(--accent,#1b5e8a);
+  --sk-kritis:var(--stok-kritis,#dc3545); --sk-waspada:var(--stok-waspada,#e09b1a); --sk-aman:var(--stok-aman,#17a673);
+  color:var(--sk-ink); padding:12px 14px 0; font-family:inherit;
+}
+.sk-page *{box-sizing:border-box}
+.sk-page button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.sk-muted{color:var(--sk-mut)}
+
+/* status koneksi */
+.sk-conn{display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:12px;font-size:13px;font-weight:600;background:var(--sk-card);border:1px solid var(--sk-line)}
+.sk-conn-dot{width:8px;height:8px;border-radius:50%;background:var(--sk-aman)}
+.sk-conn-txt{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sk-c-basi .sk-conn-dot,.sk-c-offline .sk-conn-dot,.sk-c-kosong .sk-conn-dot{background:var(--sk-waspada)}
+.sk-c-gagal .sk-conn-dot{background:var(--sk-kritis)}
+.sk-refresh{width:36px;height:36px;border-radius:10px;font-size:20px;line-height:1;display:grid;place-items:center}
+.sk-refresh.spin{animation:sk-spin .9s linear infinite}
+@keyframes sk-spin{to{transform:rotate(360deg)}}
+
+.sk-head{margin:16px 2px 12px}
+.sk-head small{display:block;font-size:11px;letter-spacing:.12em;text-transform:uppercase;font-weight:700;color:var(--sk-mut)}
+.sk-head h1{margin:2px 0 0;font-size:26px;line-height:1.15;font-weight:800}
+
+/* segmented */
+.sk-seg{display:flex;gap:4px;padding:4px;border-radius:14px;background:var(--sk-card);border:1px solid var(--sk-line)}
+.sk-seg button{flex:1;min-height:42px;border-radius:10px;font-weight:700;font-size:14px;color:var(--sk-mut)}
+.sk-seg button em{font-style:normal;font-size:11px;opacity:.7;margin-left:2px}
+.sk-seg button.on{background:var(--sk-brand);color:#fff}
+
+/* chip divisi di atas (menggantikan KPI) */
+.sk-div-chips{display:flex;flex-wrap:nowrap;gap:6px;margin:12px 0 8px;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:2px}
+.sk-div-chips button{flex:0 0 auto;min-height:36px;padding:0 12px;border-radius:999px;border:1px solid var(--sk-line);background:var(--sk-card);font-size:12.5px;font-weight:700;color:var(--sk-mut);white-space:nowrap}
+.sk-div-chips button em{font-style:normal;font-size:11px;opacity:.75;margin-left:4px}
+.sk-div-chips button.on{background:var(--sk-brand);border-color:var(--sk-brand);color:#fff}
+.sk-div-chips button.on em{opacity:.9}
+
+/* ringkasan status + chip status sekunder */
+.sk-status-row{display:flex;flex-direction:column;gap:8px;margin:0 0 10px}
+.sk-status-sum{margin:0;font-size:12.5px;font-weight:600;color:var(--sk-mut)}
+.sk-status-total{color:var(--sk-mut);font-weight:600}
+.sk-status-chips{display:flex;flex-wrap:wrap;gap:6px}
+.sk-status-chips button{min-height:30px;padding:0 10px;border-radius:999px;border:1px solid var(--sk-line);background:var(--sk-card);font-size:11.5px;font-weight:700;color:var(--sk-mut)}
+.sk-status-chips button.on{border-color:var(--sk-brand);background:color-mix(in srgb,var(--sk-brand) 12%,var(--sk-card));color:var(--sk-brand)}
+
+/* pencarian (menempel di atas saat scroll) */
+.sk-search{position:sticky;top:0;z-index:5;display:flex;align-items:center;margin:0 -14px 10px;padding:8px 14px;background:var(--sk-bg)}
+.sk-search input{flex:1;min-height:46px;padding:0 40px 0 14px;border-radius:14px;border:1px solid var(--sk-line);background:var(--sk-card);color:inherit;font:inherit;font-size:15px;outline:none}
+.sk-search input:focus{border-color:var(--sk-brand)}
+.sk-search button{position:absolute;right:22px;width:28px;height:28px;color:var(--sk-mut)}
+
+/* restok */
+.sk-restok{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 14px;margin-bottom:10px;border-radius:14px;background:color-mix(in srgb,var(--sk-kritis) 9%,var(--sk-card));border:1px solid color-mix(in srgb,var(--sk-kritis) 30%,var(--sk-line))}
+.sk-restok b{display:block;font-size:14px}
+.sk-restok small{color:var(--sk-mut);font-size:12px}
+.sk-restok button{padding:8px 14px;border-radius:10px;background:var(--sk-kritis);color:#fff;font-weight:700;font-size:13px}
+.sk-alert{padding:10px 12px;margin-bottom:10px;border-radius:12px;font-size:13px;background:color-mix(in srgb,var(--sk-kritis) 10%,var(--sk-card));border:1px solid var(--sk-kritis)}
+.sk-alert button{text-decoration:underline;font-weight:700}
+
+/* daftar divisi */
+.sk-list-head{display:flex;align-items:baseline;gap:8px;margin:14px 2px 8px}
+.sk-list-head h2{margin:0;font-size:16px;font-weight:800;flex:1}
+.sk-list-head span{font-size:12px;color:var(--sk-mut)}
+.sk-list-head button{font-size:12px;font-weight:700;color:var(--sk-brand)}
+.sk-div{background:var(--sk-card);border:1px solid var(--sk-line);border-radius:16px;margin-bottom:10px;overflow:hidden}
+.sk-div-head{display:flex;align-items:center;width:100%;gap:10px;padding:12px 14px;text-align:left}
+.sk-div-title{flex:1;min-width:0}
+.sk-div-title h3{margin:0;font-size:16px;font-weight:800}
+.sk-div-title p{margin:2px 0 8px;font-size:12.5px;color:var(--sk-mut)}
+.t-kritis{color:var(--sk-kritis);font-weight:700}
+.t-waspada{color:var(--sk-waspada);font-weight:700}
+.t-aman{color:var(--sk-aman);font-weight:700}
+.sk-bar{display:flex;height:6px;border-radius:99px;overflow:hidden;background:var(--sk-line)}
+.sk-bar i{display:block;height:100%}
+.sk-bar .sk-aman,.sk-meter .sk-aman,.sk-dot.sk-aman{background:var(--sk-aman)}
+.sk-bar .sk-waspada,.sk-meter .sk-waspada,.sk-dot.sk-waspada{background:var(--sk-waspada)}
+.sk-bar .sk-kritis,.sk-meter .sk-kritis,.sk-dot.sk-kritis{background:var(--sk-kritis)}
+.sk-chev{font-size:24px;color:var(--sk-mut);transition:transform .2s}
+.sk-div.is-open .sk-chev{transform:rotate(90deg)}
+.sk-div-body{border-top:1px solid var(--sk-line)}
+
+/* baris item */
+.sk-item{display:grid;grid-template-columns:1fr auto 10px;grid-template-areas:"main qty dot" "meter meter meter";gap:4px 10px;align-items:center;width:100%;padding:11px 14px;text-align:left;border-bottom:1px solid var(--sk-line)}
+.sk-item:last-child{border-bottom:0}
+.sk-item:active{background:color-mix(in srgb,var(--sk-brand) 7%,transparent)}
+.sk-item-main{grid-area:main;min-width:0;display:flex;flex-direction:column}
+.sk-item-nama{font-size:14.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sk-item-kode{font-size:11.5px;color:var(--sk-mut)}
+.sk-item-qty{grid-area:qty;text-align:right;display:flex;align-items:baseline;gap:4px}
+.sk-item-qty b{font-size:16px}
+.sk-item-qty small{font-size:11px;color:var(--sk-mut)}
+.sk-dot{grid-area:dot;width:10px;height:10px;border-radius:50%}
+.sk-meter{grid-area:meter;height:4px;border-radius:99px;background:var(--sk-line);overflow:hidden}
+.sk-meter i{display:block;height:100%;border-radius:99px}
+
+/* state */
+.sk-skel div{height:78px;border-radius:16px;margin-bottom:10px;background:linear-gradient(90deg,var(--sk-line),transparent,var(--sk-line));background-size:200% 100%;animation:sk-sh 1.2s linear infinite}
+@keyframes sk-sh{to{background-position:-200% 0}}
+.sk-empty{text-align:center;padding:28px 16px;color:var(--sk-mut)}
+.sk-empty b{display:block;color:var(--sk-ink);font-size:16px;margin-bottom:4px}
+.sk-primary{margin-top:12px;padding:12px 18px;border-radius:12px;background:var(--sk-brand);color:#fff!important;font-weight:700}
+
+/* bottom sheet */
+.sk-sheet-wrap{position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.45);display:flex;align-items:flex-end}
+.sk-sheet{width:100%;max-height:80vh;overflow:auto;background:var(--sk-card);border-radius:22px 22px 0 0;padding:10px 18px calc(22px + env(safe-area-inset-bottom));animation:sk-up .22s ease-out}
+@keyframes sk-up{from{transform:translateY(40px);opacity:.6}}
+.sk-grab{width:40px;height:4px;border-radius:9px;background:var(--sk-line);margin:0 auto 14px}
+.sk-sheet h3{margin:0;font-size:20px}
+.sk-sheet-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:16px 0 6px}
+.sk-sheet-grid div{padding:12px;border-radius:12px;background:var(--sk-bg);border:1px solid var(--sk-line)}
+.sk-sheet-grid small{display:block;font-size:11px;color:var(--sk-mut);margin-bottom:2px}
+.sk-sheet-grid b{font-size:15px}
+.sk-sheet .sk-primary{width:100%}
+
+.sk-toast{position:fixed;left:50%;bottom:calc(96px + env(safe-area-inset-bottom));transform:translateX(-50%);padding:10px 16px;border-radius:99px;background:var(--sk-ink);color:var(--sk-bg);font-size:13px;font-weight:600;z-index:60}
+
+/* ruang untuk tombol Input melayang di navigasi bawah */
+.sk-spacer{height:calc(120px + env(safe-area-inset-bottom))}
+
+@media (prefers-reduced-motion:reduce){.sk-page *{animation:none!important;transition:none!important}}
