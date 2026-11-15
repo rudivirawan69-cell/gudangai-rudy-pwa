@@ -129,12 +129,10 @@ const parse = (v) => {
 const lum = (c) => c.reduce((sum, v, i) => sum + [0.2126,0.7152,0.0722][i] * ((v/255 <= .04045) ? v/255/12.92 : ((v/255+.055)/1.055)**2.4), 0);
 const ratio = (a,b) => { if (!a || !b) return null; const x=lum(a), y=lum(b); return (Math.max(x,y)+.05)/(Math.min(x,y)+.05); };
 try {
-  const res = await page.goto('http://127.0.0.1:4173/', { waitUntil: 'domcontentloaded', timeout: 30000 });
-  if (!res || !res.ok()) throw new Error('Vite preview tidak merespons HTTP OK');
-  await page.waitForTimeout(1800);
   for (const theme of themes) {
-    await page.evaluate((t) => { document.documentElement.dataset.theme=t; localStorage.setItem('gudangai_theme',t); }, theme);
-    await page.waitForTimeout(120);
+    const res = await page.goto('http://127.0.0.1:4173/?theme=' + theme, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    if (!res || !res.ok()) throw new Error('Vite preview tidak merespons HTTP OK untuk tema ' + theme);
+    await page.waitForTimeout(1800);
     const tokens = await page.evaluate(() => {
       const s=getComputedStyle(document.documentElement);
       return Object.fromEntries(['--page-bg','--bg-app','--bg-elevated','--text-main','--text-muted','--text-on-bg','--text-on-accent','--accent-strong'].map((k)=>[k,s.getPropertyValue(k).trim()]));
@@ -146,7 +144,7 @@ try {
     }
     for (const width of widths) {
       await page.setViewportSize({width,height:850});
-      const info=await page.evaluate(()=>({dataTheme:document.documentElement.dataset.theme,scrollWidth:document.documentElement.scrollWidth,innerWidth,loginVisible:!!document.querySelector('form input[type="email"],form input[autocomplete="username"],input[type="password"]'),text:(document.body.innerText||'').slice(0,1200)}));
+      const info=await page.evaluate(()=>({dataTheme:document.documentElement.dataset.theme,themeColor:document.querySelector('meta[name="theme-color"]')?.content||null,scrollWidth:document.documentElement.scrollWidth,innerWidth,loginVisible:!!document.querySelector('form input[type="email"],form input[autocomplete="username"],input[type="password"]'),text:(document.body.innerText||'').slice(0,1200)}));
       const file='login-'+theme+'-'+width+'.png';
       await page.screenshot({path:path.join(OUT,file),fullPage:true});
       shots.push({theme,width,file,...info,overflow:info.scrollWidth>info.innerWidth});
