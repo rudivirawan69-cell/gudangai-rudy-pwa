@@ -4,11 +4,10 @@ import { useStock } from "../hooks/useStock";
 import { ENTITAS, TIDAK_TERKLASIFIKASI, normalizeAll } from "../data/stokAdapter.js";
 
 /**
- * StokPage — redesain halaman Data Stok GudangAI RUDY
- * Mengambil data sekali via useStock("ALL"), menormalisasi di klien (stokAdapter),
- * dan menampilkan UI flat sesuai paket v2.
- *
- * onInput disembunyikan (undefined) karena goTab('input') belum menerima parameter item.
+ * StokPage — redesain v2.1
+ * - Tanpa 4 kartu KPI
+ * - Chip divisi di bagian atas (filter utama)
+ * - Ringkasan status satu baris + chip filter status sekunder
  */
 
 const RANK = { kritis: 0, waspada: 1, aman: 2 };
@@ -35,20 +34,6 @@ function ringkas(list) {
   const c = { total: list.length, kritis: 0, waspada: 0, aman: 0 };
   list.forEach((i) => (c[i.status] += 1));
   return c;
-}
-
-function Kpi({ id, label, value, active, onClick }) {
-  return (
-    <button
-      type="button"
-      className={`sk-kpi sk-${id}${active ? " is-active" : ""}`}
-      onClick={onClick}
-      aria-pressed={active}
-    >
-      <span className="sk-kpi-val">{value}</span>
-      <span className="sk-kpi-lbl">{label}</span>
-    </button>
-  );
 }
 
 function Bar({ c }) {
@@ -140,11 +125,11 @@ function Sheet({ it, onClose, onInput }) {
 }
 
 export default function StokPage() {
-  // Ambil seluruh stok sekali; filter entitas dilakukan di klien.
   const { items: rawItems, loading, error, refresh, lastRefresh } = useStock("ALL");
-  const onInput = undefined; // goTab('input') belum menerima parameter item
+  const onInput = undefined;
 
   const [entitas, setEntitas] = useState("CV");
+  const [divFilter, setDivFilter] = useState(null);
   const [filter, setFilter] = useState("semua");
   const [q, setQ] = useState("");
   const [open, setOpen] = useState({});
@@ -163,6 +148,11 @@ export default function StokPage() {
       }
     } catch {}
   }, [rawItems]);
+
+  useEffect(() => {
+    setDivFilter(null);
+    setFilter("semua");
+  }, [entitas]);
 
   const memakaiCache = !(rawItems && rawItems.length) && cache?.data?.length;
   const sumber = memakaiCache ? cache.data : rawItems || [];
@@ -186,13 +176,25 @@ export default function StokPage() {
     [semua, tabs]
   );
 
+  const daftarDivisi = useMemo(() => {
+    const m = new Map();
+    perEntitas.forEach((i) => {
+      const d = i.divisi || "Lainnya";
+      m.set(d, (m.get(d) || 0) + 1);
+    });
+    return [...m.entries()]
+      .map(([nama, n]) => ({ nama, n }))
+      .sort((a, b) => a.nama.localeCompare(b.nama, "id"));
+  }, [perEntitas]);
+
   const terfilter = useMemo(() => {
     const k = q.trim().toLowerCase();
     return perEntitas
+      .filter((i) => !divFilter || i.divisi === divFilter)
       .filter((i) => filter === "semua" || i.status === filter)
       .filter((i) => !k || i.nama.toLowerCase().includes(k) || String(i.kode).toLowerCase().includes(k))
       .sort((a, b) => RANK[a.status] - RANK[b.status] || a.nama.localeCompare(b.nama));
-  }, [perEntitas, filter, q]);
+  }, [perEntitas, divFilter, filter, q]);
 
   const divisi = useMemo(() => {
     const m = new Map();
@@ -202,7 +204,7 @@ export default function StokPage() {
     );
   }, [terfilter]);
 
-  const auto = q.trim() !== "" || filter !== "semua";
+  const auto = q.trim() !== "" || filter !== "semua" || !!divFilter;
   const isOpen = (d) => (auto ? true : !!open[d]);
 
   const segarkan = useCallback(async () => {
@@ -218,9 +220,9 @@ export default function StokPage() {
   const restokItems = useMemo(
     () =>
       perEntitas
-        .filter((i) => i.min > 0 && i.stok < i.min)
+        .filter((i) => (!divFilter || i.divisi === divFilter) && i.min > 0 && i.stok < i.min)
         .sort((a, b) => RANK[a.status] - RANK[b.status] || a.nama.localeCompare(b.nama)),
-    [perEntitas]
+    [perEntitas, divFilter]
   );
   const daftarRestok = useMemo(
     () =>
@@ -231,7 +233,7 @@ export default function StokPage() {
   );
 
   const bagikan = async () => {
-    const teks = `Daftar restok ${entitas} (${new Date().toLocaleDateString("id-ID")})\n${daftarRestok.join("\n")}`;
+    const teks = `Daftar restok ${entitas}${divFilter ? ` · ${divFilter}` : ""} (${new Date().toLocaleDateString("id-ID")})\n${daftarRestok.join("\n")}`;
     try {
       if (navigator.share) await navigator.share({ text: teks });
       else {
@@ -283,39 +285,61 @@ export default function StokPage() {
             role="tab"
             aria-selected={entitas === e}
             className={entitas === e ? "on" : ""}
-            onClick={() => {
-              setEntitas(e);
-              setFilter("semua");
-            }}
+            onClick={() => setEntitas(e)}
           >
             {e} <em>{cntEnt[e]}</em>
           </button>
         ))}
       </div>
 
-      <div className="sk-kpis">
-        <Kpi id="semua" label="Total" value={cnt.total} active={filter === "semua"} onClick={() => setFilter("semua")} />
-        <Kpi
-          id="kritis"
-          label="Kritis"
-          value={cnt.kritis}
-          active={filter === "kritis"}
-          onClick={() => setFilter(filter === "kritis" ? "semua" : "kritis")}
-        />
-        <Kpi
-          id="waspada"
-          label="Waspada"
-          value={cnt.waspada}
-          active={filter === "waspada"}
-          onClick={() => setFilter(filter === "waspada" ? "semua" : "waspada")}
-        />
-        <Kpi
-          id="aman"
-          label="Aman"
-          value={cnt.aman}
-          active={filter === "aman"}
-          onClick={() => setFilter(filter === "aman" ? "semua" : "aman")}
-        />
+      {daftarDivisi.length > 0 && (
+        <div className="sk-div-chips" role="group" aria-label="Filter divisi">
+          <button
+            type="button"
+            className={!divFilter ? "on" : ""}
+            onClick={() => setDivFilter(null)}
+          >
+            Semua <em>{perEntitas.length}</em>
+          </button>
+          {daftarDivisi.map(({ nama, n }) => (
+            <button
+              key={nama}
+              type="button"
+              className={divFilter === nama ? "on" : ""}
+              onClick={() => setDivFilter(divFilter === nama ? null : nama)}
+            >
+              {nama} <em>{n}</em>
+            </button>
+          ))}
+        </div>
+      )}
+
+      <div className="sk-status-row">
+        <p className="sk-status-sum">
+          <span className="t-kritis">{cnt.kritis} kritis</span>
+          <span aria-hidden="true"> · </span>
+          <span className="t-waspada">{cnt.waspada} waspada</span>
+          <span aria-hidden="true"> · </span>
+          <span className="t-aman">{cnt.aman} aman</span>
+          <span className="sk-status-total"> · {cnt.total} total</span>
+        </p>
+        <div className="sk-status-chips" role="group" aria-label="Filter status">
+          {[
+            { id: "semua", label: "Semua" },
+            { id: "kritis", label: "Kritis" },
+            { id: "waspada", label: "Waspada" },
+            { id: "aman", label: "Aman" },
+          ].map((s) => (
+            <button
+              key={s.id}
+              type="button"
+              className={filter === s.id ? "on" : ""}
+              onClick={() => setFilter(filter === s.id && s.id !== "semua" ? "semua" : s.id)}
+            >
+              {s.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="sk-search">
@@ -339,8 +363,7 @@ export default function StokPage() {
             <b>{daftarRestok.length} item di bawah stok aman</b>
             <small>
               {restokItems.filter((i) => i.status === "kritis").length} kritis ·{" "}
-              {restokItems.filter((i) => i.status === "waspada").length} waspada ·{" "}
-              {restokItems.filter((i) => i.status === "aman").length} aman
+              {restokItems.filter((i) => i.status === "waspada").length} waspada
             </small>
           </div>
           <button type="button" onClick={bagikan}>
@@ -379,8 +402,10 @@ export default function StokPage() {
       )}
 
       <div className="sk-list-head">
-        <h2>Divisi · {entitas}</h2>
-        <span>{divisi.length} divisi</span>
+        <h2>
+          {divFilter || "Semua divisi"} · {entitas}
+        </h2>
+        <span>{divisi.length} grup</span>
         {!auto && divisi.length > 0 && (
           <button
             type="button"
@@ -415,7 +440,7 @@ export default function StokPage() {
       {!kosong && divisi.length === 0 && !loading && (
         <div className="sk-empty">
           <b>Tidak ada item cocok</b>
-          <p>Ubah kata kunci atau filter.</p>
+          <p>Ubah kata kunci, divisi, atau filter status.</p>
         </div>
       )}
 
