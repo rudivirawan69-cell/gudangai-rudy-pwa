@@ -121,3 +121,20 @@
 .sk-spacer{height:calc(120px + env(safe-area-inset-bottom))}
 
 @media (prefers-reduced-motion:reduce){.sk-page *{animation:none!important;transition:none!important}}
+
+/* chip status + banner (kompatibel StokPage optimasi) */
+.sk-chips{display:flex;flex-wrap:wrap;gap:6px}
+.sk-chips button{min-height:34px;padding:0 12px;border-radius:999px;border:1px solid var(--sk-line);background:var(--sk-card);font-size:12.5px;font-weight:700;color:var(--sk-mut)}
+.sk-chips button.on{background:var(--sk-ink);border-color:var(--sk-ink);color:var(--sk-bg)}
+.sk-chips button.sk-c-kritis.on{background:var(--sk-kritis);border-color:var(--sk-kritis);color:#fff}
+.sk-chips button.sk-c-waspada.on{background:var(--sk-waspada);border-color:var(--sk-waspada);color:#fff}
+.sk-chips button.sk-c-aman.on{background:var(--sk-aman);border-color:var(--sk-aman);color:#fff}
+.sk-banner{display:flex;gap:10px;align-items:center;justify-content:space-between;padding:12px 14px;border-radius:14px;background:color-mix(in srgb,var(--sk-kritis) 10%,var(--sk-card));border:1px solid color-mix(in srgb,var(--sk-kritis) 35%,var(--sk-line));margin-bottom:12px}
+.sk-banner b{display:block;font-size:14px}
+.sk-banner small{display:block;font-size:12px;color:var(--sk-mut);margin-top:2px}
+.sk-banner .sk-primary{margin-top:0;padding:10px 14px;font-size:13px;white-space:nowrap}
+/* performa rendering */
+.sk-div{content-visibility:auto;contain-intrinsic-size:auto 120px}
+.sk-item{content-visibility:auto;contain-intrinsic-size:auto 56px;contain:layout paint style}
+.sk-more{display:block;width:100%;margin:8px 0 4px;padding:12px;border-radius:14px;border:1px dashed var(--sk-line);background:transparent;color:var(--sk-mut);font-weight:700;font-size:13px}
+.sk-more:active{background:color-mix(in srgb,var(--sk-brand) 8%,transparent)}
