@@ -48,6 +48,11 @@ const counts = css.filter(([f]) => f !== 'src/theme-tokens.css').map(([file, s])
   important: (s.match(/!important\b/g) || []).length,
 }));
 const totals = counts.reduce((a, x) => ({ hex: a.hex + x.hex, hsl: a.hsl + x.hsl, important: a.important + x.important }), { hex: 0, hsl: 0, important: 0 });
+const elevationRows = css.map(([file, source]) => ({
+  file,
+  declarations: [...source.matchAll(/box-shadow\\s*:\\s*([^;}]+)/gi)].map((m) => m[1].trim()),
+}));
+const elevationAudit = elevationRows.flatMap((row) => row.declarations.map((value) => ({ file: row.file, value }))).filter((row) => !/^var\\(--elev-(?:1|2|press)\\)|^var\\(--focus-ring\\)|^none\\b/i.test(row.value));
 const html = read('index.html');
 const inventory = {
   cssFiles, cssCount: cssFiles.length, jsxCount: jsxFiles.length, mainImports,
@@ -55,6 +60,8 @@ const inventory = {
   unimportedCssCandidates: cssFiles.filter((f) => !graphFiles.some((x) => x.file === f) && !mainImports.some((i) => path.posix.normalize(path.posix.join('src', i)) === f)),
   duplicateSelectors: duplicates, selectorsWithoutLiteralJsxToken: unusedCandidates,
   hardcodedOutsideTokens: { totals, files: counts },
+  elevationAudit: { declarations: elevationRows.reduce((n, row) => n + row.declarations.length, 0), nonTokenDeclarations: elevationAudit },
+  ghostOverlayAudit: { appBgDefinitions: (read('src/index.css').match(/\\.app-bg\\s*\\{/g) || []).length, appBgAfterDefinitions: (read('src/index.css').match(/\\.app-bg::after\\s*\\{/g) || []).length, cardIconBeforeRule: /\\.app-content[^{}]*\\.card[^{}]*::before[^{}]*data:image\\/svg\\+xml/.test(read('src/index.css')) },
   htmlThemeBootstrap: {
     setsDataTheme: /root\.dataset\.theme\s*=/.test(html),
     readsStoredTheme: /localStorage\.getItem\(['"]gudangai_theme['"]\)/.test(html),
@@ -157,4 +164,4 @@ const overflow=shots.filter((x)=>x.overflow);
 const violations=axeRows.flatMap((x)=>x.violations.map((v)=>({theme:x.theme,...v})));
 fs.writeFileSync(path.join(OUT,'summary.json'),JSON.stringify({screenshotCount:shots.length,overflowCount:overflow.length,contrastFailureCount:fails.length,contrastFailures:fails,axeViolations:violations},null,2));
 console.log(JSON.stringify({cssFiles:cssFiles.length,jsxFiles:jsxFiles.length,screenshots:shots.length,overflow:overflow.length,contrastFailures:fails.length,axeViolations:violations.length},null,2));
-if (overflow.length || fails.length || violations.length) process.exitCode=1;
+if (overflow.length || fails.length || violations.length || elevationAudit.length || inventory.ghostOverlayAudit.appBgDefinitions !== 1 || inventory.ghostOverlayAudit.appBgAfterDefinitions !== 1 || inventory.ghostOverlayAudit.cardIconBeforeRule) process.exitCode=1;
