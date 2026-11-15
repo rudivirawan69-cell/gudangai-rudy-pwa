@@ -6,7 +6,7 @@ html[data-theme] .stock-page :is(.stock-entity-tabs,.stock-stat-card,.stock-divi
   background: var(--bg-elevated) !important;
   color: var(--text-main) !important;
   border-color: var(--border) !important;
-  box-shadow: var(--shadow-1) !important;
+  box-shadow: var(--elev-1) !important;
 }
 html[data-theme] .operator-tasks-card { border-radius: 1.15rem !important; }
 html[data-theme] .ot-module-head { background: color-mix(in srgb,var(--bg-elevated) 86%,var(--bg-muted)); }
@@ -26,7 +26,7 @@ html[data-theme] .ot-tag-option,.ot-filter-btn { background: var(--bg-elevated);
 html[data-theme] .ot-tag-option.is-active,.ot-filter-btn.is-active { background: var(--accent-soft); color: var(--accent-strong); border-color: var(--accent); }
 html[data-theme] .ot-filter-icon { background: var(--bg-muted); color: var(--accent-strong); }
 html[data-theme] .ot-add-btn { background: var(--accent-strong); color: var(--text-on-accent); }
-html[data-theme] .ot-item { background: var(--bg-elevated); border-color: var(--border); box-shadow: 0 3px 10px color-mix(in srgb,var(--text-main) 5%,transparent); }
+html[data-theme] .ot-item { background: var(--bg-elevated); border-color: var(--border); box-shadow: var(--elev-1); }
 html[data-theme] .ot-item.is-done { opacity:.72; background: color-mix(in srgb,var(--bg-elevated) 86%,var(--bg-muted)); }
 html[data-theme] .ot-item.is-pinned { border-color: color-mix(in srgb,var(--accent) 52%,var(--border)); }
 html[data-theme] .ot-item-text { color: var(--text-main); }
@@ -60,10 +60,10 @@ html[data-theme="graphite_titanium"] .ot-chip-kirim { color:#86efac; }
 .stock-page-title-row { min-height:42px; }
 .stock-page-kicker { font-size:9px; font-weight:800; letter-spacing:.12em; text-transform:uppercase; }
 .stock-page-title { line-height:1.15; }
-.stock-refresh-btn { background:var(--bg-elevated); color:var(--accent-strong); border-color:var(--border); box-shadow:var(--shadow-1); }
+.stock-refresh-btn { background:var(--bg-elevated); color:var(--accent-strong); border-color:var(--border); box-shadow: var(--elev-1); }
 .stock-entity-tabs { background:var(--bg-muted); }
 .stock-entity-tab { color:var(--text-muted); }
-.stock-entity-tab.is-active { background:var(--accent-strong); color:var(--text-on-accent); box-shadow:0 3px 9px color-mix(in srgb,var(--accent-strong) 25%,transparent); }
+.stock-entity-tab.is-active { background:var(--accent-strong); color:var(--text-on-accent); box-shadow: var(--elev-2); }
 .stock-stat-card { min-height:100px; }
 .stock-stat-card.is-selected { outline:2px solid var(--accent); outline-offset:1px; }
 .stock-stat-icon { width:32px;height:32px;background:var(--bg-muted);color:var(--accent-strong); }
@@ -84,7 +84,7 @@ html[data-theme="graphite_titanium"] .ot-chip-kirim { color:#86efac; }
 .stock-division-card { transition:transform .16s ease,border-color .16s ease,box-shadow .16s ease; }
 .stock-division-card.is-open { border-color:var(--accent)!important; }
 .stock-division-head { background:transparent; }
-.stock-division-icon { color:#fff; box-shadow:inset 0 1px 0 rgba(255,255,255,.3),0 4px 10px rgba(0,0,0,.12); }
+.stock-division-icon { color:#fff; box-shadow: var(--elev-1); }
 .stock-division-icon.tone-raw { background:linear-gradient(135deg,#0ea5e9,#0369a1); }
 .stock-division-icon.tone-cold { background:linear-gradient(135deg,#8b5cf6,#6d28d9); }
 .stock-division-icon.tone-kitchen { background:linear-gradient(135deg,#f59e0b,#b45309); }
