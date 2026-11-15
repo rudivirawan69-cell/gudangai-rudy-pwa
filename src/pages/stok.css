@@ -31,19 +31,20 @@
 .sk-seg button em{font-style:normal;font-size:11px;opacity:.7;margin-left:2px}
 .sk-seg button.on{background:var(--sk-brand);color:#fff}
 
-/* KPI */
-.sk-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:12px 0}
-.sk-kpi{display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:10px 10px 9px;border-radius:14px;background:var(--sk-card);border:1.5px solid var(--sk-line);text-align:left;position:relative;overflow:hidden}
-.sk-kpi::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--sk-line)}
-.sk-kpi.sk-kritis::before{background:var(--sk-kritis)}
-.sk-kpi.sk-waspada::before{background:var(--sk-waspada)}
-.sk-kpi.sk-aman::before{background:var(--sk-aman)}
-.sk-kpi.sk-semua::before{background:var(--sk-brand)}
-.sk-kpi-val{font-size:24px;font-weight:800;line-height:1.1;padding-left:4px}
-.sk-kpi-lbl{font-size:11px;font-weight:700;color:var(--sk-mut);padding-left:4px}
-.sk-kpi.sk-kritis .sk-kpi-val{color:var(--sk-kritis)}
-.sk-kpi.sk-waspada .sk-kpi-val{color:var(--sk-waspada)}
-.sk-kpi.is-active{border-color:var(--sk-brand);background:color-mix(in srgb,var(--sk-brand) 8%,var(--sk-card))}
+/* chip divisi di atas (menggantikan KPI) */
+.sk-div-chips{display:flex;flex-wrap:nowrap;gap:6px;margin:12px 0 8px;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:2px}
+.sk-div-chips button{flex:0 0 auto;min-height:36px;padding:0 12px;border-radius:999px;border:1px solid var(--sk-line);background:var(--sk-card);font-size:12.5px;font-weight:700;color:var(--sk-mut);white-space:nowrap}
+.sk-div-chips button em{font-style:normal;font-size:11px;opacity:.75;margin-left:4px}
+.sk-div-chips button.on{background:var(--sk-brand);border-color:var(--sk-brand);color:#fff}
+.sk-div-chips button.on em{opacity:.9}
+
+/* ringkasan status + chip status sekunder */
+.sk-status-row{display:flex;flex-direction:column;gap:8px;margin:0 0 10px}
+.sk-status-sum{margin:0;font-size:12.5px;font-weight:600;color:var(--sk-mut)}
+.sk-status-total{color:var(--sk-mut);font-weight:600}
+.sk-status-chips{display:flex;flex-wrap:wrap;gap:6px}
+.sk-status-chips button{min-height:30px;padding:0 10px;border-radius:999px;border:1px solid var(--sk-line);background:var(--sk-card);font-size:11.5px;font-weight:700;color:var(--sk-mut)}
+.sk-status-chips button.on{border-color:var(--sk-brand);background:color-mix(in srgb,var(--sk-brand) 12%,var(--sk-card));color:var(--sk-brand)}
 
 /* pencarian (menempel di atas saat scroll) */
 .sk-search{position:sticky;top:0;z-index:5;display:flex;align-items:center;margin:0 -14px 10px;padding:8px 14px;background:var(--sk-bg)}
@@ -119,5 +120,4 @@
 /* ruang untuk tombol Input melayang di navigasi bawah */
 .sk-spacer{height:calc(120px + env(safe-area-inset-bottom))}
 
-@media (max-width:360px){.sk-kpi-val{font-size:20px}.sk-kpis{gap:6px}}
 @media (prefers-reduced-motion:reduce){.sk-page *{animation:none!important;transition:none!important}}
