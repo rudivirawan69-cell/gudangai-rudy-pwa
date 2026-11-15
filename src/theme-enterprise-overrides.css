@@ -120,7 +120,7 @@ html[data-theme] .app-top-header .app-header-card {
   background: var(--bg-elevated) !important;
   border-color: var(--border) !important;
   color: var(--text-main) !important;
-  box-shadow: var(--shadow-1) !important;
+  box-shadow: var(--elev-1) !important;
 }
 html[data-theme] .app-content :is(.card,.surface,.section-card,.stat-tile,.stock-card,
 .dashboard-panel,.dashboard-total-card,.dashboard-po-card,.dashboard-header-card,
@@ -129,7 +129,7 @@ html[data-theme] .app-content :is(.card,.surface,.section-card,.stat-tile,.stock
   background: var(--bg-elevated) !important;
   color: var(--text-main) !important;
   border-color: var(--border) !important;
-  box-shadow: var(--shadow-1) !important;
+  box-shadow: var(--elev-1) !important;
   text-shadow: none !important;
 }
 html[data-theme] .nav-bar {
@@ -171,7 +171,7 @@ html[data-theme] .app-content :is(.border-cyan-200,.border-blue-200,.border-blue
 html[data-theme] .app-content .theme-picker-btn.is-active {
   border-color: var(--accent) !important;
   background: var(--accent-soft) !important;
-  box-shadow: 0 0 0 2px var(--accent-soft) !important;
+  box-shadow: var(--elev-2) !important;
 }
 html[data-theme] .app-content .theme-picker-btn.is-active :is(svg,span) {
   color: var(--accent-strong) !important;
