@@ -5,7 +5,7 @@ html[data-theme] .app-content .dashboard-shell {
 html[data-theme] .app-content .dashboard-shell :is(.dashboard-panel,.dashboard-total-card,.dashboard-po-card) {
   background: var(--bg-elevated) !important;
   border-color: var(--border) !important;
-  box-shadow: var(--shadow-1) !important;
+  box-shadow: var(--elev-1) !important;
   color: var(--text-main) !important;
 }
 html[data-theme] .app-content .dashboard-shell :is(.text-slate-900,.text-slate-800,.text-slate-700) {
@@ -21,7 +21,7 @@ html[data-theme] .app-content .input-page {
 html[data-theme] .app-content .stock-page :is(.stock-card,.stock-metric-surface) {
   background: var(--bg-elevated) !important;
   border-color: var(--border) !important;
-  box-shadow: var(--shadow-1) !important;
+  box-shadow: var(--elev-1) !important;
   color: var(--text-main) !important;
 }
 html[data-theme] .app-content .stock-page :is(.text-slate-900,.text-slate-800,.text-slate-700) {
@@ -60,7 +60,7 @@ html[data-theme] .app-content .input-page button:focus-visible {
 /* Home reminder reference polish — theme-aware surfaces, no operational data changes. */
 html[data-theme] .app-content .home-reminder-module .home-reminder-surface {
   background: var(--bg-elevated) !important; border-color: var(--border) !important;
-  color: var(--text-main) !important; box-shadow: var(--shadow-1) !important;
+  color: var(--text-main) !important; box-shadow: var(--elev-1) !important;
 }
 html[data-theme] .app-content .home-reminder-module .home-reminder-muted {
   background: var(--bg-muted) !important; border-color: var(--border) !important; color: var(--text-main) !important;
