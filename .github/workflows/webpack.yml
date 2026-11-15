@@ -32,7 +32,7 @@ jobs:
       - name: Check Worker syntax and canonical Wrangler target
         run: |
           node --check worker.js
-          node --input-type=module -e "import fs from 'node:fs'; const raw=fs.readFileSync('wrangler.jsonc','utf8').replace(/^\\s*\\/\\/.*$/gm, ''); const c=JSON.parse(raw); if(c.name !== 'gudangai-rudy-pwa-69') throw new Error('Unexpected Worker name: '+c.name); if(c.main !== 'worker.js') throw new Error('Unexpected Worker entrypoint: '+c.main); if(c.assets?.directory !== './dist') throw new Error('Unexpected assets directory'); if(c.vars?.ALLOWED_ORIGINS !== 'https://gudangai-rudy-pwa-69.rudivirawan69.workers.dev') throw new Error('Unexpected production origin'); if(c.vars?.ANTHROPIC_FALLBACK_ENABLED !== 'false') throw new Error('Anthropic fallback must remain disabled');"
+          node --input-type=module -e "import fs from 'node:fs'; const raw=fs.readFileSync('wrangler.jsonc','utf8').replace(/^\\s*\\/\\/.*$/gm, ''); const c=JSON.parse(raw); if(c.name !== 'gudangai-rudy-pwa-69') throw new Error('Unexpected Worker name: '+c.name); if(c.main !== 'worker.js') throw new Error('Unexpected Worker entrypoint: '+c.main); if(c.assets?.directory !== './dist') throw new Error('Unexpected assets directory'); if(c.vars?.ALLOWED_ORIGINS !== 'https://gudangai-rudy-pwa-69.rudivirawan69.workers.dev,https://gudangai-rudy-pwa-live.vercel.app') throw new Error('Unexpected production origins'); if(c.vars?.ANTHROPIC_FALLBACK_ENABLED !== 'false') throw new Error('Anthropic fallback must remain disabled');"
       - name: Test Agent Worker security and routing
         run: npm run test:agent
       - name: Build verification
