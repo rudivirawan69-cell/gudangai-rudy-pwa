@@ -119,7 +119,7 @@ html[data-theme] .app-content :is(
   background-color: var(--bg-elevated) !important;
   border-color: var(--border) !important;
   color: var(--text-main) !important;
-  box-shadow: var(--shadow-1) !important;
+  box-shadow: var(--elev-1) !important;
 }
 html[data-theme] .app-content .menu-row:hover,
 html[data-theme] .app-content .more-row:hover {
@@ -150,7 +150,7 @@ html[data-theme] .app-content :is(.chip-btn,.more-row) {
 html[data-theme] .nav-bar {
   background: var(--nav-bg) !important;
   border-color: var(--border) !important;
-  box-shadow: var(--shadow-nav) !important;
+  box-shadow: var(--elev-1) !important;
   -webkit-backdrop-filter: blur(16px) saturate(1.08);
   backdrop-filter: blur(16px) saturate(1.08);
 }
