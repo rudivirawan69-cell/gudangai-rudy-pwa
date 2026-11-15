@@ -16,13 +16,13 @@
   justify-content: center;
   color: #fff;
   background: linear-gradient(145deg, #10b981, #059669);
-  box-shadow: 0 8px 20px rgba(16, 185, 129, 0.45), 0 2px 6px rgba(0, 0, 0, 0.25);
+  box-shadow: var(--elev-1);
   border: 3px solid var(--bg-elevated, #ffffff);
   transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.2s ease;
 }
 .nav-fab-btn.is-active {
   background: linear-gradient(145deg, #34d399, #10b981);
-  box-shadow: 0 10px 24px rgba(16, 185, 129, 0.55), 0 2px 6px rgba(0, 0, 0, 0.25);
+  box-shadow: var(--elev-2);
 }
 .nav-fab:active .nav-fab-btn { transform: scale(0.92); }
 
@@ -72,7 +72,7 @@
   background: var(--bg-elevated, #ffffff);
   color: var(--text-main, #0f172a);
   border: 1px solid var(--border, #e2e8f0);
-  box-shadow: 0 8px 24px rgba(2, 6, 23, 0.18);
+  box-shadow: var(--elev-1);
   font-size: 11px;
   font-weight: 700;
   white-space: nowrap;
