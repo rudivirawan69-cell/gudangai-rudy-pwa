@@ -1,0 +1,58 @@
+name: GudangAI UI audit (read-only)
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "scripts-audit/**"
+      - ".github/workflows/ui-audit.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ui-audit-\${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    name: Build, visual audit, contrast and axe (no deploy)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Install isolated browser audit dependencies
+        run: npm install --no-save --package-lock=false --ignore-scripts playwright axe-core
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Vite production build (direct; does not run package build scripts)
+        run: npx vite build
+
+      - name: Run UI inventory, login screenshots, contrast and axe audit
+        run: node scripts-audit/audit-ui.mjs
+        env:
+          CI: "true"
+
+      - name: Upload audit evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: gudangai-ui-audit-\${{ github.run_number }}
+          path: artifacts/ui-audit/
+          if-no-files-found: error
+          retention-days: 14
