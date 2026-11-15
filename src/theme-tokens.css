@@ -152,21 +152,21 @@ html[data-theme="deep_ocean"] .ops-card {
 }
 html[data-theme="graphite_titanium"] .ops-card,
 html[data-theme="warm_productive"] .ops-card {
-  background: rgba(255, 255, 255, 0.94);
-  border-color: rgba(15, 118, 110, 0.18);
-  color: #134e4a;
+  background: var(--bg-elevated);
+  border-color: var(--border);
+  color: var(--text-main);
 }
 html[data-theme="graphite_titanium"] .ops-card .ops-card-title,
-html[data-theme="warm_productive"] .ops-card .ops-card-title { color: #134e4a; }
+html[data-theme="warm_productive"] .ops-card .ops-card-title { color: var(--text-main); }
 html[data-theme="deep_ocean"] .ops-notes-card {
   background: rgba(18, 38, 61, 0.85);
   border-color: rgba(148, 163, 184, 0.22);
 }
 html[data-theme="graphite_titanium"] .ops-notes-card,
 html[data-theme="warm_productive"] .ops-notes-card {
-  background: rgba(255, 255, 255, 0.96);
-  border-color: rgba(15, 118, 110, 0.2);
-  color: #134e4a;
+  background: var(--bg-elevated);
+  border-color: var(--border);
+  color: var(--text-main);
 }
 .ops-icon-amber { background: linear-gradient(135deg, #f59e0b, #d97706); }
 .ops-icon-emerald { background: linear-gradient(135deg, #10b981, #0d9488); }
