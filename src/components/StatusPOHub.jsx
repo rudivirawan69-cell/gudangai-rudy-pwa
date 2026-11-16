@@ -136,6 +136,11 @@ function StatusTriple({ status }) {
   );
 }
 
+function formatPeriodDate(value) {
+  const match = String(value || '').trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return match ? `${match[3]}-${match[2]}-${match[1]}` : String(value || '');
+}
+
 function todayISO() {
   const d = new Date();
   const y = d.getFullYear();
@@ -281,8 +286,8 @@ function StatusPOHubPanel({ mode }) {
             </p>
             <p className="text-[10px] font-semibold text-cyan-700 mt-0.5">
               Periode: {mode === 'previous'
-                ? (data?.previousWeek?.periodStart && data?.previousWeek?.periodEnd ? `${data.previousWeek.periodStart} s.d. ${data.previousWeek.periodEnd}` : 'Periode sebelumnya')
-                : (data?.periodStart && data?.periodEnd ? `${data.periodStart} s.d. ${data.periodEnd}` : 'Tanggal PO belum terbaca')}
+                ? (data?.previousWeek?.periodStart && data?.previousWeek?.periodEnd ? `${formatPeriodDate(data.previousWeek.periodStart)} s.d. ${formatPeriodDate(data.previousWeek.periodEnd)}` : 'Periode sebelumnya')
+                : (data?.periodStart && data?.periodEnd ? `${formatPeriodDate(data.periodStart)} s.d. ${formatPeriodDate(data.periodEnd)}` : 'Tanggal PO belum terbaca')}
               {mode === 'current' && data?.periodStatus ? ` · ${data.periodStatus}` : ''}
               {mode === 'previous' ? ' · TERTUNDA / ARSIP' : ''}
             </p>
