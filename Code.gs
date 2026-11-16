@@ -2352,8 +2352,9 @@ function syncDivisionStockLightweight_() {
     dest.getRange(u.row, 6).setValue(u.value);
   });
 
-  const stamp = Utilities.formatDate(new Date(), TIMEZONE, "dd-MMM-yyyy HH:mm:ss");
-  dest.getRange(2, 1).setValue("Sisa Stok = CV/PT; BAHAN BAKU = Stock Bahan Baku | Update: " + stamp);
+  // Satu sumber timestamp: Data Stok Per Divisi!A2 dengan format Update terakhir.
+  // Stempel dilakukan SETELAH perubahan Sisa Stok agar tidak tertimpa format lama.
+  updateLastUpdateTimestamp();
   clearDataDirty_();
   return {
     success: true,
@@ -3665,14 +3666,20 @@ function onEdit(e) {
   try {
     if (!e || !e.range) return;
     const sheetName = e.range.getSheet().getName();
-    const affected = ["Stock CV", "Stock PT", "Stock awal", "purchase order"].indexOf(sheetName) >= 0 || Object.keys(SHEET_CONFIG).indexOf(sheetName) >= 0;
+    const stockSourceSheets = ["Stock CV", "Stock PT", "Stock awal", "Stock Bahan Baku"];
+    const affected = stockSourceSheets.indexOf(sheetName) >= 0 || sheetName === "purchase order" || Object.keys(SHEET_CONFIG).indexOf(sheetName) >= 0;
     if (!affected) return;
-    // onEdit: invalidasi cache + dirty + stempel waktu. Sinkronisasi divisi real-time bila stok berubah.
+    // Edit manual ikut memperbarui sumber timestamp. Untuk sumber stok, stempel dilakukan
+    // setelah sinkronisasi Data Stok Per Divisi selesai, bukan sebelum sinkronisasi.
     clearMasterCache();
     markDataDirty_(sheetName);
-    updateLastUpdateTimestamp();
-    if (sheetName === "Stock CV" || sheetName === "Stock PT" || sheetName === "Stock awal") {
-      try { syncDivisionStockLightweight_(); } catch (divErr) { console.error("onEdit sync divisi: " + divErr.message); }
+    if (stockSourceSheets.indexOf(sheetName) >= 0) {
+      let syncResult = null;
+      try { syncResult = syncDivisionStockLightweight_(); }
+      catch (divErr) { console.error("onEdit sync divisi: " + divErr.message); }
+      if (!syncResult || syncResult.success !== true) updateLastUpdateTimestamp();
+    } else {
+      updateLastUpdateTimestamp();
     }
     if (sheetName === "Barang masuk" || sheetName === "purchase order") {
       try { refreshDashboardPOSection_({ renderCharts: false, lightweight: true }); } catch (poErr) { console.error("Dashboard PO ringan gagal: " + poErr.message); }
