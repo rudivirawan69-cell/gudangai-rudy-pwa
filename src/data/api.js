@@ -142,7 +142,7 @@ async function getJson(action, extraParams = {}) {
   const secret = getApiSecret();
   const q = new URLSearchParams({ action, ...extraParams });
   if (secret) q.set('secret', secret);
-  const res = await fetchWithRetry(url + '?' + q.toString(), { method: 'GET', redirect: 'follow' });
+  const res = await fetchWithRetry(url + '?' + q.toString(), { method: 'GET', redirect: 'follow', cache: 'no-store' });
   const text = await res.text();
   try { return JSON.parse(text); } catch { throw new Error('Respons bukan JSON'); }
 }
