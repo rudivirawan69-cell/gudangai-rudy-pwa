@@ -3065,6 +3065,22 @@ function getPOOverwriteGuard_() {
     };
   }
 
+  // PO periode sebelumnya boleh diganti hanya jika snapshot rollover sudah tersimpan.
+  // Snapshot menjadi sumber status tertunda minggu lalu; jangan hilangkan data jika arsip gagal.
+  const archived = getPreviousPOStatus_();
+  const activeWeekKey = getWeekKey_(new Date());
+  if (archived && archived.weekKey && status.weekKey &&
+      archived.weekKey === status.weekKey && status.weekKey !== activeWeekKey) {
+    return {
+      safe: true,
+      pendingCount: (status.items || []).filter(function(item) {
+        return String(item.status || "").toUpperCase() !== "SELESAI" && Number(item.qtyBelumDatang || 0) > 0;
+      }).length,
+      reason: "PO periode " + (status.periodStart || status.weekKey) + "–" + (status.periodEnd || "") + " sudah diarsipkan sebagai PO minggu lalu.",
+      archivedWeekKey: archived.weekKey
+    };
+  }
+
   // Tanpa NO PO, kedatangan tidak bisa dipasangkan secara andal ke PO aktif.
   // Jangan izinkan generator menghapus daftar lama berdasarkan fallback nama barang.
   if (!String(status.noPO || "").trim()) {
@@ -3529,21 +3545,36 @@ function getWeekKey_(date) {
 function rolloverPOWeekIfNeeded_() {
   const props = PropertiesService.getScriptProperties();
   const currentKey = getWeekKey_(new Date());
-  const previousKey = props.getProperty("GUDANGAI_PO_WEEK_KEY") || "";
-  if (!previousKey) {
-    props.setProperty("GUDANGAI_PO_WEEK_KEY", currentKey);
-    return { changed: false, currentKey: currentKey, previousKey: null };
-  }
-  if (previousKey === currentKey) return { changed: false, currentKey: currentKey, previousKey: previousKey };
-
+  const storedKey = props.getProperty("GUDANGAI_PO_WEEK_KEY") || "";
   let status = null;
   try { status = getStatusPO(); } catch (e) { status = null; }
-  const previousItems = status && status.success ? (status.items || []) : [];
-  const snapshot = { weekKey: previousKey, capturedAt: new Date().toISOString(), noPO: status && status.noPO || null,
-    summary: status && status.summary || null, items: previousItems };
-  props.setProperty("GUDANGAI_PO_LAST_WEEK_STATUS", JSON.stringify(snapshot));
+  if (!status || status.success !== true) {
+    return { changed: false, success: false, code: "PO_ROLLOVER_STATUS_UNAVAILABLE",
+      error: "Rollover dibatalkan: status PO aktif tidak berhasil dibaca; PO lama tidak boleh ditimpa." };
+  }
+  const poWeekKey = status.weekKey || storedKey || currentKey;
+  const previousKey = storedKey || poWeekKey;
+  if (poWeekKey === currentKey) {
+    props.setProperty("GUDANGAI_PO_WEEK_KEY", currentKey);
+    return { changed: false, success: true, currentKey: currentKey, previousKey: previousKey };
+  }
+  const snapshot = {
+    weekKey: poWeekKey, capturedAt: new Date().toISOString(), noPO: status.noPO || null,
+    tanggalPO: status.tanggalPO || null, periodStart: status.periodStart || null,
+    periodEnd: status.periodEnd || null, periodStatus: status.periodStatus || "TERTUNDA",
+    summary: status.summary || null, items: status.items || []
+  };
+  const serialized = JSON.stringify(snapshot);
+  props.setProperty("GUDANGAI_PO_LAST_WEEK_STATUS", serialized);
+  if (props.getProperty("GUDANGAI_PO_LAST_WEEK_STATUS") !== serialized) {
+    return { changed: false, success: false, code: "PO_ROLLOVER_ARCHIVE_UNCONFIRMED",
+      error: "Arsip PO minggu lalu tidak terkonfirmasi; PO lama dipertahankan dan PO baru tidak ditulis." };
+  }
   props.setProperty("GUDANGAI_PO_WEEK_KEY", currentKey);
-  return { changed: true, currentKey: currentKey, previousKey: previousKey, count: previousItems.length };
+  return { changed: true, success: true, currentKey: currentKey, previousKey: poWeekKey,
+    count: (status.items || []).length, archivedPending: (status.items || []).filter(function(item) {
+      return String(item.status || "").toUpperCase() !== "SELESAI" && Number(item.qtyBelumDatang || 0) > 0;
+    }).length };
 }
 
 function getPreviousPOStatus_() {
@@ -3558,6 +3589,10 @@ function weeklyPOAutomation() {
   if (!lock.tryLock(PO_LOCK_TIMEOUT_MS)) return { success: false, status: "UNKNOWN", code: "PO_WEEKLY_LOCK_TIMEOUT", error: "Proses PO mingguan sedang dikerjakan proses lain." };
   try {
     const rollover = rolloverPOWeekIfNeeded_();
+    if (!rollover || rollover.success === false) {
+      return { success: false, status: "BLOCKED", code: rollover && rollover.code || "PO_ROLLOVER_FAILED",
+        error: rollover && rollover.error || "PO baru dibatalkan karena arsip periode lama belum aman.", rollover: rollover };
+    }
     const result = writePORecommendations();
     if (result.success) {
       try { refreshDashboardPOSection_({ renderCharts: true, force: true }); } catch (e) { console.error("Dashboard PO mingguan gagal: " + e.message); }
@@ -3916,6 +3951,27 @@ function getStockDelta(body) {
   return { success: true, status: "OK", mode: "DELTA", sinceTimestamp: since.toISOString(), generatedAt: new Date().toISOString(), count: items.length, items: items, masterVersion: versions.masterVersion, stockVersion: versions.stockVersion, lastUpdate: getLastUpdateTimestamp() };
 }
 
+function getPOPeriodBounds_(poDate) {
+  if (!(poDate instanceof Date) || isNaN(poDate.getTime())) return null;
+  const poKey = Utilities.formatDate(poDate, TIMEZONE, "yyyy-MM-dd");
+  const parts = poKey.split("-").map(Number);
+  const utc = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2]));
+  const day = utc.getUTCDay() || 7;
+  const monday = new Date(utc.getTime());
+  monday.setUTCDate(monday.getUTCDate() - day + 1);
+  const nextMonday = new Date(monday.getTime());
+  nextMonday.setUTCDate(nextMonday.getUTCDate() + 7);
+  const sunday = new Date(nextMonday.getTime());
+  sunday.setUTCDate(sunday.getUTCDate() - 1);
+  return {
+    poStart: poKey,
+    periodStart: Utilities.formatDate(monday, "UTC", "yyyy-MM-dd"),
+    periodEnd: Utilities.formatDate(sunday, "UTC", "yyyy-MM-dd"),
+    periodEndExclusive: Utilities.formatDate(nextMonday, "UTC", "yyyy-MM-dd"),
+    weekKey: getWeekKey_(poDate)
+  };
+}
+
 function getPOInfoFromHeader_(sheet) {
   // Pembacaan sederhana & efisien: tanggal hanya dari baris 4, No PO dari baris 4/5.
   // Tidak bergantung pada kode unik rumit di keterangan untuk menentukan tanggal PO.
@@ -3946,10 +4002,14 @@ function getPOInfoFromHeader_(sheet) {
     if (m) { noPO = String(m[1]).trim(); break; }
   }
 
+  const period = tanggal ? getPOPeriodBounds_(tanggal) : null;
   return {
     noPO: noPO,
     tanggal: tanggal,
-    weekKey: tanggal ? getWeekKey_(tanggal) : getWeekKey_(new Date()),
+    weekKey: period ? period.weekKey : null,
+    periodStart: period ? period.periodStart : null,
+    periodEnd: period ? period.periodEnd : null,
+    periodEndExclusive: period ? period.periodEndExclusive : null,
     tanggalText: tanggal ? Utilities.formatDate(tanggal, TIMEZONE, DATE_FORMAT) : null
   };
 }
@@ -3999,6 +4059,19 @@ function recordPOArrival(body) {
     }
   });
   if (!found) return { success: false, status: "REJECTED", code: "PO_ITEM_NOT_FOUND", error: "Item PO tidak ditemukan." };
+
+  const poInfo = getPOInfoFromHeader_(po);
+  const arrivalDate = parseTransactionDate_(body.tanggal || Utilities.formatDate(new Date(), TIMEZONE, DATE_FORMAT));
+  if (!poInfo.tanggal || !poInfo.periodEndExclusive || !arrivalDate) {
+    return { success: false, status: "REJECTED", code: "PO_PERIOD_DATE_INVALID", error: "Tanggal PO atau tanggal kedatangan tidak valid." };
+  }
+  const arrivalKey = Utilities.formatDate(arrivalDate, TIMEZONE, "yyyy-MM-dd");
+  const poStartKey = Utilities.formatDate(poInfo.tanggal, TIMEZONE, "yyyy-MM-dd");
+  if (arrivalKey < poStartKey || arrivalKey >= poInfo.periodEndExclusive) {
+    return { success: false, status: "REJECTED", code: "PO_PERIOD_MISMATCH",
+      error: "Kedatangan berada di luar periode PO " + poInfo.periodStart + " s.d. " + poInfo.periodEnd + ".",
+      periodStart: poInfo.periodStart, periodEnd: poInfo.periodEnd, tanggalKedatangan: arrivalKey };
+  }
 
   const entityInfo = normalizeEntityGroup_(body.entitas || body.entity, body.kode || body.kodeBarang);
   let entitas = entityInfo.valid ? entityInfo.entitas : "";
@@ -4065,14 +4138,13 @@ function getStatusPO(body) {
       if (!ket || qty <= 0) return;
       const ketUpper = ket.toUpperCase();
       if (ketUpper.indexOf('RETUR') >= 0 || /^DARI\b/.test(ketUpper)) return;
-      if (info.tanggal) {
-        const tanggalMasuk = parseTransactionDate_(r[0]);
-        if (tanggalMasuk) {
-          const poKey = Utilities.formatDate(info.tanggal, TIMEZONE, 'yyyy-MM-dd');
-          const masukKey = Utilities.formatDate(tanggalMasuk, TIMEZONE, 'yyyy-MM-dd');
-          if (masukKey < poKey) return;
-        }
-      }
+      // Kedatangan hanya dihitung pada periode PO: tanggal PO s.d. Minggu akhir periode.
+      // Untuk PO 16–22 Nov 2026, transaksi 23 Nov masuk periode berikutnya.
+      const tanggalMasuk = parseTransactionDate_(r[0]);
+      if (!tanggalMasuk || !info.tanggal || !info.periodEndExclusive) return;
+      const poKey = Utilities.formatDate(info.tanggal, TIMEZONE, 'yyyy-MM-dd');
+      const masukKey = Utilities.formatDate(tanggalMasuk, TIMEZONE, 'yyyy-MM-dd');
+      if (masukKey < poKey || masukKey >= info.periodEndExclusive) return;
       if (reIndex) {
         const m = ket.match(reIndex);
         if (m) {
@@ -4134,10 +4206,14 @@ function getStatusPO(body) {
     });
   });
 
+  const todayKey = Utilities.formatDate(new Date(), TIMEZONE, "yyyy-MM-dd");
+  const periodStatus = !info.periodStart || !info.periodEndExclusive ? "TANGGAL_PO_TIDAK_VALID" :
+    (todayKey < info.periodStart ? "BELUM_MULAI" : (todayKey >= info.periodEndExclusive ? "TERTUNDA" : "AKTIF"));
   return {
     success: true, status: 'OK', timestamp: new Date().toISOString(), noPO: noPO,
     tanggalPO: info.tanggal ? Utilities.formatDate(info.tanggal, TIMEZONE, DATE_FORMAT) : (info.tanggalText || null),
-    weekKey: info.weekKey,
+    weekKey: info.weekKey, periodStart: info.periodStart, periodEnd: info.periodEnd,
+    periodStatus: periodStatus, isActivePeriod: periodStatus === "AKTIF",
     summary: {
       totalAktif: totalAktif, totalKonfirmasi: totalKonfirmasi, itemMenunggu: itemMenunggu,
       itemSebagian: itemSebagian, itemSelesai: itemSelesai, totalItem: items.length,
