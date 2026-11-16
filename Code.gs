@@ -2820,48 +2820,23 @@ function getPOStatus_() {
     aktif: { cv: 0, pt: 0, purchaseOrder: 0, total: 0, itemCount: 0 },
     konfirmasi: { cv: 0, pt: 0, purchaseOrder: 0, total: 0, itemCount: 0 }
   };
-  const sh = getSS().getSheetByName("purchase order");
-  if (!sh || sh.getLastRow() < PO_HEADER_ROW) return result;
+  // Sumber status tunggal: getStatusPO(), termasuk validasi periode Senin–Minggu.
+  let status = null;
+  try { status = getStatusPO(); } catch (e) { status = null; }
+  if (!status || status.success !== true || status.periodStatus !== "AKTIF") return result;
 
-  // Format GudangAI standar: header tabel row 6, data mulai row 7,
-  // B=No, C=Nama, D=Size, E=Satuan, F=PO CV, G=PO PT, H=Total, I=Tanggal Kedatangan.
-  // Header-based agar tidak salah menjumlahkan nomor item/tanggal/angka lain.
-  const headerRow = PO_HEADER_ROW;
-  const lastCol = sh.getLastColumn();
-  const headers = sh.getRange(headerRow, 1, 1, lastCol).getDisplayValues()[0].map(function(v) {
-    return String(v || "").trim().toUpperCase();
-  });
-  const cCV = headers.findIndex(function(h) { return /PO\\s*CV|CV\\s*PO/.test(h); });
-  const cPT = headers.findIndex(function(h) { return /PO\\s*PT|PT\\s*PO/.test(h); });
-  const cTotal = headers.findIndex(function(h) { return /^TOTAL$|TOTAL\\s*PO/.test(h); });
-  const cStatus = headers.findIndex(function(h) { return /STATUS|KONFIRM/.test(h); });
-
-  if (cCV < 0 && cPT < 0 && cTotal < 0) {
-    return result;
-  }
-
-  const startRow = PO_DATA_START_ROW;
-  const numRows = sh.getLastRow() - startRow + 1;
-  if (numRows <= 0) return result;
-  const vals = sh.getRange(startRow, 1, numRows, lastCol).getDisplayValues();
-
-  vals.forEach(function(row) {
-    const hasItem = row.some(function(v) { return String(v || "").trim() !== ""; });
-    if (!hasItem) return;
-
-    const statusText = cStatus >= 0 ? String(row[cStatus] || "").toUpperCase() : "";
-    const confirmed = /KONFIRM|CONFIRM|SELESAI|APPROVED/.test(statusText);
+  (status.items || []).forEach(function(item) {
+    const confirmed = String(item.status || "").toUpperCase() === "SELESAI";
     const bucket = confirmed ? result.konfirmasi : result.aktif;
-
-    const cv = cCV >= 0 ? toNumber_(row[cCV]) : 0;
-    const pt = cPT >= 0 ? toNumber_(row[cPT]) : 0;
-    const total = cTotal >= 0 ? toNumber_(row[cTotal]) : (cv + pt);
+    const cv = Math.max(0, toNumber_(item.poCV));
+    const pt = Math.max(0, toNumber_(item.poPT));
+    const total = Math.max(0, toNumber_(item.totalPO) || cv + pt);
     bucket.cv += cv;
     bucket.pt += pt;
+    bucket.purchaseOrder += total;
     bucket.total += total;
-    if (cv || pt || total) bucket.itemCount++;
+    if (total > 0) bucket.itemCount++;
   });
-
   return result;
 }
 
@@ -4290,10 +4265,10 @@ function refreshDashboardPOSection_(options) {
   const clearEnd = Math.max(chartStart + 20, Math.min(sh.getMaxRows(), chartStart + 80));
   dashboardClearPOArea_(sh, currentTop, clearEnd);
 
-  const currentSubtitle = 'Periode: ' + (data.tanggalPO || data.weekKey || '-') + ' • No PO: ' + (data.noPO || '-') + ' • Total Qty: ' + (data.summary.totalPOQty || 0) + ' • Datang: ' + (data.summary.totalKonfirmasiQty || 0) + ' • Belum Datang: ' + (data.summary.totalSisaQty || 0);
+  const currentSubtitle = 'Periode: ' + (data.periodStart && data.periodEnd ? data.periodStart + ' s.d. ' + data.periodEnd : data.tanggalPO || '-') + ' • Status: ' + (data.periodStatus || '-') + ' • No PO: ' + (data.noPO || '-') + ' • Total Qty: ' + (data.summary.totalPOQty || 0) + ' • Datang: ' + (data.summary.totalKonfirmasiQty || 0) + ' • Belum Datang: ' + (data.summary.totalSisaQty || 0);
   renderPOStatusBlock_(sh, currentTop, '4 STATUS PO MINGGU INI', currentSubtitle, data, data.items, 1);
 
-  const previousSubtitle = previous.weekKey ? 'Periode: ' + previous.weekKey + ' • No PO: ' + (previous.noPO || '-') + ' • Data arsip minggu lalu' : 'Belum ada arsip PO minggu lalu.';
+  const previousSubtitle = previous.weekKey ? 'Periode: ' + (previous.periodStart && previous.periodEnd ? previous.periodStart + ' s.d. ' + previous.periodEnd : previous.weekKey) + ' • Status: TERTUNDA / ARSIP • No PO: ' + (previous.noPO || '-') + ' • Data PO minggu lalu' : 'Belum ada arsip PO minggu lalu.';
   renderPOStatusBlock_(sh, previousTop, '5 STATUS PO MINGGU LALU', previousSubtitle, previous, previousItems, 8);
 
   [60, 300, 100, 100, 120, 120].forEach(function(w, i) { sh.setColumnWidth(i + 1, w); });
