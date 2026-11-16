@@ -140,3 +140,4 @@ jobs:
           echo "Deployment commit: ${GITHUB_SHA}"
           echo "Worker: gudangai-rudy-pwa-69"
           echo "Production URL: https://gudangai-rudy-pwa-69.rudivirawan69.workers.dev/"
+# Manual production redeploy trigger for PO weekly-period merge d9478af0d973d40a9816d9442bfd581e65a84eaa
