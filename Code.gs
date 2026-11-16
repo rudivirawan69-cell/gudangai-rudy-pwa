@@ -2449,7 +2449,7 @@ function syncDivisionStock(options) {
   const order = ["DAPUR 1","DAPUR 2","MIE","PACKING","CS","BAHAN BAKU","REKANAN"];
   const out = [
     ["TABEL DATA STOK PER DIVISI — V6.5 OPTIMIZED", "", "", "", "", "", ""],
-    ["Sisa Stok = CV/PT; BAHAN BAKU = Stock Bahan Baku | Update: " + Utilities.formatDate(new Date(), TIMEZONE, "dd-MMM-yyyy HH:mm:ss"), "", "", "", "", "", ""]
+    ["Sisa Stok = Stock Akhir CV/PT; BAHAN BAKU = Stock Bahan Baku | Update terakhir: " + Utilities.formatDate(new Date(), TIMEZONE, "yyyy-MM-dd HH:mm:ss"), "", "", "", "", "", ""]
   ];
   order.forEach(div => {
     const items = groups[div] || [];
