@@ -34,7 +34,11 @@ test('PO status counts only arrivals from PO date until the exclusive next-Monda
 test('weekly rollover archives and reads back old PO before allowing replacement', () => {
   const rollover = block('rolloverPOWeekIfNeeded_');
   const guard = block('getPOOverwriteGuard_');
-  assert.ok(rollover.indexOf('props.setProperty("GUDANGAI_PO_LAST_WEEK_STATUS"') < rollover.indexOf('props.setProperty("GUDANGAI_PO_WEEK_KEY"'));
+  const archiveIndex = rollover.indexOf('props.setProperty("GUDANGAI_PO_LAST_WEEK_STATUS"');
+  const verifyIndex = rollover.indexOf('props.getProperty("GUDANGAI_PO_LAST_WEEK_STATUS") !== serialized');
+  const weekKeyWriteIndex = rollover.lastIndexOf('props.setProperty("GUDANGAI_PO_WEEK_KEY", currentKey)');
+  assert.ok(archiveIndex >= 0 && verifyIndex > archiveIndex && weekKeyWriteIndex > verifyIndex,
+    'The previous PO snapshot must be read back successfully before the active week key advances.');
   assert.match(rollover, /PO_ROLLOVER_ARCHIVE_UNCONFIRMED/);
   assert.match(guard, /archived\.weekKey === status\.weekKey/);
   assert.match(guard, /safe: true/);
