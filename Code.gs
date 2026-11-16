@@ -2820,48 +2820,23 @@ function getPOStatus_() {
     aktif: { cv: 0, pt: 0, purchaseOrder: 0, total: 0, itemCount: 0 },
     konfirmasi: { cv: 0, pt: 0, purchaseOrder: 0, total: 0, itemCount: 0 }
   };
-  const sh = getSS().getSheetByName("purchase order");
-  if (!sh || sh.getLastRow() < PO_HEADER_ROW) return result;
+  // Sumber status tunggal: getStatusPO(), termasuk validasi periode Senin–Minggu.
+  let status = null;
+  try { status = getStatusPO(); } catch (e) { status = null; }
+  if (!status || status.success !== true || status.periodStatus !== "AKTIF") return result;
 
-  // Format GudangAI standar: header tabel row 6, data mulai row 7,
-  // B=No, C=Nama, D=Size, E=Satuan, F=PO CV, G=PO PT, H=Total, I=Tanggal Kedatangan.
-  // Header-based agar tidak salah menjumlahkan nomor item/tanggal/angka lain.
-  const headerRow = PO_HEADER_ROW;
-  const lastCol = sh.getLastColumn();
-  const headers = sh.getRange(headerRow, 1, 1, lastCol).getDisplayValues()[0].map(function(v) {
-    return String(v || "").trim().toUpperCase();
-  });
-  const cCV = headers.findIndex(function(h) { return /PO\\s*CV|CV\\s*PO/.test(h); });
-  const cPT = headers.findIndex(function(h) { return /PO\\s*PT|PT\\s*PO/.test(h); });
-  const cTotal = headers.findIndex(function(h) { return /^TOTAL$|TOTAL\\s*PO/.test(h); });
-  const cStatus = headers.findIndex(function(h) { return /STATUS|KONFIRM/.test(h); });
-
-  if (cCV < 0 && cPT < 0 && cTotal < 0) {
-    return result;
-  }
-
-  const startRow = PO_DATA_START_ROW;
-  const numRows = sh.getLastRow() - startRow + 1;
-  if (numRows <= 0) return result;
-  const vals = sh.getRange(startRow, 1, numRows, lastCol).getDisplayValues();
-
-  vals.forEach(function(row) {
-    const hasItem = row.some(function(v) { return String(v || "").trim() !== ""; });
-    if (!hasItem) return;
-
-    const statusText = cStatus >= 0 ? String(row[cStatus] || "").toUpperCase() : "";
-    const confirmed = /KONFIRM|CONFIRM|SELESAI|APPROVED/.test(statusText);
+  (status.items || []).forEach(function(item) {
+    const confirmed = String(item.status || "").toUpperCase() === "SELESAI";
     const bucket = confirmed ? result.konfirmasi : result.aktif;
-
-    const cv = cCV >= 0 ? toNumber_(row[cCV]) : 0;
-    const pt = cPT >= 0 ? toNumber_(row[cPT]) : 0;
-    const total = cTotal >= 0 ? toNumber_(row[cTotal]) : (cv + pt);
+    const cv = Math.max(0, toNumber_(item.poCV));
+    const pt = Math.max(0, toNumber_(item.poPT));
+    const total = Math.max(0, toNumber_(item.totalPO) || cv + pt);
     bucket.cv += cv;
     bucket.pt += pt;
+    bucket.purchaseOrder += total;
     bucket.total += total;
-    if (cv || pt || total) bucket.itemCount++;
+    if (total > 0) bucket.itemCount++;
   });
-
   return result;
 }
 
@@ -3062,6 +3037,22 @@ function getPOOverwriteGuard_() {
       code: "PO_STATUS_UNAVAILABLE",
       error: "PO tidak ditimpa karena status PO aktif gagal dibaca.",
       reviewRequired: true
+    };
+  }
+
+  // PO periode sebelumnya boleh diganti hanya jika snapshot rollover sudah tersimpan.
+  // Snapshot menjadi sumber status tertunda minggu lalu; jangan hilangkan data jika arsip gagal.
+  const archived = getPreviousPOStatus_();
+  const activeWeekKey = getWeekKey_(new Date());
+  if (archived && archived.weekKey && status.weekKey &&
+      archived.weekKey === status.weekKey && status.weekKey !== activeWeekKey) {
+    return {
+      safe: true,
+      pendingCount: (status.items || []).filter(function(item) {
+        return String(item.status || "").toUpperCase() !== "SELESAI" && Number(item.qtyBelumDatang || 0) > 0;
+      }).length,
+      reason: "PO periode " + (status.periodStart || status.weekKey) + "–" + (status.periodEnd || "") + " sudah diarsipkan sebagai PO minggu lalu.",
+      archivedWeekKey: archived.weekKey
     };
   }
 
@@ -3529,21 +3520,36 @@ function getWeekKey_(date) {
 function rolloverPOWeekIfNeeded_() {
   const props = PropertiesService.getScriptProperties();
   const currentKey = getWeekKey_(new Date());
-  const previousKey = props.getProperty("GUDANGAI_PO_WEEK_KEY") || "";
-  if (!previousKey) {
-    props.setProperty("GUDANGAI_PO_WEEK_KEY", currentKey);
-    return { changed: false, currentKey: currentKey, previousKey: null };
-  }
-  if (previousKey === currentKey) return { changed: false, currentKey: currentKey, previousKey: previousKey };
-
+  const storedKey = props.getProperty("GUDANGAI_PO_WEEK_KEY") || "";
   let status = null;
   try { status = getStatusPO(); } catch (e) { status = null; }
-  const previousItems = status && status.success ? (status.items || []) : [];
-  const snapshot = { weekKey: previousKey, capturedAt: new Date().toISOString(), noPO: status && status.noPO || null,
-    summary: status && status.summary || null, items: previousItems };
-  props.setProperty("GUDANGAI_PO_LAST_WEEK_STATUS", JSON.stringify(snapshot));
+  if (!status || status.success !== true) {
+    return { changed: false, success: false, code: "PO_ROLLOVER_STATUS_UNAVAILABLE",
+      error: "Rollover dibatalkan: status PO aktif tidak berhasil dibaca; PO lama tidak boleh ditimpa." };
+  }
+  const poWeekKey = status.weekKey || storedKey || currentKey;
+  const previousKey = storedKey || poWeekKey;
+  if (poWeekKey === currentKey) {
+    props.setProperty("GUDANGAI_PO_WEEK_KEY", currentKey);
+    return { changed: false, success: true, currentKey: currentKey, previousKey: previousKey };
+  }
+  const snapshot = {
+    weekKey: poWeekKey, capturedAt: new Date().toISOString(), noPO: status.noPO || null,
+    tanggalPO: status.tanggalPO || null, periodStart: status.periodStart || null,
+    periodEnd: status.periodEnd || null, periodStatus: status.periodStatus || "TERTUNDA",
+    summary: status.summary || null, items: status.items || []
+  };
+  const serialized = JSON.stringify(snapshot);
+  props.setProperty("GUDANGAI_PO_LAST_WEEK_STATUS", serialized);
+  if (props.getProperty("GUDANGAI_PO_LAST_WEEK_STATUS") !== serialized) {
+    return { changed: false, success: false, code: "PO_ROLLOVER_ARCHIVE_UNCONFIRMED",
+      error: "Arsip PO minggu lalu tidak terkonfirmasi; PO lama dipertahankan dan PO baru tidak ditulis." };
+  }
   props.setProperty("GUDANGAI_PO_WEEK_KEY", currentKey);
-  return { changed: true, currentKey: currentKey, previousKey: previousKey, count: previousItems.length };
+  return { changed: true, success: true, currentKey: currentKey, previousKey: poWeekKey,
+    count: (status.items || []).length, archivedPending: (status.items || []).filter(function(item) {
+      return String(item.status || "").toUpperCase() !== "SELESAI" && Number(item.qtyBelumDatang || 0) > 0;
+    }).length };
 }
 
 function getPreviousPOStatus_() {
@@ -3558,6 +3564,10 @@ function weeklyPOAutomation() {
   if (!lock.tryLock(PO_LOCK_TIMEOUT_MS)) return { success: false, status: "UNKNOWN", code: "PO_WEEKLY_LOCK_TIMEOUT", error: "Proses PO mingguan sedang dikerjakan proses lain." };
   try {
     const rollover = rolloverPOWeekIfNeeded_();
+    if (!rollover || rollover.success === false) {
+      return { success: false, status: "BLOCKED", code: rollover && rollover.code || "PO_ROLLOVER_FAILED",
+        error: rollover && rollover.error || "PO baru dibatalkan karena arsip periode lama belum aman.", rollover: rollover };
+    }
     const result = writePORecommendations();
     if (result.success) {
       try { refreshDashboardPOSection_({ renderCharts: true, force: true }); } catch (e) { console.error("Dashboard PO mingguan gagal: " + e.message); }
@@ -3916,6 +3926,32 @@ function getStockDelta(body) {
   return { success: true, status: "OK", mode: "DELTA", sinceTimestamp: since.toISOString(), generatedAt: new Date().toISOString(), count: items.length, items: items, masterVersion: versions.masterVersion, stockVersion: versions.stockVersion, lastUpdate: getLastUpdateTimestamp() };
 }
 
+function formatPOPeriodDate_(value) {
+  const match = String(value || "").trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return match ? match[3] + "-" + match[2] + "-" + match[1] : String(value || "-");
+}
+
+function getPOPeriodBounds_(poDate) {
+  if (!(poDate instanceof Date) || isNaN(poDate.getTime())) return null;
+  const poKey = Utilities.formatDate(poDate, TIMEZONE, "yyyy-MM-dd");
+  const parts = poKey.split("-").map(Number);
+  const utc = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2]));
+  const day = utc.getUTCDay() || 7;
+  const monday = new Date(utc.getTime());
+  monday.setUTCDate(monday.getUTCDate() - day + 1);
+  const nextMonday = new Date(monday.getTime());
+  nextMonday.setUTCDate(nextMonday.getUTCDate() + 7);
+  const sunday = new Date(nextMonday.getTime());
+  sunday.setUTCDate(sunday.getUTCDate() - 1);
+  return {
+    poStart: poKey,
+    periodStart: Utilities.formatDate(monday, "UTC", "yyyy-MM-dd"),
+    periodEnd: Utilities.formatDate(sunday, "UTC", "yyyy-MM-dd"),
+    periodEndExclusive: Utilities.formatDate(nextMonday, "UTC", "yyyy-MM-dd"),
+    weekKey: getWeekKey_(poDate)
+  };
+}
+
 function getPOInfoFromHeader_(sheet) {
   // Pembacaan sederhana & efisien: tanggal hanya dari baris 4, No PO dari baris 4/5.
   // Tidak bergantung pada kode unik rumit di keterangan untuk menentukan tanggal PO.
@@ -3946,10 +3982,14 @@ function getPOInfoFromHeader_(sheet) {
     if (m) { noPO = String(m[1]).trim(); break; }
   }
 
+  const period = tanggal ? getPOPeriodBounds_(tanggal) : null;
   return {
     noPO: noPO,
     tanggal: tanggal,
-    weekKey: tanggal ? getWeekKey_(tanggal) : getWeekKey_(new Date()),
+    weekKey: period ? period.weekKey : null,
+    periodStart: period ? period.periodStart : null,
+    periodEnd: period ? period.periodEnd : null,
+    periodEndExclusive: period ? period.periodEndExclusive : null,
     tanggalText: tanggal ? Utilities.formatDate(tanggal, TIMEZONE, DATE_FORMAT) : null
   };
 }
@@ -3999,6 +4039,19 @@ function recordPOArrival(body) {
     }
   });
   if (!found) return { success: false, status: "REJECTED", code: "PO_ITEM_NOT_FOUND", error: "Item PO tidak ditemukan." };
+
+  const poInfo = getPOInfoFromHeader_(po);
+  const arrivalDate = parseTransactionDate_(body.tanggal || Utilities.formatDate(new Date(), TIMEZONE, DATE_FORMAT));
+  if (!poInfo.tanggal || !poInfo.periodEndExclusive || !arrivalDate) {
+    return { success: false, status: "REJECTED", code: "PO_PERIOD_DATE_INVALID", error: "Tanggal PO atau tanggal kedatangan tidak valid." };
+  }
+  const arrivalKey = Utilities.formatDate(arrivalDate, TIMEZONE, "yyyy-MM-dd");
+  const poStartKey = Utilities.formatDate(poInfo.tanggal, TIMEZONE, "yyyy-MM-dd");
+  if (arrivalKey < poStartKey || arrivalKey >= poInfo.periodEndExclusive) {
+    return { success: false, status: "REJECTED", code: "PO_PERIOD_MISMATCH",
+      error: "Kedatangan berada di luar periode PO " + poInfo.periodStart + " s.d. " + poInfo.periodEnd + ".",
+      periodStart: poInfo.periodStart, periodEnd: poInfo.periodEnd, tanggalKedatangan: arrivalKey };
+  }
 
   const entityInfo = normalizeEntityGroup_(body.entitas || body.entity, body.kode || body.kodeBarang);
   let entitas = entityInfo.valid ? entityInfo.entitas : "";
@@ -4065,14 +4118,13 @@ function getStatusPO(body) {
       if (!ket || qty <= 0) return;
       const ketUpper = ket.toUpperCase();
       if (ketUpper.indexOf('RETUR') >= 0 || /^DARI\b/.test(ketUpper)) return;
-      if (info.tanggal) {
-        const tanggalMasuk = parseTransactionDate_(r[0]);
-        if (tanggalMasuk) {
-          const poKey = Utilities.formatDate(info.tanggal, TIMEZONE, 'yyyy-MM-dd');
-          const masukKey = Utilities.formatDate(tanggalMasuk, TIMEZONE, 'yyyy-MM-dd');
-          if (masukKey < poKey) return;
-        }
-      }
+      // Kedatangan hanya dihitung pada periode PO: tanggal PO s.d. Minggu akhir periode.
+      // Untuk PO 16–22 Nov 2026, transaksi 23 Nov masuk periode berikutnya.
+      const tanggalMasuk = parseTransactionDate_(r[0]);
+      if (!tanggalMasuk || !info.tanggal || !info.periodEndExclusive) return;
+      const poKey = Utilities.formatDate(info.tanggal, TIMEZONE, 'yyyy-MM-dd');
+      const masukKey = Utilities.formatDate(tanggalMasuk, TIMEZONE, 'yyyy-MM-dd');
+      if (masukKey < poKey || masukKey >= info.periodEndExclusive) return;
       if (reIndex) {
         const m = ket.match(reIndex);
         if (m) {
@@ -4134,10 +4186,18 @@ function getStatusPO(body) {
     });
   });
 
+  const todayKey = Utilities.formatDate(new Date(), TIMEZONE, "yyyy-MM-dd");
+  const periodStatus = !info.periodStart || !info.periodEndExclusive ? "TANGGAL_PO_TIDAK_VALID" :
+    (todayKey < info.periodStart ? "BELUM_MULAI" : (todayKey >= info.periodEndExclusive ? "TERTUNDA" : "AKTIF"));
+  const previousSnapshot = getPreviousPOStatus_();
+  const previousWeek = previousSnapshot && previousSnapshot.weekKey && previousSnapshot.weekKey !== info.weekKey
+    ? previousSnapshot : null;
   return {
     success: true, status: 'OK', timestamp: new Date().toISOString(), noPO: noPO,
     tanggalPO: info.tanggal ? Utilities.formatDate(info.tanggal, TIMEZONE, DATE_FORMAT) : (info.tanggalText || null),
-    weekKey: info.weekKey,
+    weekKey: info.weekKey, periodStart: info.periodStart, periodEnd: info.periodEnd,
+    periodStatus: periodStatus, isActivePeriod: periodStatus === "AKTIF",
+    previousWeek: previousWeek,
     summary: {
       totalAktif: totalAktif, totalKonfirmasi: totalKonfirmasi, itemMenunggu: itemMenunggu,
       itemSebagian: itemSebagian, itemSelesai: itemSelesai, totalItem: items.length,
@@ -4214,10 +4274,10 @@ function refreshDashboardPOSection_(options) {
   const clearEnd = Math.max(chartStart + 20, Math.min(sh.getMaxRows(), chartStart + 80));
   dashboardClearPOArea_(sh, currentTop, clearEnd);
 
-  const currentSubtitle = 'Periode: ' + (data.tanggalPO || data.weekKey || '-') + ' • No PO: ' + (data.noPO || '-') + ' • Total Qty: ' + (data.summary.totalPOQty || 0) + ' • Datang: ' + (data.summary.totalKonfirmasiQty || 0) + ' • Belum Datang: ' + (data.summary.totalSisaQty || 0);
+  const currentSubtitle = 'Periode: ' + (data.periodStart && data.periodEnd ? formatPOPeriodDate_(data.periodStart) + ' s.d. ' + formatPOPeriodDate_(data.periodEnd) : data.tanggalPO || '-') + ' • Status: ' + (data.periodStatus || '-') + ' • No PO: ' + (data.noPO || '-') + ' • Total Qty: ' + (data.summary.totalPOQty || 0) + ' • Datang: ' + (data.summary.totalKonfirmasiQty || 0) + ' • Belum Datang: ' + (data.summary.totalSisaQty || 0);
   renderPOStatusBlock_(sh, currentTop, '4 STATUS PO MINGGU INI', currentSubtitle, data, data.items, 1);
 
-  const previousSubtitle = previous.weekKey ? 'Periode: ' + previous.weekKey + ' • No PO: ' + (previous.noPO || '-') + ' • Data arsip minggu lalu' : 'Belum ada arsip PO minggu lalu.';
+  const previousSubtitle = previous.weekKey ? 'Periode: ' + (previous.periodStart && previous.periodEnd ? formatPOPeriodDate_(previous.periodStart) + ' s.d. ' + formatPOPeriodDate_(previous.periodEnd) : previous.weekKey) + ' • Status: TERTUNDA / ARSIP • No PO: ' + (previous.noPO || '-') + ' • Data PO minggu lalu' : 'Belum ada arsip PO minggu lalu.';
   renderPOStatusBlock_(sh, previousTop, '5 STATUS PO MINGGU LALU', previousSubtitle, previous, previousItems, 8);
 
   [60, 300, 100, 100, 120, 120].forEach(function(w, i) { sh.setColumnWidth(i + 1, w); });

@@ -62,9 +62,36 @@ function normalizeStatusPO(raw) {
   let previousWeek = previousRaw && typeof previousRaw === 'object' ? {
     weekKey: String(previousRaw.weekKey || previousRaw.week || ''),
     noPO: previousRaw.noPO || '',
+    periodStart: previousRaw.periodStart || '',
+    periodEnd: previousRaw.periodEnd || '',
+    periodStatus: previousRaw.periodStatus || 'TERTUNDA',
+    readOnly: previousRaw.readOnly !== false,
     items: (Array.isArray(previousRaw.items) ? previousRaw.items : []).map(mapItem).filter((it) => it.nama && it.nama !== '—'),
     summary: previousRaw.summary || null,
   } : null;
+  // Bila PO pada sheet sudah melewati Minggu penutup tetapi rollover otomatis belum berjalan,
+  // tampilkan sebagai arsip tertunda, bukan sebagai PO aktif minggu ini.
+  if (raw.periodStatus === 'TERTUNDA' && items.length) {
+    previousWeek = {
+      weekKey: String(raw.weekKey || ''),
+      noPO: raw.noPO || '',
+      periodStart: raw.periodStart || '',
+      periodEnd: raw.periodEnd || '',
+      periodStatus: 'TERTUNDA',
+      readOnly: true,
+      items: items,
+      summary: {
+        totalItem: items.length,
+        itemMenunggu: menunggu,
+        itemSebagian: sebagian,
+        itemSelesai: selesai,
+      },
+    };
+    items = [];
+    menunggu = 0;
+    sebagian = 0;
+    selesai = 0;
+  }
   if (previousWeek && previousWeek.items.length) {
     const ps = previousWeek.summary || {};
     let pMenunggu = toQty(ps.itemMenunggu ?? ps.menunggu ?? 0);
@@ -98,6 +125,10 @@ function normalizeStatusPO(raw) {
     success: true,
     noPO: raw.noPO || summaryRaw.noPO || '',
     weekKey: raw.weekKey || raw.week || '',
+    periodStart: raw.periodStart || '',
+    periodEnd: raw.periodEnd || '',
+    periodStatus: raw.periodStatus || '',
+    isActivePeriod: raw.isActivePeriod === true,
     items,
     previousWeek,
     summary: {
@@ -126,6 +157,11 @@ function StatusTriple({ status }) {
       {box(isDatang, 'Datang', 'bg-emerald-50 border-emerald-300 text-emerald-800', 'bg-white border-slate-100 text-slate-400')}
     </div>
   );
+}
+
+function formatPeriodDate(value) {
+  const match = String(value || '').trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return match ? `${match[3]}-${match[2]}-${match[1]}` : String(value || '');
 }
 
 function todayISO() {
@@ -269,7 +305,14 @@ function StatusPOHubPanel({ mode }) {
           <div className="min-w-0">
             <p className="text-sm font-extrabold text-slate-900">{statusTitle}</p>
             <p className="text-[11px] text-slate-500 mt-0.5">
-              {statusNoPO ? `No PO: ${statusNoPO}` : (data?.weekKey || 'Data dari Spreadsheet utama')}
+              {statusNoPO ? `No PO: ${statusNoPO}` : (mode === 'previous' ? (data?.previousWeek?.weekKey || 'Arsip PO minggu lalu') : (data?.weekKey || 'Data dari Spreadsheet utama'))}
+            </p>
+            <p className="text-[10px] font-semibold text-cyan-700 mt-0.5">
+              Periode: {mode === 'previous'
+                ? (data?.previousWeek?.periodStart && data?.previousWeek?.periodEnd ? `${formatPeriodDate(data.previousWeek.periodStart)} s.d. ${formatPeriodDate(data.previousWeek.periodEnd)}` : 'Periode sebelumnya')
+                : (data?.periodStart && data?.periodEnd ? `${formatPeriodDate(data.periodStart)} s.d. ${formatPeriodDate(data.periodEnd)}` : 'Tanggal PO belum terbaca')}
+              {mode === 'current' && data?.periodStatus ? ` · ${data.periodStatus}` : ''}
+              {mode === 'previous' ? ' · TERTUNDA / ARSIP' : ''}
             </p>
           </div>
           <button type="button" onClick={load} className="w-9 h-9 rounded-xl border border-slate-200 bg-white flex items-center justify-center shrink-0" aria-label="Muat ulang">
@@ -340,12 +383,13 @@ function StatusPOHubPanel({ mode }) {
                   Periode berjalan · Belum selesai: {(data?.items || []).filter((it) => it.status !== 'Selesai' && ((Number(it.qtyPO) || 0) - (Number(it.qtyDatang) || 0)) > 0).length} item
                 </p>
               </button>
-              <button type="button" onClick={() => { setConfirmPeriod('previous'); setSelectedItem(null); setMsg(''); }} className="rounded-2xl border-2 border-slate-200 bg-slate-50 px-4 py-4 text-left active:scale-[0.99]">
-                <p className="text-sm font-extrabold text-slate-900">Konfirmasi PO Minggu Lalu</p>
+              <div className="rounded-2xl border-2 border-slate-200 bg-slate-50 px-4 py-4 text-left opacity-80">
+                <p className="text-sm font-extrabold text-slate-700">Arsip PO Minggu Lalu</p>
                 <p className="text-[11px] text-slate-600 mt-1">
-                  Periode sebelumnya · Belum selesai: {(data?.previousWeek?.items || []).filter((it) => it.status !== 'Selesai' && ((Number(it.qtyPO) || 0) - (Number(it.qtyDatang) || 0)) > 0).length} item
+                  Periode sudah ditutup · Belum selesai: {(data?.previousWeek?.items || []).filter((it) => it.status !== 'Selesai' && ((Number(it.qtyPO) || 0) - (Number(it.qtyDatang) || 0)) > 0).length} item
                 </p>
-              </button>
+                <p className="text-[10px] text-slate-500 mt-1">Hanya untuk melihat status. Konfirmasi baru dicatat pada periode PO aktif.</p>
+              </div>
             </div>
           )}
         </div>
