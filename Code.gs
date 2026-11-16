@@ -3926,6 +3926,11 @@ function getStockDelta(body) {
   return { success: true, status: "OK", mode: "DELTA", sinceTimestamp: since.toISOString(), generatedAt: new Date().toISOString(), count: items.length, items: items, masterVersion: versions.masterVersion, stockVersion: versions.stockVersion, lastUpdate: getLastUpdateTimestamp() };
 }
 
+function formatPOPeriodDate_(value) {
+  const match = String(value || "").trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return match ? match[3] + "-" + match[2] + "-" + match[1] : String(value || "-");
+}
+
 function getPOPeriodBounds_(poDate) {
   if (!(poDate instanceof Date) || isNaN(poDate.getTime())) return null;
   const poKey = Utilities.formatDate(poDate, TIMEZONE, "yyyy-MM-dd");
@@ -4269,10 +4274,10 @@ function refreshDashboardPOSection_(options) {
   const clearEnd = Math.max(chartStart + 20, Math.min(sh.getMaxRows(), chartStart + 80));
   dashboardClearPOArea_(sh, currentTop, clearEnd);
 
-  const currentSubtitle = 'Periode: ' + (data.periodStart && data.periodEnd ? data.periodStart + ' s.d. ' + data.periodEnd : data.tanggalPO || '-') + ' • Status: ' + (data.periodStatus || '-') + ' • No PO: ' + (data.noPO || '-') + ' • Total Qty: ' + (data.summary.totalPOQty || 0) + ' • Datang: ' + (data.summary.totalKonfirmasiQty || 0) + ' • Belum Datang: ' + (data.summary.totalSisaQty || 0);
+  const currentSubtitle = 'Periode: ' + (data.periodStart && data.periodEnd ? formatPOPeriodDate_(data.periodStart) + ' s.d. ' + formatPOPeriodDate_(data.periodEnd) : data.tanggalPO || '-') + ' • Status: ' + (data.periodStatus || '-') + ' • No PO: ' + (data.noPO || '-') + ' • Total Qty: ' + (data.summary.totalPOQty || 0) + ' • Datang: ' + (data.summary.totalKonfirmasiQty || 0) + ' • Belum Datang: ' + (data.summary.totalSisaQty || 0);
   renderPOStatusBlock_(sh, currentTop, '4 STATUS PO MINGGU INI', currentSubtitle, data, data.items, 1);
 
-  const previousSubtitle = previous.weekKey ? 'Periode: ' + (previous.periodStart && previous.periodEnd ? previous.periodStart + ' s.d. ' + previous.periodEnd : previous.weekKey) + ' • Status: TERTUNDA / ARSIP • No PO: ' + (previous.noPO || '-') + ' • Data PO minggu lalu' : 'Belum ada arsip PO minggu lalu.';
+  const previousSubtitle = previous.weekKey ? 'Periode: ' + (previous.periodStart && previous.periodEnd ? formatPOPeriodDate_(previous.periodStart) + ' s.d. ' + formatPOPeriodDate_(previous.periodEnd) : previous.weekKey) + ' • Status: TERTUNDA / ARSIP • No PO: ' + (previous.noPO || '-') + ' • Data PO minggu lalu' : 'Belum ada arsip PO minggu lalu.';
   renderPOStatusBlock_(sh, previousTop, '5 STATUS PO MINGGU LALU', previousSubtitle, previous, previousItems, 8);
 
   [60, 300, 100, 100, 120, 120].forEach(function(w, i) { sh.setColumnWidth(i + 1, w); });
