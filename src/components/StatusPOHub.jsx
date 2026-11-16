@@ -69,6 +69,29 @@ function normalizeStatusPO(raw) {
     items: (Array.isArray(previousRaw.items) ? previousRaw.items : []).map(mapItem).filter((it) => it.nama && it.nama !== '—'),
     summary: previousRaw.summary || null,
   } : null;
+  // Bila PO pada sheet sudah melewati Minggu penutup tetapi rollover otomatis belum berjalan,
+  // tampilkan sebagai arsip tertunda, bukan sebagai PO aktif minggu ini.
+  if (raw.periodStatus === 'TERTUNDA' && items.length) {
+    previousWeek = {
+      weekKey: String(raw.weekKey || ''),
+      noPO: raw.noPO || '',
+      periodStart: raw.periodStart || '',
+      periodEnd: raw.periodEnd || '',
+      periodStatus: 'TERTUNDA',
+      readOnly: true,
+      items: items,
+      summary: {
+        totalItem: items.length,
+        itemMenunggu: menunggu,
+        itemSebagian: sebagian,
+        itemSelesai: selesai,
+      },
+    };
+    items = [];
+    menunggu = 0;
+    sebagian = 0;
+    selesai = 0;
+  }
   if (previousWeek && previousWeek.items.length) {
     const ps = previousWeek.summary || {};
     let pMenunggu = toQty(ps.itemMenunggu ?? ps.menunggu ?? 0);
