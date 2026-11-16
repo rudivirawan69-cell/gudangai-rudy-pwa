@@ -52,8 +52,12 @@ const sync = functionBody(gs, 'syncDivisionStockLightweight_');
 assert.match(sync, /applyBahanBakuStockSource_\(stockMap\)/);
 assert.match(sync, /dest\.getRange\(u\.row, 6\)\.setValue\(u\.value\)/,
   'Lightweight sync must update only the existing Sisa Stok cells.');
-assert.match(sync, /dest\.getRange\(2, 1\)\.setValue\(/,
-  'Lightweight sync must refresh its source/timestamp subtitle.');
+assert.match(sync, /updateLastUpdateTimestamp\(\)/,
+  'Lightweight sync must refresh the canonical Data Stok Per Divisi timestamp after updating stock.');
+assert.doesNotMatch(sync, /\| Update:/,
+  'Lightweight sync must not write the legacy timestamp label.');
+assert.match(onEdit, /Stock Bahan Baku/,
+  'Manual Bahan Baku edits must be included in the edit trigger.');
 const rebuild = functionBody(gs, 'syncDivisionStock');
 assert.match(rebuild, /\.setValues\(/);
 assert.match(rebuild, /kode\.startsWith\("BBCV-"\).*?div = "BAHAN BAKU"/);
