@@ -83,6 +83,14 @@ const readSheetTimestamp = new Function('getSS', sheetTimestampReader + '; retur
   () => ({ getSheetByName: () => ({ getLastRow: () => 2, getRange: () => ({ getDisplayValue: () => 'Sisa Stok = Stock Akhir CV/PT | Update terakhir: 2026-11-13 18:20:45' }) }) })
 );
 assert.equal(readSheetTimestamp(), '2026-11-13 18:20:45', 'timestamp must come from Data Stok Per Divisi A2');
+const lightweightSync = extractFunction(code, 'syncDivisionStockLightweight_');
+assert.match(lightweightSync, /updateLastUpdateTimestamp\(\)/, 'lightweight stock sync must write the canonical timestamp after updating cells');
+assert.doesNotMatch(lightweightSync, /\| Update:/, 'legacy Update timestamp format must not overwrite A2');
+const onEditSource = extractFunction(code, 'onEdit');
+assert.match(onEditSource, /"Stock Bahan Baku"/, 'manual Bahan Baku edits must trigger sync and timestamp update');
+const headerSyncForPoll = fs.readFileSync('src/hooks/useSheetUpdate.js', 'utf8');
+assert.match(headerSyncForPoll, /setInterval\(refresh, 15000\)/, 'header re-reads the spreadsheet timestamp every 15 seconds');
+assert.match(api, /cache: 'no-store'/, 'spreadsheet GET reads bypass browser cache');
 assert.match(code, /sheetUpdatedAt: sheetUpdatedAt, lastUpdate: sheetUpdatedAt/);
 const headerSync = fs.readFileSync('src/hooks/useSheetUpdate.js', 'utf8');
 assert.match(headerSync, /return obj\.sheetUpdatedAt \|\| obj\.data\?\.sheetUpdatedAt \|\| obj\.meta\?\.sheetUpdatedAt/);
