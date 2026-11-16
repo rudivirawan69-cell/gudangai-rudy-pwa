@@ -4184,11 +4184,15 @@ function getStatusPO(body) {
   const todayKey = Utilities.formatDate(new Date(), TIMEZONE, "yyyy-MM-dd");
   const periodStatus = !info.periodStart || !info.periodEndExclusive ? "TANGGAL_PO_TIDAK_VALID" :
     (todayKey < info.periodStart ? "BELUM_MULAI" : (todayKey >= info.periodEndExclusive ? "TERTUNDA" : "AKTIF"));
+  const previousSnapshot = getPreviousPOStatus_();
+  const previousWeek = previousSnapshot && previousSnapshot.weekKey && previousSnapshot.weekKey !== info.weekKey
+    ? previousSnapshot : null;
   return {
     success: true, status: 'OK', timestamp: new Date().toISOString(), noPO: noPO,
     tanggalPO: info.tanggal ? Utilities.formatDate(info.tanggal, TIMEZONE, DATE_FORMAT) : (info.tanggalText || null),
     weekKey: info.weekKey, periodStart: info.periodStart, periodEnd: info.periodEnd,
     periodStatus: periodStatus, isActivePeriod: periodStatus === "AKTIF",
+    previousWeek: previousWeek,
     summary: {
       totalAktif: totalAktif, totalKonfirmasi: totalKonfirmasi, itemMenunggu: itemMenunggu,
       itemSebagian: itemSebagian, itemSelesai: itemSelesai, totalItem: items.length,
