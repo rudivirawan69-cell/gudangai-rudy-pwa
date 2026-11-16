@@ -62,6 +62,9 @@ function normalizeStatusPO(raw) {
   let previousWeek = previousRaw && typeof previousRaw === 'object' ? {
     weekKey: String(previousRaw.weekKey || previousRaw.week || ''),
     noPO: previousRaw.noPO || '',
+    periodStart: previousRaw.periodStart || '',
+    periodEnd: previousRaw.periodEnd || '',
+    periodStatus: previousRaw.periodStatus || 'TERTUNDA',
     items: (Array.isArray(previousRaw.items) ? previousRaw.items : []).map(mapItem).filter((it) => it.nama && it.nama !== '—'),
     summary: previousRaw.summary || null,
   } : null;
@@ -98,6 +101,10 @@ function normalizeStatusPO(raw) {
     success: true,
     noPO: raw.noPO || summaryRaw.noPO || '',
     weekKey: raw.weekKey || raw.week || '',
+    periodStart: raw.periodStart || '',
+    periodEnd: raw.periodEnd || '',
+    periodStatus: raw.periodStatus || '',
+    isActivePeriod: raw.isActivePeriod === true,
     items,
     previousWeek,
     summary: {
@@ -269,7 +276,14 @@ function StatusPOHubPanel({ mode }) {
           <div className="min-w-0">
             <p className="text-sm font-extrabold text-slate-900">{statusTitle}</p>
             <p className="text-[11px] text-slate-500 mt-0.5">
-              {statusNoPO ? `No PO: ${statusNoPO}` : (data?.weekKey || 'Data dari Spreadsheet utama')}
+              {statusNoPO ? `No PO: ${statusNoPO}` : (mode === 'previous' ? (data?.previousWeek?.weekKey || 'Arsip PO minggu lalu') : (data?.weekKey || 'Data dari Spreadsheet utama'))}
+            </p>
+            <p className="text-[10px] font-semibold text-cyan-700 mt-0.5">
+              Periode: {mode === 'previous'
+                ? (data?.previousWeek?.periodStart && data?.previousWeek?.periodEnd ? `${data.previousWeek.periodStart} s.d. ${data.previousWeek.periodEnd}` : 'Periode sebelumnya')
+                : (data?.periodStart && data?.periodEnd ? `${data.periodStart} s.d. ${data.periodEnd}` : 'Tanggal PO belum terbaca')}
+              {mode === 'current' && data?.periodStatus ? ` · ${data.periodStatus}` : ''}
+              {mode === 'previous' ? ' · TERTUNDA / ARSIP' : ''}
             </p>
           </div>
           <button type="button" onClick={load} className="w-9 h-9 rounded-xl border border-slate-200 bg-white flex items-center justify-center shrink-0" aria-label="Muat ulang">
