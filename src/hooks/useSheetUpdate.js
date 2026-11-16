@@ -87,7 +87,7 @@ export function useSheetUpdate() {
     if (local) apply(local, 'ok');
     refresh();
 
-    const timer = window.setInterval(refresh, 60000);
+    const timer = window.setInterval(refresh, 15000);
     window.addEventListener(EVENT_NAME, onSheetUpdated);
     window.addEventListener(BOOTSTRAP_EVENT, onBootstrap);
     window.addEventListener(STOCK_EVENT, onStock);
