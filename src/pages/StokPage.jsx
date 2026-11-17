@@ -16,7 +16,6 @@ const BATCH = 60;
 
 const fmt = (n) =>
   new Intl.NumberFormat("id-ID", { maximumFractionDigits: 2 }).format(n);
-const fmtCount = (n) => new Intl.NumberFormat("id-ID", { maximumFractionDigits: 0 }).format(n);
 
 function relatif(ts) {
   if (!ts) return null;
@@ -78,9 +77,9 @@ const Divisi = memo(function Divisi({ nama, items, open, onToggle, onOpen }) {
         <div className="sk-div-title">
           <h3>{nama}</h3>
           <p>
-            {fmtCount(c.total)} barang
-            {c.kritis > 0 && <span className="t-kritis"> · {fmtCount(c.kritis)} kritis</span>}
-            {c.waspada > 0 && <span className="t-waspada"> · {fmtCount(c.waspada)} perlu perhatian</span>}
+            {c.total} barang
+            {c.kritis > 0 && <span className="t-kritis"> · {c.kritis} kritis</span>}
+            {c.waspada > 0 && <span className="t-waspada"> · {c.waspada} perlu perhatian</span>}
           </p>
           <Bar c={c} />
         </div>
@@ -302,60 +301,45 @@ export default function StokPage() {
       </div>
 
       <header className="sk-head">
-        <small>Persediaan</small>
-        <h1>Stok Barang</h1>
-        <p>Pantau jumlah dan kebutuhan restok</p>
+        <small>Monitoring persediaan</small>
+        <h1>Data Stok</h1>
       </header>
 
-      <section className="sk-summary" aria-label="Ringkasan stok">
-        <div className="sk-stat"><b>{fmtCount(cnt.total)}</b><span>Total barang</span></div>
-        <div className="sk-stat is-critical"><b>{fmtCount(cnt.kritis)}</b><span>Kritis</span></div>
-        <div className="sk-stat is-warning"><b>{fmtCount(cnt.waspada)}</b><span>Waspada</span></div>
-        <div className="sk-stat is-safe"><b>{fmtCount(cnt.aman)}</b><span>Aman</span></div>
-      </section>
-
-      <section className="sk-filter-block" aria-label="Pilih entitas">
-        <h2 className="sk-section-label">Entitas</h2>
-        <div className="sk-seg" role="tablist" aria-label="Entitas">
+      <div className="sk-seg" role="tablist" aria-label="Entitas">
         {tabs.map((e) => (
           <button key={e} type="button" role="tab" aria-selected={entitas === e} className={entitas === e ? "on" : ""} onClick={() => setEntitas(e)}>
             {e === TIDAK_TERKLASIFIKASI ? "Lainnya" : e}
-            {cntEnt[e] != null ? <em>{fmtCount(cntEnt[e])}</em> : null}
+            {cntEnt[e] != null ? <em>{cntEnt[e]}</em> : null}
           </button>
         ))}
-        </div>
-      </section>
+      </div>
 
-      <section className="sk-filter-block" aria-label="Pilih divisi">
-        <h2 className="sk-section-label">Divisi</h2>
-        <div className="sk-div-chips" role="group" aria-label="Filter divisi">
+      <div className="sk-div-chips" role="group" aria-label="Filter divisi">
         <button type="button" className={!divFilter ? "on" : ""} onClick={() => setDivFilter(null)}>
-          Semua<em>{fmtCount(perEntitas.length)}</em>
+          Semua<em>{perEntitas.length}</em>
         </button>
         {daftarDivisi.map(({ nama, n }) => (
           <button key={nama} type="button" className={divFilter === nama ? "on" : ""} onClick={() => setDivFilter(divFilter === nama ? null : nama)}>
-            {nama}<em>{fmtCount(n)}</em>
+            {nama}<em>{n}</em>
           </button>
         ))}
-        </div>
-      </section>
+      </div>
 
-      <section className="sk-filter-block" aria-label="Filter kondisi stok">
-        <div className="sk-status-row">
-          <h2 className="sk-section-label">Kondisi stok</h2>
-          <div className="sk-chips" role="group" aria-label="Filter status">
-            {["semua", "kritis", "waspada", "aman"].map((s) => (
-              <button key={s} type="button" className={`${filter === s ? "on" : ""}${s !== "semua" ? ` sk-c-${s}` : ""}`} onClick={() => setFilter(s)}>
-                {s === "semua" ? "Semua" : LABEL[s]}
-                {s !== "semua" && <em>{fmtCount(cnt[s])}</em>}
-              </button>
-            ))}
-          </div>
+      <div className="sk-status-row">
+        <span className="sk-status-sum">
+          <b>{cnt.total}</b> item · <span className="t-kritis">{cnt.kritis} kritis</span> · <span className="t-waspada">{cnt.waspada} waspada</span> · <span className="t-aman">{cnt.aman} aman</span>
+        </span>
+        <div className="sk-chips" role="group" aria-label="Filter status">
+          {["semua", "kritis", "waspada", "aman"].map((s) => (
+            <button key={s} type="button" className={`${filter === s ? "on" : ""}${s !== "semua" ? ` sk-c-${s}` : ""}`} onClick={() => setFilter(s)}>
+              {s === "semua" ? "Semua" : LABEL[s]}
+            </button>
+          ))}
         </div>
-      </section>
+      </div>
 
       <div className="sk-search">
-        <input type="search" aria-label="Cari barang" placeholder="Cari nama barang atau kode…" value={q} onChange={(e) => setQ(e.target.value)} autoComplete="off" spellCheck={false} />
+        <input type="search" aria-label="Cari barang" placeholder="Cari nama atau kode…" value={q} onChange={(e) => setQ(e.target.value)} autoComplete="off" spellCheck={false} />
         {q && (
           <button type="button" onClick={() => setQ("")} aria-label="Hapus">✕</button>
         )}
@@ -379,11 +363,11 @@ export default function StokPage() {
       )}
 
       <div className="sk-list-head">
-        <div>
-          <h2>Daftar barang</h2>
-          <p>{divFilter || "Semua divisi"} · {entitas}</p>
-        </div>
-        <span>{fmtCount(terfilter.length)} barang</span>
+        <h2>Daftar barang</h2>
+        <span>{terfilter.length} item</span>
+        {(divFilter || filter !== "semua" || q) && (
+          <button type="button" onClick={() => { setDivFilter(null); setFilter("semua"); setQ(""); }}>Reset</button>
+        )}
       </div>
 
       {loading && semua.length === 0 && (
