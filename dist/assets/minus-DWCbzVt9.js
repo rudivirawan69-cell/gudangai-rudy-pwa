@@ -1,1 +1,0 @@
-import{u as e}from"./index-DEFe5dlz.js";var t=e(`Minus`,[[`path`,{d:`M5 12h14`,key:`1ays0h`}]]);export{t};
