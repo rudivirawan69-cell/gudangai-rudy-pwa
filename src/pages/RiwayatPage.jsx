@@ -1,4 +1,4 @@
-import { memo, useMemo, useState, useEffect, useCallback, useDeferredValue, useRef } from "react";
+import { Fragment, memo, useMemo, useState, useEffect, useCallback, useDeferredValue, useRef } from "react";
 import "./riwayat.css";
 import { getLocalHistory, getPendingQueue } from "../data/api";
 import {
@@ -120,6 +120,7 @@ export default function RiwayatPage({ onNavigate }) {
   }, [tick]);
 
   const onRefresh = useCallback(() => setTick((n) => n + 1), []);
+
   const onOpenQueue = useCallback(() => onNavigate?.("sync"), [onNavigate]);
 
   useEffect(() => {
@@ -355,6 +356,44 @@ export default function RiwayatPage({ onNavigate }) {
           )}
         </div>
       )}
+
+      <div className="rw-audit-table-wrap" aria-label="Tabel audit riwayat transaksi">
+        <table className="rw-audit-table">
+          <thead>
+            <tr><th>Tanggal</th><th>Waktu</th><th>Jenis / item</th><th>Entitas</th><th>Jumlah</th><th>Status</th></tr>
+          </thead>
+          <tbody>
+            {tersaring.slice(0, limit).map((t) => (
+              <Fragment key={t.id}>
+                <tr key={t.id}>
+                  <td>{t.hariKey === "tanpa-tanggal" ? "—" : t.hariKey}</td>
+                  <td>{t.jamLabel || "—"}</td>
+                  <td>
+                    <button type="button" className="rw-audit-open" aria-expanded={openId === t.id} onClick={() => setOpenId((prev) => prev === t.id ? null : t.id)}>
+                      {TIPE_LABEL[t.tipe] || t.tipe || "Transaksi"} · {judul(t)}
+                      <small>{t.jumlahItem} item · buka detail</small>
+                    </button>
+                  </td>
+                  <td>{t.entitas || "—"}</td>
+                  <td className="rw-audit-qty">{fmt(t.totalQty)}</td>
+                  <td><span className={`rw-pill rw-s-${t.status}`}>{STATUS_LABEL[t.status] || t.status}</span></td>
+                </tr>
+                {openId === t.id && (
+                  <tr key={`${t.id}-detail`} className="rw-audit-detail">
+                    <td colSpan={6}>
+                      <div className="rw-detail">
+                        <ul>{(t.items || EMPTY).map((item, index) => <li key={index}><span>{item.nama || item.kode}{item.kode && item.nama ? <em> · {item.kode}</em> : null}</span><b>{fmt(item.qty)} {item.satuan || ""}</b></li>)}</ul>
+                        {t.keterangan ? <p className="rw-ket">{t.keterangan}</p> : null}
+                        <div className="rw-actions"><button type="button" onClick={() => salin(t)}>Salin ringkasan</button></div>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </Fragment>
+            ))}
+          </tbody>
+        </table>
+      </div>
 
       {tampil.map((h) => (
         <section key={h.key} className="rw-day">

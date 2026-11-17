@@ -386,6 +386,26 @@ export default function StokPage() {
         </div>
       )}
 
+      <div className="sk-desktop-table-wrap" aria-label="Tabel audit stok">
+        <table className="sk-desktop-table">
+          <thead>
+            <tr><th>Nama barang</th><th>Divisi</th><th>Entitas</th><th style={{textAlign:"right"}}>Sisa stok</th><th style={{textAlign:"right"}}>Stok aman</th><th>Status</th></tr>
+          </thead>
+          <tbody>
+            {terfilter.slice(0, limit).map((it) => (
+              <tr key={`${it.entitas}-${it.kode}-desktop`}>
+                <td><button type="button" className="sk-table-name" onClick={() => onOpenItem(it)}>{it.nama}<span className="sk-table-code">{it.kode || "Tanpa kode"}</span></button></td>
+                <td>{it.divisi}</td>
+                <td>{it.entitas}</td>
+                <td className="sk-table-qty">{fmt(it.stok)} {it.satuan}</td>
+                <td className="sk-table-qty">{it.min > 0 ? `${fmt(it.min)} ${it.satuan}` : "—"}</td>
+                <td><span className={`sk-table-status ${it.status}`}>{LABEL[it.status]}</span></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
       {tampilDivisi.map(([nama, items]) => (
         <Divisi
           key={nama}
