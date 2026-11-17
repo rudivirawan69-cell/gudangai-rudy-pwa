@@ -1,6 +1,6 @@
 import { Fragment, memo, useMemo, useState, useEffect, useCallback, useDeferredValue, useRef } from "react";
 import "./riwayat.css";
-import { getLocalHistory, getPendingQueue, fetchRemoteTransactionHistory } from "../data/api";
+import { getLocalHistory, getPendingQueue } from "../data/api";
 import {
   gabung, filterTx, kelompokkan, keCSV, ringkasanTeks, ringkasKatalog,
 } from "../data/riwayatAdapter.js";
@@ -101,9 +101,6 @@ export default function RiwayatPage({ onNavigate }) {
     }
   });
   const [toast, setToast] = useState("");
-  const [remote, setRemote] = useState(EMPTY);
-  const [remoteLoading, setRemoteLoading] = useState(true);
-  const [remoteError, setRemoteError] = useState("");
   const toastTimer = useRef(null);
 
   const local = useMemo(() => {
@@ -124,31 +121,6 @@ export default function RiwayatPage({ onNavigate }) {
 
   const onRefresh = useCallback(() => setTick((n) => n + 1), []);
 
-  // Read-only remote history: use the existing API endpoint; never writes transactions.
-  useEffect(() => {
-    let active = true;
-    if (!navigator.onLine) {
-      setRemote(EMPTY);
-      setRemoteError("Offline — menampilkan riwayat lokal perangkat.");
-      setRemoteLoading(false);
-      return () => { active = false; };
-    }
-    setRemoteLoading(true);
-    setRemoteError("");
-    fetchRemoteTransactionHistory(7)
-      .then((rows) => {
-        if (active) setRemote(Array.isArray(rows) ? rows : EMPTY);
-      })
-      .catch((err) => {
-        if (!active) return;
-        setRemote(EMPTY);
-        setRemoteError(err?.message || "Riwayat Spreadsheet tidak dapat dimuat.");
-      })
-      .finally(() => {
-        if (active) setRemoteLoading(false);
-      });
-    return () => { active = false; };
-  }, [tick]);
   const onOpenQueue = useCallback(() => onNavigate?.("sync"), [onNavigate]);
 
   useEffect(() => {
@@ -166,7 +138,7 @@ export default function RiwayatPage({ onNavigate }) {
     if (toastTimer.current) clearTimeout(toastTimer.current);
   }, []);
 
-  const semua = useMemo(() => gabung(local, remote), [local, remote]);
+  const semua = useMemo(() => gabung(local, EMPTY), [local]);
 
   const katalog = useMemo(() => ringkasKatalog(semua), [semua]);
   const cntStatus = katalog.status;
@@ -260,7 +232,7 @@ export default function RiwayatPage({ onNavigate }) {
             {totalValid} valid
             {anomali > 0 ? ` · ${anomali} tidak valid disembunyikan` : ""}
             {" · "}
-            {remoteLoading ? "Memuat Spreadsheet…" : remoteError ? "Fallback lokal perangkat" : "Spreadsheet + lokal · 7 hari"}
+            lokal perangkat
           </p>
         </div>
         <div className="rw-head-actions">
@@ -307,8 +279,6 @@ export default function RiwayatPage({ onNavigate }) {
           </div>
         </div>
       )}
-
-      {remoteError && <div className="rw-alert rw-soft" role="status">{remoteError}</div>}
 
       <div className="rw-filters">
         <div className="rw-chips" role="group" aria-label="Jenis transaksi">
@@ -375,7 +345,7 @@ export default function RiwayatPage({ onNavigate }) {
         </div>
       )}
 
-      {totalValid === 0 && !remoteLoading && (
+      {totalValid === 0 && (
         <div className="rw-empty">
           <b>{adaFilter ? "Tidak ada hasil" : "Belum ada riwayat"}</b>
           <p>{adaFilter ? "Ubah filter atau reset." : "Transaksi berhasil akan muncul di sini."}</p>
