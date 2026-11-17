@@ -1,4 +1,4 @@
-import { memo, useMemo, useState, useEffect, useCallback, useDeferredValue, useRef } from "react";
+import { Fragment, memo, useMemo, useState, useEffect, useCallback, useDeferredValue, useRef } from "react";
 import "./riwayat.css";
 import { getLocalHistory, getPendingQueue, fetchRemoteTransactionHistory } from "../data/api";
 import {
@@ -394,7 +394,7 @@ export default function RiwayatPage({ onNavigate }) {
           </thead>
           <tbody>
             {tersaring.slice(0, limit).map((t) => (
-              <>
+              <Fragment key={t.id}>
                 <tr key={t.id}>
                   <td>{t.hariKey === "tanpa-tanggal" ? "—" : t.hariKey}</td>
                   <td>{t.jamLabel || "—"}</td>
@@ -419,7 +419,7 @@ export default function RiwayatPage({ onNavigate }) {
                     </td>
                   </tr>
                 )}
-              </>
+              </Fragment>
             ))}
           </tbody>
         </table>
