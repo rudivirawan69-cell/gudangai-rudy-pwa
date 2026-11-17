@@ -1,6 +1,6 @@
 import { memo, useMemo, useState, useEffect, useCallback, useDeferredValue, useRef } from "react";
 import "./riwayat.css";
-import { getLocalHistory, getPendingQueue } from "../data/api";
+import { getLocalHistory, getPendingQueue, fetchRemoteTransactionHistory } from "../data/api";
 import {
   gabung, filterTx, kelompokkan, keCSV, ringkasanTeks, ringkasKatalog,
 } from "../data/riwayatAdapter.js";
@@ -101,6 +101,9 @@ export default function RiwayatPage({ onNavigate }) {
     }
   });
   const [toast, setToast] = useState("");
+  const [remote, setRemote] = useState(EMPTY);
+  const [remoteLoading, setRemoteLoading] = useState(true);
+  const [remoteError, setRemoteError] = useState("");
   const toastTimer = useRef(null);
 
   const local = useMemo(() => {
@@ -120,6 +123,32 @@ export default function RiwayatPage({ onNavigate }) {
   }, [tick]);
 
   const onRefresh = useCallback(() => setTick((n) => n + 1), []);
+
+  // Read-only remote history: use the existing API endpoint; never writes transactions.
+  useEffect(() => {
+    let active = true;
+    if (!navigator.onLine) {
+      setRemote(EMPTY);
+      setRemoteError("Offline — menampilkan riwayat lokal perangkat.");
+      setRemoteLoading(false);
+      return () => { active = false; };
+    }
+    setRemoteLoading(true);
+    setRemoteError("");
+    fetchRemoteTransactionHistory(7)
+      .then((rows) => {
+        if (active) setRemote(Array.isArray(rows) ? rows : EMPTY);
+      })
+      .catch((err) => {
+        if (!active) return;
+        setRemote(EMPTY);
+        setRemoteError(err?.message || "Riwayat Spreadsheet tidak dapat dimuat.");
+      })
+      .finally(() => {
+        if (active) setRemoteLoading(false);
+      });
+    return () => { active = false; };
+  }, [tick]);
   const onOpenQueue = useCallback(() => onNavigate?.("sync"), [onNavigate]);
 
   useEffect(() => {
@@ -137,7 +166,7 @@ export default function RiwayatPage({ onNavigate }) {
     if (toastTimer.current) clearTimeout(toastTimer.current);
   }, []);
 
-  const semua = useMemo(() => gabung(local, EMPTY), [local]);
+  const semua = useMemo(() => gabung(local, remote), [local, remote]);
 
   const katalog = useMemo(() => ringkasKatalog(semua), [semua]);
   const cntStatus = katalog.status;
@@ -231,7 +260,7 @@ export default function RiwayatPage({ onNavigate }) {
             {totalValid} valid
             {anomali > 0 ? ` · ${anomali} tidak valid disembunyikan` : ""}
             {" · "}
-            lokal perangkat
+            {remoteLoading ? "Memuat Spreadsheet…" : remoteError ? "Fallback lokal perangkat" : "Spreadsheet + lokal · 7 hari"}
           </p>
         </div>
         <div className="rw-head-actions">
@@ -278,6 +307,8 @@ export default function RiwayatPage({ onNavigate }) {
           </div>
         </div>
       )}
+
+      {remoteError && <div className="rw-alert rw-soft" role="status">{remoteError}</div>}
 
       <div className="rw-filters">
         <div className="rw-chips" role="group" aria-label="Jenis transaksi">
@@ -344,7 +375,7 @@ export default function RiwayatPage({ onNavigate }) {
         </div>
       )}
 
-      {totalValid === 0 && (
+      {totalValid === 0 && !remoteLoading && (
         <div className="rw-empty">
           <b>{adaFilter ? "Tidak ada hasil" : "Belum ada riwayat"}</b>
           <p>{adaFilter ? "Ubah filter atau reset." : "Transaksi berhasil akan muncul di sini."}</p>
@@ -355,6 +386,44 @@ export default function RiwayatPage({ onNavigate }) {
           )}
         </div>
       )}
+
+      <div className="rw-audit-table-wrap" aria-label="Tabel audit riwayat transaksi">
+        <table className="rw-audit-table">
+          <thead>
+            <tr><th>Tanggal</th><th>Waktu</th><th>Jenis / item</th><th>Entitas</th><th>Jumlah</th><th>Status</th></tr>
+          </thead>
+          <tbody>
+            {tersaring.slice(0, limit).map((t) => (
+              <>
+                <tr key={t.id}>
+                  <td>{t.hariKey === "tanpa-tanggal" ? "—" : t.hariKey}</td>
+                  <td>{t.jamLabel || "—"}</td>
+                  <td>
+                    <button type="button" className="rw-audit-open" aria-expanded={openId === t.id} onClick={() => setOpenId((prev) => prev === t.id ? null : t.id)}>
+                      {TIPE_LABEL[t.tipe] || t.tipe || "Transaksi"} · {judul(t)}
+                      <small>{t.jumlahItem} item · buka detail</small>
+                    </button>
+                  </td>
+                  <td>{t.entitas || "—"}</td>
+                  <td className="rw-audit-qty">{fmt(t.totalQty)}</td>
+                  <td><span className={`rw-pill rw-s-${t.status}`}>{STATUS_LABEL[t.status] || t.status}</span></td>
+                </tr>
+                {openId === t.id && (
+                  <tr key={`${t.id}-detail`} className="rw-audit-detail">
+                    <td colSpan={6}>
+                      <div className="rw-detail">
+                        <ul>{(t.items || EMPTY).map((item, index) => <li key={index}><span>{item.nama || item.kode}{item.kode && item.nama ? <em> · {item.kode}</em> : null}</span><b>{fmt(item.qty)} {item.satuan || ""}</b></li>)}</ul>
+                        {t.keterangan ? <p className="rw-ket">{t.keterangan}</p> : null}
+                        <div className="rw-actions"><button type="button" onClick={() => salin(t)}>Salin ringkasan</button></div>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </>
+            ))}
+          </tbody>
+        </table>
+      </div>
 
       {tampil.map((h) => (
         <section key={h.key} className="rw-day">
