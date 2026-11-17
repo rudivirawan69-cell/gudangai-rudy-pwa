@@ -1227,6 +1227,22 @@ export default function DashboardPage({ onNavigate }) {
 
   return (
     <div className="dashboard-shell w-full max-w-6xl mx-auto px-3 sm:px-5 lg:px-7 pt-4 pb-24 space-y-4">
+      <header className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white/90 px-4 py-4 shadow-sm sm:flex-row sm:items-center sm:justify-between sm:px-5">
+        <div className="min-w-0">
+          <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-cyan-700">Beranda</p>
+          <h1 className="mt-1 text-xl font-extrabold tracking-tight text-slate-900 sm:text-2xl">Ringkasan Gudang</h1>
+          <p className="mt-1 text-xs leading-relaxed text-slate-500">Pantau pergerakan, ketersediaan stok, dan status operasional.</p>
+        </div>
+        <nav aria-label="Akses cepat" className="flex shrink-0 flex-wrap gap-2">
+          <button type="button" onClick={() => onNavigate?.('stok')} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-cyan-200 bg-cyan-50 px-3 text-xs font-bold text-cyan-800 transition hover:bg-cyan-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500">
+            <Package className="h-4 w-4" aria-hidden="true" /> Lihat stok
+          </button>
+          <button type="button" onClick={() => onNavigate?.('riwayat')} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500">
+            <FileText className="h-4 w-4" aria-hidden="true" /> Riwayat
+          </button>
+        </nav>
+      </header>
+
       <HomeReminderModule
         onNavigate={onNavigate}
         criticalCount={dashboardCriticalCount}

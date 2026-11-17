@@ -31,11 +31,12 @@ const EMPTY = [];
 
 const fmt = (n) =>
   new Intl.NumberFormat("id-ID", { maximumFractionDigits: 2 }).format(n);
+const fmtCount = (n) => new Intl.NumberFormat("id-ID", { maximumFractionDigits: 0 }).format(n);
 
 function judul(t) {
   const a = t.items[0];
   const nama = a?.nama || a?.kode || "(tanpa nama)";
-  return t.jumlahItem > 1 ? `${nama} +${t.jumlahItem - 1} lainnya` : nama;
+  return t.jumlahItem > 1 ? `${nama} +${fmtCount(t.jumlahItem - 1)} lainnya` : nama;
 }
 
 const Baris = memo(function Baris({ t, buka, onToggle, onRetry, onCopy, ringkas }) {
@@ -226,13 +227,11 @@ export default function RiwayatPage({ onNavigate }) {
     <div className="rw-page">
       <header className="rw-head">
         <div>
-          <small>Log audit transaksi</small>
-          <h1>Riwayat</h1>
+          <small>Aktivitas persediaan</small>
+          <h1>Riwayat Transaksi</h1>
           <p className="rw-sub">
-            {totalValid} valid
-            {anomali > 0 ? ` · ${anomali} tidak valid disembunyikan` : ""}
-            {" · "}
-            lokal perangkat
+            {fmtCount(totalValid)} transaksi{adaFilter ? " ditemukan" : " tersimpan di perangkat"}
+            {anomali > 0 ? ` · ${fmtCount(anomali)} entri tidak valid disembunyikan` : ""}
           </p>
         </div>
         <div className="rw-head-actions">
@@ -281,49 +280,59 @@ export default function RiwayatPage({ onNavigate }) {
       )}
 
       <div className="rw-filters">
-        <div className="rw-chips" role="group" aria-label="Jenis transaksi">
-          {TIPE_FILTERS.map((x) => (
-            <button
-              key={x.id}
-              type="button"
-              className={tipe === x.id ? "on" : ""}
-              onClick={() => setTipe(x.id)}
-            >
-              {x.label}
-              {x.id !== "semua" && cntTipe[x.id] != null ? <em>{cntTipe[x.id]}</em> : null}
-            </button>
-          ))}
-        </div>
-        <div className="rw-chips" role="group" aria-label="Entitas">
-          {ENT.map((e) => (
-            <button
-              key={e}
-              type="button"
-              className={entitas === e ? "on" : ""}
-              onClick={() => setEntitas(e)}
-            >
-              {e === "semua" ? "Semua entitas" : e}
-            </button>
-          ))}
-        </div>
-        <div className="rw-chips" role="group" aria-label="Status kirim">
-          {STATUS_FILTERS.map((s) => (
-            <button
-              key={s}
-              type="button"
-              className={status === s ? "on" : ""}
-              onClick={() => setStatus(s)}
-            >
-              {s === "semua" ? "Semua status" : STATUS_LABEL[s] || s}
-            </button>
-          ))}
-        </div>
+        <section className="rw-filter-group" aria-label="Filter jenis transaksi">
+          <h2>Jenis transaksi</h2>
+          <div className="rw-chips" role="group" aria-label="Jenis transaksi">
+            {TIPE_FILTERS.map((x) => (
+              <button
+                key={x.id}
+                type="button"
+                className={tipe === x.id ? "on" : ""}
+                onClick={() => setTipe(x.id)}
+              >
+                {x.label}
+                {x.id !== "semua" && cntTipe[x.id] != null ? <em>{fmtCount(cntTipe[x.id])}</em> : null}
+              </button>
+            ))}
+          </div>
+        </section>
+        <section className="rw-filter-group" aria-label="Filter entitas">
+          <h2>Entitas</h2>
+          <div className="rw-chips" role="group" aria-label="Entitas">
+            {ENT.map((e) => (
+              <button
+                key={e}
+                type="button"
+                className={entitas === e ? "on" : ""}
+                onClick={() => setEntitas(e)}
+              >
+                {e === "semua" ? "Semua entitas" : e}
+              </button>
+            ))}
+          </div>
+        </section>
+        <section className="rw-filter-group" aria-label="Filter status pengiriman">
+          <h2>Status pengiriman</h2>
+          <div className="rw-chips" role="group" aria-label="Status pengiriman">
+            {STATUS_FILTERS.map((s) => (
+              <button
+                key={s}
+                type="button"
+                className={status === s ? "on" : ""}
+                onClick={() => setStatus(s)}
+              >
+                {s === "semua" ? "Semua status" : STATUS_LABEL[s] || s}
+              </button>
+            ))}
+          </div>
+        </section>
       </div>
 
       <div className="rw-search">
         <input
           type="search"
-          placeholder="Cari kode / nama / keterangan…"
+          aria-label="Cari transaksi"
+          placeholder="Cari kode, nama, atau keterangan…"
           value={q}
           onChange={(e) => setQ(e.target.value)}
           autoComplete="off"
