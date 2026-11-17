@@ -117,6 +117,15 @@ html[data-theme="warm_productive"] {
   --panel-dark-text: #f0fdfa;
 }
 
+html[data-theme] .login-input::placeholder {
+  color: var(--text-muted);
+  opacity: .82;
+}
+html[data-theme] .login-input:focus-visible {
+  border-color: var(--accent) !important;
+  box-shadow: var(--focus-ring);
+}
+
 /* Ops Category Cards theme-aware */
 .ops-category-section { color: var(--text-main); }
 .ops-category-section .ops-section-label { color: var(--text-muted); }

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { isSupabaseConfigured, getSupabaseClient } from '../data/supabaseAuth';
 
-const AUTH_BG = 'var(--bg-base, #02030f)';
+const AUTH_BG = 'var(--bg-app, #02030f)';
 const CARD_BG = 'var(--bg-elevated, #1b1e2e)';
 const CARD_BORDER = 'var(--border, rgba(255,255,255,0.1))';
 const TEXT_MAIN = 'var(--text-main, #ffffff)';
@@ -81,7 +81,7 @@ export default function LoginPage() {
             </div>
             <h1 className="text-2xl font-extrabold tracking-tight">
               <span style={{ color: TEXT_MAIN }}>GudangAI</span>{' '}
-              <span className="text-cyan-400">RUDY</span>
+              <span style={{ color: 'var(--accent-strong)' }}>RUDY</span>
             </h1>
             <p className="text-xs mt-1.5 font-medium" style={{ color: TEXT_MUTED }}>
               Cold Storage Control System
@@ -89,7 +89,8 @@ export default function LoginPage() {
           </div>
 
           {!configured && (
-            <div className="mb-4 rounded-xl border border-amber-400/30 bg-amber-500/10 p-3 text-xs text-amber-100">
+            <div className="mb-4 rounded-xl border p-3 text-xs font-medium"
+              style={{ backgroundColor: 'var(--bg-muted)', borderColor: 'var(--warning)', color: 'var(--text-main)' }}>
               Konfigurasi Supabase tidak terdeteksi. Pastikan VITE_SUPABASE_URL dan
               VITE_SUPABASE_PUBLISHABLE_KEY tersedia pada build.
             </div>
@@ -107,7 +108,8 @@ export default function LoginPage() {
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
                 placeholder="nama@perusahaan.com"
-                className="w-full rounded-xl border border-white/15 bg-black/30 px-3.5 py-3 text-sm text-white outline-none placeholder:text-white/35 focus:border-teal-400 focus:ring-2 focus:ring-teal-400/40"
+                className="login-input w-full rounded-xl border px-3.5 py-3 text-sm outline-none focus:ring-2"
+                style={{ backgroundColor: 'var(--field-bg, var(--bg-muted))', borderColor: 'var(--border)', color: 'var(--text-main)' }}
               />
             </label>
 
@@ -123,14 +125,16 @@ export default function LoginPage() {
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
                   placeholder="Password akun Supabase"
-                  className="min-w-0 flex-1 rounded-xl border border-white/15 bg-black/30 px-3.5 py-3 text-sm text-white outline-none placeholder:text-white/35 focus:border-teal-400 focus:ring-2 focus:ring-teal-400/40"
+                  className="login-input min-w-0 flex-1 rounded-xl border px-3.5 py-3 text-sm outline-none focus:ring-2"
+                  style={{ backgroundColor: 'var(--field-bg, var(--bg-muted))', borderColor: 'var(--border)', color: 'var(--text-main)' }}
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword((value) => !value)}
                   aria-pressed={showPassword}
                   aria-label={showPassword ? 'Sembunyikan password' : 'Tampilkan password'}
-                  className="rounded-xl border border-white/15 px-3 text-xs font-semibold text-white/75 hover:bg-white/5"
+                  className="rounded-xl border px-3 text-xs font-semibold hover:bg-black/5"
+                  style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}
                 >
                   {showPassword ? 'Sembunyikan' : 'Lihat'}
                 </button>
@@ -140,23 +144,25 @@ export default function LoginPage() {
             {error && (
               <p
                 role="alert"
-                className="rounded-xl border border-rose-400/35 bg-rose-500/10 p-3 text-[13px] font-semibold text-rose-100 animate-[shakeX_0.35s_ease]"
+                className="rounded-xl border p-3 text-[13px] font-semibold animate-[shakeX_0.35s_ease]"
+                style={{ backgroundColor: 'var(--bg-muted)', borderColor: 'var(--danger)', color: 'var(--danger)' }}
               >
                 {error}
               </p>
             )}
 
             {resetState === 'sent' && (
-              <p role="status" className="rounded-xl border border-emerald-400/35 bg-emerald-500/10 p-3 text-xs text-emerald-100">
+              <p role="status" className="rounded-xl border p-3 text-xs font-medium"
+                style={{ backgroundColor: 'var(--bg-muted)', borderColor: 'var(--success)', color: 'var(--success)' }}>
                 Email reset terkirim ke {email.trim()}. Periksa kotak masuk/spam.
               </p>
             )}
 
             <button
               type="submit"
-              disabled={submitting || !configured || !email.trim() || !password}
-              className="w-full rounded-xl py-3 text-sm font-extrabold text-slate-950 shadow-lg disabled:opacity-45 transition active:scale-[0.99]"
-              style={{ backgroundColor: '#14b8a6' }}
+              disabled={submitting || !configured}
+              className="w-full rounded-xl py-3 text-sm font-extrabold shadow-lg disabled:opacity-45 transition active:scale-[0.99]"
+              style={{ backgroundColor: 'var(--accent)', color: 'var(--text-on-accent)' }}
             >
               {submitting ? 'Memverifikasi akun…' : 'Masuk dengan Supabase'}
             </button>
@@ -165,7 +171,8 @@ export default function LoginPage() {
               type="button"
               onClick={handleResetPassword}
               disabled={!configured || !email.trim() || resetState === 'sending' || resetCooldown > 0}
-              className="w-full py-1 text-xs font-semibold text-cyan-300 hover:text-cyan-200 disabled:opacity-40"
+              className="w-full py-1 text-xs font-semibold underline underline-offset-2 disabled:opacity-50"
+              style={{ color: 'var(--accent-strong)' }}
             >
               {resetState === 'sending'
                 ? 'Mengirim email…'
