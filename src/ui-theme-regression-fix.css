@@ -76,7 +76,7 @@ html[data-theme="graphite_titanium"] {
   --text-on-accent: #171a20;
   --border: rgba(183,193,205,.22);
   --accent: #d69a48;
-  --accent-strong: #b77a2e;
+  --accent-strong: #e3a94f;
   --accent-soft: rgba(214,154,72,.17);
   --brand-teal: #d69a48;
   --brand-teal-dark: #a96f2b;
@@ -206,3 +206,44 @@ html[data-theme] .app-content :is(
     transition: none !important;
   }
 }
+
+/* Legacy utility colors must follow the active palette on every routed page. */
+html[data-theme] .app-content :is(
+  .text-gray-900,.text-gray-800,.text-gray-700,.text-neutral-900,.text-neutral-800,.text-neutral-700
+) { color: var(--text-main) !important; }
+html[data-theme] .app-content :is(
+  .text-gray-600,.text-gray-500,.text-gray-400,.text-gray-300,
+  .text-neutral-600,.text-neutral-500,.text-neutral-400,.text-neutral-300,
+  .text-slate-300
+) { color: var(--text-muted) !important; }
+html:is([data-theme="deep_ocean"],[data-theme="graphite_titanium"]) .app-content :is(
+  .text-amber-900,.text-amber-800,.text-amber-700,.text-amber-600,.text-amber-500,
+  .text-yellow-900,.text-yellow-800,.text-yellow-700,.text-yellow-600
+) { color: var(--warning) !important; }
+html:is([data-theme="deep_ocean"],[data-theme="graphite_titanium"]) .app-content :is(
+  .text-emerald-900,.text-emerald-800,.text-emerald-700,.text-emerald-600,.text-emerald-500,
+  .text-green-900,.text-green-800,.text-green-700,.text-green-600
+) { color: var(--success) !important; }
+html:is([data-theme="deep_ocean"],[data-theme="graphite_titanium"]) .app-content :is(
+  .text-rose-900,.text-rose-800,.text-rose-700,.text-rose-600,
+  .text-red-900,.text-red-800,.text-red-700,.text-red-600
+) { color: var(--danger) !important; }
+html[data-theme] .app-content .bg-white { background-color: var(--bg-elevated) !important; }
+html:is([data-theme="deep_ocean"],[data-theme="graphite_titanium"]) .app-content :is(
+  .bg-gray-50,.bg-gray-100,.bg-slate-50,.bg-slate-100,.bg-slate-200,
+  .bg-amber-50,.bg-amber-100,.bg-yellow-50,.bg-yellow-100,
+  .bg-emerald-50,.bg-emerald-100,.bg-green-50,.bg-green-100,
+  .bg-rose-50,.bg-rose-100,.bg-red-50,.bg-red-100,
+  .bg-cyan-50,.bg-cyan-100,.bg-teal-50,.bg-teal-100,.bg-blue-50,.bg-blue-100
+) { background-color: var(--bg-muted) !important; }
+html:is([data-theme="deep_ocean"],[data-theme="graphite_titanium"]) .app-content :is(
+  .border-gray-100,.border-gray-200,.border-gray-300,.border-slate-100,.border-slate-200,
+  .border-amber-100,.border-amber-200,.border-yellow-100,.border-yellow-200,
+  .border-emerald-100,.border-emerald-200,.border-green-100,.border-green-200,
+  .border-rose-100,.border-rose-200,.border-red-100,.border-red-200,
+  .border-cyan-100,.border-cyan-200,.border-teal-100,.border-teal-200,.border-blue-100,.border-blue-200
+) { border-color: var(--border) !important; }
+html:is([data-theme="deep_ocean"],[data-theme="graphite_titanium"]) .app-content :is(
+  button[class*="bg-emerald-"],button[class*="bg-green-"],button[class*="bg-amber-"],
+  button[class*="bg-yellow-"],button[class*="bg-rose-"],button[class*="bg-red-"]
+) { color: var(--text-on-accent) !important; }
