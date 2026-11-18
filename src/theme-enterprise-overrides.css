@@ -210,3 +210,59 @@ html[data-theme] :is(.status-kritis,.stok-kritis) { color: var(--stok-kritis) !i
     animation: none !important;
   }
 }
+
+
+/* Contrast fix: dashboard total-item / total-outlet icon badges on deep_ocean */
+html[data-theme="deep_ocean"] .app-content .dashboard-icon-cyan {
+  background: linear-gradient(145deg, #0e7490, #155e75) !important;
+  color: #e0f2fe !important;
+  border-color: #22d3ee !important;
+  box-shadow: 0 0 12px rgba(34, 211, 238, 0.35), inset 0 1px 0 rgba(255,255,255,0.15) !important;
+}
+html[data-theme="deep_ocean"] .app-content .dashboard-icon-orange {
+  background: linear-gradient(145deg, #c2410c, #9a3412) !important;
+  color: #ffedd5 !important;
+  border-color: #fb923c !important;
+  box-shadow: 0 0 12px rgba(251, 146, 60, 0.35), inset 0 1px 0 rgba(255,255,255,0.15) !important;
+}
+html[data-theme="deep_ocean"] .app-content .dashboard-total-card .text-cyan-700,
+html[data-theme="deep_ocean"] .app-content .dashboard-total-card [class*="text-cyan-"] {
+  color: #67e8f9 !important;
+}
+html[data-theme="deep_ocean"] .app-content .dashboard-total-card .text-orange-700,
+html[data-theme="deep_ocean"] .app-content .dashboard-total-card [class*="text-orange-"] {
+  color: #fdba74 !important;
+}
+html[data-theme="deep_ocean"] .app-content .dashboard-total-card .text-slate-900,
+html[data-theme="deep_ocean"] .app-content .dashboard-total-card .text-slate-500 {
+  color: var(--text-main) !important;
+}
+html[data-theme="deep_ocean"] .app-content .dashboard-total-card .text-slate-400 {
+  color: var(--text-muted) !important;
+}
+
+/* Contrast fix: profile card + menu rows on graphite & ocean (Settings) */
+html[data-theme="graphite_titanium"] .app-content .rounded-2xl.bg-white\\/95,
+html[data-theme="deep_ocean"] .app-content .rounded-2xl.bg-white\\/95 {
+  background: var(--bg-elevated) !important;
+  border-color: var(--border) !important;
+  color: var(--text-main) !important;
+}
+html[data-theme="graphite_titanium"] .app-content .rounded-2xl.bg-cyan-50\\/80,
+html[data-theme="deep_ocean"] .app-content .rounded-2xl.bg-cyan-50\\/80 {
+  background: var(--bg-muted) !important;
+  border-color: var(--border) !important;
+  color: var(--text-main) !important;
+}
+html[data-theme="graphite_titanium"] .app-content [class*="bg-blue-50"],
+html[data-theme="deep_ocean"] .app-content [class*="bg-blue-50"],
+html[data-theme="graphite_titanium"] .app-content [class*="bg-cyan-50"],
+html[data-theme="deep_ocean"] .app-content [class*="bg-cyan-50"] {
+  background: var(--bg-muted) !important;
+}
+html[data-theme="graphite_titanium"] .app-content [class*="text-blue-600"],
+html[data-theme="deep_ocean"] .app-content [class*="text-blue-600"],
+html[data-theme="graphite_titanium"] .app-content [class*="text-cyan-700"],
+html[data-theme="deep_ocean"] .app-content [class*="text-cyan-700"] {
+  color: var(--accent-strong, #22d3ee) !important;
+}
