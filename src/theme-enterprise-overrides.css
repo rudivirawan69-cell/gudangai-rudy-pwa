@@ -242,14 +242,14 @@ html[data-theme="deep_ocean"] .app-content .dashboard-total-card .text-slate-400
 }
 
 /* Contrast fix: profile card + menu rows on graphite & ocean (Settings) */
-html[data-theme="graphite_titanium"] .app-content .rounded-2xl.bg-white\\/95,
-html[data-theme="deep_ocean"] .app-content .rounded-2xl.bg-white\\/95 {
+html[data-theme="graphite_titanium"] .app-content .rounded-2xl.bg-white\/95,
+html[data-theme="deep_ocean"] .app-content .rounded-2xl.bg-white\/95 {
   background: var(--bg-elevated) !important;
   border-color: var(--border) !important;
   color: var(--text-main) !important;
 }
-html[data-theme="graphite_titanium"] .app-content .rounded-2xl.bg-cyan-50\\/80,
-html[data-theme="deep_ocean"] .app-content .rounded-2xl.bg-cyan-50\\/80 {
+html[data-theme="graphite_titanium"] .app-content .rounded-2xl.bg-cyan-50\/80,
+html[data-theme="deep_ocean"] .app-content .rounded-2xl.bg-cyan-50\/80 {
   background: var(--bg-muted) !important;
   border-color: var(--border) !important;
   color: var(--text-main) !important;
