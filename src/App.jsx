@@ -49,9 +49,9 @@ class ErrorBoundary extends Component {
 
 const MAIN_TABS = [
   { id: 'dashboard', label: 'Beranda', icon: LayoutDashboard, chip: 'bg-cyan-500/25' },
-  { id: 'stok', label: 'Stok', icon: Package, chip: 'bg-blue-500/25' },
-  { id: 'input', label: 'Input', icon: PackagePlus, chip: 'bg-emerald-500/25', fab: true },
   { id: 'ai', label: 'Agent', icon: BrainCircuit, chip: 'bg-orange-500/25' },
+  { id: 'input', label: 'Input', icon: PackagePlus, chip: 'bg-emerald-500/25', fab: true },
+  { id: 'stok', label: 'Stok', icon: Package, chip: 'bg-blue-500/25' },
   { id: 'more', label: 'Lainnya', icon: MoreHorizontal, chip: 'bg-slate-500/25' },
 ];
 
