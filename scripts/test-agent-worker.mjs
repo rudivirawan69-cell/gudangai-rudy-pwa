@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import worker, { detectLiveActions, liveDataBlock } from '../worker.js';
+
+const codeGs = readFileSync(new URL('../Code.gs', import.meta.url), 'utf8');
 
 const ORIGIN = 'https://gudangai-rudy-pwa-69.rudivirawan69.workers.dev';
 const SUPABASE_URL = 'https://project.supabase.co';
@@ -254,7 +257,8 @@ async function runLive(message, { env = liveEnv, sheetsResponse } = {}) {
 
 test('detectLiveActions maps read-only intents without parameters and caps at two', () => {
   assert.deepEqual(detectLiveActions('ringkasan dashboard dan stok menipis'), ['getDashboardData', 'getLowStock']);
-  assert.deepEqual(detectLiveActions('status PO dan riwayat barang masuk dan log sistem'), ['getStatusPO', 'getTransactionHistory']);
+  assert.deepEqual(detectLiveActions('status PO dan riwayat barang masuk'), ['getStatusPO', 'getTransactionHistory']);
+  assert.deepEqual(detectLiveActions('prediksi stok habis dalam tiga hari'), ['getStockoutRisk', 'getLowStock']);
   assert.deepEqual(detectLiveActions('buatkan SOP cold storage'), []);
 });
 
@@ -265,6 +269,28 @@ test('data questions trigger live read-only read and include provenance', async 
   assert.equal(payload.dataSources[0].action, 'getDashboardData'); assert.equal(payload.dataSources[0].ok, true);
   assert.ok(payload.dataSources[0].readAt); assert.match(systemText, /DATA LIVE \(read-only\)/);
   assert.match(systemText, /Pisahkan entitas CV dan PT/);
+});
+
+test('three-day stockout questions request the dedicated 30-day read-only forecast', async () => {
+  const { sheetCalls, systemText } = await runLive('Prediksi stok yang akan habis dalam 3 hari');
+  assert.equal(sheetCalls[0].action, 'getStockoutRisk');
+  assert.equal(sheetCalls[0].windowDays, 30);
+  assert.equal(sheetCalls[0].thresholdDays, 3);
+  assert.match(systemText, /estimasi stok habis/i);
+  assert.match(systemText, /jangan.*kepastian/i);
+});
+
+test('Apps Script forecast is routed by POST and declares read-only output', () => {
+  const routeStart = codeGs.indexOf('function doPost(e)');
+  const routeEnd = codeGs.indexOf('function doGet(e)');
+  const forecastStart = codeGs.indexOf('function getStockoutRisk(params)');
+  const forecastEnd = codeGs.indexOf('function getTransactionHistory(params)');
+  assert.ok(routeStart >= 0 && routeEnd > routeStart && forecastStart >= 0 && forecastEnd > forecastStart);
+  assert.match(codeGs.slice(routeStart, routeEnd), /case "getStockoutRisk": return jsonResponse\(getStockoutRisk\(body\)\)/);
+  const forecast = codeGs.slice(forecastStart, forecastEnd);
+  assert.match(forecast, /readOnly: true/);
+  assert.match(forecast, /Barang keluar/);
+  assert.match(forecast, /thresholdDays/);
 });
 
 test('server secret never appears in prompt or response', async () => {

@@ -390,6 +390,8 @@ function doPost(e) {
       case "getAllStock":
       case "getStockAll": return jsonResponse(getAllStock(body.entitas || body.entity || "ALL"));
       case "getLowStock": return jsonResponse(getLowStock());
+      case "getStockoutRisk": return jsonResponse(getStockoutRisk(body));
+      case "getLastUpdate": return jsonResponse({ success: true, timestamp: getLastUpdateTimestamp() });
       case "getTransactionHistory": return jsonResponse(getTransactionHistory(body));
       case "searchByName": return jsonResponse(searchByName(body.query || body.q || body.nama));
       case "getDashboard":
@@ -1945,6 +1947,76 @@ function getLowStock() {
   });
   low.sort(function(a, b) { return (Number(a.stockAkhir) || 0) - (Number(b.stockAkhir) || 0); });
   return { success: true, count: low.length, items: low };
+}
+
+function getStockoutRisk(params) {
+  params = params || {};
+  const windowDays = Math.min(90, Math.max(7, Math.floor(Number(params.windowDays) || 30)));
+  const thresholdDays = Math.min(14, Math.max(1, Math.floor(Number(params.thresholdDays) || 3)));
+  const all = getAllStock("ALL");
+  if (!all || all.success !== true) return Object.assign({ success: false, readOnly: true, code: "STOCK_SOURCE_UNAVAILABLE" }, all || {});
+
+  const now = new Date();
+  const todayKey = Utilities.formatDate(now, TIMEZONE, "yyyy-MM-dd");
+  const todayParts = todayKey.split("-").map(Number);
+  const startDate = new Date(Date.UTC(todayParts[0], todayParts[1] - 1, todayParts[2] - windowDays + 1));
+  const periodStart = Utilities.formatDate(startDate, "UTC", "yyyy-MM-dd");
+  const movementByKey = Object.create(null);
+  const outgoing = getSS().getSheetByName("Barang keluar");
+  if (!outgoing) return { success: false, readOnly: true, code: "OUTGOING_SHEET_NOT_FOUND", error: "Sheet Barang keluar tidak ditemukan." };
+
+  const config = SHEET_CONFIG["Barang keluar"];
+  const last = getRealLastDataRow(outgoing, config);
+  let movementRows = 0;
+  if (last >= config.headerRow + 1) {
+    const rows = outgoing.getRange(config.headerRow + 1, 2, last - config.headerRow, WRITE_COLUMNS).getValues();
+    rows.forEach(function(row) {
+      const date = parseTransactionDate_(row[0]);
+      if (!date) return;
+      const dateKey = Utilities.formatDate(date, TIMEZONE, "yyyy-MM-dd");
+      if (dateKey < periodStart || dateKey > todayKey) return;
+      const kode = String(row[1] || "").trim();
+      const qty = Number(row[4]);
+      const identity = normalizeEntityGroup_("", kode);
+      if (!kode || !identity.valid || !Number.isFinite(qty) || qty <= 0) return;
+      const key = identity.entitas + "|" + kode.toUpperCase();
+      movementByKey[key] = (movementByKey[key] || 0) + qty;
+      movementRows += 1;
+    });
+  }
+
+  const items = [];
+  const reviewItems = [];
+  (all.items || []).forEach(function(item) {
+    const identity = normalizeEntityGroup_(item.entitas, item.kode);
+    if (!identity.valid) return;
+    const current = Math.max(0, Number(item.stockAkhir) || 0);
+    const averageDailyOut = (movementByKey[identity.entitas + "|" + String(item.kode || "").trim().toUpperCase()] || 0) / windowDays;
+    const daysOfCover = averageDailyOut > 0 ? current / averageDailyOut : null;
+    const result = {
+      kode: item.kode, nama: item.nama, entitas: identity.entitas, divisi: item.divisi || null,
+      satuan: item.satuan || null, stockAkhir: current, stockAman: Number(item.stockAman) || 0,
+      averageDailyOut: Math.round(averageDailyOut * 100) / 100,
+      daysOfCover: daysOfCover == null ? null : Math.round(daysOfCover * 10) / 10,
+      status: current <= 0 ? "STOK_KOSONG" : (daysOfCover != null && daysOfCover <= thresholdDays ? "PROSES_PO_SEGERA" : null)
+    };
+    if (result.status) items.push(result);
+    else if (averageDailyOut === 0 && result.stockAman > current) reviewItems.push(Object.assign({}, result, { status: "PERLU_REVIEW_TANPA_RIWAYAT_KELUAR" }));
+  });
+
+  items.sort(function(a, b) {
+    if (a.status !== b.status) return a.status === "STOK_KOSONG" ? -1 : 1;
+    return (a.daysOfCover == null ? -1 : a.daysOfCover) - (b.daysOfCover == null ? -1 : b.daysOfCover);
+  });
+  reviewItems.sort(function(a, b) { return a.stockAkhir - b.stockAkhir; });
+  return {
+    success: true, readOnly: true, source: "Stock CV/PT/Bahan Baku + Barang keluar",
+    generatedAt: now.toISOString(), periodStart: periodStart, periodEnd: todayKey,
+    windowDays: windowDays, thresholdDays: thresholdDays,
+    method: "Rata-rata QTY Barang keluar per hari kalender pada periode; estimasi, bukan kepastian. Item tanpa arus keluar tidak diproyeksikan.",
+    movementRows: movementRows, candidateCount: items.length, reviewCount: reviewItems.length,
+    items: items.slice(0, 60), reviewItems: reviewItems.slice(0, 30)
+  };
 }
 
 function getTransactionHistory(params) {

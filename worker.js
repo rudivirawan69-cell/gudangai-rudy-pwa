@@ -1,4 +1,5 @@
 import { parseTanggal, resolvePeriode } from './tanggal.js';
+import { AGENT_SKILL_RULES, EXTRA_LIVE_INTENTS, EXTRA_READ_ACTIONS, buildSystemPrompt } from './cloudflare/agentSkills.js';
 
 const DEFAULT_MODEL = '@cf/meta/llama-3.1-8b-instruct';
 const MAX_MESSAGE_LENGTH = 4000;
@@ -8,40 +9,24 @@ const MAX_LIVE_ACTIONS = 2;
 const READ_ONLY_ACTIONS = new Set([
   'ping','status','getConfig','getDashboard','getDashboardData',
   'getAllStock','getStockAll','getStockByCode','searchByName',
-  'getLowStock','getTransactionHistory','getStatusPO','getPOStatus',
-  'getSystemLog','bootstrap','getStockDelta','getSyncMetrics','getLastUpdate','getPOAnalysis',
+  'getLowStock','getTransactionHistory','getStatusPO','bootstrap',
+  'getStockDelta','getSyncMetrics','getLastUpdate','getPOAnalysis',
+  ...EXTRA_READ_ACTIONS,
 ]);
 const LIVE_INTENTS = [
+  ...EXTRA_LIVE_INTENTS.filter((intent) => intent.action === 'getStockoutRisk'),
   { action: 'getDashboardData', pattern: /dashboard|ringkasan|rangkuman|kondisi gudang|overview/i },
   { action: 'getLowStock', pattern: /stok (menipis|kritis|rendah|habis)|low ?stock|di bawah minimum|hampir habis|kritis/i },
   { action: 'searchByName', pattern: /\b(stok|stock|sisa)\b|stock akhir|stok akhir|berapa.*(stok|stock|sisa)|sisa (stok|barang)|cari (barang|item|kode)|nama barang|fillet|kode (cv|pt|wk)-?/i },
   { action: 'getAllStock', pattern: /semua stok|stok (cv|pt|semua|master|lengkap)|daftar (stok|barang)|inventory/i },
   { action: 'getStatusPO', pattern: /\bpo\b|purchase order|status po|pembelian/i },
   { action: 'getTransactionHistory', pattern: /riwayat|histori|history|transaksi (terakhir|hari ini|kemarin)|barang (masuk|keluar|rusak)/i },
-  { action: 'getSystemLog', pattern: /system log|log sistem|log error|audit log/i },
   { action: 'getStockDelta', pattern: /perubahan (stok|terakhir)|yang (baru|berubah) (saja|hari ini)|delta|sinkronisasi|apa yang berubah/i },
   { action: 'getSyncMetrics', pattern: /metrik (sync|sinkronisasi)|performa (sync|koneksi)|seberapa sering (error|gagal)|kesehatan (sync|sistem)/i },
   { action: 'getPOAnalysis', pattern: /analisis po|rekomendasi (po|pembelian)|apa yang (harus|perlu) (di)?(pesan|beli)/i },
   { action: 'getConfig', pattern: /periode aktif|bulan (aktif|berjalan)|konfigurasi|timezone|versi backend/i },
+  ...EXTRA_LIVE_INTENTS.filter((intent) => intent.action !== 'getStockoutRisk'),
 ];
-const STRUCTURE_KNOWLEDGE = `STRUKTUR GUDANGAI-69 (backend 6.6.5).
-- Sumber total/status/divisi: Dashboard Live, dibaca dinamis berdasarkan label; jangan hitung ulang sebagai pengganti.
-- Baseline November 2026: 193 item = 165 CV+PT (kode CV/PT/WK/MM dihitung terpisah) + 28 Bahan Baku; status baseline Aman 100, Waspada 17, Kritis 76.
-- Angka 193 adalah baseline, bukan konstanta. Jika item ditambah/dihapus, ikuti Dashboard Live terbaru.
-- getAllStock(ALL) memuat Stock CV + Stock PT + Stock Bahan Baku; jangan menggabungkan SKU CV/PT bernama sama dalam total utama.
-- Stok Gabungan Per Divisi adalah tampilan alternatif 113 produk, label "Gabungan CV+PT (113 produk)"; jangan dicampur atau ditambahkan ke total 193.
-- Divisi baseline: DAPUR 1 28, DAPUR 2 17, MIE 10, PACKING 57, CS 45, BAHAN BAKU 28, REKANAN 8.
-- Master stock read-only. Transaksi masuk/keluar/rusak. PO MENUNGGU/SEBAGIAN/SELESAI. Sync ping 60s + getStockDelta. Agent read-only.`.trim();
-const SKILL_RULES = [
-  'ATURAN AGENT (mode read_only):',
-  '1. Pisahkan entitas CV dan PT di setiap analisis. Jangan mencampur kecuali diminta.',
-  '2. Data live hanya dari blok DATA LIVE. Jika kosong/gagal, jangan klaim baca spreadsheet.',
-  '3. Jangan mengarang angka/kode/status. Sebut action dan readAt untuk data live.',
-  '4. Jangan minta/tampilkan secret, PIN, atau API key.',
-  '5. Tidak bisa menulis data; hanya analisis dan rekomendasi.',
-  '6. Status PO: MENUNGGU/SEBAGIAN/SELESAI. Progress=qtyDatang/totalPO.',
-  '7. Jika ditanya total master/status/divisi, utamakan getDashboardData dari Dashboard Live; jangan mengarang atau menghitung ulang dari daftar parsial. Bedakan total utama 193 baseline dari tampilan alternatif Gabungan CV+PT 113 produk.',
-].join('\n');
 function emptyPOSummary() {
   return {
     totalAktif: 0, totalKonfirmasi: 0, itemMenunggu: 0, itemSebagian: 0,
@@ -199,6 +184,9 @@ async function gatherLiveData(env, message) {
     const params = {};
     if (action === 'searchByName' && query) { params.q=query; params.query=query; params.nama=query; params.name=query; }
     if (action === 'getAllStock') params.entitas = 'ALL';
+    if (action === 'getStockoutRisk') { params.windowDays = 30; params.thresholdDays = 3; }
+    if (action === 'getStockDelta') params.sinceTimestamp = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    if (action === 'getTransactionHistory') { params.sheet = 'Barang keluar'; params.limit = 100; }
     const raw = await callSheetsRead(env, action, params);
     const ok = raw?.success !== false;
     const { source, action: _a, readAt, ...data } = raw || {};
@@ -215,13 +203,7 @@ export function liveDataBlock(live) {
   return `DATA LIVE (read-only):\n${parts.join('\n\n')}`;
 }
 function systemPrompt(context={}, liveBlock='') {
-  return [
-    'Kamu adalah Agent Operasional GudangAI RUDY untuk cold storage Nasi Goreng 69.',
-    'Jawab Bahasa Indonesia, singkat, akurat, berorientasi tindakan operator.',
-    'Jangan mengubah master data atau transaksi stok. Hanya analisis dan rekomendasi.',
-    STRUCTURE_KNOWLEDGE, SKILL_RULES, liveBlock,
-    `Konteks operasi: ${JSON.stringify(context).slice(0,3500)}`,
-  ].filter(Boolean).join('\n');
+  return buildSystemPrompt(context, liveBlock);
 }
 function normalizeHistory(history, currentMessage) {
   const normalized = (Array.isArray(history)?history:[]).slice(-MAX_HISTORY_ITEMS)

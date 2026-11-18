@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
-import { ArrowDown, ArrowRight, Bot, Boxes, ClipboardList, FileSearch, PackageCheck, Send, ShieldCheck, Sparkles, Thermometer, Trash2, X } from 'lucide-react';
+import { AlarmClock, ArrowDown, ArrowRight, Bot, Boxes, ClipboardList, FileCode2, FileSearch, PackageCheck, Presentation, Send, ShieldCheck, Sparkles, Thermometer, Trash2, X } from 'lucide-react';
 
 const AGENT_API = (import.meta.env.VITE_GUDANGAI_AI_API_BASE || import.meta.env.VITE_GUDANGAI_AGENT_API || 'https://gudangai-rudy-pwa-69.rudivirawan69.workers.dev').replace(/\/$/, '');
 const MAX_HISTORY = 8;
@@ -9,11 +9,14 @@ const STICK_THRESHOLD = 96;
 
 const SKILLS = [
   { id: 'stock', title: 'Analisis Stok', description: 'Evaluasi stok aman, kritis, dan kebutuhan item.', icon: Boxes, prompt: 'Analisis data stok gudang melalui sumber live read-only yang tersedia. Jika data live tidak tersedia, minta operator menempelkan data stok. Pisahkan fakta, risiko, dan rekomendasi; jangan mengarang angka atau saldo.' },
+  { id: 'stockout', title: 'Risiko Stok 3 Hari', description: 'Estimasi cakupan stok dari riwayat keluar 30 hari.', icon: AlarmClock, prompt: 'Analisis item yang perlu segera diproses/PO sebelum stok diperkirakan habis dalam 3 hari. Gunakan getStockoutRisk dan, bila tersedia, cocokkan dengan PO aktif. Tampilkan periode, saldo, rata-rata pemakaian, hari cakupan, asumsi, dan data yang belum cukup. Ini estimasi, bukan kepastian. Jangan membuat atau mengirim PO.' },
   { id: 'purchasing', title: 'Purchasing & PO', description: 'Tinjau kebutuhan pembelian dan prioritas PO.', icon: ClipboardList, prompt: 'Evaluasi kebutuhan purchasing dan status PO berdasarkan data read-only yang tersedia. Jika data live tidak tersedia, minta operator menempelkan data PO atau kebutuhan. Periksa prioritas, potensi overstock, dan data yang masih kurang. Jangan membuat atau mengirim PO.' },
+  { id: 'codegs', title: 'Code.gs & Sheet', description: 'Telusuri kontrak kode, sheet, dan dampak sinkronisasi.', icon: FileCode2, prompt: 'Bantu audit bug atau perubahan yang menyangkut Code.gs, PWA, dan spreadsheet. Bedakan fakta dari snapshot repository dan data live. Sebut fungsi/action dan sheet/range yang relevan bila ada bukti; uraikan risiko kompatibilitas, tes, serta rencana read-back. Jangan mengklaim mengedit atau men-deploy apa pun.' },
   { id: 'audit', title: 'Audit Transaksi', description: 'Periksa konsistensi catatan masuk, keluar, dan rusak.', icon: FileSearch, prompt: 'Audit transaksi gudang berdasarkan riwayat read-only yang tersedia. Jika data live tidak tersedia, minta operator menempelkan data transaksi. Cari duplikasi, anomali jumlah, tanggal, dan informasi yang belum lengkap. Jangan mengubah transaksi.' },
   { id: 'cold', title: 'Cold Storage', description: 'Checklist kondisi, risiko, dan tindak lanjut.', icon: Thermometer, prompt: 'Buat analisis kondisi cold storage berdasarkan catatan berikut. Bedakan fakta dan dugaan, lalu susun tindakan prioritas. Jangan mengasumsikan suhu sensor yang tidak diberikan.\n\nTempel catatan kondisi:' },
   { id: 'sop', title: 'SOP & Checklist', description: 'Susun langkah kerja dan pemeriksaan operator.', icon: ShieldCheck, prompt: 'Susun SOP/checklist operasional gudang yang ringkas, berurutan, dan mudah dijalankan untuk kebutuhan berikut:' },
   { id: 'report', title: 'Laporan Operasional', description: 'Rangkum progres, kendala, dan rencana tindak lanjut.', icon: PackageCheck, prompt: 'Susun laporan operasional gudang berdasarkan data read-only yang tersedia dan catatan operator. Jika sumber live tidak tersedia, minta catatan atau data pendukung. Kelompokkan hasil, kendala, risiko, dan tindak lanjut. Jangan menambah fakta yang tidak tersedia.' },
+  { id: 'meeting', title: 'Meeting Internal', description: 'Siapkan briefing berbasis data live dan sumber.', icon: Presentation, prompt: 'Siapkan materi meeting internal berdasarkan data live yang tersedia. Cantumkan waktu baca dan sumber, ringkasan CV/PT/Bahan Baku, PO, risiko, kendala, keputusan yang diperlukan, dan tindak lanjut hanya bila datanya tersedia. Tandai setiap informasi yang belum terkonfirmasi; jangan mengarang angka atau penanggung jawab.' },
 ];
 
 function getReply(payload) {
@@ -109,8 +112,8 @@ export default function AIAssistantPage({ onNavigate }) {
             surface: 'Halaman operasional AI',
             skill: activeSkill,
             permissions: 'read_only',
-            capabilities: ['analisis data yang diberikan operator', 'rekomendasi purchasing dan PO', 'audit catatan transaksi', 'checklist cold storage', 'SOP operasional', 'ringkasan laporan'],
-            constraints: ['membaca data gudang hanya melalui gateway server read-only yang diizinkan; tidak mengakses spreadsheet secara langsung', 'tidak menulis atau mengubah stok, transaksi, maupun PO', 'jangan mengarang stok, kode, jumlah, status PO, atau jadwal', 'jika sumber live gagal atau belum tersedia, nyatakan data belum terkonfirmasi dan minta data pendukung'],
+            capabilities: ['analisis data live melalui allowlist read-only', 'estimasi risiko stok habis 3 hari dari pemakaian 30 hari', 'rekomendasi purchasing dan tinjauan PO', 'audit transaksi', 'analisis Code.gs dan sinkronisasi dari bukti yang tersedia', 'materi meeting internal berbasis sumber'],
+            constraints: ['membaca data gudang hanya melalui gateway server read-only yang diizinkan', 'tidak menulis spreadsheet, mengubah Code.gs, stok, transaksi, maupun PO', 'jangan mengarang stok, kode, jumlah, status PO, sheet, perlindungan, atau jadwal', 'bedakan snapshot repository dari Apps Script yang live', 'jika sumber live gagal atau belum tersedia, nyatakan data belum terkonfirmasi dan minta data pendukung', 'memori percakapan tidak persisten antar sesi'],
           },
         }),
       });
@@ -240,12 +243,12 @@ export default function AIAssistantPage({ onNavigate }) {
       <form onSubmit={(event) => { event.preventDefault(); sendMessage(draft); }} className="shrink-0 rounded-2xl border border-slate-200 bg-white p-2 shadow-lg dark:border-slate-700 dark:bg-slate-900">
         <label htmlFor="rubee-message" className="sr-only">Instruksi untuk Rubee</label>
         <div className="flex items-end gap-2">
-          <textarea id="rubee-message" rows={2} maxLength={4000} value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); sendMessage(draft); } }} placeholder="Tulis kebutuhan operasional…" disabled={loading || !online} className="max-h-32 min-h-[48px] flex-1 resize-none rounded-xl bg-slate-50 px-3 py-3 text-[15px] text-slate-800 outline-none placeholder:text-slate-400 focus:ring-2 focus:ring-cyan-300 disabled:opacity-50 dark:bg-slate-800 dark:text-white" />
+          <textarea id="rubee-message" rows={2} maxLength={4000} value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { if (event.nativeEvent.isComposing || event.keyCode === 229) return; event.preventDefault(); sendMessage(draft); } }} placeholder="Tulis kebutuhan operasional…" disabled={loading || !online} className="max-h-32 min-h-[48px] flex-1 resize-none rounded-xl bg-slate-50 px-3 py-3 text-[15px] text-slate-800 outline-none placeholder:text-slate-400 focus:ring-2 focus:ring-cyan-300 disabled:opacity-50 dark:bg-slate-800 dark:text-white" />
           <button type="submit" disabled={!draft.trim() || loading || !online} className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#0b2a55] text-white disabled:opacity-40" aria-label="Kirim ke Rubee">
             {loading ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" /> : <Send className="h-4 w-4" />}
           </button>
         </div>
-        <p className="px-2 pt-1.5 text-[10px] text-slate-400">Data gudang dibaca hanya melalui koneksi server read-only yang tersedia atau dari data yang Anda kirim. Rubee tidak dapat mengubah stok, transaksi, maupun PO. Jangan kirim PIN, password, atau API key.</p>
+        <p className="px-2 pt-1.5 text-[10px] text-slate-400">Rubee membaca data melalui gateway server read-only. Ia belum dapat mengedit Spreadsheet atau Code.gs dan tidak menyimpan memori lintas sesi. Jangan kirim PIN, password, atau API key.</p>
       </form>
     </section>
   );
