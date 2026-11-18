@@ -287,28 +287,11 @@ export default function StokPage() {
 
   return (
     <div className="sk-page">
-      <div className={`sk-conn sk-c-${koneksi}`}>
-        <span className="sk-conn-dot" />
-        <span className="sk-conn-txt">{teksKoneksi}</span>
-        <button type="button" className={`sk-refresh${refreshing ? " spin" : ""}`} onClick={segarkan} aria-label="Muat ulang">
-          ⟳
-        </button>
-      </div>
-
       <header className="sk-head">
-        <small>Persediaan</small>
         <h1>Stok Barang</h1>
-        <p>Pantau jumlah dan kebutuhan restok</p>
       </header>
 
-      <section className="sk-summary" aria-label="Kondisi persediaan">
-        <div className="sk-stat is-critical"><span>Kritis</span></div>
-        <div className="sk-stat is-warning"><span>Waspada</span></div>
-        <div className="sk-stat is-safe"><span>Aman</span></div>
-      </section>
-
-      <section className="sk-filter-block" aria-label="Pilih entitas">
-        <h2 className="sk-section-label">Entitas</h2>
+      <section className="sk-filter-block sk-entity-block" aria-label="Pilih entitas">
         <div className="sk-seg" role="tablist" aria-label="Entitas">
         {tabs.map((e) => (
           <button key={e} type="button" role="tab" aria-selected={entitas === e} className={entitas === e ? "on" : ""} onClick={() => setEntitas(e)}>
@@ -370,6 +353,12 @@ export default function StokPage() {
           <button type="button" onClick={segarkan}>Coba lagi</button>
         </div>
       )}
+
+      <div className={`sk-conn sk-c-${koneksi} sk-conn-inline`}>
+        <span className="sk-conn-dot" />
+        <span className="sk-conn-txt">{teksKoneksi}</span>
+        <button type="button" className={`sk-refresh${refreshing ? " spin" : ""}`} onClick={segarkan} aria-label="Muat ulang">⟳</button>
+      </div>
 
       <div className="sk-list-head">
         <div>
