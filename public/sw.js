@@ -60,15 +60,15 @@ self.addEventListener('fetch', (event) => {
 
   // Hashed Vite assets are network-first. Never cache SPA HTML fallbacks as JS/CSS.
   const isHashedAsset = url.pathname.startsWith('/assets/') &&
-    /[-.][A-Za-z0-9_-]{8,}\\.(?:js|css|woff2?|png|jpe?g|svg|webp)$/i.test(url.pathname);
+    /[-.][A-Za-z0-9_-]{8,}\.(?:js|css|woff2?|png|jpe?g|svg|webp)$/i.test(url.pathname);
   if (isHashedAsset) {
     const hasExpectedContentType = (response) => {
       const contentType = response.headers.get('content-type') || '';
       const extension = url.pathname.split('.').pop().toLowerCase();
       if (extension === 'js') return /(?:javascript|ecmascript)/i.test(contentType);
-      if (extension === 'css') return /text\\/css/i.test(contentType);
-      if (extension === 'woff' || extension === 'woff2') return /font\\/|woff/i.test(contentType);
-      if (['png', 'jpg', 'jpeg', 'svg', 'webp'].includes(extension)) return /image\\//i.test(contentType);
+      if (extension === 'css') return /text\/css/i.test(contentType);
+      if (extension === 'woff' || extension === 'woff2') return /font\/|woff/i.test(contentType);
+      if (['png', 'jpg', 'jpeg', 'svg', 'webp'].includes(extension)) return /image\//i.test(contentType);
       return false;
     };
 
