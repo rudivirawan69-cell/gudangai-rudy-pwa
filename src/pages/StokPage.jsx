@@ -60,7 +60,7 @@ const ItemRow = memo(function ItemRow({ it, onOpen }) {
         <b>{fmt(it.stok)}</b>
         <small>{it.satuan}</small>
       </div>
-      <span className={`sk-dot sk-${it.status}`} title={LABEL[it.status]} />
+      <span className={`sk-item-status sk-${it.status}`}>{LABEL[it.status]}</span>
       {target && (
         <div className="sk-meter">
           <i className={`sk-${it.status}`} style={{ width: `${pct}%` }} />
@@ -177,16 +177,10 @@ export default function StokPage() {
     () => semua.filter((i) => i.entitas === entitas),
     [semua, entitas]
   );
-  const cnt = useMemo(() => ringkas(perEntitas), [perEntitas]);
   const tabs = useMemo(
     () => (laporan.tanpaEntitas > 0 ? [...ENTITAS, TIDAK_TERKLASIFIKASI] : ENTITAS),
     [laporan.tanpaEntitas]
   );
-  const cntEnt = useMemo(
-    () => Object.fromEntries(tabs.map((e) => [e, semua.filter((i) => i.entitas === e).length])),
-    [semua, tabs]
-  );
-
   const daftarDivisi = useMemo(() => {
     const m = new Map();
     perEntitas.forEach((i) => {
@@ -307,11 +301,10 @@ export default function StokPage() {
         <p>Pantau jumlah dan kebutuhan restok</p>
       </header>
 
-      <section className="sk-summary" aria-label="Ringkasan stok">
-        <div className="sk-stat"><b>{fmtCount(cnt.total)}</b><span>Total barang</span></div>
-        <div className="sk-stat is-critical"><b>{fmtCount(cnt.kritis)}</b><span>Kritis</span></div>
-        <div className="sk-stat is-warning"><b>{fmtCount(cnt.waspada)}</b><span>Waspada</span></div>
-        <div className="sk-stat is-safe"><b>{fmtCount(cnt.aman)}</b><span>Aman</span></div>
+      <section className="sk-summary" aria-label="Kondisi persediaan">
+        <div className="sk-stat is-critical"><span>Kritis</span></div>
+        <div className="sk-stat is-warning"><span>Waspada</span></div>
+        <div className="sk-stat is-safe"><span>Aman</span></div>
       </section>
 
       <section className="sk-filter-block" aria-label="Pilih entitas">
@@ -320,7 +313,7 @@ export default function StokPage() {
         {tabs.map((e) => (
           <button key={e} type="button" role="tab" aria-selected={entitas === e} className={entitas === e ? "on" : ""} onClick={() => setEntitas(e)}>
             {e === TIDAK_TERKLASIFIKASI ? "Lainnya" : e}
-            {cntEnt[e] != null ? <em>{fmtCount(cntEnt[e])}</em> : null}
+
           </button>
         ))}
         </div>
@@ -347,7 +340,7 @@ export default function StokPage() {
             {["semua", "kritis", "waspada", "aman"].map((s) => (
               <button key={s} type="button" className={`${filter === s ? "on" : ""}${s !== "semua" ? ` sk-c-${s}` : ""}`} onClick={() => setFilter(s)}>
                 {s === "semua" ? "Semua" : LABEL[s]}
-                {s !== "semua" && <em>{fmtCount(cnt[s])}</em>}
+
               </button>
             ))}
           </div>
