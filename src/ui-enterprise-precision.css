@@ -1,0 +1,115 @@
+/* GudangAI Enterprise Precision Layer
+ * Presentation-only normalization. Keep page logic, API contracts, stock rules,
+ * transaction writes, PO workflow and offline queue behavior untouched.
+ * Loaded once after the existing theme and app UI styles.
+ */
+
+:root {
+  --ui-control-height: 2.75rem;
+  --ui-control-radius: 0.75rem;
+  --ui-panel-radius: 1rem;
+  --ui-panel-gap: 0.75rem;
+  --ui-motion-fast: 140ms;
+  --ui-motion-standard: 200ms;
+}
+
+html[data-theme] {
+  scroll-behavior: smooth;
+  scrollbar-gutter: stable;
+}
+
+html[data-theme] .app-content {
+  color: var(--text-main);
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+html[data-theme] .app-content :where(
+  .card,
+  .surface,
+  .section-card,
+  .stat-tile,
+  .stock-card,
+  .dashboard-panel,
+  .dashboard-total-card,
+  .dashboard-po-card,
+  .po-hub-card,
+  .menu-group,
+  .settings-menu-row,
+  .info-box
+) {
+  border-color: var(--border);
+  border-radius: var(--ui-panel-radius);
+}
+
+html[data-theme] .app-content :where(input, select, textarea) {
+  accent-color: var(--accent);
+  border-radius: var(--ui-control-radius);
+}
+
+html[data-theme] .app-content :where(button, a, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--accent) !important;
+  outline-offset: 2px;
+  box-shadow: var(--focus-ring);
+}
+
+html[data-theme] .app-content :where(button:disabled, input:disabled, select:disabled, textarea:disabled) {
+  cursor: not-allowed;
+}
+
+html[data-theme] .app-content :where(button, a) {
+  -webkit-tap-highlight-color: transparent;
+}
+
+html[data-theme] .app-content :where(.skeleton) {
+  background-color: var(--bg-muted);
+}
+
+html[data-theme] .app-content :where(.empty-state, [data-ui-state="empty"]) {
+  color: var(--text-muted);
+}
+
+html[data-theme] .app-content :where(.error-state, [data-ui-state="error"]) {
+  border-color: color-mix(in srgb, var(--danger) 34%, var(--border));
+}
+
+html[data-theme] .app-content :where(.status-aman, .stok-aman) {
+  color: var(--stok-aman);
+}
+
+html[data-theme] .app-content :where(.status-waspada, .stok-waspada) {
+  color: var(--stok-waspada);
+}
+
+html[data-theme] .app-content :where(.status-kritis, .stok-kritis) {
+  color: var(--stok-kritis);
+}
+
+.app-top-header {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+.nav-bar {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+@media (max-width: 380px) {
+  html[data-theme] .app-content {
+    --space-page: 0.75rem;
+  }
+
+  html[data-theme] .app-content :where(.grid) {
+    min-width: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html[data-theme] *,
+  html[data-theme] *::before,
+  html[data-theme] *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
