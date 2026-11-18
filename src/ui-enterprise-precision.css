@@ -15,7 +15,6 @@
 
 html[data-theme] {
   scroll-behavior: smooth;
-  scrollbar-gutter: stable;
 }
 
 html[data-theme] .app-content {
