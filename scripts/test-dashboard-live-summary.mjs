@@ -102,11 +102,9 @@ assert.doesNotMatch(api, /buildDashboardFallbackFromStock/);
 const dashApi = api.slice(api.indexOf('export async function getDashboardData()'), api.indexOf('export async function confirmPOStatus'));
 assert.doesNotMatch(dashApi, /fetchStock\(/);
 assert.equal(wrangler.name, 'gudangai-rudy-pwa-69');
-assert.match(worker, /Baseline November 2026: 193 item/);
-assert.match(worker, /tampilan alternatif 113 produk/);
-assert.match(worker, /getDashboardData dari Dashboard Live/);
-assert.match(agentSkills, /193 item/);
-assert.match(agentSkills, /Gabungan CV\+PT \(113 produk\)/);
+assert.match(worker, /getDashboardData/);
+assert.match(agentSkills, /Jangan menghardcode total item/);
+assert.match(agentSkills, /Dashboard Live/);
 
 
 const dashboardPage = fs.readFileSync(new URL('../src/pages/DashboardPage.jsx', import.meta.url), 'utf8');

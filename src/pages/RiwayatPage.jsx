@@ -16,7 +16,7 @@ import {
 
 const TIPE_LABEL = { masuk: "Masuk", keluar: "Keluar", rusak: "Rusak" };
 const ARAH = { masuk: "↓", keluar: "↑", rusak: "!" };
-const STATUS_LABEL = { terkirim: "Terkirim", antrian: "Antrian", gagal: "Gagal", lokal: "Lokal" };
+const STATUS_LABEL = { terkirim: "Terkirim", antrian: "Antrean", gagal: "Gagal", lokal: "Lokal" };
 const ENT = ["semua", "CV", "PT", "Bahan Baku"];
 const TIPE_FILTERS = [
   { id: "semua", label: "Semua" },
@@ -175,7 +175,7 @@ export default function RiwayatPage({ onNavigate }) {
     return out;
   }, [hari, limit]);
 
-  const nAntrian = queueCount || cntStatus.antrian || 0;
+  const nAntrean = queueCount || cntStatus.antrian || 0;
   const adaFilter = tipe !== "semua" || entitas !== "semua" || status !== "semua" || q.trim() !== "";
 
   const info = useCallback((t) => {
@@ -235,9 +235,9 @@ export default function RiwayatPage({ onNavigate }) {
           </p>
         </div>
         <div className="rw-head-actions">
-          {nAntrian > 0 && (
+          {nAntrean > 0 && (
             <button type="button" className="rw-btn-queue" onClick={onOpenQueue}>
-              Antrian {nAntrian}
+              Antrean {nAntrean}
             </button>
           )}
           <button
@@ -262,7 +262,7 @@ export default function RiwayatPage({ onNavigate }) {
               {cntStatus.gagal > 0 && cntStatus.antrian > 0 ? " · " : ""}
               {cntStatus.antrian > 0 ? `${cntStatus.antrian} antrian` : ""}
             </b>
-            <small>Filter atau buka Antrian Sinkronisasi</small>
+            <small>Filter atau buka Antrean Sinkronisasi</small>
           </div>
           <div className="rw-banner-btns">
             {cntStatus.gagal > 0 && (
@@ -270,9 +270,9 @@ export default function RiwayatPage({ onNavigate }) {
                 Lihat gagal
               </button>
             )}
-            {nAntrian > 0 && (
+            {nAntrean > 0 && (
               <button type="button" className="rw-primary" onClick={onOpenQueue}>
-                Antrian
+                Antrean
               </button>
             )}
           </div>

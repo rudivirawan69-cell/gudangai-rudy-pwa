@@ -131,7 +131,11 @@ assert.match(apiSource, /err\?\.noQueue[\s\S]*queuedCount:\s*0/,
 assert.match(apiSource, /import \{ classifyStockLevel \} from '\.\/stockStatus'/);
 assert.match(stockStatusSource, /stock < 10/);
 assert.match(stockStatusSource, /stock < 20/);
-assert.match(stokSource, /classifyStockLevel/);
+const stokAdapterSource = readFileSync(new URL('../src/data/stokAdapter.js', import.meta.url), 'utf8');
+assert.match(stokSource, /normalizeAll/);
+assert.match(stokAdapterSource, /function hitungStatus\(stok\)/);
+assert.match(stokAdapterSource, /stok < AMBANG\.KRITIS_DI_BAWAH/);
+assert.match(stokAdapterSource, /stok < AMBANG\.WASPADA_DI_BAWAH/);
 assert.match(dashboardSource, /classifyStockLevel/);
 assert.doesNotMatch(apiSource, /buildDashboardFallbackFromStock/);
 assert.match(apiSource, /DASHBOARD_LIVE_READ_FAILED/,
