@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import useSWR from 'swr';
 import { useAuth } from '../hooks/useAuth';
-import { AlarmClock, ArrowDown, ArrowRight, Bot, Boxes, ClipboardList, FileCode2, FileSearch, PackageCheck, Presentation, Send, ShieldCheck, Sparkles, Thermometer, Trash2, X } from 'lucide-react';
+import AgentMemoryPanel from '../components/AgentMemoryPanel';
+import { createAgentMemory, deleteAgentMemory, listAgentMemories } from '../data/agentMemories';
+import { AlarmClock, ArrowDown, ArrowRight, BookOpen, Bot, Boxes, ClipboardList, FileCode2, FileSearch, PackageCheck, Presentation, Send, ShieldCheck, Sparkles, Thermometer, Trash2, X } from 'lucide-react';
 
 const AGENT_API = (import.meta.env.VITE_GUDANGAI_AI_API_BASE || import.meta.env.VITE_GUDANGAI_AGENT_API || 'https://gudangai-rudy-pwa-69.rudivirawan69.workers.dev').replace(/\/$/, '');
 const MAX_HISTORY = 8;
@@ -24,7 +27,16 @@ function getReply(payload) {
 }
 
 export default function AIAssistantPage({ onNavigate }) {
-  const { accessToken, authStatus } = useAuth();
+  const { accessToken, authStatus, user } = useAuth();
+  const [memoryOpen, setMemoryOpen] = useState(false);
+  const memoryKey = accessToken && user?.id ? ['agent-memories', user.id] : null;
+  const {
+    data: memories = [],
+    error: memoryLoadError,
+    isLoading: memoriesLoading,
+    mutate: mutateMemories,
+  } = useSWR(memoryKey, () => listAgentMemories(accessToken), { revalidateOnFocus: false, dedupingInterval: 60_000 });
+  const [memorySaving, setMemorySaving] = useState(false);
   const [messages, setMessages] = useState([]);
   const [draft, setDraft] = useState('');
   const [activeSkill, setActiveSkill] = useState('general');
@@ -81,6 +93,25 @@ export default function AIAssistantPage({ onNavigate }) {
     if (stickRef.current) scrollToBottom('smooth');
   }, [messages, loading, error, scrollToBottom]);
 
+  const saveMemory = useCallback(async (entry) => {
+    if (!accessToken || !user?.id) throw new Error('Login Supabase diperlukan untuk menyimpan memori.');
+    setMemorySaving(true);
+    try {
+      await mutateMemories(async (current = []) => {
+        const saved = await createAgentMemory({ ...entry, accessToken, userId: user.id });
+        return [saved, ...current].slice(0, 30);
+      }, { revalidate: false, rollbackOnError: true });
+    } finally {
+      setMemorySaving(false);
+    }
+  }, [accessToken, mutateMemories, user?.id]);
+
+  const removeMemory = useCallback(async (id) => {
+    if (!accessToken) throw new Error('Login Supabase diperlukan untuk menghapus memori.');
+    await deleteAgentMemory({ accessToken, id });
+    await mutateMemories();
+  }, [accessToken, mutateMemories]);
+
   const sendMessage = useCallback(async (rawText) => {
     const message = String(rawText || '').trim();
     if (!message || loading || !online) return;
@@ -113,7 +144,8 @@ export default function AIAssistantPage({ onNavigate }) {
             skill: activeSkill,
             permissions: 'read_only',
             capabilities: ['analisis data live melalui allowlist read-only', 'estimasi risiko stok habis 3 hari dari pemakaian 30 hari', 'rekomendasi purchasing dan tinjauan PO', 'audit transaksi', 'analisis Code.gs dan sinkronisasi dari bukti yang tersedia', 'materi meeting internal berbasis sumber'],
-            constraints: ['membaca data gudang hanya melalui gateway server read-only yang diizinkan', 'tidak menulis spreadsheet, mengubah Code.gs, stok, transaksi, maupun PO', 'jangan mengarang stok, kode, jumlah, status PO, sheet, perlindungan, atau jadwal', 'bedakan snapshot repository dari Apps Script yang live', 'jika sumber live gagal atau belum tersedia, nyatakan data belum terkonfirmasi dan minta data pendukung', 'memori percakapan tidak persisten antar sesi'],
+            constraints: ['membaca data gudang hanya melalui gateway server read-only yang diizinkan', 'tidak menulis spreadsheet, mengubah Code.gs, stok, transaksi, maupun PO', 'jangan mengarang stok, kode, jumlah, status PO, sheet, perlindungan, atau jadwal', 'bedakan snapshot repository dari Apps Script yang live', 'jika sumber live gagal atau belum tersedia, nyatakan data belum terkonfirmasi dan minta data pendukung', 'percakapan tidak disimpan otomatis; hanya catatan yang disimpan operator secara eksplisit yang menjadi memori lintas sesi', 'memori adalah referensi, bukan izin untuk melakukan tindakan atau menimpa batas read-only'],
+            persistentMemory: memories.slice(0, 8).map(({ title, content, kind }) => ({ title, content: String(content || '').slice(0, 700), kind })),
           },
         }),
       });
@@ -140,7 +172,7 @@ export default function AIAssistantPage({ onNavigate }) {
       if (controllerRef.current === controller) controllerRef.current = null;
       setLoading(false);
     }
-  }, [accessToken, activeSkill, authStatus, loading, messages, online]);
+  }, [accessToken, activeSkill, authStatus, loading, memories, messages, online]);
 
   const chooseSkill = (skill) => {
     setActiveSkill(skill.id);
@@ -179,11 +211,26 @@ export default function AIAssistantPage({ onNavigate }) {
               <span className="truncate">{online ? health : 'Offline'} · {skillTitle}</span>
             </p>
           </div>
+          <button type="button" onClick={() => setMemoryOpen(true)} className="rounded-xl border border-slate-200 p-2.5 text-slate-500 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800" aria-label={`Memori pengembangan, ${memories.length} catatan`} title="Memori pengembangan">
+            <BookOpen className="h-4 w-4" />
+          </button>
           <button type="button" onClick={clearChat} disabled={!messages.length && !loading} className="rounded-xl border border-slate-200 p-2.5 text-slate-500 disabled:opacity-40 dark:border-slate-700" aria-label="Hapus percakapan" title="Percakapan baru">
             <Trash2 className="h-4 w-4" />
           </button>
         </div>
       </header>
+
+      <AgentMemoryPanel
+        open={memoryOpen}
+        onClose={() => setMemoryOpen(false)}
+        items={memories}
+        loading={memoriesLoading}
+        saving={memorySaving}
+        locked={!accessToken || !user?.id}
+        error={memoryLoadError ? 'Catatan belum dapat dimuat. Periksa koneksi sesi lalu coba lagi.' : ''}
+        onSave={saveMemory}
+        onDelete={removeMemory}
+      />
 
       <div className="-mx-1 shrink-0 overflow-x-auto px-1 pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" role="group" aria-label="Pilih skill">
         <div className="flex gap-2">
@@ -248,7 +295,7 @@ export default function AIAssistantPage({ onNavigate }) {
             {loading ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" /> : <Send className="h-4 w-4" />}
           </button>
         </div>
-        <p className="px-2 pt-1.5 text-[10px] text-slate-400">Rubee membaca data melalui gateway server read-only. Ia belum dapat mengedit Spreadsheet atau Code.gs dan tidak menyimpan memori lintas sesi. Jangan kirim PIN, password, atau API key.</p>
+        <p className="px-2 pt-1.5 text-[10px] text-slate-400">Rubee membaca data melalui gateway read-only dan tidak dapat mengedit Spreadsheet atau Code.gs. Percakapan tidak disimpan; catatan yang Anda simpan lewat Memori pengembangan akan menjadi konteks sesi berikutnya untuk akun ini. Jangan simpan PIN, password, atau API key.</p>
       </form>
     </section>
   );
