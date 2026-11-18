@@ -180,6 +180,26 @@ html[data-theme] .more-sheet-backdrop {
 html[data-theme] .more-sheet { background: var(--modal-surface) !important; }
 html[data-theme] .page-on-dark :is(.page-title,h1,h2) { text-shadow: none !important; }
 
+/* Quick links inherit the active palette across all three dashboard modes. */
+html[data-theme] .app-content .dashboard-quick-card {
+  background: var(--bg-elevated) !important;
+  color: var(--text-main) !important;
+  border-color: var(--border) !important;
+  box-shadow: var(--shadow-1) !important;
+}
+html[data-theme] .app-content .dashboard-quick-card-label { color: var(--text-main) !important; }
+html[data-theme] .app-content .dashboard-quick-card-arrow { color: var(--text-muted) !important; }
+html[data-theme] .app-content .dashboard-quick-card-icon {
+  color: var(--accent-strong) !important;
+  background: var(--accent-soft) !important;
+  border-color: var(--border) !important;
+  box-shadow: none !important;
+}
+html[data-theme] .app-content .dashboard-quick-card:focus-visible {
+  outline: none !important;
+  box-shadow: var(--shadow-1), var(--focus-ring) !important;
+}
+
 /* Theme changes animate only paint properties; tactile transforms stay component-owned. */
 html[data-theme] .app-shell,
 html[data-theme] .app-bg,
