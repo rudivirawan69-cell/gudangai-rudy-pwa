@@ -1233,14 +1233,6 @@ export default function DashboardPage({ onNavigate }) {
           <h1 className="mt-1 text-xl font-extrabold tracking-tight text-slate-900 sm:text-2xl">Ringkasan Gudang</h1>
           <p className="mt-1 text-xs leading-relaxed text-slate-500">Pantau pergerakan, ketersediaan stok, dan status operasional.</p>
         </div>
-        <nav aria-label="Akses cepat" className="flex shrink-0 flex-wrap gap-2">
-          <button type="button" onClick={() => onNavigate?.('stok')} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-cyan-200 bg-cyan-50 px-3 text-xs font-bold text-cyan-800 transition hover:bg-cyan-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500">
-            <Package className="h-4 w-4" aria-hidden="true" /> Lihat stok
-          </button>
-          <button type="button" onClick={() => onNavigate?.('riwayat')} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500">
-            <FileText className="h-4 w-4" aria-hidden="true" /> Riwayat
-          </button>
-        </nav>
       </header>
 
       <HomeReminderModule
@@ -1333,6 +1325,28 @@ export default function DashboardPage({ onNavigate }) {
           {pending} item menunggu sinkronisasi di Antrian.
         </div>
       )}
+
+      <section className="dashboard-quick-links" aria-labelledby="dashboard-quick-links-title">
+        <h2 id="dashboard-quick-links-title" className="text-sm font-extrabold tracking-tight text-slate-900">Akses Cepat</h2>
+        <div className="mt-2 grid grid-cols-3 gap-2" aria-label="Akses cepat halaman">
+          {[
+            { label: 'Cek Stok', Icon: Package, target: 'stok', iconClass: 'dashboard-quick-icon-stock' },
+            { label: 'Riwayat', Icon: FileText, target: 'riwayat', iconClass: 'dashboard-quick-icon-history' },
+            { label: 'PO', Icon: FilePlus2, target: 'po', iconClass: 'dashboard-quick-icon-po' },
+          ].map(({ label, Icon, target, iconClass }) => (
+            <button
+              key={target}
+              type="button"
+              onClick={() => onNavigate?.(target)}
+              className="dashboard-quick-card dashboard-3d-card"
+            >
+              <span className={`dashboard-quick-card-icon ${iconClass}`}><Icon className="h-5 w-5" aria-hidden="true" /></span>
+              <span className="dashboard-quick-card-label">{label}</span>
+              <ArrowUpRight className="dashboard-quick-card-arrow h-4 w-4" aria-hidden="true" />
+            </button>
+          ))}
+        </div>
+      </section>
     </div>
   );
 }
