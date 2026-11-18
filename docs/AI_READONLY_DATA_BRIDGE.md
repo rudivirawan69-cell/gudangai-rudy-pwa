@@ -19,9 +19,11 @@ Jika salah satu belum ada, `/api/agent/health` tetap hidup tetapi melaporkan `da
 {"action":"getDashboardData"}
 ```
 
-Action yang diizinkan hanya `ping`, `status`, `getConfig`, `getDashboard`, `getDashboardData`, `getAllStock`, `getStockAll`, `getStockByCode`, `searchByName`, `getLowStock`, `getTransactionHistory`, `getStatusPO`, `getPOStatus`, `getSystemLog`, dan `bootstrap`.
+Action yang diizinkan hanya action baca yang cocok dengan dispatcher `doPost` Code.gs. Termasuk `getConfig`, `getDashboardData`, `getAllStock`, `getStockByCode`, `searchByName`, `getLowStock`, `getTransactionHistory`, `getStatusPO`, `getStockDelta`, `getSyncMetrics`, `getLastUpdate`, `getPOAnalysis`, dan `getStockoutRisk`. Action yang tidak tersedia pada dispatcher tidak boleh diiklankan oleh agent; write/admin tetap ditolak Worker.
 
-Tidak ada endpoint ini yang boleh meneruskan transaksi, PO write, ganti periode, penghapusan, atau arbitrary function ke Apps Script. Write tetap menggunakan kontrak PWA/backend yang sudah ada, dengan idempotency, audit, dan read-back.
+`getStockoutRisk` adalah action baca baru di Code.gs: ia membandingkan stok live dengan transaksi `Barang keluar` pada jendela 30 hari, melaporkan estimasi cakupan hari dan kandidat yang diproyeksikan habis dalam 3 hari. Item tanpa arus keluar masuk daftar review terpisah, bukan diperlakukan sebagai aman. Hasil adalah estimasi, bukan kepastian; bandingkan dengan PO aktif sebelum rekomendasi.
+
+Tidak ada endpoint ini yang boleh meneruskan transaksi, PO write, ganti periode, penghapusan, atau arbitrary function ke Apps Script. Write tetap menggunakan kontrak PWA/backend yang sudah ada, dengan idempotency, audit, dan read-back. Penambahan action ke source repo tidak otomatis memperbarui Apps Script Web App aktif; rilis Code.gs tetap merupakan gate terpisah.
 
 ## Aktivasi berikutnya
 

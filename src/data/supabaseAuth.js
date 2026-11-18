@@ -57,6 +57,46 @@ async function authRequest(path, { method = 'GET', body, accessToken, signal } =
   return payload;
 }
 
+export async function supabaseRestRequest(path, { method = 'GET', body, accessToken, signal, prefer } = {}) {
+  const endpoint = String(path || '');
+  if (!/^agent_memories(?:\?[A-Za-z0-9_.%=&,-]+)?$/.test(endpoint)) {
+    throw authError('Endpoint data Supabase tidak diizinkan.');
+  }
+  if (!accessToken) throw authError('Sesi Supabase diperlukan untuk mengakses data.', 401);
+  if (!isSupabaseConfigured()) throw authError('Konfigurasi Supabase belum tersedia.');
+
+  let response;
+  try {
+    response = await fetch(`${SUPABASE_URL}/rest/v1/${endpoint}`, {
+      method,
+      signal,
+      cache: 'no-store',
+      headers: {
+        apikey: SUPABASE_PUBLISHABLE_KEY,
+        Authorization: `Bearer ${accessToken}`,
+        ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+        ...(prefer ? { Prefer: prefer } : {}),
+      },
+      ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+    });
+  } catch (error) {
+    error.networkError = true;
+    throw error;
+  }
+
+  let payload = null;
+  if (response.status !== 204) {
+    try { payload = await response.json(); } catch (_) { /* response may be empty */ }
+  }
+  if (!response.ok) {
+    const message = response.status === 401 || response.status === 403
+      ? 'Sesi tidak valid atau akun ini tidak memiliki akses ke catatan tersebut.'
+      : 'Permintaan data memori gagal. Coba lagi.';
+    throw authError(message, response.status);
+  }
+  return payload;
+}
+
 function normalizeSession(payload) {
   const expiresIn = Number(payload.expires_in || 3600);
   return {
