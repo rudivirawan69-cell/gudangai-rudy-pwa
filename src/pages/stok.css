@@ -200,3 +200,10 @@
 .sk-conn-inline .sk-refresh{width:27px;height:27px;font-size:17px;color:var(--sk-brand)}
 .sk-list-head{margin:8px 2px 7px}
 @media(max-width:380px){.sk-head h1{font-size:22px}.sk-entity-block{padding:7px}.sk-entity-block .sk-seg button{min-height:39px;font-size:12px}}
+
+
+/* 2026-11-19 — clean division labels: show names only, no numeric counters. */
+.sk-div-title h3{font-size:14px;line-height:1.25;font-weight:800;letter-spacing:.005em}
+.sk-div-title p,.sk-div-title .sk-bar{display:none!important}
+.sk-div-head{min-height:48px;padding:10px 13px}
+.sk-div-chips button em{display:none}
