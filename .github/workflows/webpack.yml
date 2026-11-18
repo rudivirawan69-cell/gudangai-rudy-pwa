@@ -124,6 +124,31 @@ jobs:
           put_secret "GUDANGAI_SHEETS_API_SECRET" "$GUDANGAI_SHEETS_API_SECRET"
 
 
+      - name: Verify production app shell and every lazy JS/CSS asset
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import { readdir } from 'node:fs/promises';
+          const base = 'https://gudangai-rudy-pwa-69.rudivirawan69.workers.dev';
+          const htmlResponse = await fetch(base + '/', { cache: 'no-store' });
+          if (!htmlResponse.ok) throw new Error('Production app shell HTTP ' + htmlResponse.status);
+          const html = await htmlResponse.text();
+          if (!html.includes('<div id="root">')) throw new Error('Production root element is missing');
+          const assets = (await readdir('dist/assets')).filter((name) => /\\.(?:js|css)$/i.test(name));
+          if (!assets.some((name) => /^DashboardPage-.+\\.js$/i.test(name))) throw new Error('Dashboard lazy chunk missing from build output');
+          const results = await Promise.all(assets.map(async (name) => {
+            const response = await fetch(base + '/assets/' + name, { cache: 'no-store' });
+            const type = response.headers.get('content-type') || '';
+            const expected = name.endsWith('.js') ? /(?:javascript|ecmascript)/i : /text\\/css/i;
+            if (!response.ok || !expected.test(type)) {
+              throw new Error(name + ' returned HTTP ' + response.status + ' with Content-Type ' + type);
+            }
+            return name;
+          }));
+          console.log('Production app shell OK; verified ' + results.length + ' JS/CSS assets, including Dashboard lazy chunk.');
+          NODE
+
       - name: Verify live Worker health and Supabase configuration
         shell: bash
         run: |
