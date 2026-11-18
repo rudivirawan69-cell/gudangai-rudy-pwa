@@ -1,16 +1,14 @@
 import { useMemo, useState, useEffect, useCallback, useRef } from 'react';
 import { useStock } from '../hooks/useStock';
-import { useAuth } from '../hooks/useAuth';
 import {
   getPendingQueue, getStatusPO, getDashboardData, confirmPOStatus, getLocalHistory, getApiUrl, getApiSecret,
 } from '../data/api';
 import { classifyStockLevel } from '../data/stockStatus';
-import HomeReminderModule from '../components/HomeReminderModule';
 import HomeAgentAssistant from '../components/HomeAgentAssistant';
 import {
   AlertTriangle, RefreshCw, FileText, Package, Users, Boxes, ShieldAlert, CheckCircle2, AlertCircle, X,
   CalendarDays, CalendarClock, ClipboardCheck, FilePlus2, Mail, Clock3, Layers3, ArrowUpRight,
-  ChevronDown, BellRing, Bot, Sparkles,
+  ChevronDown, Bot, Sparkles,
 } from 'lucide-react';
 
 function classifyItem(it) {
@@ -1004,7 +1002,6 @@ function StatusPOCard({ data, loading, error, onRefresh, onConfirm, confirmingId
 }
 
 export default function DashboardPage({ onNavigate }) {
-  const { user } = useAuth();
 
   // DASHBOARD MASTER SOURCE:
   // Ringkasan total/status/divisi hanya berasal dari Dashboard Live.
@@ -1207,9 +1204,6 @@ export default function DashboardPage({ onNavigate }) {
 
   // No local fallback: totals must never diverge from the Dashboard Live source.
   const dashboardTotalItem = dashboardData?.totalItemAktif ?? dashboardData?.totalItem ?? null;
-  const dashboardCriticalCount = dashboardData
-    ? Number(dashboardData.kritis ?? dashboardData.status?.kritis ?? 0)
-    : null;
 
   const pending = useMemo(() => {
     try {
@@ -1218,29 +1212,8 @@ export default function DashboardPage({ onNavigate }) {
     } catch { return 0; }
   }, [allItems, poData]);
 
-  const name = user?.name || user?.nama || 'Rudi';
-
-  const spreadsheetTimestamp =
-    dashboardData?.lastUpdate ?? dashboardData?.lastUpdatedAt ?? dashboardData?.lastUpdated ??
-    dashboardData?.updatedAt ?? dashboardData?.updateTime ?? dashboardData?.waktuUpdate ??
-    dashboardData?.waktu_update ?? dashboardData?.terakhirUpdate ?? dashboardData?.timestamp ?? null;
-
   return (
     <div className="dashboard-shell w-full max-w-6xl mx-auto px-3 sm:px-5 lg:px-7 pt-4 pb-24 space-y-4">
-      <header className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white/90 px-4 py-4 shadow-sm sm:flex-row sm:items-center sm:justify-between sm:px-5">
-        <div className="min-w-0">
-          <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-cyan-700">Beranda</p>
-          <h1 className="mt-1 text-xl font-extrabold tracking-tight text-slate-900 sm:text-2xl">Ringkasan Gudang</h1>
-          <p className="mt-1 text-xs leading-relaxed text-slate-500">Pantau pergerakan, ketersediaan stok, dan status operasional.</p>
-        </div>
-      </header>
-
-      <HomeReminderModule
-        onNavigate={onNavigate}
-        criticalCount={dashboardCriticalCount}
-        userName={name}
-      />
-
       <HomeAgentAssistant onNavigate={onNavigate} />
 
       {confirmMsg && (
