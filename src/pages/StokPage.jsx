@@ -71,18 +71,11 @@ const ItemRow = memo(function ItemRow({ it, onOpen }) {
 });
 
 const Divisi = memo(function Divisi({ nama, items, open, onToggle, onOpen }) {
-  const c = ringkas(items);
   return (
     <section className={`sk-div${open ? " is-open" : ""}`}>
       <button type="button" className="sk-div-head" onClick={() => onToggle(nama)} aria-expanded={open}>
         <div className="sk-div-title">
           <h3>{nama}</h3>
-          <p>
-            {fmtCount(c.total)} barang
-            {c.kritis > 0 && <span className="t-kritis"> · {fmtCount(c.kritis)} kritis</span>}
-            {c.waspada > 0 && <span className="t-waspada"> · {fmtCount(c.waspada)} perlu perhatian</span>}
-          </p>
-          <Bar c={c} />
         </div>
         <span className="sk-chev" aria-hidden="true">›</span>
       </button>
@@ -306,11 +299,11 @@ export default function StokPage() {
         <h2 className="sk-section-label">Divisi</h2>
         <div className="sk-div-chips" role="group" aria-label="Filter divisi">
         <button type="button" className={!divFilter ? "on" : ""} onClick={() => setDivFilter(null)}>
-          Semua<em>{fmtCount(perEntitas.length)}</em>
+          Semua
         </button>
         {daftarDivisi.map(({ nama, n }) => (
           <button key={nama} type="button" className={divFilter === nama ? "on" : ""} onClick={() => setDivFilter(divFilter === nama ? null : nama)}>
-            {nama}<em>{fmtCount(n)}</em>
+            {nama}
           </button>
         ))}
         </div>
