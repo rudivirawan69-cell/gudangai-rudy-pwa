@@ -58,22 +58,37 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Vite build assets contain content hashes: immutable cache-first is safe.
+  // Hashed Vite assets are network-first. Never cache SPA HTML fallbacks as JS/CSS.
   const isHashedAsset = url.pathname.startsWith('/assets/') &&
-    /[-.][A-Za-z0-9_-]{8,}\.(?:js|css|woff2?|png|jpe?g|svg|webp)$/i.test(url.pathname);
+    /[-.][A-Za-z0-9_-]{8,}\\.(?:js|css|woff2?|png|jpe?g|svg|webp)$/i.test(url.pathname);
   if (isHashedAsset) {
-    event.respondWith(
-      caches.match(request).then((cached) => {
-        if (cached) return cached;
-        return fetch(request).then((response) => {
-          if (response.ok) {
-            const copy = response.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(request, copy)).catch(() => undefined);
-          }
+    const hasExpectedContentType = (response) => {
+      const contentType = response.headers.get('content-type') || '';
+      const extension = url.pathname.split('.').pop().toLowerCase();
+      if (extension === 'js') return /(?:javascript|ecmascript)/i.test(contentType);
+      if (extension === 'css') return /text\\/css/i.test(contentType);
+      if (extension === 'woff' || extension === 'woff2') return /font\\/|woff/i.test(contentType);
+      if (['png', 'jpg', 'jpeg', 'svg', 'webp'].includes(extension)) return /image\\//i.test(contentType);
+      return false;
+    };
+
+    event.respondWith((async () => {
+      const cached = await caches.match(request);
+      try {
+        const response = await fetch(request);
+        if (response.ok && hasExpectedContentType(response)) {
+          const copy = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(request, copy)).catch(() => undefined);
           return response;
-        });
-      })
-    );
+        }
+        // A 200 text/html SPA fallback is not a valid JavaScript/CSS asset.
+        if (cached && hasExpectedContentType(cached)) return cached;
+        return response;
+      } catch (error) {
+        if (cached && hasExpectedContentType(cached)) return cached;
+        throw error;
+      }
+    })());
     return;
   }
 
