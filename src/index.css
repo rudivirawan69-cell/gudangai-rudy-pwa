@@ -765,6 +765,22 @@ button{min-height:40px}
 @media(max-width:360px){.po-shortcut{min-height:136px;padding:.68rem}.po-shortcut-title{font-size:.7rem}.po-shortcut-subtitle{font-size:.6rem}}
 @media(prefers-reduced-motion:reduce){.po-shortcut,.division-status-card{transition:none}.po-shortcut:hover,.division-status-card:hover{transform:none}}
 
+.dashboard-quick-links{position:relative;z-index:1}
+.dashboard-quick-card{display:flex;min-width:0;min-height:7rem;align-items:center;justify-content:center;flex-direction:column;gap:.55rem;position:relative;overflow:hidden;padding:.8rem .45rem;border:1px solid var(--border,#dfe8eb);border-radius:1rem;background:var(--bg-elevated,#fff);color:var(--text-main,#123039);box-shadow:var(--shadow-1,0 8px 18px rgba(16,55,64,.085));text-align:center;transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease;-webkit-tap-highlight-color:transparent}
+.dashboard-quick-card::after{content:"";position:absolute;left:12px;right:12px;top:0;height:1px;background:linear-gradient(90deg,transparent,rgba(15,159,154,.32),transparent);pointer-events:none}
+.dashboard-quick-card:hover{transform:translateY(-2px);border-color:#c4e0e3;box-shadow:0 13px 24px rgba(16,55,64,.12),0 4px 8px rgba(16,55,64,.05)}
+.dashboard-quick-card:active{transform:translateY(0) scale(.98)}
+.dashboard-quick-card:focus-visible{outline:3px solid rgba(8,145,178,.45);outline-offset:2px}
+.dashboard-quick-card-icon{display:grid;width:2.35rem;height:2.35rem;place-items:center;border:1px solid #d5e6e9;border-radius:.8rem;background:linear-gradient(145deg,#f3ffff,#dceff1);color:#0f777b}
+.dashboard-quick-icon-history{background:linear-gradient(145deg,#f1f3ff,#dde4ff);border-color:#d3dafb;color:#4f63a7}
+.dashboard-quick-icon-po{background:linear-gradient(145deg,#fff8e9,#ffe8bb);border-color:#f4d8a0;color:#9b610b}
+.dashboard-quick-card-label{font-size:.72rem;font-weight:850;line-height:1.2;color:var(--text-main,#102e36)}
+.dashboard-quick-card-arrow{position:absolute;right:.5rem;top:.5rem;color:var(--text-muted,#647781)}
+html[data-theme="deep_ocean"] .dashboard-quick-card{background:#16324f!important;border-color:rgba(56,189,248,.4)!important;color:#fff!important;box-shadow:8px 8px 18px #030a12,-5px -5px 14px #1a3a58!important}
+html[data-theme="deep_ocean"] .dashboard-quick-card-label{color:#fff!important;-webkit-text-fill-color:#fff!important}
+html[data-theme="deep_ocean"] .dashboard-quick-card-arrow{color:#b6c7dc!important}
+@media(prefers-reduced-motion:reduce){.dashboard-quick-card{transition:none}.dashboard-quick-card:hover{transform:none}}
+
 
 /* Audit UI 2026-10: consistent compact cards, aligned metrics, theme-aware surfaces */
 html[data-theme] {
