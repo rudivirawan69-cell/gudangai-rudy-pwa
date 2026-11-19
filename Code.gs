@@ -4460,11 +4460,14 @@ function getAgentKnowledge_(params) {
 function getAgentSheetManifest_(ss) {
   const sheets = ss.getSheets().map(function(sh) {
     const lastRow = sh.getLastRow(), lastCol = sh.getLastColumn();
-    const previewRows = Math.min(sh.getName() === "Config" ? 3 : 8, Math.max(0, lastRow));
-    const previewCols = Math.min(20, Math.max(0, lastCol));
-    const preview = previewRows && previewCols ? sh.getRange(1, 1, previewRows, previewCols).getDisplayValues() : [];
+    // Manifest hanya memuat header, bukan contoh baris transaksi/konfigurasi.
+    // Nama kolom dipaginasi agar tab dengan banyak kolom tidak terpotong diam-diam.
+    const headerPreview = lastRow > 0 && lastCol > 0
+      ? sh.getRange(1, 1, 1, Math.min(100, lastCol)).getDisplayValues()[0]
+      : [];
     return { sheetName:sh.getName(), sheetId:sh.getSheetId(), lastRow:lastRow, lastColumn:lastCol,
-      headerPreview:preview, usedRows:lastRow, redacted:sh.getName() === "Config", hidden:sh.isSheetHidden() };
+      headerPreview:headerPreview, headerTruncated:lastCol > 100, usedRows:lastRow,
+      redacted:sh.getName() === "Config", hidden:sh.isSheetHidden() };
   });
   return { success:true, readOnly:true, mode:"manifest", spreadsheetName:ss.getName(),
     activeMonth:getActiveMonth(), sheetCount:sheets.length, sheets:sheets, readAt:new Date().toISOString() };
@@ -4475,23 +4478,30 @@ function getAgentSheetPage_(ss, params) {
   const sh = name ? ss.getSheetByName(name) : null;
   if (!sh) return { success:false, readOnly:true, code:"SHEET_NOT_FOUND", error:"Nama tab tidak valid atau tidak ditemukan." };
   if (name === "Config") return { success:false, readOnly:true, code:"SENSITIVE_SHEET_REDACTED", error:"Nilai Config tidak diekspos ke Agent. Gunakan getConfig untuk metadata konfigurasi yang aman." };
-  const lastRow = sh.getLastRow(), lastCol = Math.min(30, sh.getLastColumn());
+  const lastRow = sh.getLastRow(), lastCol = sh.getLastColumn();
   const startRow = Math.max(1, Math.floor(Number(params.startRow) || 1));
+  const startColumn = Math.max(1, Math.floor(Number(params.startColumn) || 1));
   const pageSize = Math.min(50, Math.max(1, Math.floor(Number(params.pageSize) || 25)));
-  if (startRow > lastRow || lastCol < 1) return { success:true, readOnly:true, mode:"page",
-    sheetName:name, startRow:startRow, pageSize:pageSize, totalRows:lastRow, rows:[], nextStartRow:null,
-    readAt:new Date().toISOString() };
+  const pageColumns = Math.min(30, Math.max(1, Math.floor(Number(params.pageColumns) || 30)));
+  if (startRow > lastRow || startColumn > lastCol) return { success:true, readOnly:true, mode:"page",
+    sheetName:name, startRow:startRow, startColumn:startColumn, pageSize:pageSize, pageColumns:pageColumns,
+    totalRows:lastRow, totalColumns:lastCol, rows:[], formulas:[], nextStartRow:null,
+    nextStartColumn:null, readAt:new Date().toISOString() };
   const count = Math.min(pageSize, lastRow - startRow + 1);
-  const range = sh.getRange(startRow, 1, count, lastCol);
+  const columns = Math.min(pageColumns, lastCol - startColumn + 1);
+  const range = sh.getRange(startRow, startColumn, count, columns);
   const values = range.getDisplayValues();
   const formulaRows = params.includeFormulas === true ? range.getFormulas().map(function(row, rowIndex) {
     return row.map(function(formula, columnIndex) {
-      return formula ? { rowNumber:startRow + rowIndex, column:columnIndex + 1, formula:formula } : null;
+      return formula ? { rowNumber:startRow + rowIndex, column:startColumn + columnIndex, formula:formula } : null;
     }).filter(Boolean);
   }).reduce(function(all, row) { return all.concat(row); }, []) : [];
-  const next = startRow + count;
+  const nextRow = startRow + count;
+  const nextColumn = startColumn + columns;
   return { success:true, readOnly:true, mode:"page", sheetName:name, sheetId:sh.getSheetId(),
-    startRow:startRow, pageSize:pageSize, totalRows:lastRow, totalColumns:sh.getLastColumn(),
+    startRow:startRow, startColumn:startColumn, pageSize:pageSize, pageColumns:pageColumns,
+    totalRows:lastRow, totalColumns:lastCol,
     rows:values.map(function(row, index) { return { rowNumber:startRow + index, values:row }; }),
-    formulas:formulaRows, nextStartRow:next <= lastRow ? next : null, readAt:new Date().toISOString() };
+    formulas:formulaRows, nextStartRow:nextRow <= lastRow ? nextRow : null,
+    nextStartColumn:nextColumn <= lastCol ? nextColumn : null, readAt:new Date().toISOString() };
 }
