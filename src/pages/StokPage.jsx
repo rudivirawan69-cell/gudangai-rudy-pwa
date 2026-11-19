@@ -71,18 +71,11 @@ const ItemRow = memo(function ItemRow({ it, onOpen }) {
 });
 
 const Divisi = memo(function Divisi({ nama, items, open, onToggle, onOpen }) {
-  const c = ringkas(items);
   return (
     <section className={`sk-div${open ? " is-open" : ""}`}>
       <button type="button" className="sk-div-head" onClick={() => onToggle(nama)} aria-expanded={open}>
         <div className="sk-div-title">
           <h3>{nama}</h3>
-          <p>
-            {fmtCount(c.total)} barang
-            {c.kritis > 0 && <span className="t-kritis"> · {fmtCount(c.kritis)} kritis</span>}
-            {c.waspada > 0 && <span className="t-waspada"> · {fmtCount(c.waspada)} perlu perhatian</span>}
-          </p>
-          <Bar c={c} />
         </div>
         <span className="sk-chev" aria-hidden="true">›</span>
       </button>
@@ -287,28 +280,11 @@ export default function StokPage() {
 
   return (
     <div className="sk-page">
-      <div className={`sk-conn sk-c-${koneksi}`}>
-        <span className="sk-conn-dot" />
-        <span className="sk-conn-txt">{teksKoneksi}</span>
-        <button type="button" className={`sk-refresh${refreshing ? " spin" : ""}`} onClick={segarkan} aria-label="Muat ulang">
-          ⟳
-        </button>
-      </div>
-
       <header className="sk-head">
-        <small>Persediaan</small>
         <h1>Stok Barang</h1>
-        <p>Pantau jumlah dan kebutuhan restok</p>
       </header>
 
-      <section className="sk-summary" aria-label="Kondisi persediaan">
-        <div className="sk-stat is-critical"><span>Kritis</span></div>
-        <div className="sk-stat is-warning"><span>Waspada</span></div>
-        <div className="sk-stat is-safe"><span>Aman</span></div>
-      </section>
-
-      <section className="sk-filter-block" aria-label="Pilih entitas">
-        <h2 className="sk-section-label">Entitas</h2>
+      <section className="sk-filter-block sk-entity-block" aria-label="Pilih entitas">
         <div className="sk-seg" role="tablist" aria-label="Entitas">
         {tabs.map((e) => (
           <button key={e} type="button" role="tab" aria-selected={entitas === e} className={entitas === e ? "on" : ""} onClick={() => setEntitas(e)}>
@@ -323,11 +299,11 @@ export default function StokPage() {
         <h2 className="sk-section-label">Divisi</h2>
         <div className="sk-div-chips" role="group" aria-label="Filter divisi">
         <button type="button" className={!divFilter ? "on" : ""} onClick={() => setDivFilter(null)}>
-          Semua<em>{fmtCount(perEntitas.length)}</em>
+          Semua
         </button>
         {daftarDivisi.map(({ nama, n }) => (
           <button key={nama} type="button" className={divFilter === nama ? "on" : ""} onClick={() => setDivFilter(divFilter === nama ? null : nama)}>
-            {nama}<em>{fmtCount(n)}</em>
+            {nama}
           </button>
         ))}
         </div>
@@ -370,6 +346,12 @@ export default function StokPage() {
           <button type="button" onClick={segarkan}>Coba lagi</button>
         </div>
       )}
+
+      <div className={`sk-conn sk-c-${koneksi} sk-conn-inline`}>
+        <span className="sk-conn-dot" />
+        <span className="sk-conn-txt">{teksKoneksi}</span>
+        <button type="button" className={`sk-refresh${refreshing ? " spin" : ""}`} onClick={segarkan} aria-label="Muat ulang">⟳</button>
+      </div>
 
       <div className="sk-list-head">
         <div>

@@ -263,8 +263,8 @@ export default function AIAssistantPage({ onNavigate }) {
               <h3 className="text-base font-extrabold text-slate-800 dark:text-slate-100">Apa yang perlu dibantu?</h3>
               <p className="mt-1.5 text-xs leading-relaxed text-slate-500 dark:text-slate-400">Pilih skill atau tulis instruksi operasional. Rubee membantu analisis dan menyusun langkah kerja dari data yang Anda kirim.</p>
               <div className="mt-5 flex flex-wrap justify-center gap-2">
-                <button type="button" onClick={() => onNavigate?.('stok')} className="rounded-lg border border-slate-200 bg-white px-3.5 py-2.5 text-xs font-bold text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">Buka Data Stok <ArrowRight className="ml-1 inline h-3 w-3" /></button>
-                <button type="button" onClick={() => onNavigate?.('po')} className="rounded-lg border border-slate-200 bg-white px-3.5 py-2.5 text-xs font-bold text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">Buka PO <ArrowRight className="ml-1 inline h-3 w-3" /></button>
+                <button type="button" onClick={() => onNavigate?.('po')} className="rounded-lg border border-slate-200 bg-white px-3.5 py-2.5 text-xs font-bold text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">Konfirmasi PO <ArrowRight className="ml-1 inline h-3 w-3" /></button>
+                <button type="button" onClick={() => onNavigate?.('settings')} className="rounded-lg border border-slate-200 bg-white px-3.5 py-2.5 text-xs font-bold text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">Atur <ArrowRight className="ml-1 inline h-3 w-3" /></button>
               </div>
             </div>
           )}
@@ -295,7 +295,6 @@ export default function AIAssistantPage({ onNavigate }) {
             {loading ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" /> : <Send className="h-4 w-4" />}
           </button>
         </div>
-        <p className="px-2 pt-1.5 text-[10px] text-slate-400">Rubee membaca data melalui gateway read-only dan tidak dapat mengedit Spreadsheet atau Code.gs. Percakapan tidak disimpan; catatan yang Anda simpan lewat Memori pengembangan akan menjadi konteks sesi berikutnya untuk akun ini. Jangan simpan PIN, password, atau API key.</p>
       </form>
     </section>
   );

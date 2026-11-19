@@ -117,6 +117,7 @@ export default function SettingsPage({ onNavigate }) {
   const [pinMsg, setPinMsg] = useState('');
   const [pendingCount, setPendingCount] = useState(0);
   const [panel, setPanel] = useState(null);
+  const [showAuthInfo, setShowAuthInfo] = useState(false);
   const [showLogout, setShowLogout] = useState(false);
   const bootstrapRevision = useBootstrapRevision();
 
@@ -215,7 +216,7 @@ export default function SettingsPage({ onNavigate }) {
   const isSupabaseSession = Boolean(user?.email);
 
   return (
-    <div className="space-y-3 pb-6">
+    <div className="settings-page space-y-3 pb-6">
       <div className="settings-profile-summary flex items-center gap-3 rounded-2xl bg-white/95 border border-slate-200 shadow-sm px-3.5 py-3">
         <Avatar name={user?.name || 'Rudi'} photo={user?.photo} size="lg" />
         <div className="flex-1 min-w-0">
@@ -225,22 +226,28 @@ export default function SettingsPage({ onNavigate }) {
         <span className="status-pill status-pill-neutral shrink-0">{isSupabaseSession ? 'Supabase' : 'Lokal'}</span>
       </div>
 
-      <div className="rounded-2xl border border-cyan-200/80 bg-cyan-50/80 px-3.5 py-3 space-y-1.5">
-        <div className="flex items-center gap-2">
+      <div className="settings-auth-card rounded-2xl border border-cyan-200/80 bg-cyan-50/80 overflow-hidden">
+        <button type="button" onClick={() => setShowAuthInfo((v) => !v)}
+          className="w-full flex items-center gap-2 px-3.5 py-2.5 text-left"
+          aria-expanded={showAuthInfo}>
           <Shield className="w-4 h-4 text-cyan-700 shrink-0" />
-          <p className="text-xs font-bold text-cyan-900">Dua lapisan autentikasi</p>
-        </div>
-        <p className="text-[11px] text-cyan-900/80 leading-relaxed">
-          <strong>Supabase</strong> memverifikasi identitas operator (login email/password) dan membuka akses Agent AI.
-          <strong> PIN lokal</strong> hanya mengunci perangkat ini — tidak dipakai untuk server, spreadsheet, atau AI.
-          API Secret terpisah untuk koneksi Apps Script.
-        </p>
-        <p className="text-[10px] text-cyan-800/70">
-          Sesi aktif: {isSupabaseSession ? 'Supabase (email terverifikasi)' : 'Lokal (kompatibilitas PWA lama)'}
-        </p>
+          <span className="flex-1 text-xs font-bold text-cyan-900">Dua lapisan autentikasi</span>
+          <span className="text-[10px] font-semibold text-cyan-800">{showAuthInfo ? 'Tutup' : 'Detail'}</span>
+          <ChevronRight className={showAuthInfo ? "w-4 h-4 text-cyan-700 rotate-90" : "w-4 h-4 text-cyan-700"} />
+        </button>
+        {showAuthInfo && <div className="px-3.5 pb-3 space-y-1.5">
+          <p className="text-[11px] text-cyan-900/85 leading-relaxed">
+            <strong>Supabase</strong> memverifikasi identitas operator (login email/password) dan membuka akses Agent AI.
+            <strong> PIN lokal</strong> hanya mengunci perangkat ini — tidak dipakai untuk server, spreadsheet, atau AI.
+            API Secret terpisah untuk koneksi Apps Script.
+          </p>
+          <p className="text-[10px] text-cyan-800/75">
+            Sesi aktif: {isSupabaseSession ? 'Supabase (email terverifikasi)' : 'Lokal (kompatibilitas PWA lama)'}
+          </p>
+        </div>}
       </div>
 
-      <div className="card p-3.5 space-y-3">
+      <div className="card settings-theme-card p-3 space-y-2">
         <div className="flex items-center gap-2">
           <span className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 bg-violet-50 text-violet-600">
             <Palette className="w-4.5 h-4.5" />
@@ -280,7 +287,7 @@ export default function SettingsPage({ onNavigate }) {
         </p>
       </div>
 
-      <div className="space-y-2.5">
+      <div className="space-y-1.5">
         <div className="card overflow-hidden">
           <MenuRow icon={User} iconBg="bg-blue-50 text-blue-600" title="Profil Saya" subtitle="Nama & foto tampilan" onClick={() => setPanel(panel === 'profile' ? null : 'profile')} />
         </div>
@@ -385,14 +392,6 @@ export default function SettingsPage({ onNavigate }) {
 
       <div className="card overflow-hidden">
         <MenuRow icon={LogOut} iconBg="bg-red-50 text-red-600" title="Keluar" subtitle="Masuk kembali dengan metode autentikasi yang aktif" onClick={() => setShowLogout(true)} danger />
-      </div>
-
-      <div className="info-box px-3 py-2.5 flex items-start gap-2">
-        <Shield className="w-3.5 h-3.5 text-slate-300 shrink-0 mt-0.5" />
-        <p className="text-[10px] text-slate-400 leading-relaxed">
-          {isSupabaseSession ? 'Sesi operator diverifikasi oleh Supabase.' : 'Mode lokal hanya untuk kompatibilitas PWA lama.'}
-          {' '}PIN lokal tidak memberi hak akses server atau AI. Jangan bagikan API Secret.
-        </p>
       </div>
 
       {showLogout && (

@@ -699,7 +699,7 @@ export default function InputPage() {
         })}
       </div>
 
-      <div className="grid grid-cols-5 gap-2.5">
+      <div className="grid grid-cols-5 gap-2.5" role="group" aria-label="Metode input">
         <button type="button" onClick={() => filePdfRef.current?.click()} disabled={busy}
           className="rounded-2xl bg-white border border-slate-200 shadow-sm py-3 flex flex-col items-center gap-1.5 disabled:opacity-50">
           <span className="w-9 h-9 rounded-xl bg-violet-50 border border-violet-100 flex items-center justify-center">
@@ -736,6 +736,9 @@ export default function InputPage() {
           <span className="text-[11px] font-semibold text-slate-700">(paste)</span>
         </button>
       </div>
+      <p className="-mt-2 px-1 text-[10px] leading-relaxed text-slate-500" id="input-methods-note">
+        Metode input otomatis terkunci selama proses baca, validasi, atau pemindaian berlangsung.
+      </p>
       <input ref={filePdfRef} type="file" accept="application/pdf" className="hidden" onChange={onPdfPick} />
       <input ref={fileImgRef} type="file" accept="image/*" className="hidden" onChange={onImgPick} />
 

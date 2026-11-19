@@ -231,8 +231,8 @@ export default function SyncQueuePage({ onBack }) {
       {total === 0 ? (
         <div className="rounded-2xl bg-white border border-slate-200 shadow-sm p-6 text-center space-y-2">
           <CheckCircle2 className="w-10 h-10 text-emerald-500 mx-auto" />
-          <p className="text-sm font-semibold text-slate-700">Antrian kosong</p>
-          <p className="text-xs text-slate-500">Semua transaksi sudah tersinkron atau dihapus.</p>
+          <p className="text-sm font-semibold text-slate-700">Antrean kosong</p>
+          <p className="text-xs text-slate-500">Tidak ada transaksi yang menunggu sinkronisasi di perangkat ini.</p>
           <button type="button" onClick={onBack}
             className="mt-2 px-4 py-2.5 rounded-xl bg-cyan-700 text-white text-sm font-semibold">
             Kembali

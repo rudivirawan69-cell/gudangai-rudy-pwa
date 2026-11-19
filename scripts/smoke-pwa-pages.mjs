@@ -141,7 +141,7 @@ try {
 
   const tabs = [
     ['Beranda', 'Status per Divisi'],
-    ['Stok', 'Data Stok'],
+    ['Stok', 'Stok Barang'],
     ['Input', 'Draft transaksi dipulihkan'],
     ['Agent', 'Agent Rubee Intelligence'],
   ];

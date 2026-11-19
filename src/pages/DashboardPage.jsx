@@ -610,7 +610,7 @@ function DashboardTotals({ totalItem }) {
         <div className="flex items-start justify-between gap-2"><span className="dashboard-icon-badge dashboard-icon-cyan"><Package className="w-4 h-4" /></span><span className="text-[9px] font-extrabold text-slate-400">MASTER</span></div>
         <p className="text-[10px] font-bold uppercase tracking-wider text-cyan-700 mt-2">Total Item</p>
         <p className="text-2xl font-extrabold text-slate-900 tabular-nums mt-1">{itemCount == null ? '—' : itemCount.toLocaleString('id-ID')}</p>
-        <p className="text-[10px] text-slate-500 mt-0.5">{itemCount == null ? 'Menunggu Dashboard Live' : 'SKU aktif · Dashboard Live'}</p>
+        <p className="text-[10px] text-slate-500 mt-0.5">{itemCount == null ? 'Ringkasan resmi belum diterima' : 'SKU aktif · Dashboard Live'}</p>
       </div>
       <div className="dashboard-total-card border-orange-100">
         <div className="flex items-start justify-between gap-2"><span className="dashboard-icon-badge dashboard-icon-orange"><Users className="w-4 h-4" /></span><span className="text-[9px] font-extrabold text-slate-400">JARINGAN</span></div>
@@ -630,6 +630,7 @@ function DashboardStatusSummary({ data }) {
   ];
   const hasSummary = Boolean(data && data.success !== false);
   return (
+    <>
     <section className="grid grid-cols-3 gap-2" aria-label="Status total dari Dashboard Live">
       {values.map((item) => {
         const raw = data?.status?.[item.key] ?? data?.[item.key];
@@ -643,6 +644,12 @@ function DashboardStatusSummary({ data }) {
         );
       })}
     </section>
+      {!hasSummary && (
+        <p className="mt-2 px-1 text-[11px] leading-relaxed text-slate-500" role="status">
+          Menunggu respons resmi Dashboard Live. Angka stok lokal tidak digunakan sebagai pengganti ringkasan ini.
+        </p>
+      )}
+    </>
   );
 }
 

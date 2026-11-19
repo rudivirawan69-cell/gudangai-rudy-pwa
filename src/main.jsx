@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import './css-theme-imports.css'
 import './app-ui-v2.css'
+import './ui-enterprise-precision.css'
 import App from './App.jsx'
 
 createRoot(document.getElementById('root')).render(
