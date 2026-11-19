@@ -387,9 +387,13 @@ export default {
         agentStage: configuredSheets(env) ? 'read_only_live_data' : 'analysis_only',
         liveIntentActions:LIVE_INTENTS.map(i=>i.action),
         readOnlyActions:Array.from(READ_ONLY_ACTIONS),
-        codeKnowledgeIndexed:true, codeKnowledgeVersion:CODE_KNOWLEDGE.version,
+        codeKnowledgeIndexed:true, codeKnowledgeSource:CODE_KNOWLEDGE.source,
+        codeKnowledgeVersion:CODE_KNOWLEDGE.version, codeKnowledgeRef:CODE_KNOWLEDGE.ref,
         codeKnowledgeSha256:CODE_KNOWLEDGE.sha256, codeKnowledgeChunks:CODE_KNOWLEDGE.chunkCount,
-        spreadsheetKnowledgeAction:'getAgentKnowledge', maxLiveActions:MAX_LIVE_ACTIONS,
+        codeKnowledgeLineCount:CODE_KNOWLEDGE.lineCount, codeKnowledgeCharacters:CODE_KNOWLEDGE.characterCount,
+        codeKnowledgeRetrievalMaxChunks:3, spreadsheetKnowledgeAction:'getAgentKnowledge',
+        liveDataCharacterBudget:LIVE_DATA_CHAR_BUDGET, codeDataCharacterBudget:CODE_DATA_CHAR_BUDGET,
+        maxLiveActions:MAX_LIVE_ACTIONS,
         deploymentTarget:new URL(request.url).origin,
       }, 200, corsOrigin);
     }
