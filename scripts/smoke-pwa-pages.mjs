@@ -212,7 +212,7 @@ try {
     await assertNoHorizontalOverflow('Riwayat', viewport);
     await openMorePage('Pengaturan', 'Mode Tampilan');
     await assertNoHorizontalOverflow('Pengaturan', viewport);
-    await openMorePage('Antrian Sinkronisasi', 'Antrian Sinkronisasi');
+    await openMorePage('Antrian Sinkronisasi', 'Antrean Sinkronisasi');
     await assertNoHorizontalOverflow('Antrian Sinkronisasi', viewport);
   }
 

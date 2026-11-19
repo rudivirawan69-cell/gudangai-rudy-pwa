@@ -9,6 +9,8 @@ import { formatSpreadsheetTimestamp } from './utils/sheetTimestamp';
 import { useBootstrap } from './hooks/useBootstrap';
 import { startRealtimeSync, syncNow } from './data/realTimeSync';
 import { getPendingQueue } from './data/api';
+import { useSyncAll } from './hooks/useSyncAll';
+import SyncStatusPill from './components/SyncStatusPill';
 import {
   LayoutDashboard, Package, PackagePlus, Clock, Settings, ClipboardList,
   WifiOff, AlertTriangle, Loader2, RefreshCw, BrainCircuit, MoreHorizontal, X,
@@ -135,7 +137,7 @@ function MoreSheet({ open, onClose, onNavigate, activeId, pendingCount }) {
   );
 }
 
-function AppHeader({ user, tab, onOpenSettings, online, status, sheetLabel, onRefresh }) {
+function AppHeader({ user, tab, onOpenSettings, online, status, sheetLabel, onRefresh, sync }) {
   const [refreshing, setRefreshing] = useState(false);
   const photo = (user?.photo && String(user.photo).length > 40) ? user.photo : DEFAULT_PROFILE_PHOTO;
   const connected = online && status !== 'offline' && status !== 'error';
@@ -169,6 +171,9 @@ function AppHeader({ user, tab, onOpenSettings, online, status, sheetLabel, onRe
                   ? 'Update — menunggu data spreadsheet'
                   : 'Update — belum terhubung'}
             </p>
+            <div className="mt-1">
+              <SyncStatusPill status={sync.status} summary={sync.summary} error={sync.error} onRefresh={() => sync.refresh()} />
+            </div>
           </div>
           <button type="button" onClick={handleRefresh} disabled={refreshing} className="shrink-0 w-10 h-10 rounded-xl bg-[var(--bg-muted,#f8fafc)] border border-[var(--border,#e2e8f0)] flex items-center justify-center active:scale-95 disabled:opacity-60" aria-label="Cek koneksi ke spreadsheet" title="Cek koneksi">
             <RefreshCw className={`w-3.5 h-3.5 text-[var(--text-muted,#475569)] ${refreshing ? 'animate-spin' : ''}`} />
@@ -244,7 +249,8 @@ function AppShell() {
     setInstallPrompt(null);
   };
 
-  const { user, loading } = useAuth();
+  const { user, loading, accessToken } = useAuth();
+  const sync = useSyncAll({ accessToken, interval: 60_000 });
   const [tab, setTab] = useState('dashboard');
   const [pageKey, setPageKey] = useState(0);
   const [moreOpen, setMoreOpen] = useState(false);
@@ -316,7 +322,7 @@ function AppShell() {
     <div className="app-shell min-h-screen text-[var(--text-main,#10232b)]">
       <div className="app-bg" aria-hidden="true" />
       <ConnBanner online={online} hasUrl={hasUrl} status={status} message={message} syncing={syncing} />
-      <AppHeader user={user} tab={tab} onOpenSettings={() => goTab('settings')} online={online} status={status} sheetLabel={sheetLabel} onRefresh={() => checkHealth({ quiet: false })} />
+      <AppHeader user={user} tab={tab} onOpenSettings={() => goTab('settings')} online={online} status={status} sheetLabel={sheetLabel} onRefresh={() => checkHealth({ quiet: false })} sync={sync} />
       <InstallBanner installPrompt={installPrompt} onInstall={installApp} onDismiss={dismissInstall} />
       <main className="page-content app-content w-full max-w-none mx-0 min-h-0 px-3 pb-32 pt-1">
         <div key={pageKey} className="animate-page-in">
