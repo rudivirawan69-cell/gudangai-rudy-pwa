@@ -1,7 +1,7 @@
 import { useMemo, useState, useEffect, useCallback, useRef } from 'react';
 import { useStock } from '../hooks/useStock';
 import {
-  getPendingQueue, getStatusPO, getDashboardData, confirmPOStatus, getLocalHistory, getApiUrl, getApiSecret,
+  getPendingQueue, getStatusPO, confirmPOStatus, getLocalHistory, getApiUrl, getApiSecret,
 } from '../data/api';
 import { classifyStockLevel } from '../data/stockStatus';
 import HomeAgentAssistant from '../components/HomeAgentAssistant';
@@ -1008,7 +1008,7 @@ function StatusPOCard({ data, loading, error, onRefresh, onConfirm, confirmingId
   );
 }
 
-export default function DashboardPage({ onNavigate }) {
+export default function DashboardPage({ onNavigate, dashboardData, dashboardError }) {
 
   // DASHBOARD MASTER SOURCE:
   // Ringkasan total/status/divisi hanya berasal dari Dashboard Live.
@@ -1029,13 +1029,10 @@ export default function DashboardPage({ onNavigate }) {
   const [poData, setPoData] = useState(null);
   const [poLoading, setPoLoading] = useState(true);
   const [poError, setPoError] = useState('');
-  const [dashboardData, setDashboardData] = useState(null);
-  const [dashboardError, setDashboardError] = useState('');
   const [confirmingId, setConfirmingId] = useState(null);
   const [confirmMsg, setConfirmMsg] = useState('');
   const poSignatureRef = useRef('');
   const poDataRef = useRef(null);
-  const dashboardSignatureRef = useRef('');
   const historySignatureRef = useRef('');
   const [history, setHistory] = useState(() => getLocalHistory());
   const loadMovementHistory = useCallback(async () => {
@@ -1125,43 +1122,24 @@ export default function DashboardPage({ onNavigate }) {
     }
   }, []);
 
-  const loadDashboardData = useCallback(async () => {
-    try {
-      const res = await getDashboardData();
-      if (res?.success) {
-        const signature = JSON.stringify(res);
-        if (signature !== dashboardSignatureRef.current) {
-          dashboardSignatureRef.current = signature;
-          setDashboardData(res);
-        }
-        setDashboardError('');
-      } else {
-        setDashboardError(res?.error || 'Ringkasan Dashboard Live tidak tersedia.');
-      }
-    } catch (err) {
-      setDashboardError(err?.message || 'Gagal membaca Dashboard Live.');
-    }
-  }, []);
-
   useEffect(() => {
     void loadPO();
-    void loadDashboardData();
-    const refreshSources = () => {
+    const refreshPO = () => {
       if (document.visibilityState !== 'visible' || !navigator.onLine) return;
       void loadPO({ silent: true });
-      void loadDashboardData();
     };
-    const timer = setInterval(refreshSources, 15000); // Dashboard backend polling
-    window.addEventListener('online', refreshSources);
-    window.addEventListener('gudangai-po-changed', refreshSources);
-    document.addEventListener('visibilitychange', refreshSources);
+    // Status PO tetap diperbarui terpisah; Dashboard Live tidak dipolling dari halaman.
+    const timer = setInterval(refreshPO, 60000);
+    window.addEventListener('online', refreshPO);
+    window.addEventListener('gudangai-po-changed', refreshPO);
+    document.addEventListener('visibilitychange', refreshPO);
     return () => {
       clearInterval(timer);
-      window.removeEventListener('online', refreshSources);
-      window.removeEventListener('gudangai-po-changed', refreshSources);
-      document.removeEventListener('visibilitychange', refreshSources);
+      window.removeEventListener('online', refreshPO);
+      window.removeEventListener('gudangai-po-changed', refreshPO);
+      document.removeEventListener('visibilitychange', refreshPO);
     };
-  }, [loadPO, loadDashboardData]);
+  }, [loadPO]);
 
   const handleConfirm = useCallback(async (item, status = 'Selesai', qtyDatang, noPOOverride, entitasOverride, kodeOverride) => {
     if (!item) return;
