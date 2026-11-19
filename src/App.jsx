@@ -249,7 +249,7 @@ function AppShell() {
   const [moreOpen, setMoreOpen] = useState(false);
   const tabRef = useRef('dashboard');
   const { online, hasUrl, status, message, syncing, checkHealth } = useConnection({ pollMs: 90000 });
-  const dashboardLive = useDashboardLive();
+  const dashboardLive = useDashboardLive({ enabled: Boolean(user) });
   const sheetLabel = dashboardLive.sheetUpdatedAt;
   useBootstrap();
 
