@@ -303,7 +303,7 @@ test('three-day stockout questions request the dedicated 30-day read-only foreca
   assert.equal(sheetCalls[0].windowDays, 30);
   assert.equal(sheetCalls[0].thresholdDays, 3);
   assert.match(systemText, /estimasi stok habis/i);
-  assert.match(systemText, /jangan.*kepastian/i);
+  assert.match(systemText, /bukan kepastian/i);
 });
 
 test('Apps Script forecast is routed by POST and declares read-only output', () => {
