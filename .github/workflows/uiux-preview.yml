@@ -29,12 +29,15 @@ jobs:
     if: startsWith(github.head_ref, 'uiux/')
     runs-on: ubuntu-24.04
     timeout-minutes: 25
+    environment:
+      name: uiux-preview
+      url: https://gudangai-rudy-pwa69-uiux-preview.rudivirawan69.workers.dev/
     steps:
       - name: Checkout feature branch
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
           cache: npm
@@ -59,7 +62,7 @@ jobs:
           import { readdir, readFile } from 'node:fs/promises';
           const files = await readdir('dist/assets');
           const jsFiles = files.filter((name) => name.endsWith('.js'));
-          const bundle = (await Promise.all(jsFiles.map((name) => readFile('dist/assets/' + name, 'utf8')))).join('\n');
+          const bundle = (await Promise.all(jsFiles.map((name) => readFile('dist/assets/' + name, 'utf8')))).join('\\n');
           for (const marker of ['UIUX_PREVIEW_READ_ONLY', 'TRANSAKSI PRODUKSI DINONAKTIFKAN']) {
             if (!bundle.includes(marker)) throw new Error('Preview safety marker missing: ' + marker);
           }
@@ -73,7 +76,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "${CLOUDFLARE_API_TOKEN:-}" ] || [ -z "${CLOUDFLARE_ACCOUNT_ID:-}" ]; then
-            echo "Missing CLOUDFLARE_API_TOKEN or CLOUDFLARE_ACCOUNT_ID repository secrets."
+            echo "Missing uiux-preview environment secrets: CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID."
             exit 1
           fi
           npx wrangler@4.156.0 deploy --config wrangler.uiux-preview.jsonc
