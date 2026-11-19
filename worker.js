@@ -16,7 +16,7 @@ const READ_ONLY_ACTIONS = new Set([
   ...EXTRA_READ_ACTIONS,
 ]);
 const LIVE_INTENTS = [
-  { action: 'getAgentKnowledge', pattern: /(?:daftar|nama|struktur|isi|seluruh|semua|baca|cari|jelaskan|periksa).{0,45}(?:sheet|spreadsheet|tab|kolom|baris|formula|rumus)|(?:sheet|spreadsheet|tab|kolom|baris|formula|rumus).{0,45}(?:apa|mana|semua|seluruh|struktur|isi|data|header|judul)|rumus.{0,30}(?:stok|sisa|stock|perhitungan)/i },
+  { action: 'getAgentKnowledge', pattern: /(?:daftar|nama|struktur|isi|seluruh|semua|baca|buka|tampilkan|ambil|lihat|cari|jelaskan|periksa).{0,45}(?:sheet|spreadsheet|tab|kolom|baris|formula|rumus|stock cv|stock pt|stock bahan baku)|(?:sheet|spreadsheet|tab|kolom|baris|formula|rumus).{0,45}(?:apa|mana|semua|seluruh|struktur|isi|data|header|judul)|rumus.{0,30}(?:stok|sisa|stock|perhitungan)/i },
   ...EXTRA_LIVE_INTENTS.filter((intent) => intent.action === 'getStockoutRisk'),
   { action: 'getDashboardData', pattern: /dashboard|ringkasan|rangkuman|kondisi gudang|overview/i },
   { action: 'getLowStock', pattern: /stok (menipis|kritis|rendah|habis)|low ?stock|di bawah minimum|hampir habis|kritis/i },
