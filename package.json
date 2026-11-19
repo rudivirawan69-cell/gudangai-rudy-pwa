@@ -12,7 +12,7 @@
     "test:dates": "node --test scripts/test-tanggal.mjs",
     "preview": "vite preview",
     "write-icons": "node scripts/write-icons.mjs",
-    "predev": "node scripts/assemble-api.mjs && node scripts/write-icons.mjs",
+    "predev": "node scripts/build-agent-knowledge.mjs && node scripts/assemble-api.mjs && node scripts/write-icons.mjs",
     "assemble-api": "node scripts/assemble-api.mjs"
   },
   "dependencies": {
