@@ -5,8 +5,12 @@ import './index.css'
 import './css-theme-imports.css'
 import './app-ui-v2.css'
 import './ui-enterprise-precision.css'
-import './uiux-page-system-2026.css'
 import App from './App.jsx'
+
+// The page-system redesign is preview-only until it passes visual review.
+if (import.meta.env.VITE_UIUX_PREVIEW === 'true') {
+  await import('./uiux-page-system-2026.css')
+}
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
