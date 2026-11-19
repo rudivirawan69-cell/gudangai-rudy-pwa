@@ -3,6 +3,7 @@
 ## Status
 
 - Feature branch: `uiux/global-design-system-preview-20261119`
+- Draft PR: https://github.com/rudivirawan69-cell/gudangai-rudy-pwa/pull/181
 - Figma design system: https://www.figma.com/design/71Dfh4x0CkJcIZyPyBlQ3L
 - Preview Worker: `gudangai-rudy-pwa69-uiux-preview`
 - Preview URL: https://gudangai-rudy-pwa69-uiux-preview.rudivirawan69.workers.dev/
@@ -13,6 +14,15 @@
 1. **Figma** — define tokens, theme palettes, component anatomy, states, responsive behavior and design review.
 2. **GitHub** — implement the approved design on a `uiux/*` feature branch, review the diff and run CI in a Pull Request to `main`.
 3. **Cloudflare Preview** — build and deploy the PR to the dedicated UIUX Preview Worker. Review on Android and desktop before approval.
+
+## Required GitHub Preview environment
+
+Create or configure GitHub repository environment `uiux-preview` and add these environment secrets:
+
+- `CLOUDFLARE_API_TOKEN` — a dedicated token limited to deploying Workers scripts/assets for this account.
+- `CLOUDFLARE_ACCOUNT_ID` — the Cloudflare account ID.
+
+Do not copy Apps Script, Supabase service-role, or production Worker runtime secrets into this environment. The Preview job intentionally uses a separate GitHub environment instead of the existing `production` environment.
 
 ## Preview safety boundary
 
