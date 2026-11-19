@@ -4424,7 +4424,8 @@ function getAgentKnowledge_(params) {
   }).slice(0, 5);
   if (!terms.length) terms.push(query.toLowerCase());
   const requestedSheet = String(params.sheetName || params.sheet || "").trim();
-  const sheets = ss.getSheets().filter(function(sh) { return sh.getName() !== "Config" && (!requestedSheet || sh.getName() === requestedSheet); });
+  const sensitiveSheets = ["Config", "System Log"];
+  const sheets = ss.getSheets().filter(function(sh) { return sensitiveSheets.indexOf(sh.getName()) === -1 && (!requestedSheet || sh.getName() === requestedSheet); });
   if (requestedSheet && !sheets.length) return { success:false, readOnly:true, code:"SHEET_NOT_FOUND", error:"Tab yang diminta tidak ditemukan.", requestedSheet:requestedSheet };
   const maxResults = Math.min(40, Math.max(1, Math.floor(Number(params.limit) || 24)));
   const results = [], seen = Object.create(null);
@@ -4460,14 +4461,22 @@ function getAgentKnowledge_(params) {
 function getAgentSheetManifest_(ss) {
   const sheets = ss.getSheets().map(function(sh) {
     const lastRow = sh.getLastRow(), lastCol = sh.getLastColumn();
-    // Manifest hanya memuat header, bukan contoh baris transaksi/konfigurasi.
-    // Nama kolom dipaginasi agar tab dengan banyak kolom tidak terpotong diam-diam.
-    const headerPreview = lastRow > 0 && lastCol > 0
-      ? sh.getRange(1, 1, 1, Math.min(100, lastCol)).getDisplayValues()[0]
-      : [];
+    const sensitive = sh.getName() === "Config" || sh.getName() === "System Log";
+    let headerRow = null, headerPreview = [];
+    if (!sensitive && lastRow > 0 && lastCol > 0) {
+      // Header dapat berada di baris 1, 3, atau 5 (contoh PO). Pilih baris
+      // terpadat dari 8 baris pertama; tidak mengirim contoh transaksi ke Agent.
+      const scanRows = Math.min(8, lastRow), scanCols = Math.min(100, lastCol);
+      const preview = sh.getRange(1, 1, scanRows, scanCols).getDisplayValues();
+      let bestCount = 0;
+      for (let r = 0; r < preview.length; r++) {
+        const filled = preview[r].filter(function(value) { return String(value || "").trim() !== ""; }).length;
+        if (filled > bestCount) { bestCount = filled; headerRow = r + 1; headerPreview = preview[r]; }
+      }
+    }
     return { sheetName:sh.getName(), sheetId:sh.getSheetId(), lastRow:lastRow, lastColumn:lastCol,
-      headerPreview:headerPreview, headerTruncated:lastCol > 100, usedRows:lastRow,
-      redacted:sh.getName() === "Config", hidden:sh.isSheetHidden() };
+      headerRow:headerRow, headerPreview:headerPreview, headerTruncated:lastCol > 100, usedRows:lastRow,
+      redacted:sensitive, hidden:sh.isSheetHidden() };
   });
   return { success:true, readOnly:true, mode:"manifest", spreadsheetName:ss.getName(),
     activeMonth:getActiveMonth(), sheetCount:sheets.length, sheets:sheets, readAt:new Date().toISOString() };
@@ -4477,7 +4486,7 @@ function getAgentSheetPage_(ss, params) {
   const name = String(params.sheetName || params.sheet || "").trim();
   const sh = name ? ss.getSheetByName(name) : null;
   if (!sh) return { success:false, readOnly:true, code:"SHEET_NOT_FOUND", error:"Nama tab tidak valid atau tidak ditemukan." };
-  if (name === "Config") return { success:false, readOnly:true, code:"SENSITIVE_SHEET_REDACTED", error:"Nilai Config tidak diekspos ke Agent. Gunakan getConfig untuk metadata konfigurasi yang aman." };
+  if (name === "Config" || name === "System Log") return { success:false, readOnly:true, code:"SENSITIVE_SHEET_REDACTED", error:"Tab sensitif tidak diekspos ke Agent melalui pembaca umum." };
   const lastRow = sh.getLastRow(), lastCol = sh.getLastColumn();
   const startRow = Math.max(1, Math.floor(Number(params.startRow) || 1));
   const startColumn = Math.max(1, Math.floor(Number(params.startColumn) || 1));
