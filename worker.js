@@ -232,7 +232,7 @@ export function liveDataBlock(live) {
     remaining = Math.max(0, remaining - clipped.length);
     return '[' + item.action + ' | dibaca ' + item.readAt + ' | ' + item.source + ']\n' + clipped;
   });
-  return 'DATA LIVE (read-only; setiap hasil memiliki sumber dan waktu baca):\n' + parts.join('\n\n');
+  return 'DATA LIVE (read-only): setiap hasil memiliki sumber dan waktu baca.\n' + parts.join('\n\n');
 }
 const CODE_STOP_WORDS = new Set(['dan','atau','yang','untuk','dari','dengan','pada','apa','bagaimana','berapa','tolong','jelaskan','periksa','cek','saya','kamu','agent','gudangai','rudy','rubee','tentang','sistem','aplikasi']);
 export function retrieveCodeKnowledge(message, maxChunks = 3) {
