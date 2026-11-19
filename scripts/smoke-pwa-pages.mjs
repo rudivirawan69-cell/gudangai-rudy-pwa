@@ -212,7 +212,7 @@ try {
     await assertNoHorizontalOverflow('Riwayat', viewport);
     await openMorePage('Pengaturan', 'Mode Tampilan');
     await assertNoHorizontalOverflow('Pengaturan', viewport);
-    await openMorePage('Antrian Sinkronisasi', 'Antrian Sinkronisasi');
+    await openMorePage('Antrian Sinkronisasi', 'Antrean Sinkronisasi');
     await assertNoHorizontalOverflow('Antrian Sinkronisasi', viewport);
   }
 
@@ -220,12 +220,12 @@ try {
   // Verify the restored Data Stock page keeps CV/PT selection and division expansion.
   await page.setViewportSize({ width: 390, height: 844 });
   await page.locator('nav.nav-bar button').filter({ hasText: 'Stok' }).first().click();
-  await page.getByText('Data Stok', { exact: false }).first().waitFor({ state: 'visible', timeout: 10000 });
-  await page.getByRole('button', { name: 'CV', exact: true }).waitFor({ state: 'visible' });
-  await page.getByRole('button', { name: 'PT', exact: true }).click();
+  await page.getByText('Stok Barang', { exact: false }).first().waitFor({ state: 'visible', timeout: 10000 });
+  await page.getByRole('tab', { name: 'CV', exact: true }).waitFor({ state: 'visible' });
+  await page.getByRole('tab', { name: 'PT', exact: true }).click();
   await page.getByRole('button').filter({ hasText: 'PRODUKSI' }).first().click();
   await page.getByText('Bebek', { exact: true }).waitFor({ state: 'visible', timeout: 10000 });
-  await page.getByRole('button', { name: 'CV', exact: true }).click();
+  await page.getByRole('tab', { name: 'CV', exact: true }).click();
   await page.getByRole('button').filter({ hasText: 'CS' }).first().click();
   await page.getByText('Ayam Fillet Dada', { exact: true }).waitFor({ state: 'visible', timeout: 10000 });
 
@@ -236,7 +236,7 @@ try {
     }, theme);
     await page.reload({ waitUntil: 'domcontentloaded' });
     await page.locator('nav.nav-bar').waitFor({ state: 'visible', timeout: 15000 });
-    for (const [label, marker] of [['Beranda', 'Status per Divisi'], ['Stok', 'Data Stok'], ['Input', 'Draft transaksi dipulihkan'], ['Agent', 'Agent Rubee Intelligence']]) {
+    for (const [label, marker] of [['Beranda', 'Status per Divisi'], ['Stok', 'Stok Barang'], ['Input', 'Draft transaksi dipulihkan'], ['Agent', 'Agent Rubee Intelligence']]) {
       await page.locator('nav.nav-bar button').filter({ hasText: label }).first().click();
       await page.getByText(marker, { exact: false }).first().waitFor({ state: 'visible', timeout: 10000 });
       const themeState = await page.evaluate(() => ({
@@ -258,7 +258,7 @@ try {
   await mkdir(screenshotRoot, { recursive: true });
   const visualPages = [
     ['Beranda', 'Status per Divisi', 'beranda'],
-    ['Stok', 'Data Stok', 'stok'],
+    ['Stok', 'Stok Barang', 'stok'],
     ['Input', 'Draft transaksi dipulihkan', 'input'],
     ['Agent', 'Agent Rubee Intelligence', 'agent'],
   ];
