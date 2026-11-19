@@ -5,12 +5,151 @@
  */
 
 :root {
-  --ui-control-height: 2.75rem;
-  --ui-control-radius: 0.75rem;
-  --ui-panel-radius: 1rem;
-  --ui-panel-gap: 0.75rem;
+  --ui-radius-panel: 1rem;
+  --ui-radius-control: 0.75rem;
+  --ui-control-min-height: 2.75rem;
+  --ui-space-1: 0.25rem;
+  --ui-space-2: 0.5rem;
+  --ui-space-3: 0.75rem;
+  --ui-space-4: 1rem;
+  --ui-space-5: 1.25rem;
+  --ui-space-6: 1.5rem;
+  --ui-font-page-title: clamp(1.25rem, 5vw, 1.5rem);
+  --ui-font-section-title: 1rem;
+  --ui-font-body: 0.875rem;
+  --ui-font-caption: 0.75rem;
+  --ui-transition-fast: 140ms ease;
+  --ui-transition-normal: 200ms ease;
+  --ui-control-height: var(--ui-control-min-height);
+  --ui-control-radius: var(--ui-radius-control);
+  --ui-panel-radius: var(--ui-radius-panel);
+  --ui-panel-gap: var(--ui-space-3);
   --ui-motion-fast: 140ms;
   --ui-motion-standard: 200ms;
+}
+
+/* Canonical app palette: aliases keep older page styles on the same theme tokens. */
+html[data-theme="soft_light"] {
+  color-scheme: light;
+  --bg-app: #f1f6fa;
+  --bg-app-grad: linear-gradient(180deg, #f8fbfd 0%, #edf4f8 55%, #e5eef5 100%);
+  --bg-overlay: radial-gradient(ellipse 82% 34% at 50% 0%, rgb(36 123 168 / 7.5%), transparent 72%);
+  --bg-elevated: #ffffff;
+  --bg-muted: #e7eff5;
+  --field-bg: #f8fbfd;
+  --text-main: #203448;
+  --text-muted: #607487;
+  --text-on-accent: #ffffff;
+  --border: #dce7ef;
+  --accent: #247ba8;
+  --accent-strong: #195f87;
+  --accent-soft: rgb(36 123 168 / 12%);
+  --success: #16a36a;
+  --warning: #e6a23c;
+  --danger: #dc4545;
+  --stok-aman: #16a36a;
+  --stok-waspada: #e6a23c;
+  --stok-kritis: #dc4545;
+  --po-datang: #16a36a;
+  --po-sebagian: #e6a23c;
+  --po-belum: #94a3b8;
+  --brand-teal: #247ba8;
+  --brand-teal-dark: #195f87;
+  --brand-teal-soft: #e8f3f9;
+  --brand-orange: #d69a48;
+  --nav-bg: rgb(255 255 255 / 96%);
+  --modal-backdrop: rgb(17 35 49 / 42%);
+  --modal-surface: #ffffff;
+  --focus-ring: 0 0 0 3px rgb(36 123 168 / 25%);
+  --shadow-1: 0 5px 18px rgb(28 61 83 / 7%);
+  --shadow-2: 0 10px 26px rgb(28 61 83 / 11%);
+  --shadow-press: inset 0 2px 7px rgb(28 61 83 / 10%);
+  --shadow-nav: 0 -5px 20px rgb(28 61 83 / 7%);
+}
+
+html[data-theme="deep_ocean"] {
+  color-scheme: dark;
+  --bg-app: #101b2d;
+  --bg-app-grad: linear-gradient(165deg, #0c1626 0%, #14243a 52%, #192d43 100%);
+  --bg-overlay: radial-gradient(ellipse 82% 34% at 50% 0%, rgb(53 185 176 / 10%), transparent 72%);
+  --bg-elevated: #17283d;
+  --bg-muted: #20364d;
+  --field-bg: #102238;
+  --text-main: #f1f5f9;
+  --text-muted: #b7c7d8;
+  --text-on-accent: #071521;
+  --border: rgb(153 178 202 / 22%);
+  --accent: #35b9b0;
+  --accent-strong: #239b98;
+  --accent-soft: rgb(53 185 176 / 16%);
+  --success: #2dd4a0;
+  --warning: #f4bd55;
+  --danger: #fb7185;
+  --stok-aman: #2dd4a0;
+  --stok-waspada: #f4bd55;
+  --stok-kritis: #fb7185;
+  --po-datang: #2dd4a0;
+  --po-sebagian: #f4bd55;
+  --po-belum: #94a3b8;
+  --brand-teal: #35b9b0;
+  --brand-teal-dark: #197f83;
+  --brand-teal-soft: rgb(53 185 176 / 16%);
+  --brand-orange: #f4bd55;
+  --nav-bg: rgb(18 35 54 / 97%);
+  --modal-backdrop: rgb(1 8 16 / 68%);
+  --modal-surface: #17283d;
+  --focus-ring: 0 0 0 3px rgb(53 185 176 / 35%);
+  --shadow-1: 0 7px 22px rgb(0 0 0 / 20%);
+  --shadow-2: 0 12px 30px rgb(0 0 0 / 28%);
+  --shadow-press: inset 0 2px 8px rgb(0 0 0 / 28%);
+  --shadow-nav: 0 -6px 22px rgb(0 0 0 / 24%);
+}
+
+html[data-theme="graphite_titanium"] {
+  color-scheme: dark;
+  --bg-app: #171a20;
+  --bg-app-grad: linear-gradient(165deg, #14171c 0%, #202630 58%, #292f38 100%);
+  --bg-overlay: radial-gradient(ellipse 82% 34% at 50% 0%, rgb(214 154 72 / 8.5%), transparent 72%);
+  --bg-elevated: #252b34;
+  --bg-muted: #303844;
+  --field-bg: #1c222b;
+  --text-main: #f1f3f5;
+  --text-muted: #b4bdc8;
+  --text-on-accent: #171a20;
+  --border: rgb(183 193 205 / 22%);
+  --accent: #d69a48;
+  --accent-strong: #e3a94f;
+  --accent-soft: rgb(214 154 72 / 17%);
+  --success: #35b987;
+  --warning: #e3a94f;
+  --danger: #f07171;
+  --stok-aman: #35b987;
+  --stok-waspada: #e3a94f;
+  --stok-kritis: #f07171;
+  --po-datang: #35b987;
+  --po-sebagian: #e3a94f;
+  --po-belum: #9ca6b2;
+  --brand-teal: #d69a48;
+  --brand-teal-dark: #a96f2b;
+  --brand-teal-soft: rgb(214 154 72 / 16%);
+  --brand-orange: #e3a94f;
+  --nav-bg: rgb(31 36 44 / 98%);
+  --modal-backdrop: rgb(5 7 10 / 72%);
+  --modal-surface: #252b34;
+  --focus-ring: 0 0 0 3px rgb(214 154 72 / 35%);
+  --shadow-1: 0 7px 22px rgb(0 0 0 / 24%);
+  --shadow-2: 0 12px 30px rgb(0 0 0 / 32%);
+  --shadow-press: inset 0 2px 8px rgb(0 0 0 / 32%);
+  --shadow-nav: 0 -6px 22px rgb(0 0 0 / 28%);
+}
+
+html[data-theme] {
+  --surface: var(--bg-elevated);
+  --ink: var(--text-main);
+  --page-bg: var(--bg-app);
+  --line: var(--border);
+  --ui-radius-card: var(--ui-radius-panel);
+  --ui-control-height: var(--ui-control-min-height);
 }
 
 html[data-theme] {
