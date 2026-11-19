@@ -124,7 +124,7 @@ assert.doesNotMatch(divisionBody, /localMap|classifyItem\(it\)/);
 assert.match(dashboardPage, /Dashboard Live belum berhasil diperbarui/);
 assert.match(dashboardPage, /DashboardPage\(\{ onNavigate, dashboardData, dashboardError \}\)/, 'dashboard summary is supplied by the persistent app-shell snapshot');
 assert.doesNotMatch(dashboardPage, /getDashboardData\(/, 'Dashboard page must not independently refetch Dashboard Live on navigation');
-assert.doesNotMatch(dashboardPage, /setInterval\\(refreshSources, 15000\)/, 'Dashboard page must not poll Dashboard Live every 15 seconds');
+assert.doesNotMatch(dashboardPage, /setInterval\(refreshSources, 15000\)/, 'Dashboard page must not poll Dashboard Live every 15 seconds');
 assert.match(dashboardPage, /function DashboardStatusSummary\(\{ data \}\)/);
 assert.match(dashboardPage, /data\?\.status\?\.\[item\.key\] \?\? data\?\.\[item\.key\]/);
 assert.match(dashboardPage, /DashboardStatusSummary data=\{dashboardData\}/);
