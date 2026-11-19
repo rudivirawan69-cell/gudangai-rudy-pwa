@@ -485,8 +485,8 @@ test('manifest is metadata-only and never returns sample transaction rows', () =
   assert.ok(start >= 0 && end > start);
   const manifest = codeGs.slice(start, end);
   assert.match(manifest, /knownHeaderRows/);
-  assert.match(manifest, /getRange\\(headerRow, 1, 1,/);
-  assert.doesNotMatch(manifest, /getRange\\(1, 1, scanRows/);
+  assert.match(manifest, /getRange\(headerRow, 1, 1,/);
+  assert.doesNotMatch(manifest, /getRange\(1, 1, scanRows/);
   assert.match(manifest, /headerTruncated/);
   assert.match(manifest, /redacted:sensitive/);
 });
