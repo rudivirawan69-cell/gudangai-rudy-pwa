@@ -10,7 +10,7 @@ export const EXTRA_LIVE_INTENTS = [
   { action: 'getLastUpdate', pattern: /update terakhir|terakhir diperbarui|kapan.{0,20}(update|sinkronisasi)/i },
   { action: 'getPOAnalysis', pattern: /analisis po|rekomendasi (po|pembelian)|apa yang (harus|perlu) (di)?(pesan|beli)/i },
   { action: 'getConfig', pattern: /periode aktif|bulan (aktif|berjalan)|konfigurasi|timezone|versi backend/i },
-  { action: 'getAgentKnowledge', pattern: /daftar tab|daftar sheet|struktur (sheet|spreadsheet|tab|gudang)|nama (sheet|tab)|tab (apa saja|aktif|yang ada|spreadsheet)|sheet (apa saja|yang ada|aktif)|isi code\\.gs|code\\.gs|peta (sheet|tab|spreadsheet|gudang)|koleksi (sheet|tab)|list (sheet|tab)|apa saja (tab|sheet|isi)/i },
+  { action: 'getAgentKnowledge', pattern: /daftar tab|daftar sheet|struktur (sheet|spreadsheet|tab|gudang)|nama (sheet|tab)|tab (apa saja|aktif|yang ada|spreadsheet)|sheet (apa saja|yang ada|aktif)|isi code\.gs|code\.gs|peta (sheet|tab|spreadsheet|gudang)|koleksi (sheet|tab)|list (sheet|tab)|apa saja (tab|sheet|isi)/i },
 ];
 
 export const STRUCTURE_KNOWLEDGE = `PETA PENGETAHUAN GUDANGAI RUDY — INTEGRASI SKILL GUDANGAI-PWA (BASELINE V6.5.4+)
