@@ -188,10 +188,16 @@ async function gatherLiveData(env, message) {
     if (action === 'searchByName' && query) { params.q=query; params.query=query; params.nama=query; params.name=query; }
     if (action === 'getAllStock') params.entitas = 'ALL';
     if (action === 'getAgentKnowledge') {
-      const wantsManifest = /(?:daftar|nama|semua|seluruh|struktur).{0,30}(?:sheet|spreadsheet|tab)|(?:sheet|tab).{0,20}(?:apa saja|daftar|semua)/i.test(String(message||''));
-      params.mode = wantsManifest ? 'manifest' : 'search';
-      params.query = String(message||'').slice(0,240);
-      params.includeFormulas = /formula|rumus|vlookup|arrayformula|formula/i.test(String(message||''));
+      const text = String(message || '');
+      const sheetNames = ['Stock CV','Stock PT','Stock Bahan Baku','Barang masuk','Barang keluar','Barang Rusak','purchase order','Dashboard Live','Data Stok Per Divisi','System Log','Config','Stock Awal'];
+      const requestedSheet = sheetNames.find((name) => text.toLowerCase().includes(name.toLowerCase()));
+      const pageMatch = text.match(/(?:baris|row)\\s*(\\d+)/i);
+      const wantsPage = Boolean(requestedSheet && pageMatch);
+      const wantsManifest = /(?:daftar|nama|semua|seluruh|struktur).{0,30}(?:sheet|spreadsheet|tab)|(?:sheet|tab).{0,20}(?:apa saja|daftar|semua)/i.test(text);
+      params.mode = wantsPage ? 'page' : wantsManifest ? 'manifest' : 'search';
+      params.query = text.slice(0,240);
+      if (wantsPage) { params.sheetName = requestedSheet; params.startRow = Number(pageMatch[1]); params.pageSize = 30; }
+      params.includeFormulas = /formula|rumus|vlookup|arrayformula/i.test(text);
       params.limit = 24;
     }
     if (action === 'getStockoutRisk') { params.windowDays = 30; params.thresholdDays = 3; }
