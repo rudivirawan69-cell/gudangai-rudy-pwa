@@ -119,13 +119,19 @@ function readQueueLocal() {
   } catch (_) { return { revision: 0, queue: [] }; }
 }
 function commitQueueLocal(queue) {
+  const safeQueue = Array.isArray(queue) ? queue : [];
   const next = Math.max(_queueRevision + 1, Date.now());
   _queueRevision = next;
   try {
-    localStorage.setItem(QUEUE_KEY, JSON.stringify(Array.isArray(queue) ? queue : []));
+    localStorage.setItem(QUEUE_KEY, JSON.stringify(safeQueue));
     localStorage.setItem(QUEUE_KEY + '_rev', String(next));
   } catch (_) {}
-  void persistQueueBackup(queue, next);
+  void persistQueueBackup(safeQueue, next);
+  try {
+    window.dispatchEvent(new CustomEvent('gudangai-queue-changed', {
+      detail: { count: safeQueue.reduce((sum, entry) => sum + (entry.items || []).length, 0), revision: next }
+    }));
+  } catch (_) {}
 }
 export async function hydrateOfflineQueue() {
   return hydrateQueueBackup(readQueueLocal, (queue, revision) => {
@@ -601,16 +607,29 @@ export async function verifyPendingItem(item) {
     return { success: false, status: 'OFFLINE', code: 'READBACK_OFFLINE', error: 'Perangkat sedang offline; item tetap di antrean.' };
   }
   try {
-    const data = await getJson('getTransactionStatus', {
+    const params = {
       transactionId: identity.transactionId,
       nonce: identity.nonce,
       sheet,
-    });
-    const applied = data?.success === true &&
-      (data?.status === 'APPLIED' || data?.code === 'READBACK_CONFIRMED' || data?.code === 'READBACK_FOUND');
+    };
+    let data;
+    try {
+      data = await getJson('getTransactionStatus', params);
+    } catch (_) {
+      // Some Apps Script deployments/proxies do not complete the GET read-back route.
+      // POST is still read-only because the action is getTransactionStatus.
+      data = await postJson({ action: 'getTransactionStatus', ...params, requestId: 'VERIFY-' + item.clientItemId }, { retries: 1, timeoutMs: SINGLE_TIMEOUT_MS });
+    }
+    const readBackMatched = data?.readBack?.matched === true;
+    const applied = data?.success === true && data?.status === 'APPLIED' && readBackMatched;
     return applied
       ? { ...data, success: true, status: 'APPLIED', clientItemId: item.clientItemId, sheet }
-      : { ...data, success: false, clientItemId: item.clientItemId, sheet, error: data?.error || 'Server belum mengonfirmasi transaksi.' };
+      : {
+          ...data, success: false, clientItemId: item.clientItemId, sheet,
+          error: data?.error || (data?.status === 'APPLIED' && !readBackMatched
+            ? 'Ledger menyatakan APPLIED, tetapi baris spreadsheet belum cocok saat read-back. Item tidak dihapus.'
+            : 'Server belum mengonfirmasi transaksi melalui read-back. Item tetap di antrean.'),
+        };
   } catch (err) {
     return { success: false, status: 'UNKNOWN', code: 'READBACK_FAILED', clientItemId: item.clientItemId, sheet, error: err?.message || 'Gagal membaca status transaksi.' };
   }
@@ -701,8 +720,41 @@ export function getLocalHistory() {
 }
 export function saveToHistory(entry) {
   const list = getTransactionHistory();
-  list.unshift({ ...entry, id: 'H-' + Date.now() });
-  try { localStorage.setItem(HISTORY_KEY, JSON.stringify(list.slice(0, 200))); } catch (_) {}
+  const source = entry || {};
+  const clientItemId = String(source.clientItemId || '').trim();
+  const transactionId = String(source.transactionId || (clientItemId ? 'TX-' + clientItemId : '')).trim();
+  const savedAt = source.savedAt || source.at || new Date().toISOString();
+  const rawItems = Array.isArray(source.items) && source.items.length
+    ? source.items
+    : (source.kode || source.kodeBarang || source.nama
+      ? [{ kode: source.kode || source.kodeBarang || '', nama: source.nama || '', qty: Number(source.qty) || 0, satuan: source.satuan || '' }]
+      : []);
+  const normalizedItems = rawItems.map((item) => ({
+    ...item,
+    kode: String(item?.kode || item?.kodeBarang || '').trim(),
+    nama: String(item?.nama || item?.name || '').replace(/\\u00a0/g, ' ').replace(/\\s+/g, ' ').trim(),
+    qty: Number(item?.qty ?? item?.quantity) || 0,
+    satuan: String(item?.satuan || item?.unit || '').trim(),
+  }));
+  const historyEntry = {
+    ...source,
+    id: clientItemId || transactionId ? 'H-' + (clientItemId || transactionId) : 'H-' + Date.now(),
+    transactionId,
+    clientItemId,
+    savedAt,
+    at: savedAt,
+    timestamp: savedAt,
+    items: normalizedItems,
+    status: source.status || 'success',
+    syncStatus: 'success',
+  };
+  const dedupeKey = clientItemId || transactionId;
+  const next = dedupeKey
+    ? [historyEntry, ...list.filter((item) => String(item.clientItemId || item.transactionId || '') !== dedupeKey)]
+    : [historyEntry, ...list];
+  try { localStorage.setItem(HISTORY_KEY, JSON.stringify(next.slice(0, 200))); } catch (_) {}
+  try { window.dispatchEvent(new CustomEvent('gudangai-history-changed', { detail: { transactionId, clientItemId } })); } catch (_) {}
+  return historyEntry;
 }
 export async function fetchRemoteTransactionHistory(days = 7) {
   const safeDays = Math.max(1, Math.min(31, Number(days) || 7));
