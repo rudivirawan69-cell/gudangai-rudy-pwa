@@ -15,8 +15,8 @@ test('generated Code.gs index covers the complete repository snapshot', async ()
   }
   assert.match(CODE_KNOWLEDGE.sha256, /^[a-f0-9]{64}$/);
   const helperStart = source.indexOf('function getAgentKnowledge_(params)');
-  const helperEnd = source.indexOf('function getAgentSheetManifest_', helperStart);
-  const reader = source.slice(helperStart, helperEnd);
+  const helperEnd = source.length;
+  const reader = source.slice(helperStart);
   assert.ok(helperStart >= 0 && helperEnd > helperStart);
-  assert.doesNotMatch(reader, /\\.(?:setValue|setValues|appendRow|deleteRow|insertRow|clear)\\s*\\(/, 'knowledge reader must not write spreadsheet cells');
+  assert.doesNotMatch(reader, /\.(?:setValue|setValues|appendRow|deleteRow|insertRow|clear)\s*\(/, 'knowledge reader must not write spreadsheet cells');
 });
