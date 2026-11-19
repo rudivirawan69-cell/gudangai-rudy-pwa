@@ -53,7 +53,7 @@ export async function fetchSyncAll({ accessToken, signal } = {}) {
   }
 
   const existing = inFlightByToken.get(token);
-  if (existing) return existing;
+  if (existing && !existing.signal?.aborted) return existing.promise;
 
   const task = (async () => {
     try {
@@ -75,10 +75,10 @@ export async function fetchSyncAll({ accessToken, signal } = {}) {
     }
   })();
 
-  inFlightByToken.set(token, task);
+  inFlightByToken.set(token, { promise: task, signal });
   try {
     return await task;
   } finally {
-    if (inFlightByToken.get(token) === task) inFlightByToken.delete(token);
+    if (inFlightByToken.get(token)?.promise === task) inFlightByToken.delete(token);
   }
 }
