@@ -324,7 +324,7 @@ function AppShell() {
       <ConnBanner online={online} hasUrl={hasUrl} status={status} message={message} syncing={syncing} />
       <AppHeader user={user} tab={tab} onOpenSettings={() => goTab('settings')} online={online} status={status} sheetLabel={sheetLabel} onRefresh={() => checkHealth({ quiet: false })} sync={sync} />
       <InstallBanner installPrompt={installPrompt} onInstall={installApp} onDismiss={dismissInstall} />
-      <main className="page-content app-content w-full max-w-none mx-0 min-h-0 px-3 pb-32 pt-1">
+      <main data-ui-page={tab} className="page-content app-content w-full max-w-none mx-0 min-h-0 px-3 pb-32 pt-1">
         <div key={pageKey} className="animate-page-in">
           <ErrorBoundary>
             <Suspense fallback={<div className="flex justify-center py-20"><Loader2 className="w-7 h-7 text-cyan-500 animate-spin" /></div>}>
