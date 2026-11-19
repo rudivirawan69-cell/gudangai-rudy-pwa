@@ -411,6 +411,100 @@ function doPost(e) {
       case "logDailySnapshot": return jsonResponse(logDailySnapshot());
       case "clearMasterCache": return jsonResponse(clearMasterCache());
       case "maintenanceCleanup": return jsonResponse(maintenanceCleanup(true));
+
+/**
+ * Agent Rubee knowledge reader — READ ONLY.
+ * mode=manifest: metadata seluruh tab tanpa membocorkan isi konfigurasi.
+ * mode=page: halaman data terbatas (maks. 50 baris x 30 kolom).
+ * mode=search: pencarian lintas tab, hasil dibatasi dan disertai provenance.
+ */
+function getAgentKnowledge_(params) {
+  params = params || {};
+  const mode = String(params.mode || "manifest").trim().toLowerCase();
+  const ss = getSS();
+  if (mode === "manifest") return getAgentSheetManifest_(ss);
+  if (mode === "page") return getAgentSheetPage_(ss, params);
+  if (mode !== "search") return { success:false, readOnly:true, code:"INVALID_KNOWLEDGE_MODE", error:"Mode harus manifest, search, atau page." };
+  const query = String(params.query || params.q || "").trim().slice(0, 240);
+  if (query.length < 2) return { success:false, readOnly:true, code:"KNOWLEDGE_QUERY_TOO_SHORT", error:"Masukkan kata kunci minimal 2 karakter." };
+  const includeFormulas = params.includeFormulas === true;
+  const terms = query.toLowerCase().split(/[^a-z0-9À-ÿ_-]+/i).filter(function(term) {
+    return term.length >= 3 && !/^(dan|atau|yang|untuk|dari|dengan|pada|apa|bagaimana|berapa|tolong|jelaskan|semua|sheet|spreadsheet|gudangai)$/i.test(term);
+  }).slice(0, 5);
+  if (!terms.length) terms.push(query.toLowerCase());
+  const requestedSheet = String(params.sheetName || params.sheet || "").trim();
+  const sheets = ss.getSheets().filter(function(sh) { return !requestedSheet || sh.getName() === requestedSheet; });
+  if (requestedSheet && !sheets.length) return { success:false, readOnly:true, code:"SHEET_NOT_FOUND", error:"Tab yang diminta tidak ditemukan.", requestedSheet:requestedSheet };
+  const maxResults = Math.min(40, Math.max(1, Math.floor(Number(params.limit) || 24)));
+  const results = [], seen = Object.create(null);
+  let scannedSheets = 0;
+  for (let s = 0; s < sheets.length && results.length < maxResults; s++) {
+    const sh = sheets[s], lastRow = sh.getLastRow(), lastCol = Math.min(30, sh.getLastColumn());
+    if (lastRow < 1 || lastCol < 1) continue;
+    scannedSheets++;
+    for (let t = 0; t < terms.length && results.length < maxResults; t++) {
+      let finder = sh.getRange(1, 1, lastRow, lastCol).createTextFinder(terms[t])
+        .matchCase(false).matchEntireCell(false).useRegularExpression(false).matchFormulaText(includeFormulas);
+      let match, perTerm = 0;
+      while ((match = finder.findNext()) && results.length < maxResults && perTerm < 4) {
+        const rowNumber = match.getRow(), key = sh.getSheetId() + ":" + rowNumber;
+        perTerm++;
+        if (seen[key]) continue;
+        seen[key] = true;
+        const rowRange = sh.getRange(rowNumber, 1, 1, lastCol);
+        const values = rowRange.getDisplayValues()[0];
+        const formulas = includeFormulas ? rowRange.getFormulas()[0].map(function(formula, index) {
+          return formula ? { column:index + 1, formula:formula } : null;
+        }).filter(Boolean) : [];
+        results.push({ sheetName:sh.getName(), sheetId:sh.getSheetId(), rowNumber:rowNumber,
+          matchedCell:match.getA1Notation(), matchedTerm:terms[t], values:values, formulas:formulas });
+      }
+    }
+  }
+  return { success:true, readOnly:true, mode:"search", query:query, terms:terms,
+    scannedSheets:scannedSheets, totalMatches:results.length, truncated:results.length >= maxResults,
+    results:results, readAt:new Date().toISOString(), spreadsheetName:ss.getName() };
+}
+
+function getAgentSheetManifest_(ss) {
+  const sheets = ss.getSheets().map(function(sh) {
+    const lastRow = sh.getLastRow(), lastCol = sh.getLastColumn();
+    const previewRows = Math.min(8, Math.max(0, lastRow));
+    const previewCols = Math.min(20, Math.max(0, lastCol));
+    const preview = previewRows && previewCols ? sh.getRange(1, 1, previewRows, previewCols).getDisplayValues() : [];
+    return { sheetName:sh.getName(), sheetId:sh.getSheetId(), lastRow:lastRow, lastColumn:lastCol,
+      headerPreview:preview, dataRows:Math.max(0, lastRow - 1), hidden:sh.isSheetHidden() };
+  });
+  return { success:true, readOnly:true, mode:"manifest", spreadsheetName:ss.getName(),
+    activeMonth:getActiveMonth(), sheetCount:sheets.length, sheets:sheets, readAt:new Date().toISOString() };
+}
+
+function getAgentSheetPage_(ss, params) {
+  const name = String(params.sheetName || params.sheet || "").trim();
+  const sh = name ? ss.getSheetByName(name) : null;
+  if (!sh) return { success:false, readOnly:true, code:"SHEET_NOT_FOUND", error:"Nama tab tidak valid atau tidak ditemukan." };
+  const lastRow = sh.getLastRow(), lastCol = Math.min(30, sh.getLastColumn());
+  const startRow = Math.max(1, Math.floor(Number(params.startRow) || 1));
+  const pageSize = Math.min(50, Math.max(1, Math.floor(Number(params.pageSize) || 25)));
+  if (startRow > lastRow || lastCol < 1) return { success:true, readOnly:true, mode:"page",
+    sheetName:name, startRow:startRow, pageSize:pageSize, totalRows:lastRow, rows:[], nextStartRow:null,
+    readAt:new Date().toISOString() };
+  const count = Math.min(pageSize, lastRow - startRow + 1);
+  const range = sh.getRange(startRow, 1, count, lastCol);
+  const values = range.getDisplayValues();
+  const formulaRows = params.includeFormulas === true ? range.getFormulas().map(function(row, rowIndex) {
+    return row.map(function(formula, columnIndex) {
+      return formula ? { rowNumber:startRow + rowIndex, column:columnIndex + 1, formula:formula } : null;
+    }).filter(Boolean);
+  }).reduce(function(all, row) { return all.concat(row); }, []) : [];
+  const next = startRow + count;
+  return { success:true, readOnly:true, mode:"page", sheetName:name, sheetId:sh.getSheetId(),
+    startRow:startRow, pageSize:pageSize, totalRows:lastRow, totalColumns:sh.getLastColumn(),
+    rows:values.map(function(row, index) { return { rowNumber:startRow + index, values:row }; }),
+    formulas:formulaRows, nextStartRow:next <= lastRow ? next : null, readAt:new Date().toISOString() };
+}
+
+      case "getAgentKnowledge": return jsonResponse(getAgentKnowledge_(body));
       case "getConfig": return jsonResponse({ success: true, config: readConfig_(), activeMonth: getActiveMonth(), title: APP_TITLE });
       case "diagnoseStockFormulas": return jsonResponse(diagnoseStockFormulaPatterns_());
       case "setupConfig": return jsonResponse(setupConfigSheet());
