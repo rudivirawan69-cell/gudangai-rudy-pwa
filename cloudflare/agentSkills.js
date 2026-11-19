@@ -1,5 +1,6 @@
 export const EXTRA_READ_ACTIONS = [
   'getStockoutRisk',
+  'getAgentKnowledge',
 ];
 
 export const EXTRA_LIVE_INTENTS = [
@@ -9,6 +10,7 @@ export const EXTRA_LIVE_INTENTS = [
   { action: 'getLastUpdate', pattern: /update terakhir|terakhir diperbarui|kapan.{0,20}(update|sinkronisasi)/i },
   { action: 'getPOAnalysis', pattern: /analisis po|rekomendasi (po|pembelian)|apa yang (harus|perlu) (di)?(pesan|beli)/i },
   { action: 'getConfig', pattern: /periode aktif|bulan (aktif|berjalan)|konfigurasi|timezone|versi backend/i },
+  { action: 'getAgentKnowledge', pattern: /daftar tab|daftar sheet|struktur (sheet|spreadsheet|tab|gudang)|nama (sheet|tab)|tab (apa saja|aktif|yang ada|spreadsheet)|sheet (apa saja|yang ada|aktif)|isi code\\.gs|code\\.gs|peta (sheet|tab|spreadsheet|gudang)|koleksi (sheet|tab)|list (sheet|tab)|apa saja (tab|sheet|isi)/i },
 ];
 
 export const STRUCTURE_KNOWLEDGE = `PETA PENGETAHUAN GUDANGAI RUDY — INTEGRASI SKILL GUDANGAI-PWA (BASELINE V6.5.4+)
@@ -82,6 +84,8 @@ export const AGENT_SKILL_RULES = [
   '10. Untuk perubahan stok, periode, PO, sel, formula, atau Code.gs: jangan melakukan atau mengklaim perubahan. Ajukan draft terperinci + minta persetujuan dan cakupan eksplisit.',
   '11. Rahasiakan API secret, token, PIN, dan kredensial. Jangan menyalin DATA LIVE sensitif lebih dari yang diperlukan untuk menjawab.',
   '12. Jumlah item master bersifat dinamis. Jangan hardcode 170/189/191 atau angka historis lainnya sebagai kondisi saat ini.',
+  '13. Pertanyaan tentang daftar tab / struktur sheet / nama sheet / isi Code.gs / peta spreadsheet WAJIB memakai action getAgentKnowledge (mode manifest). Dilarang mengarang nama tab, nama action, atau daftar sheet dari memori. Jawab hanya dari hasil live; sebut sumber (manifest/search/page) dan readAt.',
+  '14. Jika getAgentKnowledge gagal/tidak mengembalikan manifest, sebut kode error dan jangan menebak struktur sheet. Jangan menyebut action yang tidak ada di allowlist (mis. getAllSheetNames).'
 ].join('\n');
 
 export function buildSystemPrompt(context, liveBlock) {
