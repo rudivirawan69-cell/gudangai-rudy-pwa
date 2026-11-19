@@ -57,6 +57,12 @@ function newIds() {
   const uuid = crypto.randomUUID ? crypto.randomUUID() : (Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
   return { requestId: 'REQ-' + uuid, transactionId: 'TX-RUDY-' + uuid };
 }
+function normalizeTransactionText(value) {
+  return String(value == null ? '' : value).replace(/\u00a0/g, ' ').replace(/\s+/g, ' ').trim();
+}
+function normalizeItemCode(value) {
+  return String(value == null ? '' : value).replace(/\s+/g, '').trim();
+}
 function normalizeTanggal(raw) {
   const now = new Date();
   const wibParts = new Intl.DateTimeFormat('en-CA', {
@@ -317,7 +323,12 @@ function ensureClientItemId(it) {
 function enqueue(type, entity, items, meta = {}) {
   if (!items?.length) return [];
   const queue = getPendingQueue();
-  const normalized = items.map(ensureClientItemId);
+  const normalized = items.map((item) => ({
+    ...ensureClientItemId(item),
+    kode: normalizeItemCode(item.kode || item.kodeBarang),
+    nama: normalizeTransactionText(item.nama),
+    keterangan: normalizeTransactionText(item.keterangan),
+  }));
   queue.push({ id: 'Q-' + Date.now(), type, entity, items: normalized, tanggal: normalizeTanggal(meta.tanggal), createdAt: new Date().toISOString() });
   commitQueueLocal(queue);
   const stored = getPendingQueue();
@@ -329,7 +340,7 @@ async function submitOneItem(sheetOrAction, entity, it, tanggal) {
   if (isApplied(cid)) return { success: true, skipped: true, clientItemId: cid };
   const SHEET_MAP = { barangMasuk: 'Barang masuk', barangKeluar: 'Barang keluar', barangRusak: 'Barang Rusak' };
   const sheetName = SHEET_MAP[sheetOrAction] || sheetOrAction;
-  const payload = { action: 'addTransaction', sheet: sheetName, entitas: String(entity || '').toUpperCase(), tanggal: normalizeTanggal(tanggal), kodeBarang: String(it.kode || it.kodeBarang || '').trim(), qty: Number(it.qty) || 0, keterangan: String(it.keterangan || '').trim().slice(0, 200), requestId: cid, transactionId: 'TX-' + cid, nonce: 'NC-' + cid, queueApproved: true };
+  const payload = { action: 'addTransaction', sheet: sheetName, entitas: String(entity || '').toUpperCase(), tanggal: normalizeTanggal(tanggal), kodeBarang: normalizeItemCode(it.kode || it.kodeBarang), qty: Number(it.qty) || 0, keterangan: normalizeTransactionText(it.keterangan).slice(0, 200), requestId: cid, transactionId: 'TX-' + cid, nonce: 'NC-' + cid, queueApproved: true };
   const data = await postJson(payload, { retries: 1, timeoutMs: SINGLE_TIMEOUT_MS });
   if (data && data.code === 'UNAUTHORIZED') return { success: false, unauthorized: true, clientItemId: cid, error: 'Unauthorized' };
   if (data && (data.status === 'DUPLICATE' || data.idempotent === true || data.success === true || data.status === 'APPLIED' || data.status === 'OK')) {
@@ -342,20 +353,20 @@ async function submitBatchChunk(action, entity, chunkItems, tanggal) {
   const SHEET_MAP = { barangMasuk: 'Barang masuk', barangKeluar: 'Barang keluar', barangRusak: 'Barang Rusak' };
   const sheetName = SHEET_MAP[action] || action;
   const normalized = (chunkItems || []).map((it) => ({
-    kode: it.kode || it.kodeBarang,
-    nama: it.nama,
+    kode: normalizeItemCode(it.kode || it.kodeBarang),
+    nama: normalizeTransactionText(it.nama),
     qty: Number(it.qty) || 0,
-    satuan: it.satuan || '',
-    keterangan: it.keterangan || '',
+    satuan: normalizeTransactionText(it.satuan),
+    keterangan: normalizeTransactionText(it.keterangan),
     clientItemId: it.clientItemId || ensureClientItemId(it).clientItemId,
   })).filter((it) => it.kode && Number(it.qty) > 0);
   if (!normalized.length) return { success: false, successCount: 0, failCount: 0, results: [] };
 
   const ent = String(entity || '').toUpperCase();
   const wire = normalized.map((it) => ({
-    kodeBarang: String(it.kode || '').trim(),
+    kodeBarang: normalizeItemCode(it.kode),
     qty: Number(it.qty) || 0,
-    keterangan: String(it.keterangan || '').trim().slice(0, 200),
+    keterangan: normalizeTransactionText(it.keterangan).slice(0, 200),
     tanggal: normalizeTanggal(tanggal),
     requestId: String(it.clientItemId),
     transactionId: 'TX-' + String(it.clientItemId),
