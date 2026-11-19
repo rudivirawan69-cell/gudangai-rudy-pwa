@@ -6,6 +6,15 @@ on:
   pull_request:
     branches: ["main"]
   workflow_dispatch:
+    inputs:
+      approve_production_deploy:
+        description: "Ketik YES_I_APPROVE hanya setelah menyetujui deployment produksi"
+        required: true
+        type: choice
+        options:
+          - NO
+          - YES_I_APPROVE
+        default: NO
 
 permissions:
   contents: read
@@ -41,7 +50,7 @@ jobs:
   deploy:
     name: Deploy canonical Cloudflare Worker
     needs: verify
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.approve_production_deploy == 'YES_I_APPROVE'
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     environment: production
