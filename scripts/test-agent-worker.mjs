@@ -465,3 +465,28 @@ test('Agent Rubee knowledge API is read-only allowlisted, not a write route', as
   });
 });
 
+
+test('explicit spreadsheet reads support row and column pagination in one read action', async () => {
+  const { sheetCalls } = await runLive('Baca Stock CV baris 11 kolom 31 dan tampilkan formulanya');
+  assert.equal(sheetCalls.length, 1);
+  assert.equal(sheetCalls[0].action, 'getAgentKnowledge');
+  assert.equal(sheetCalls[0].mode, 'page');
+  assert.equal(sheetCalls[0].sheetName, 'Stock CV');
+  assert.equal(sheetCalls[0].startRow, 11);
+  assert.equal(sheetCalls[0].startColumn, 31);
+  assert.equal(sheetCalls[0].pageSize, 30);
+  assert.equal(sheetCalls[0].pageColumns, 30);
+  assert.equal(sheetCalls[0].includeFormulas, true);
+});
+
+test('manifest is metadata-only and never returns sample transaction rows', () => {
+  const start = codeGs.indexOf('function getAgentSheetManifest_(ss)');
+  const end = codeGs.indexOf('function getAgentSheetPage_(ss)', start);
+  assert.ok(start >= 0 && end > start);
+  const manifest = codeGs.slice(start, end);
+  assert.match(manifest, /getRange\(1, 1, 1,/);
+  assert.doesNotMatch(manifest, /getRange\(1, 1, previewRows/);
+  assert.match(manifest, /headerTruncated/);
+  assert.match(manifest, /redacted:sh.getName\(\) === "Config"/);
+});
+
