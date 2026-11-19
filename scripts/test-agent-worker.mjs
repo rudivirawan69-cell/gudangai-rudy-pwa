@@ -480,8 +480,8 @@ test('explicit spreadsheet reads support row and column pagination in one read a
 });
 
 test('manifest is metadata-only and never returns sample transaction rows', () => {
-  const start = codeGs.indexOf('function getAgentSheetManifest_(ss)');
-  const end = codeGs.indexOf('function getAgentSheetPage_(ss)', start);
+  const start = codeGs.indexOf('function getAgentSheetManifest_');
+  const end = codeGs.indexOf('function getAgentSheetPage_', start);
   assert.ok(start >= 0 && end > start);
   const manifest = codeGs.slice(start, end);
   assert.match(manifest, /getRange\(1, 1, 1,/);
