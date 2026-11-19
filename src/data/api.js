@@ -57,6 +57,12 @@ function newIds() {
   const uuid = crypto.randomUUID ? crypto.randomUUID() : (Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
   return { requestId: 'REQ-' + uuid, transactionId: 'TX-RUDY-' + uuid };
 }
+function normalizeTransactionText(value) {
+  return String(value == null ? '' : value).replace(/\u00a0/g, ' ').replace(/\s+/g, ' ').trim();
+}
+function normalizeItemCode(value) {
+  return String(value == null ? '' : value).replace(/\s+/g, '').trim();
+}
 function normalizeTanggal(raw) {
   const now = new Date();
   const wibParts = new Intl.DateTimeFormat('en-CA', {
@@ -119,13 +125,19 @@ function readQueueLocal() {
   } catch (_) { return { revision: 0, queue: [] }; }
 }
 function commitQueueLocal(queue) {
+  const safeQueue = Array.isArray(queue) ? queue : [];
   const next = Math.max(_queueRevision + 1, Date.now());
   _queueRevision = next;
   try {
-    localStorage.setItem(QUEUE_KEY, JSON.stringify(Array.isArray(queue) ? queue : []));
+    localStorage.setItem(QUEUE_KEY, JSON.stringify(safeQueue));
     localStorage.setItem(QUEUE_KEY + '_rev', String(next));
   } catch (_) {}
-  void persistQueueBackup(queue, next);
+  void persistQueueBackup(safeQueue, next);
+  try {
+    window.dispatchEvent(new CustomEvent('gudangai-queue-changed', {
+      detail: { count: safeQueue.reduce((sum, entry) => sum + (entry.items || []).length, 0), revision: next }
+    }));
+  } catch (_) {}
 }
 export async function hydrateOfflineQueue() {
   return hydrateQueueBackup(readQueueLocal, (queue, revision) => {
@@ -311,7 +323,12 @@ function ensureClientItemId(it) {
 function enqueue(type, entity, items, meta = {}) {
   if (!items?.length) return [];
   const queue = getPendingQueue();
-  const normalized = items.map(ensureClientItemId);
+  const normalized = items.map((item) => ({
+    ...ensureClientItemId(item),
+    kode: normalizeItemCode(item.kode || item.kodeBarang),
+    nama: normalizeTransactionText(item.nama),
+    keterangan: normalizeTransactionText(item.keterangan),
+  }));
   queue.push({ id: 'Q-' + Date.now(), type, entity, items: normalized, tanggal: normalizeTanggal(meta.tanggal), createdAt: new Date().toISOString() });
   commitQueueLocal(queue);
   const stored = getPendingQueue();
@@ -323,7 +340,7 @@ async function submitOneItem(sheetOrAction, entity, it, tanggal) {
   if (isApplied(cid)) return { success: true, skipped: true, clientItemId: cid };
   const SHEET_MAP = { barangMasuk: 'Barang masuk', barangKeluar: 'Barang keluar', barangRusak: 'Barang Rusak' };
   const sheetName = SHEET_MAP[sheetOrAction] || sheetOrAction;
-  const payload = { action: 'addTransaction', sheet: sheetName, entitas: String(entity || '').toUpperCase(), tanggal: normalizeTanggal(tanggal), kodeBarang: String(it.kode || it.kodeBarang || '').trim(), qty: Number(it.qty) || 0, keterangan: String(it.keterangan || '').trim().slice(0, 200), requestId: cid, transactionId: 'TX-' + cid, nonce: 'NC-' + cid, queueApproved: true };
+  const payload = { action: 'addTransaction', sheet: sheetName, entitas: String(entity || '').toUpperCase(), tanggal: normalizeTanggal(tanggal), kodeBarang: normalizeItemCode(it.kode || it.kodeBarang), qty: Number(it.qty) || 0, keterangan: normalizeTransactionText(it.keterangan).slice(0, 200), requestId: cid, transactionId: 'TX-' + cid, nonce: 'NC-' + cid, queueApproved: true };
   const data = await postJson(payload, { retries: 1, timeoutMs: SINGLE_TIMEOUT_MS });
   if (data && data.code === 'UNAUTHORIZED') return { success: false, unauthorized: true, clientItemId: cid, error: 'Unauthorized' };
   if (data && (data.status === 'DUPLICATE' || data.idempotent === true || data.success === true || data.status === 'APPLIED' || data.status === 'OK')) {
@@ -336,20 +353,20 @@ async function submitBatchChunk(action, entity, chunkItems, tanggal) {
   const SHEET_MAP = { barangMasuk: 'Barang masuk', barangKeluar: 'Barang keluar', barangRusak: 'Barang Rusak' };
   const sheetName = SHEET_MAP[action] || action;
   const normalized = (chunkItems || []).map((it) => ({
-    kode: it.kode || it.kodeBarang,
-    nama: it.nama,
+    kode: normalizeItemCode(it.kode || it.kodeBarang),
+    nama: normalizeTransactionText(it.nama),
     qty: Number(it.qty) || 0,
-    satuan: it.satuan || '',
-    keterangan: it.keterangan || '',
+    satuan: normalizeTransactionText(it.satuan),
+    keterangan: normalizeTransactionText(it.keterangan),
     clientItemId: it.clientItemId || ensureClientItemId(it).clientItemId,
   })).filter((it) => it.kode && Number(it.qty) > 0);
   if (!normalized.length) return { success: false, successCount: 0, failCount: 0, results: [] };
 
   const ent = String(entity || '').toUpperCase();
   const wire = normalized.map((it) => ({
-    kodeBarang: String(it.kode || '').trim(),
+    kodeBarang: normalizeItemCode(it.kode),
     qty: Number(it.qty) || 0,
-    keterangan: String(it.keterangan || '').trim().slice(0, 200),
+    keterangan: normalizeTransactionText(it.keterangan).slice(0, 200),
     tanggal: normalizeTanggal(tanggal),
     requestId: String(it.clientItemId),
     transactionId: 'TX-' + String(it.clientItemId),
@@ -540,18 +557,44 @@ async function submitItems(action, entity, items, tanggal, options = {}) {
       const remainingItems = list.slice(i);
       // A timeout is ambiguous: never issue a second write automatically.
       // Keep the same item IDs in the outbox for explicit backend/read-back reconciliation.
-      const queuedIds = options.fromQueue ? [] : enqueue(action, entity, remainingItems, { tanggal });
+      // Timeout/transport failure is ambiguous: reconcile each original identity
+      // against the ledger + exact spreadsheet row before creating an outbox entry.
+      const confirmed = [];
+      const unresolved = [];
+      for (const it of remainingItems) {
+        const itemType = action === 'barangKeluar' ? 'keluar' : action === 'barangRusak' ? 'rusak' : 'masuk';
+        const check = await verifyPendingItem({ clientItemId: it.clientItemId, type: itemType });
+        if (check?.success === true && check?.readBack?.matched === true) confirmed.push({ item: it, check });
+        else unresolved.push(it);
+      }
+      markAppliedMany(confirmed.map(({ item }) => item.clientItemId));
+      totalSuccess += confirmed.length;
+      totalFail += unresolved.length;
+      allResults.push(...confirmed.map(({ item, check }) => ({
+        success: true, status: 'APPLIED', readBackConfirmed: true,
+        clientItemId: item.clientItemId, transactionId: check.transactionId || 'TX-' + item.clientItemId,
+        readBack: check.readBack,
+      })));
+      const queuedIds = options.fromQueue ? [] : enqueue(action, entity, unresolved, { tanggal });
       totalQueued += queuedIds.length;
-      totalFail += remainingItems.length;
-      allResults.push(...remainingItems.map(it => ({
-        success: false, queued: queuedIds.includes(it.clientItemId), queueStored: queuedIds.includes(it.clientItemId), uncertain: true, clientItemId: it.clientItemId, error: msg,
+      allResults.push(...unresolved.map(it => ({
+        success: false, queued: queuedIds.includes(it.clientItemId), queueStored: queuedIds.includes(it.clientItemId),
+        uncertain: true, clientItemId: it.clientItemId, error: msg,
       })));
       emitProgress(originalList.length, originalList.length, { successCount: totalSuccess, failCount: totalFail, queuedCount: totalQueued });
-      pushNotification({
-        type: 'warning',
-        title: 'Write belum terkonfirmasi',
-        body: remainingItems.length + ' item diamankan di Antrian Sinkronisasi. Detail backend: ' + msg + '. Jangan kirim ulang manual; verifikasi backend/read-back terlebih dahulu.',
-      });
+      if (unresolved.length) {
+        pushNotification({
+          type: 'warning',
+          title: 'Write belum terkonfirmasi',
+          body: confirmed.length + ' item dikonfirmasi sudah tertulis; ' + unresolved.length + ' item diamankan di Antrian Sinkronisasi. Detail backend: ' + msg,
+        });
+      } else {
+        pushNotification({
+          type: 'success',
+          title: 'Write terverifikasi',
+          body: confirmed.length + ' item sudah terbukti tertulis di spreadsheet melalui read-back; tidak dimasukkan ke antrean.',
+        });
+      }
       break;
     }
   }
@@ -588,7 +631,11 @@ function queueItemIdentity(item) {
   return { transactionId: 'TX-' + clientItemId, nonce: 'NC-' + clientItemId };
 }
 function queueItemSheet(item) {
-  return ({ masuk: 'Barang masuk', keluar: 'Barang keluar', rusak: 'Barang Rusak' })[item?.type] || '';
+  return ({
+    masuk: 'Barang masuk', barangMasuk: 'Barang masuk',
+    keluar: 'Barang keluar', barangKeluar: 'Barang keluar',
+    rusak: 'Barang Rusak', barangRusak: 'Barang Rusak',
+  })[item?.type] || '';
 }
 /** Read-only reconciliation; local removal is allowed only after APPLIED/read-back confirmation. */
 export async function verifyPendingItem(item) {
@@ -601,16 +648,29 @@ export async function verifyPendingItem(item) {
     return { success: false, status: 'OFFLINE', code: 'READBACK_OFFLINE', error: 'Perangkat sedang offline; item tetap di antrean.' };
   }
   try {
-    const data = await getJson('getTransactionStatus', {
+    const params = {
       transactionId: identity.transactionId,
       nonce: identity.nonce,
       sheet,
-    });
-    const applied = data?.success === true &&
-      (data?.status === 'APPLIED' || data?.code === 'READBACK_CONFIRMED' || data?.code === 'READBACK_FOUND');
+    };
+    let data;
+    try {
+      data = await getJson('getTransactionStatus', params);
+      if (data?.code === 'UNKNOWN_ACTION' || data?.code === 'GET_ACTION_UNAVAILABLE') throw new Error('GET read-back action tidak tersedia');
+    } catch (_) {
+      // POST is read-only for this allowlisted status action.
+      data = await postJson({ action: 'getTransactionStatus', ...params, requestId: 'VERIFY-' + item.clientItemId }, { retries: 1, timeoutMs: SINGLE_TIMEOUT_MS });
+    }
+    const readBackMatched = data?.readBack?.matched === true;
+    const applied = data?.success === true && data?.status === 'APPLIED' && readBackMatched;
     return applied
       ? { ...data, success: true, status: 'APPLIED', clientItemId: item.clientItemId, sheet }
-      : { ...data, success: false, clientItemId: item.clientItemId, sheet, error: data?.error || 'Server belum mengonfirmasi transaksi.' };
+      : {
+          ...data, success: false, clientItemId: item.clientItemId, sheet,
+          error: data?.error || (data?.status === 'APPLIED' && !readBackMatched
+            ? 'Ledger menyatakan APPLIED, tetapi baris spreadsheet belum cocok saat read-back. Item tidak dihapus.'
+            : 'Server belum mengonfirmasi transaksi melalui read-back. Item tetap di antrean.'),
+        };
   } catch (err) {
     return { success: false, status: 'UNKNOWN', code: 'READBACK_FAILED', clientItemId: item.clientItemId, sheet, error: err?.message || 'Gagal membaca status transaksi.' };
   }
@@ -701,8 +761,41 @@ export function getLocalHistory() {
 }
 export function saveToHistory(entry) {
   const list = getTransactionHistory();
-  list.unshift({ ...entry, id: 'H-' + Date.now() });
-  try { localStorage.setItem(HISTORY_KEY, JSON.stringify(list.slice(0, 200))); } catch (_) {}
+  const source = entry || {};
+  const clientItemId = String(source.clientItemId || '').trim();
+  const transactionId = String(source.transactionId || (clientItemId ? 'TX-' + clientItemId : '')).trim();
+  const savedAt = source.savedAt || source.at || new Date().toISOString();
+  const rawItems = Array.isArray(source.items) && source.items.length
+    ? source.items
+    : (source.kode || source.kodeBarang || source.nama
+      ? [{ kode: source.kode || source.kodeBarang || '', nama: source.nama || '', qty: Number(source.qty) || 0, satuan: source.satuan || '' }]
+      : []);
+  const normalizedItems = rawItems.map((item) => ({
+    ...item,
+    kode: String(item?.kode || item?.kodeBarang || '').trim(),
+    nama: String(item?.nama || item?.name || '').replace(/\u00a0/g, ' ').replace(/\s+/g, ' ').trim(),
+    qty: Number(item?.qty ?? item?.quantity) || 0,
+    satuan: String(item?.satuan || item?.unit || '').trim(),
+  }));
+  const historyEntry = {
+    ...source,
+    id: clientItemId || transactionId ? 'H-' + (clientItemId || transactionId) : 'H-' + Date.now(),
+    transactionId,
+    clientItemId,
+    savedAt,
+    at: savedAt,
+    timestamp: savedAt,
+    items: normalizedItems,
+    status: /^(sukses|success|applied|terkirim|ok)$/i.test(String(source.status || 'success')) ? 'success' : (source.status || 'success'),
+    syncStatus: 'success',
+  };
+  const dedupeKey = clientItemId || transactionId;
+  const next = dedupeKey
+    ? [historyEntry, ...list.filter((item) => String(item.clientItemId || item.transactionId || '') !== dedupeKey)]
+    : [historyEntry, ...list];
+  try { localStorage.setItem(HISTORY_KEY, JSON.stringify(next.slice(0, 200))); } catch (_) {}
+  try { window.dispatchEvent(new CustomEvent('gudangai-history-changed', { detail: { transactionId, clientItemId } })); } catch (_) {}
+  return historyEntry;
 }
 export async function fetchRemoteTransactionHistory(days = 7) {
   const safeDays = Math.max(1, Math.min(31, Number(days) || 7));

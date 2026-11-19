@@ -135,6 +135,16 @@ export default function RiwayatPage({ onNavigate }) {
     setOpenId(null);
   }, [tipe, entitas, status, qDeferred]);
 
+  useEffect(() => {
+    const refreshHistory = () => setTick((n) => n + 1);
+    window.addEventListener('gudangai-history-changed', refreshHistory);
+    window.addEventListener('gudangai-queue-changed', refreshHistory);
+    return () => {
+      window.removeEventListener('gudangai-history-changed', refreshHistory);
+      window.removeEventListener('gudangai-queue-changed', refreshHistory);
+    };
+  }, []);
+
   useEffect(() => () => {
     if (toastTimer.current) clearTimeout(toastTimer.current);
   }, []);
