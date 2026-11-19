@@ -631,7 +631,11 @@ function queueItemIdentity(item) {
   return { transactionId: 'TX-' + clientItemId, nonce: 'NC-' + clientItemId };
 }
 function queueItemSheet(item) {
-  return ({ masuk: 'Barang masuk', keluar: 'Barang keluar', rusak: 'Barang Rusak' })[item?.type] || '';
+  return ({
+    masuk: 'Barang masuk', barangMasuk: 'Barang masuk',
+    keluar: 'Barang keluar', barangKeluar: 'Barang keluar',
+    rusak: 'Barang Rusak', barangRusak: 'Barang Rusak',
+  })[item?.type] || '';
 }
 /** Read-only reconciliation; local removal is allowed only after APPLIED/read-back confirmation. */
 export async function verifyPendingItem(item) {
