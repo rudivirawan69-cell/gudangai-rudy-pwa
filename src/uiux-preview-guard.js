@@ -70,14 +70,18 @@ if (enabled && typeof window !== 'undefined') {
     };
 
     if (typeof navigator !== 'undefined' && typeof navigator.sendBeacon === 'function') {
-      const originalSendBeacon = navigator.sendBeacon.bind(navigator);
-      navigator.sendBeacon = (url, data) => {
-        if (isBlockedWrite(url, { method: 'POST' })) {
-          window.dispatchEvent(new CustomEvent('gudangai-preview-write-blocked'));
-          return false;
-        }
-        return originalSendBeacon(url, data);
-      };
+      try {
+        const originalSendBeacon = navigator.sendBeacon.bind(navigator);
+        navigator.sendBeacon = (url, data) => {
+          if (isBlockedWrite(url, { method: 'POST' })) {
+            window.dispatchEvent(new CustomEvent('gudangai-preview-write-blocked'));
+            return false;
+          }
+          return originalSendBeacon(url, data);
+        };
+      } catch (_) {
+        // Fetch and XHR remain guarded if sendBeacon is not writable in this browser.
+      }
     }
 
     const showPreviewBanner = () => {
