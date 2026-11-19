@@ -15,7 +15,7 @@ export function useSyncAll({ accessToken, interval = 60_000 } = {}) {
       setError('Sesi Supabase belum tersedia.');
       return null;
     }
-    if (controllerRef.current) controllerRef.current.abort();
+    if (controllerRef.current && !controllerRef.current.signal.aborted) return null;
     const controller = new AbortController();
     controllerRef.current = controller;
     if (!quiet) setStatus('loading');
