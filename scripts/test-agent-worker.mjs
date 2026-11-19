@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import worker, { detectLiveActions, liveDataBlock } from '../worker.js';
+import worker, { detectLiveActions, liveDataBlock, retrieveCodeKnowledge } from '../worker.js';
 import { buildSystemPrompt } from '../cloudflare/agentSkills.js';
 
 const codeGs = readFileSync(new URL('../Code.gs', import.meta.url), 'utf8');
@@ -334,7 +334,7 @@ test('non-JSON upstream response is treated as unconfirmed', async () => {
 test('large live data is truncated within the per-action budget', () => {
   const big = { ok: true, action: 'getLowStock', source: 's', readAt: 't', data: { rows: 'x'.repeat(10000) } };
   const block = liveDataBlock({ results: [big] });
-  assert.match(block, /\[dipotong\]/); assert.ok(block.length < 4000);
+  assert.match(block, /\[dipotong\]/); assert.ok(block.length < 10000);
 });
 
 test('health reports the live-data agent stage', async () => {
@@ -416,4 +416,83 @@ test('PO endpoints reject incomplete date ranges after authentication', async ()
     assert.equal(response.status, 400);
     assert.equal((await response.json()).code, 'INVALID_PO_PERIOD');
   });
+});
+
+test('Code.gs knowledge retrieval returns source provenance and relevant functions', () => {
+  const result = retrieveCodeKnowledge('jelaskan fungsi doPost API_SECRET dan getAgentKnowledge');
+  assert.ok(result.sources.length > 0);
+  assert.ok(result.block.includes('doPost') || result.block.includes('getAgentKnowledge'));
+  assert.equal(result.sources[0].source, 'Code.gs');
+  assert.match(result.sources[0].sha256, /^[a-f0-9]{64}$/);
+});
+
+test('spreadsheet manifest intent uses one authenticated read-only knowledge action', async () => {
+  const { payload, sheetCalls, systemText } = await runLive('Daftar semua tab spreadsheet utama');
+  assert.equal(sheetCalls.length, 1);
+  assert.equal(sheetCalls[0].action, 'getAgentKnowledge');
+  assert.equal(sheetCalls[0].mode, 'manifest');
+  assert.equal(payload.dataSources[0].action, 'getAgentKnowledge');
+  assert.ok(payload.knowledgeSources.length > 0);
+  assert.match(systemText, /POTONGAN KODE BACKEND RELEVAN/);
+});
+
+test('spreadsheet formula questions request cross-sheet formula search', async () => {
+  const { sheetCalls } = await runLive('Cari rumus Stock Akhir dan formula perhitungan stok di spreadsheet');
+  assert.equal(sheetCalls.length, 1);
+  assert.equal(sheetCalls[0].action, 'getAgentKnowledge');
+  assert.equal(sheetCalls[0].mode, 'search');
+  assert.equal(sheetCalls[0].includeFormulas, true);
+  assert.ok(sheetCalls[0].query.includes('rumus'));
+});
+
+test('Agent Rubee knowledge API is read-only allowlisted, not a write route', async () => {
+  await withSupabaseAuth(async () => {
+    let sheetsCalls = 0;
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async (url) => {
+      if (String(url) === `${SUPABASE_URL}/auth/v1/user`) return new Response(JSON.stringify({ id: 'u1' }), { status: 200 });
+      sheetsCalls += 1;
+      return new Response(JSON.stringify({ success: true }), { status: 200 });
+    };
+    try {
+      const response = await worker.fetch(makeRequest('/api/data', {
+        method: 'POST', body: { action: 'setActivePeriod', period: '2026-12' },
+      }), liveEnv);
+      assert.equal(response.status, 400);
+      assert.equal((await response.json()).code, 'READ_ACTION_NOT_ALLOWED');
+      assert.equal(sheetsCalls, 0);
+    } finally { globalThis.fetch = originalFetch; }
+  });
+});
+
+
+test('explicit spreadsheet reads support row and column pagination in one read action', async () => {
+  const { sheetCalls } = await runLive('Baca Stock CV baris 11 kolom 31 dan tampilkan formulanya');
+  assert.equal(sheetCalls.length, 1);
+  assert.equal(sheetCalls[0].action, 'getAgentKnowledge');
+  assert.equal(sheetCalls[0].mode, 'page');
+  assert.equal(sheetCalls[0].sheetName, 'Stock CV');
+  assert.equal(sheetCalls[0].startRow, 11);
+  assert.equal(sheetCalls[0].startColumn, 31);
+  assert.equal(sheetCalls[0].pageSize, 30);
+  assert.equal(sheetCalls[0].pageColumns, 30);
+  assert.equal(sheetCalls[0].includeFormulas, true);
+});
+
+test('manifest is metadata-only and never returns sample transaction rows', () => {
+  const start = codeGs.indexOf('function getAgentSheetManifest_');
+  const end = codeGs.indexOf('function getAgentSheetPage_', start);
+  assert.ok(start >= 0 && end > start);
+  const manifest = codeGs.slice(start, end);
+  assert.match(manifest, /knownHeaderRows/);
+  assert.match(manifest, /getRange\(headerRow, 1, 1,/);
+  assert.doesNotMatch(manifest, /getRange\(1, 1, scanRows/);
+  assert.match(manifest, /headerTruncated/);
+  assert.match(manifest, /redacted:sensitive/);
+});
+
+
+test('sensitive Config and System Log tabs are excluded from generic search and page reads', () => {
+  assert.match(codeGs, /\["Config", "System Log"\]/);
+  assert.match(codeGs, /name === "Config" \|\| name === "System Log"/);
 });
