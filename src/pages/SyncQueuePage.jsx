@@ -127,7 +127,6 @@ export default function SyncQueuePage({ onBack }) {
       setResult({ synced: 0, failed: 1, message: 'Belum terkonfirmasi — item tetap di antrean.' });
       return;
     }
-    removePendingByClientIds([row.clientItemId]);
     saveToHistory({
       type: row.type,
       entity: row.entity,
@@ -138,10 +137,12 @@ export default function SyncQueuePage({ onBack }) {
       tanggal: row.tanggal,
       source: 'queue-readback-confirmed',
       clientItemId: row.clientItemId,
-      status: 'sukses',
+      status: 'success',
       transactionId: verification.transactionId || `TX-${row.clientItemId}`,
       readBack: verification.readBack || null,
+      items: [{ kode: row.kode, nama: row.nama, qty: row.qty, satuan: row.satuan || '' }],
     });
+    removePendingByClientIds([row.clientItemId]);
     setRows((prev) => prev.filter((r) => r.clientItemId !== row.clientItemId));
     setSyncing(false);
     setResult({ synced: 1, failed: 0, message: `${row.nama || row.kode} terverifikasi dari server · masuk Riwayat` });
@@ -169,7 +170,9 @@ export default function SyncQueuePage({ onBack }) {
         saveToHistory({
           type: item.type, entity: item.entity, kode: item.kode, nama: item.nama,
           qty: item.qty, keterangan: item.keterangan, tanggal: item.tanggal,
-          source: 'sync-queue', clientItemId: item.clientItemId,
+          source: 'sync-queue', clientItemId: item.clientItemId, status: 'success',
+          transactionId: 'TX-' + item.clientItemId,
+          items: [{ kode: item.kode, nama: item.nama, qty: item.qty, satuan: item.satuan || '' }],
         });
       }
       setRows(after);
