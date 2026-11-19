@@ -88,13 +88,19 @@ assert.match(lightweightSync, /updateLastUpdateTimestamp\(\)/, 'lightweight stoc
 assert.doesNotMatch(lightweightSync, /\| Update:/, 'legacy Update timestamp format must not overwrite A2');
 const onEditSource = extractFunction(code, 'onEdit');
 assert.match(onEditSource, /"Stock Bahan Baku"/, 'manual Bahan Baku edits must trigger sync and timestamp update');
-const headerSyncForPoll = fs.readFileSync('src/hooks/useSheetUpdate.js', 'utf8');
-assert.match(headerSyncForPoll, /setInterval\(refresh, 15000\)/, 'header re-reads the spreadsheet timestamp every 15 seconds');
+const dashboardLiveHook = fs.readFileSync('src/hooks/useDashboardLive.js', 'utf8');
+assert.match(dashboardLiveHook, /gudangai:stok:snapshot:v1/, 'Dashboard Live snapshot uses the agreed persistent cache key');
+assert.match(dashboardLiveHook, /readSnapshot\(\)/, 'cached Dashboard Live snapshot is restored before network validation');
+assert.match(dashboardLiveHook, /window\.addEventListener\(SHEET_EVENT, onSheetUpdated\)/, 'Dashboard Live listens to Spreadsheet update events');
+assert.match(dashboardLiveHook, /String\(nextTimestamp\) === String\(timestampRef\.current/, 'same Spreadsheet timestamp must not trigger another dashboard read');
+assert.match(dashboardLiveHook, /void refresh\(\);/, 'Dashboard Live is validated once when the authenticated app shell starts');
+const appShell = fs.readFileSync('src/App.jsx', 'utf8');
+assert.match(appShell, /useDashboardLive\(\{ enabled: Boolean\(user\) \}\)/, 'Dashboard Live hook is owned by the authenticated app shell');
+assert.doesNotMatch(appShell, /pageKey/, 'page navigation must not force-remount the page wrapper');
+const realtimeSync = fs.readFileSync('src/data/realTimeSync.js', 'utf8');
+assert.match(realtimeSync, /sheetUpdatedAt: iso/, 'realtime sync event carries the canonical Spreadsheet timestamp');
 assert.match(api, /cache: 'no-store'/, 'spreadsheet GET reads bypass browser cache');
 assert.match(code, /sheetUpdatedAt: sheetUpdatedAt, lastUpdate: sheetUpdatedAt/);
-const headerSync = fs.readFileSync('src/hooks/useSheetUpdate.js', 'utf8');
-assert.match(headerSync, /return obj\.sheetUpdatedAt \|\| obj\.data\?\.sheetUpdatedAt \|\| obj\.meta\?\.sheetUpdatedAt/);
-assert.doesNotMatch(headerSync, /pickTimestamp\(obj\).*lastUpdate/);
 
 assert.doesNotMatch(code, /Total master data transaksi: 191/);
 assert.match(api, /DASHBOARD_LIVE_READ_FAILED/);
