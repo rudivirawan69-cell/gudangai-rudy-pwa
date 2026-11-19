@@ -46,7 +46,7 @@ function writeSnapshot(data, sheetUpdatedAt) {
  * The last successful snapshot is rendered immediately across page navigation.
  * Network reads happen once on app startup and only after a new Spreadsheet timestamp.
  */
-export function useDashboardLive() {
+export function useDashboardLive({ enabled = true } = {}) {
   const [initialSnapshot] = useState(() => readSnapshot());
   const [snapshot, setSnapshot] = useState(initialSnapshot);
   const [error, setError] = useState('');
@@ -81,6 +81,7 @@ export function useDashboardLive() {
   }, []);
 
   useEffect(() => {
+    if (!enabled) return undefined;
     mountedRef.current = true;
     // Validate once on application startup; cached values stay visible during this request.
     void refresh();
@@ -97,7 +98,7 @@ export function useDashboardLive() {
       mountedRef.current = false;
       window.removeEventListener(SHEET_EVENT, onSheetUpdated);
     };
-  }, [refresh]);
+  }, [refresh, enabled]);
 
   return {
     data: snapshot?.data || null,
