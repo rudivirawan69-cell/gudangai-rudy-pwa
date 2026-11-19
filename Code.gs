@@ -4459,21 +4459,21 @@ function getAgentKnowledge_(params) {
 }
 
 function getAgentSheetManifest_(ss) {
+  const knownHeaderRows = {
+    "stock cv":3, "stock pt":3, "stock bahan baku":3, "stock awal":3,
+    "barang masuk":3, "barang keluar":3, "barang rusak/lo":3,
+    "purchase order":5, "data stok per divisi":3, "dashboard":3,
+    "dashboard live":3, "stok aman":3, "hampir habis":3
+  };
   const sheets = ss.getSheets().map(function(sh) {
     const lastRow = sh.getLastRow(), lastCol = sh.getLastColumn();
     const sensitive = sh.getName() === "Config" || sh.getName() === "System Log";
-    let headerRow = null, headerPreview = [];
-    if (!sensitive && lastRow > 0 && lastCol > 0) {
-      // Header dapat berada di baris 1, 3, atau 5 (contoh PO). Pilih baris
-      // terpadat dari 8 baris pertama; tidak mengirim contoh transaksi ke Agent.
-      const scanRows = Math.min(8, lastRow), scanCols = Math.min(100, lastCol);
-      const preview = sh.getRange(1, 1, scanRows, scanCols).getDisplayValues();
-      let bestCount = 0;
-      for (let r = 0; r < preview.length; r++) {
-        const filled = preview[r].filter(function(value) { return String(value || "").trim() !== ""; }).length;
-        if (filled > bestCount) { bestCount = filled; headerRow = r + 1; headerPreview = preview[r]; }
-      }
-    }
+    const headerRow = sensitive ? null : (knownHeaderRows[String(sh.getName()).toLowerCase()] || null);
+    // Hanya baca baris header yang diketahui; jangan menebak header dari baris
+    // transaksi pertama karena manifest tidak boleh membocorkan sampel data.
+    const headerPreview = headerRow && lastRow >= headerRow && lastCol > 0
+      ? sh.getRange(headerRow, 1, 1, Math.min(100, lastCol)).getDisplayValues()[0]
+      : [];
     return { sheetName:sh.getName(), sheetId:sh.getSheetId(), lastRow:lastRow, lastColumn:lastCol,
       headerRow:headerRow, headerPreview:headerPreview, headerTruncated:lastCol > 100, usedRows:lastRow,
       redacted:sensitive, hidden:sh.isSheetHidden() };
