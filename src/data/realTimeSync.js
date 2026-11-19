@@ -36,7 +36,7 @@ function emitSheetUpdated(iso) {
   if (!iso) return;
   try {
     window.dispatchEvent(new CustomEvent('gudangai-sheet-updated', {
-      detail: { lastUpdate: iso, lastUpdateISO: iso, updatedAt: iso },
+      detail: { sheetUpdatedAt: iso, lastUpdate: iso, lastUpdateISO: iso, updatedAt: iso },
     }));
   } catch (_) { /* ignore */ }
 }
