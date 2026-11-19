@@ -36,7 +36,7 @@ function emitSheetUpdated(iso) {
   if (!iso) return;
   try {
     window.dispatchEvent(new CustomEvent('gudangai-sheet-updated', {
-      detail: { lastUpdate: iso, lastUpdateISO: iso, updatedAt: iso },
+      detail: { sheetUpdatedAt: iso, lastUpdate: iso, lastUpdateISO: iso, updatedAt: iso },
     }));
   } catch (_) { /* ignore */ }
 }
@@ -116,13 +116,13 @@ async function fullBootstrap() {
   return { data, state: st };
 }
 
-async function pullDelta() {
+async function pullDelta(sheetUpdatedAtHint = null) {
   const st = loadState();
   const since = st.lastSyncISO || st.lastUpdateISO;
   if (!since) return fullBootstrap();
   const delta = await apiPost('getStockDelta', { sinceTimestamp: since, entitas: 'ALL' });
   const lastSyncISO = new Date().toISOString();
-  const lastUpdateISO = delta.lastUpdateISO || delta.lastUpdate || st.lastUpdateISO || null;
+  const lastUpdateISO = delta.lastUpdateISO || delta.lastUpdate || sheetUpdatedAtHint || st.lastUpdateISO || null;
   saveState({
     lastSyncISO,
     lastUpdateISO,
@@ -151,7 +151,7 @@ async function tick() {
         _listeners.onStockUpdate?.(data.items || data.stock || [], { mode: 'BOOTSTRAP', meta: data });
         _listeners.onStatus?.({ state: 'online', mode: 'bootstrap', failures: _failures.length });
       } else if (changed) {
-        const delta = await pullDelta();
+        const delta = await pullDelta(ping.lastUpdateISO || ping.lastUpdate || st.lastUpdateISO);
         if (delta.mode === 'DELTA' && (delta.items || []).length) {
           _listeners.onStockUpdate?.(delta.items, { mode: 'DELTA', meta: delta });
         }
