@@ -292,6 +292,80 @@ async function handleAgent(request, env, origin) {
     return json({ success:false, code:'WORKERS_AI_UNAVAILABLE', error:'Agent Workers AI sedang tidak tersedia.', detail:String(primaryError?.message||'Workers AI gagal').slice(0,240) }, 503, origin);
   }
 }
+
+const SYNC_ALL_ACTIONS = [
+  'getDashboardData',
+  'getAllStock',
+  'getStatusPO',
+  'getLowStock',
+  'getTransactionHistory',
+  'getStockDelta',
+  'getSyncMetrics',
+  'getLastUpdate',
+  'getConfig',
+];
+
+function countSyncRecords(value) {
+  if (Array.isArray(value)) return value.length;
+  if (!value || typeof value !== 'object') return 0;
+  for (const key of ['items', 'rows', 'data', 'records', 'results']) {
+    if (Array.isArray(value[key])) return value[key].length;
+  }
+  return 0;
+}
+
+export function buildSyncSummary(data = {}, errors = []) {
+  const entries = Object.entries(data);
+  const recordCounts = Object.fromEntries(entries.map(([action, value]) => [action, countSyncRecords(value)]));
+  return {
+    totalActions: SYNC_ALL_ACTIONS.length,
+    successfulActions: entries.length,
+    failedActions: errors.length,
+    totalRecords: Object.values(recordCounts).reduce((sum, count) => sum + count, 0),
+    recordCounts,
+    completed: errors.length === 0 && entries.length === SYNC_ALL_ACTIONS.length,
+  };
+}
+
+async function handleSyncAll(request, env, origin) {
+  const auth = await verifySupabaseAccessToken(request, env);
+  if (!auth.ok) return json({ success:false, code:auth.code, error:auth.error }, auth.status, origin);
+  if (!configuredSheets(env)) {
+    return json({ success:false, code:'DATA_TOOLS_NOT_CONFIGURED', error:'Gateway spreadsheet belum dikonfigurasi.' }, 503, origin);
+  }
+
+  const readAt = new Date().toISOString();
+  const settled = await Promise.all(SYNC_ALL_ACTIONS.map(async (action) => {
+    const result = await callSheetsRead(env, action);
+    if (!result || result.success === false) {
+      return { action, ok:false, code:result?.code || 'SYNC_ACTION_FAILED', error:result?.error || 'Action tidak mengembalikan data.' };
+    }
+    const { source, action: _action, readAt: _readAt, ...payload } = result;
+    return { action, ok:true, data:payload };
+  }));
+
+  const data = {};
+  const errors = [];
+  for (const result of settled) {
+    if (result.ok) data[result.action] = result.data;
+    else errors.push({ action:result.action, code:result.code, error:result.error });
+  }
+  const summary = buildSyncSummary(data, errors);
+  const success = errors.length === 0;
+  const status = Object.keys(data).length === 0 ? 502 : 200;
+  return json({
+    success,
+    partial: !success && Object.keys(data).length > 0,
+    readAt,
+    data,
+    summary,
+    errors,
+    actor:auth.userId,
+    permissions:'read_only',
+    version:2,
+  }, status, origin);
+}
+
 async function handleReadOnlyData(request, env, origin) {
   const auth = await verifySupabaseAccessToken(request, env);
   if (!auth.ok) return json({ success:false, code:auth.code, error:auth.error }, auth.status, origin);
@@ -330,6 +404,10 @@ export default {
     if (url.pathname === '/api/getStatusPO' || url.pathname === '/api/getPOTerlambat') {
       if (request.method !== 'GET') return json({ success:false, error:'Method not allowed' }, 405, corsOrigin);
       return handleStatusPO(request, env, corsOrigin, url);
+    }
+    if (url.pathname === '/api/sync-all') {
+      if (request.method !== 'GET') return json({ success:false, code:'METHOD_NOT_ALLOWED', error:'Method not allowed' }, 405, corsOrigin);
+      return handleSyncAll(request, env, corsOrigin);
     }
     if (url.pathname === '/api/data') {
       if (request.method !== 'POST') return json({ success:false, error:'Method not allowed' }, 405, corsOrigin);

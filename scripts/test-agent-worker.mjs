@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import worker, { detectLiveActions, liveDataBlock } from '../worker.js';
+import worker, { buildSyncSummary, detectLiveActions, liveDataBlock } from '../worker.js';
 import { buildSystemPrompt } from '../cloudflare/agentSkills.js';
 
 const codeGs = readFileSync(new URL('../Code.gs', import.meta.url), 'utf8');
@@ -429,4 +429,88 @@ test('PO endpoints reject incomplete date ranges after authentication', async ()
     assert.equal(response.status, 400);
     assert.equal((await response.json()).code, 'INVALID_PO_PERIOD');
   });
+});
+
+
+test('sync-all returns nine authenticated read-only datasets with one shared readAt', async () => {
+  const originalFetch = globalThis.fetch;
+  const actions = [];
+  globalThis.fetch = async (url, options) => {
+    if (String(url) === `${SUPABASE_URL}/auth/v1/user`) {
+      return new Response(JSON.stringify({ id: 'sync-user-1' }), { status: 200 });
+    }
+    assert.equal(String(url), SHEETS_URL);
+    const payload = JSON.parse(options.body);
+    actions.push(payload.action);
+    assert.equal(payload.secret, 'server-secret');
+    return new Response(JSON.stringify({ success:true, items:[{ id:payload.action }] }), { status:200 });
+  };
+  try {
+    const response = await worker.fetch(makeRequest('/api/sync-all'), liveEnv);
+    const payload = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(payload.success, true);
+    assert.equal(payload.partial, false);
+    assert.equal(payload.actor, 'sync-user-1');
+    assert.equal(payload.permissions, 'read_only');
+    assert.equal(payload.version, 2);
+    assert.equal(Object.keys(payload.data).length, 9);
+    assert.equal(payload.summary.totalActions, 9);
+    assert.equal(payload.summary.successfulActions, 9);
+    assert.equal(payload.summary.failedActions, 0);
+    assert.equal(payload.summary.totalRecords, 9);
+    assert.equal(new Set(actions).size, 9);
+    assert.equal(actions.length, 9);
+    assert.ok(payload.readAt);
+    assert.equal(JSON.stringify(payload).includes('server-secret'), false);
+  } finally { globalThis.fetch = originalFetch; }
+});
+
+test('sync-all rejects unauthenticated requests', async () => {
+  const response = await worker.fetch(makeRequest('/api/sync-all', { token:'' }), liveEnv);
+  assert.equal(response.status, 401);
+  assert.equal((await response.json()).code, 'AUTH_REQUIRED');
+});
+
+test('sync-all is GET-only', async () => {
+  const response = await worker.fetch(makeRequest('/api/sync-all', { method:'POST', body:{} }), liveEnv);
+  assert.equal(response.status, 405);
+  assert.equal((await response.json()).code, 'METHOD_NOT_ALLOWED');
+});
+
+test('sync-all reports partial failures without discarding successful datasets', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url, options) => {
+    if (String(url) === `${SUPABASE_URL}/auth/v1/user`) {
+      return new Response(JSON.stringify({ id:'sync-user-2' }), { status:200 });
+    }
+    const payload = JSON.parse(options.body);
+    if (payload.action === 'getConfig') {
+      return new Response(JSON.stringify({ success:false, code:'CONFIG_READ_FAILED', error:'Config unavailable' }), { status:200 });
+    }
+    return new Response(JSON.stringify({ success:true, rows:[{ id:payload.action }] }), { status:200 });
+  };
+  try {
+    const response = await worker.fetch(makeRequest('/api/sync-all'), liveEnv);
+    const payload = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(payload.success, false);
+    assert.equal(payload.partial, true);
+    assert.equal(Object.keys(payload.data).length, 8);
+    assert.equal(payload.errors.length, 1);
+    assert.equal(payload.errors[0].action, 'getConfig');
+    assert.equal(payload.summary.failedActions, 1);
+  } finally { globalThis.fetch = originalFetch; }
+});
+
+test('buildSyncSummary reports action and record counts', () => {
+  const summary = buildSyncSummary({
+    getAllStock:{ items:[1,2,3] },
+    getStatusPO:{ rows:[1] },
+  }, [{ action:'getConfig' }]);
+  assert.equal(summary.totalActions, 9);
+  assert.equal(summary.successfulActions, 2);
+  assert.equal(summary.failedActions, 1);
+  assert.equal(summary.totalRecords, 4);
+  assert.equal(summary.completed, false);
 });
