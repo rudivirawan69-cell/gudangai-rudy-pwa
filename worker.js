@@ -187,6 +187,7 @@ async function gatherLiveData(env, message) {
     if (action === 'getStockoutRisk') { params.windowDays = 30; params.thresholdDays = 3; }
     if (action === 'getStockDelta') params.sinceTimestamp = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     if (action === 'getTransactionHistory') { params.sheet = 'Barang keluar'; params.limit = 100; }
+    if (action === 'getAgentKnowledge') params.mode = 'manifest';
     const raw = await callSheetsRead(env, action, params);
     const ok = raw?.success !== false;
     const { source, action: _a, readAt, ...data } = raw || {};
