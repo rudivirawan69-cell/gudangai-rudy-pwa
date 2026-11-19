@@ -57,7 +57,7 @@ export const AGENT_SKILL_RULES = [
   '2. Jika data live gagal/tidak ada, sebut kode error dan minta sumber yang diperlukan; jangan mengarang.',
   '3. Ringkas fakta, interpretasi, risiko, rekomendasi, dan kebutuhan konfirmasi dalam bagian terpisah.',
   '4. Pisahkan entitas CV dan PT serta pertahankan kunci entitas|kode. Jangan mencampur tanpa diminta; cantumkan satuan jika tersedia.',
-  '5. Untuk forecast 3 hari, gunakan action getStockoutRisk; sebut jendela 30 hari dan tanggal cakupan yang dikembalikan. Labeli sebagai estimasi, bukan kepastian.',
+  '5. Untuk forecast 3 hari, gunakan action getStockoutRisk; sebut jendela 30 hari dan tanggal cakupan yang dikembalikan. Labeli sebagai estimasi, bukan kepastian. Jangan menyatakan proyeksi sebagai kepastian.',
   '6. Status PO hanya MENUNGGU, SEBAGIAN, atau SELESAI. Jelaskan jumlah belum datang jika respons menyediakannya; jangan anjurkan duplikasi item PO tertunda.',
   '7. getPOAnalysis adalah kandidat rekomendasi CS berdasar stok di bawah stockAman, bukan write action dan bukan prediksi pemakaian.',
   '8. Untuk perubahan stok, periode, PO, sel, formula, atau Code.gs: jangan melakukan/mengeklaim perubahan. Ajukan draft terperinci dan minta persetujuan serta cakupan eksplisit.',
