@@ -4,7 +4,7 @@ import { AuthProvider, useAuth, DEFAULT_PROFILE_PHOTO } from './hooks/useAuth';
 import { ThemeProvider } from './hooks/useTheme';
 import LoginPage from './pages/LoginPage';
 import { useConnection } from './hooks/useConnection';
-import { useSheetUpdate } from './hooks/useSheetUpdate';
+import { useDashboardLive } from './hooks/useDashboardLive';
 import { formatSpreadsheetTimestamp } from './utils/sheetTimestamp';
 import { useBootstrap } from './hooks/useBootstrap';
 import { startRealtimeSync, syncNow } from './data/realTimeSync';
@@ -246,11 +246,11 @@ function AppShell() {
 
   const { user, loading } = useAuth();
   const [tab, setTab] = useState('dashboard');
-  const [pageKey, setPageKey] = useState(0);
   const [moreOpen, setMoreOpen] = useState(false);
   const tabRef = useRef('dashboard');
   const { online, hasUrl, status, message, syncing, checkHealth } = useConnection({ pollMs: 90000 });
-  const sheetLabel = useSheetUpdate();
+  const dashboardLive = useDashboardLive();
+  const sheetLabel = dashboardLive.sheetUpdatedAt;
   useBootstrap();
 
   useEffect(() => {
@@ -278,7 +278,6 @@ function AppShell() {
     if (tabRef.current === id) { window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
     tabRef.current = id;
     setTab(id);
-    setPageKey((k) => k + 1);
   };
 
   useEffect(() => {
@@ -298,7 +297,7 @@ function AppShell() {
 
   let page;
   switch (tab) {
-    case 'dashboard': page = <DashboardPage onNavigate={goTab} />; break;
+    case 'dashboard': page = <DashboardPage onNavigate={goTab} dashboardData={dashboardLive.data} dashboardError={dashboardLive.error} />; break;
     case 'stok': page = <StokPage />; break;
     case 'input': page = <InputPage />; break;
     case 'po': page = <POPage onNavigate={goTab} />; break;
@@ -319,7 +318,7 @@ function AppShell() {
       <AppHeader user={user} tab={tab} onOpenSettings={() => goTab('settings')} online={online} status={status} sheetLabel={sheetLabel} onRefresh={() => checkHealth({ quiet: false })} />
       <InstallBanner installPrompt={installPrompt} onInstall={installApp} onDismiss={dismissInstall} />
       <main className="page-content app-content w-full max-w-none mx-0 min-h-0 px-3 pb-32 pt-1">
-        <div key={pageKey} className="animate-page-in">
+        <div className="animate-page-in">
           <ErrorBoundary>
             <Suspense fallback={<div className="flex justify-center py-20"><Loader2 className="w-7 h-7 text-cyan-500 animate-spin" /></div>}>
               {page}
