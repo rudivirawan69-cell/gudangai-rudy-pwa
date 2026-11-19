@@ -209,49 +209,47 @@ export function liveDataBlock(live) {
   if (!live?.results?.length) return 'DATA LIVE: tidak ada untuk pertanyaan ini. Jawab hanya dari konteks operator dan jangan mengklaim membaca spreadsheet.';
   let remaining = LIVE_DATA_CHAR_BUDGET;
   const parts = live.results.map((item) => {
-    if (!item.ok) return `[${item.action} | GAGAL ${item.code||'UNKNOWN'}] Data belum terkonfirmasi: ${item.error||'-'}`;
-    if (remaining <= 0) return `[${item.action}] Hasil tidak dimasukkan karena batas konteks tercapai.`;
+    if (!item.ok) return '[' + item.action + ' | GAGAL ' + (item.code || 'UNKNOWN') + '] Data belum terkonfirmasi: ' + (item.error || '-');
+    if (remaining <= 0) return '[' + item.action + '] Hasil tidak dimasukkan karena batas konteks tercapai.';
     const raw = JSON.stringify(item.data);
     const clipped = truncate(raw, remaining);
     remaining = Math.max(0, remaining - clipped.length);
-    return `[${item.action} | dibaca ${item.readAt} | ${item.source}]\\n${clipped}`;
+    return '[' + item.action + ' | dibaca ' + item.readAt + ' | ' + item.source + ']\n' + clipped;
   });
-  return `DATA LIVE (read-only; setiap hasil memiliki sumber dan waktu baca):\\n${parts.join('\\n\\n')}`;
+  return 'DATA LIVE (read-only; setiap hasil memiliki sumber dan waktu baca):\n' + parts.join('\n\n');
 }
 const CODE_STOP_WORDS = new Set(['dan','atau','yang','untuk','dari','dengan','pada','apa','bagaimana','berapa','tolong','jelaskan','periksa','cek','saya','kamu','agent','gudangai','rudy','rubee','tentang','sistem','aplikasi']);
 export function retrieveCodeKnowledge(message, maxChunks = 3) {
-  const terms = [...new Set(String(message||'').toLowerCase().match(/[a-z0-9_]{3,}/g)||[])].filter((term)=>!CODE_STOP_WORDS.has(term));
-  if (!terms.length) return { block:'', sources:[] };
+  const terms = [...new Set(String(message || '').toLowerCase().match(/[a-z0-9_]{3,}/g) || [])].filter((term) => !CODE_STOP_WORDS.has(term));
+  if (!terms.length) return { block: '', sources: [] };
   const ranked = CODE_KNOWLEDGE.chunks.map((chunk) => {
-    const text = String(chunk.text||'').toLowerCase();
+    const text = String(chunk.text || '').toLowerCase();
     let score = 0;
     for (const term of terms) {
-      const escaped = term.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\function liveDataBlock(live) {
-  if (!live?.results?.length) return 'DATA LIVE: tidak ada untuk pertanyaan ini. Jawab hanya dari konteks operator dan jangan mengklaim membaca spreadsheet.';
-  const parts = live.results.map((item) => item.ok
-    ? `[${item.action} | dibaca ${item.readAt} | ${item.source}]\n${truncate(JSON.stringify(item.data), LIVE_DATA_CHAR_BUDGET)}`
-    : `[${item.action} | GAGAL ${item.code||'UNKNOWN'}] Data belum terkonfirmasi: ${item.error||'-'}`);
-  return `DATA LIVE (read-only):\n${parts.join('\n\n')}`;
-}
-function systemPrompt(context={}, liveBlock='') {
-  return buildSystemPrompt(context, liveBlock);
-}');
-      const matches = text.match(new RegExp(escaped,'g'));
-      if (matches) score += Math.min(matches.length, 8) * (term.length >= 7 ? 2 : 1);
+      let count = 0;
+      let at = text.indexOf(term);
+      while (at >= 0 && count < 8) {
+        count += 1;
+        at = text.indexOf(term, at + term.length);
+      }
+      score += count * (term.length >= 7 ? 2 : 1);
     }
     return { chunk, score };
-  }).filter((item)=>item.score>0).sort((a,b)=>b.score-a.score || a.chunk.id-b.chunk.id).slice(0,maxChunks);
-  const sources = ranked.map(({chunk})=>({source:'Code.gs',section:chunk.section,chunk:chunk.id,sha256:CODE_KNOWLEDGE.sha256,version:CODE_KNOWLEDGE.version,ref:CODE_KNOWLEDGE.ref}));
+  }).filter((item) => item.score > 0).sort((a, b) => b.score - a.score || a.chunk.id - b.chunk.id).slice(0, maxChunks);
+  const sources = ranked.map(({ chunk }) => ({
+    source: 'Code.gs', section: chunk.section, chunk: chunk.id,
+    sha256: CODE_KNOWLEDGE.sha256, version: CODE_KNOWLEDGE.version, ref: CODE_KNOWLEDGE.ref,
+  }));
   let remaining = CODE_DATA_CHAR_BUDGET;
-  const block = ranked.map(({chunk})=>{
-    if (remaining<=0) return '';
-    const value = `[Code.gs · ${chunk.section} · potongan ${chunk.id}]\\n${truncate(chunk.text,remaining)}`;
-    remaining = Math.max(0,remaining-value.length);
+  const block = ranked.map(({ chunk }) => {
+    if (remaining <= 0) return '';
+    const value = '[Code.gs · ' + chunk.section + ' · potongan ' + chunk.id + ']\n' + truncate(chunk.text, remaining);
+    remaining = Math.max(0, remaining - value.length);
     return value;
-  }).filter(Boolean).join('\\n\\n');
+  }).filter(Boolean).join('\n\n');
   return { block, sources };
 }
-function systemPrompt(context={}, liveBlock='', codeBlock='') {
+function systemPrompt(context = {}, liveBlock = '', codeBlock = '') {
   return buildSystemPrompt(context, liveBlock, codeBlock);
 }
 function normalizeHistory(history, currentMessage) {
