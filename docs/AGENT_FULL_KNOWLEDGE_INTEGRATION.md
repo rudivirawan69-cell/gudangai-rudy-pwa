@@ -6,9 +6,9 @@ Agent Rubee receives two distinct knowledge channels:
 
 1. **Code knowledge index** — generated from the complete repository `Code.gs` snapshot by `scripts/build-agent-knowledge.mjs`. The build stores the source hash, backend version, line/character counts, and overlapping searchable chunks in `cloudflare/generated/code-knowledge.js`. Worker retrieval ranks the most relevant chunks per question; it does not put the full 200 KB source file into every model prompt.
 2. **Live spreadsheet knowledge** — Apps Script action `getAgentKnowledge` provides:
-   - `mode: manifest`: all visible/hidden sheet names, IDs, dimensions, and header previews.
+   - `mode: manifest`: all sheet names, IDs, dimensions, hidden flags, and only the known safe header rows; it never samples transaction rows.
    - `mode: search`: bounded cross-sheet text search with row values, matched cell, and optional formula text.
-   - `mode: page`: bounded page retrieval for a named sheet, with optional formulas and a next-row cursor.
+   - `mode: page`: bounded page retrieval for a named sheet, with optional formulas and independent next-row/next-column cursors.
 
 ## Limits and provenance
 
@@ -24,7 +24,7 @@ Agent Rubee receives two distinct knowledge channels:
 - The action is read-only and is allowlisted in the Cloudflare Worker.
 - It uses the existing Supabase bearer-token verification and server-side Apps Script secret.
 - No arbitrary Apps Script function name is accepted.
-- The `Config` sheet's values are redacted; safe configuration metadata remains available through `getConfig`.
+- `Config` and `System Log` are excluded from generic search/page reads; their values and headers are not returned by the manifest. Safe configuration metadata remains available through `getConfig`.
 - Formula retrieval is opt-in.
 - Existing transaction, PO-write, period-change, setup, and admin actions remain rejected by the Worker read-only allowlist.
 
