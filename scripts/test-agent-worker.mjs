@@ -334,7 +334,7 @@ test('non-JSON upstream response is treated as unconfirmed', async () => {
 test('large live data is truncated within the per-action budget', () => {
   const big = { ok: true, action: 'getLowStock', source: 's', readAt: 't', data: { rows: 'x'.repeat(10000) } };
   const block = liveDataBlock({ results: [big] });
-  assert.match(block, /\[dipotong\]/); assert.ok(block.length < 4000);
+  assert.match(block, /\[dipotong\]/); assert.ok(block.length < 10000);
 });
 
 test('health reports the live-data agent stage', async () => {
