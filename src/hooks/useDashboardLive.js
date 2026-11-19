@@ -52,17 +52,23 @@ export function useDashboardLive({ enabled = true } = {}) {
   const [error, setError] = useState('');
   const timestampRef = useRef(initialSnapshot?.sheetUpdatedAt || null);
   const inFlightRef = useRef(null);
+  const pendingTimestampRef = useRef(null);
   const mountedRef = useRef(false);
 
   const refresh = useCallback(async ({ sheetUpdatedAt = null } = {}) => {
-    if (inFlightRef.current) return inFlightRef.current;
+    if (inFlightRef.current) {
+      if (sheetUpdatedAt) pendingTimestampRef.current = String(sheetUpdatedAt);
+      return inFlightRef.current;
+    }
+    const requestTimestamp = sheetUpdatedAt || timestampRef.current;
     const task = (async () => {
       try {
         const result = await getDashboardData();
         if (!result || result.success !== true) {
           throw new Error(result?.error || 'Dashboard Live tidak mengembalikan ringkasan valid.');
         }
-        const resolvedTimestamp = sheetUpdatedAt || extractSheetTimestamp(result) || timestampRef.current;
+        // Never stamp an in-flight older response with a newer event timestamp.
+        const resolvedTimestamp = extractSheetTimestamp(result) || requestTimestamp;
         const next = writeSnapshot(result, resolvedTimestamp);
         timestampRef.current = next.sheetUpdatedAt;
         if (mountedRef.current) {
@@ -77,7 +83,14 @@ export function useDashboardLive({ enabled = true } = {}) {
     })();
     inFlightRef.current = task;
     try { return await task; }
-    finally { if (inFlightRef.current === task) inFlightRef.current = null; }
+    finally {
+      if (inFlightRef.current === task) inFlightRef.current = null;
+      const pendingTimestamp = pendingTimestampRef.current;
+      pendingTimestampRef.current = null;
+      if (pendingTimestamp && String(pendingTimestamp) !== String(timestampRef.current || '')) {
+        void refresh({ sheetUpdatedAt: pendingTimestamp });
+      }
+    }
   }, []);
 
   useEffect(() => {
@@ -90,7 +103,6 @@ export function useDashboardLive({ enabled = true } = {}) {
       const nextTimestamp = extractSheetTimestamp(detail);
       if (!nextTimestamp) return;
       if (String(nextTimestamp) === String(timestampRef.current || '')) return;
-      timestampRef.current = String(nextTimestamp);
       void refresh({ sheetUpdatedAt: String(nextTimestamp) });
     };
     window.addEventListener(SHEET_EVENT, onSheetUpdated);
