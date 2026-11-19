@@ -20,9 +20,12 @@ import {
 } from 'lucide-react';
 
 const TYPE_LABEL = {
-  masuk: 'Masuk',
-  keluar: 'Keluar',
-  rusak: 'Rusak',
+  masuk: 'Barang Masuk',
+  barangMasuk: 'Barang Masuk',
+  keluar: 'Barang Keluar',
+  barangKeluar: 'Barang Keluar',
+  rusak: 'Barang Rusak',
+  barangRusak: 'Barang Rusak',
 };
 
 function flattenQueue(queue) {
