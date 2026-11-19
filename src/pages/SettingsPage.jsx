@@ -249,7 +249,7 @@ export default function SettingsPage({ onNavigate }) {
 
       <div className="card settings-theme-card p-3 space-y-2">
         <div className="flex items-center gap-2">
-          <span className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 bg-violet-50 text-violet-600">
+          <span className="settings-theme-icon w-9 h-9 rounded-xl flex items-center justify-center shrink-0 bg-violet-50 text-violet-600">
             <Palette className="w-4.5 h-4.5" />
           </span>
           <div className="min-w-0 flex-1">

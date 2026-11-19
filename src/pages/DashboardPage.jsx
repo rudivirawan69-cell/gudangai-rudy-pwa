@@ -624,9 +624,9 @@ function DashboardTotals({ totalItem }) {
 
 function DashboardStatusSummary({ data }) {
   const values = [
-    { key: 'aman', label: 'Aman', tone: 'text-emerald-700 bg-emerald-50 border-emerald-100' },
-    { key: 'waspada', label: 'Waspada', tone: 'text-amber-700 bg-amber-50 border-amber-100' },
-    { key: 'kritis', label: 'Kritis', tone: 'text-red-700 bg-red-50 border-red-100' },
+    { key: 'aman', label: 'Aman' },
+    { key: 'waspada', label: 'Waspada' },
+    { key: 'kritis', label: 'Kritis' },
   ];
   const hasSummary = Boolean(data && data.success !== false);
   return (
@@ -636,7 +636,7 @@ function DashboardStatusSummary({ data }) {
         const raw = data?.status?.[item.key] ?? data?.[item.key];
         const count = raw == null || !Number.isFinite(Number(raw)) ? null : Number(raw);
         return (
-          <div key={item.key} className={`rounded-xl border p-3 text-center ${item.tone}`}>
+          <div key={item.key} className={`dashboard-status-tile dashboard-status-${item.key} rounded-xl border p-3 text-center`}>
             <p className="text-[9px] font-extrabold uppercase tracking-wide">{item.label}</p>
             <p className="mt-1 text-xl font-extrabold tabular-nums">{hasSummary && count != null ? count.toLocaleString('id-ID') : '—'}</p>
             <p className="text-[9px] font-semibold opacity-70">item</p>
@@ -1231,16 +1231,22 @@ export default function DashboardPage({ onNavigate }) {
         </p>
       )}
 
-      <section className="grid grid-cols-1 xl:grid-cols-2 gap-4" aria-label="Ringkasan operasional">
+      <section className="dashboard-overview-grid grid grid-cols-1 xl:grid-cols-2 gap-4" aria-label="Ringkasan operasional">
+        <div className="xl:col-span-2">
+          <DashboardTotals totalItem={dashboardTotalItem} />
+        </div>
+        <div className="xl:col-span-2">
+          <DashboardStatusSummary data={dashboardData} />
+        </div>
+        <div className="xl:col-span-2">
+          <HomeAgentAssistant onNavigate={onNavigate} />
+        </div>
         <div className="dashboard-panel rounded-2xl bg-white border border-slate-200 shadow-sm p-4 min-w-0">
           <Movement7Days history={history} />
         </div>
         <div className="dashboard-panel rounded-2xl bg-white border border-slate-200 shadow-sm p-4 min-w-0">
           <StockComparison cv={stats.cv} pt={stats.pt} />
         </div>
-        <div className="xl:col-span-2"><HomeAgentAssistant onNavigate={onNavigate} /></div>
-        <div className="xl:col-span-2"><DashboardTotals totalItem={dashboardTotalItem} /></div>
-        <div className="xl:col-span-2"><DashboardStatusSummary data={dashboardData} /></div>
       </section>
 
       <details className="dashboard-greeting-card group rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">

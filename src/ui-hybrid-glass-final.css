@@ -192,3 +192,85 @@ html[data-theme] .app-content .settings-profile-editor {
 @media (prefers-reduced-motion: reduce) {
   .sk-page *, .rw-page * { transition:none !important;animation:none !important; }
 }
+
+
+/* Unified home overview: KPI, status, assistant and analytics share one grid rhythm. */
+html[data-theme] .app-content .dashboard-overview-grid {
+  align-items: stretch;
+}
+html[data-theme] .app-content .dashboard-overview-grid > .dashboard-panel {
+  min-width: 0;
+  background: var(--bg-elevated) !important;
+  border-color: var(--border) !important;
+  color: var(--text-main) !important;
+}
+html[data-theme] .app-content .dashboard-status-tile {
+  background: var(--bg-elevated) !important;
+  border-color: var(--border) !important;
+  box-shadow: var(--shadow-1);
+}
+html[data-theme] .app-content .dashboard-status-aman {
+  color: var(--stok-aman) !important;
+  background: color-mix(in srgb, var(--stok-aman) 12%, var(--bg-elevated)) !important;
+}
+html[data-theme] .app-content .dashboard-status-waspada {
+  color: var(--stok-waspada) !important;
+  background: color-mix(in srgb, var(--stok-waspada) 13%, var(--bg-elevated)) !important;
+}
+html[data-theme] .app-content .dashboard-status-kritis {
+  color: var(--stok-kritis) !important;
+  background: color-mix(in srgb, var(--stok-kritis) 12%, var(--bg-elevated)) !important;
+}
+html[data-theme] .app-content .dashboard-status-tile :is(p,span) {
+  color: inherit !important;
+}
+
+/* Settings: theme selector, auth panel and profile editor follow the active palette. */
+html[data-theme] .app-content .settings-theme-icon {
+  color: var(--accent-strong) !important;
+  background: var(--accent-soft) !important;
+  border: 1px solid var(--border);
+}
+html[data-theme] .app-content .settings-theme-card .theme-picker-btn {
+  color: var(--text-muted);
+  background: var(--bg-muted) !important;
+  border-color: var(--border) !important;
+}
+html[data-theme] .app-content .settings-theme-card .theme-picker-btn :is(svg,span) {
+  color: inherit;
+}
+html[data-theme] .app-content .settings-theme-card .theme-picker-btn.is-active {
+  color: var(--accent-strong) !important;
+  background: var(--accent-soft) !important;
+  border-color: var(--accent) !important;
+}
+html[data-theme] .app-content .settings-auth-card {
+  color: var(--text-main) !important;
+  background: color-mix(in srgb, var(--accent) 10%, var(--bg-elevated)) !important;
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--border)) !important;
+}
+html[data-theme] .app-content .settings-auth-card :is(svg,p,span,strong) {
+  color: var(--text-main) !important;
+}
+html[data-theme] .app-content .settings-profile-editor {
+  background: var(--bg-elevated) !important;
+  border-color: var(--border) !important;
+  color: var(--text-main) !important;
+  box-shadow: var(--shadow-1);
+}
+html[data-theme] .app-content .settings-profile-editor :is(p,label) {
+  color: var(--text-muted) !important;
+}
+html[data-theme] .app-content .settings-profile-editor input {
+  color: var(--text-main) !important;
+  background: var(--field-bg, var(--bg-muted)) !important;
+  border-color: var(--border) !important;
+}
+html[data-theme] .app-content .settings-profile-editor input::placeholder {
+  color: var(--text-muted) !important;
+}
+@media (min-width: 1280px) {
+  html[data-theme] .app-content .dashboard-overview-grid > .dashboard-panel {
+    min-height: 100%;
+  }
+}
