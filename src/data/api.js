@@ -782,7 +782,7 @@ export function saveToHistory(entry) {
     at: savedAt,
     timestamp: savedAt,
     items: normalizedItems,
-    status: source.status || 'success',
+    status: /^(sukses|success|applied|terkirim|ok)$/i.test(String(source.status || 'success')) ? 'success' : (source.status || 'success'),
     syncStatus: 'success',
   };
   const dedupeKey = clientItemId || transactionId;
