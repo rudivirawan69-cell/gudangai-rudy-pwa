@@ -18,9 +18,9 @@ function resolveLocal(fromFile, specifier) {
 function localImports(source) {
   const found = new Set();
   const patterns = [
-    /^\\s*import\\s+(?:[\\s\\S]*?\\s+from\\s+)?['"]((?:\\.{1,2})\\/[^'"]+)['"]/gm,
-    /^\\s*export\\s+(?:[\\s\\S]*?\\s+from\\s+)['"]((?:\\.{1,2})\\/[^'"]+)['"]/gm,
-    /\\bimport\\(\\s*['"]((?:\\.{1,2})\\/[^'"]+)['"]\\s*\\)/g,
+    /^\s*import\s+(?:[\s\S]*?\s+from\s+)?['"]((?:\.{1,2})\/[^'"]+)['"]/gm,
+    /^\s*export\s+(?:[\s\S]*?\s+from\s+)['"]((?:\.{1,2})\/[^'"]+)['"]/gm,
+    /\bimport\(\s*['"]((?:\.{1,2})\/[^'"]+)['"]\s*\)/g,
   ];
   for (const pattern of patterns) {
     for (const match of source.matchAll(pattern)) found.add(match[1]);
