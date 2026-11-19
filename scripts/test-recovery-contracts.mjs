@@ -144,7 +144,7 @@ assert.match(inputPage, /gudangai_input_draft_v1/);
 assert.match(inputPage, /Draft transaksi dipulihkan/);
 assert.match(poSource, /gudangai_po_draft_v1/);
 assert.match(poSource, /const poDate = localISODate\(\)/);
-assert.match(appSource, /function AppHeader\(\{ user, tab, onOpenSettings, online, status, sheetLabel, onRefresh \}\)/);
+assert.match(appSource, /function AppHeader\(\{[^}]*user[^}]*tab[^}]*onOpenSettings[^}]*online[^}]*status[^}]*sheetLabel[^}]*onRefresh[^}]*sync[^}]*\}\)/, 'AppHeader must retain its existing props and accept the sync status model.');
 assert.match(appSource, /formatSpreadsheetTimestamp\(sheetLabel\)/);
 const sheetTimestampSource = readFileSync(new URL('../src/utils/sheetTimestamp.js', import.meta.url), 'utf8');
 assert.match(sheetTimestampSource, /Asia\/Jakarta/);
