@@ -1221,8 +1221,6 @@ export default function DashboardPage({ onNavigate }) {
 
   return (
     <div className="dashboard-shell w-full max-w-6xl mx-auto px-3 sm:px-5 lg:px-7 pt-4 pb-24 space-y-4">
-      <HomeAgentAssistant onNavigate={onNavigate} />
-
       {confirmMsg && (
         <p className="rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-[11px] font-semibold text-emerald-700">{confirmMsg}</p>
       )}
@@ -1240,6 +1238,7 @@ export default function DashboardPage({ onNavigate }) {
         <div className="dashboard-panel rounded-2xl bg-white border border-slate-200 shadow-sm p-4 min-w-0">
           <StockComparison cv={stats.cv} pt={stats.pt} />
         </div>
+        <div className="xl:col-span-2"><HomeAgentAssistant onNavigate={onNavigate} /></div>
         <div className="xl:col-span-2"><DashboardTotals totalItem={dashboardTotalItem} /></div>
         <div className="xl:col-span-2"><DashboardStatusSummary data={dashboardData} /></div>
       </section>
