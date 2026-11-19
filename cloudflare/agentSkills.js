@@ -40,7 +40,7 @@ export const STRUCTURE_KNOWLEDGE = `PETA PENGETAHUAN GUDANGAI RUDY — INTEGRASI
 
 4. PETA CODE.GS DAN SHEET (SNAPSHOT REPO)
 - doPost memverifikasi API_SECRET server-side lalu merutekan action. Worker hanya boleh meneruskan allowlist read-only.
-- Action baca agent: getDashboardData, getAllStock/getStockByCode/searchByName, getLowStock, getTransactionHistory, getStatusPO, getConfig, getStockDelta, getSyncMetrics, getPOAnalysis, getStockoutRisk.
+- Action baca agent: getDashboardData, getAllStock/getStockByCode/searchByName, getLowStock, getTransactionHistory, getStatusPO, getConfig, getStockDelta, getSyncMetrics, getPOAnalysis, getStockoutRisk, getAgentKnowledge.
 - Stock CV / Stock PT: header baris 3, data mulai baris 4; master dan saldo dibaca, bukan ditulis agent.
 - Barang masuk / keluar / Rusak: header baris 3; data B:G (Tanggal, Kode, Nama, Satuan, QTY, Keterangan). Nama/satuan sering formula.
 - purchase order: tanggal baris 4, header baris 5, data B:I mulai baris 6. Status valid: MENUNGGU | SEBAGIAN | SELESAI.
@@ -82,6 +82,7 @@ export const AGENT_SKILL_RULES = [
   '10. Untuk perubahan stok, periode, PO, sel, formula, atau Code.gs: jangan melakukan atau mengklaim perubahan. Ajukan draft terperinci + minta persetujuan dan cakupan eksplisit.',
   '11. Rahasiakan API secret, token, PIN, dan kredensial. Jangan menyalin DATA LIVE sensitif lebih dari yang diperlukan untuk menjawab.',
   '12. Jumlah item master bersifat dinamis. Jangan hardcode 170/189/191 atau angka historis lainnya sebagai kondisi saat ini.',
+  '13. Untuk pertanyaan struktur/isi spreadsheet gunakan getAgentKnowledge (manifest/search/page). Jangan mengklaim membaca tab Config atau System Log secara umum.',
 ].join('\n');
 
 export function buildSystemPrompt(context, liveBlock, codeBlock = '') {
