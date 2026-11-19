@@ -546,18 +546,44 @@ async function submitItems(action, entity, items, tanggal, options = {}) {
       const remainingItems = list.slice(i);
       // A timeout is ambiguous: never issue a second write automatically.
       // Keep the same item IDs in the outbox for explicit backend/read-back reconciliation.
-      const queuedIds = options.fromQueue ? [] : enqueue(action, entity, remainingItems, { tanggal });
+      // Timeout/transport failure is ambiguous: reconcile each original identity
+      // against the ledger + exact spreadsheet row before creating an outbox entry.
+      const confirmed = [];
+      const unresolved = [];
+      for (const it of remainingItems) {
+        const itemType = action === 'barangKeluar' ? 'keluar' : action === 'barangRusak' ? 'rusak' : 'masuk';
+        const check = await verifyPendingItem({ clientItemId: it.clientItemId, type: itemType });
+        if (check?.success === true && check?.readBack?.matched === true) confirmed.push({ item: it, check });
+        else unresolved.push(it);
+      }
+      markAppliedMany(confirmed.map(({ item }) => item.clientItemId));
+      totalSuccess += confirmed.length;
+      totalFail += unresolved.length;
+      allResults.push(...confirmed.map(({ item, check }) => ({
+        success: true, status: 'APPLIED', readBackConfirmed: true,
+        clientItemId: item.clientItemId, transactionId: check.transactionId || 'TX-' + item.clientItemId,
+        readBack: check.readBack,
+      })));
+      const queuedIds = options.fromQueue ? [] : enqueue(action, entity, unresolved, { tanggal });
       totalQueued += queuedIds.length;
-      totalFail += remainingItems.length;
-      allResults.push(...remainingItems.map(it => ({
-        success: false, queued: queuedIds.includes(it.clientItemId), queueStored: queuedIds.includes(it.clientItemId), uncertain: true, clientItemId: it.clientItemId, error: msg,
+      allResults.push(...unresolved.map(it => ({
+        success: false, queued: queuedIds.includes(it.clientItemId), queueStored: queuedIds.includes(it.clientItemId),
+        uncertain: true, clientItemId: it.clientItemId, error: msg,
       })));
       emitProgress(originalList.length, originalList.length, { successCount: totalSuccess, failCount: totalFail, queuedCount: totalQueued });
-      pushNotification({
-        type: 'warning',
-        title: 'Write belum terkonfirmasi',
-        body: remainingItems.length + ' item diamankan di Antrian Sinkronisasi. Detail backend: ' + msg + '. Jangan kirim ulang manual; verifikasi backend/read-back terlebih dahulu.',
-      });
+      if (unresolved.length) {
+        pushNotification({
+          type: 'warning',
+          title: 'Write belum terkonfirmasi',
+          body: confirmed.length + ' item dikonfirmasi sudah tertulis; ' + unresolved.length + ' item diamankan di Antrian Sinkronisasi. Detail backend: ' + msg,
+        });
+      } else {
+        pushNotification({
+          type: 'success',
+          title: 'Write terverifikasi',
+          body: confirmed.length + ' item sudah terbukti tertulis di spreadsheet melalui read-back; tidak dimasukkan ke antrean.',
+        });
+      }
       break;
     }
   }
@@ -615,9 +641,9 @@ export async function verifyPendingItem(item) {
     let data;
     try {
       data = await getJson('getTransactionStatus', params);
+      if (data?.code === 'UNKNOWN_ACTION' || data?.code === 'GET_ACTION_UNAVAILABLE') throw new Error('GET read-back action tidak tersedia');
     } catch (_) {
-      // Some Apps Script deployments/proxies do not complete the GET read-back route.
-      // POST is still read-only because the action is getTransactionStatus.
+      // POST is read-only for this allowlisted status action.
       data = await postJson({ action: 'getTransactionStatus', ...params, requestId: 'VERIFY-' + item.clientItemId }, { retries: 1, timeoutMs: SINGLE_TIMEOUT_MS });
     }
     const readBackMatched = data?.readBack?.matched === true;
@@ -732,7 +758,7 @@ export function saveToHistory(entry) {
   const normalizedItems = rawItems.map((item) => ({
     ...item,
     kode: String(item?.kode || item?.kodeBarang || '').trim(),
-    nama: String(item?.nama || item?.name || '').replace(/\\u00a0/g, ' ').replace(/\\s+/g, ' ').trim(),
+    nama: String(item?.nama || item?.name || '').replace(/\u00a0/g, ' ').replace(/\s+/g, ' ').trim(),
     qty: Number(item?.qty ?? item?.quantity) || 0,
     satuan: String(item?.satuan || item?.unit || '').trim(),
   }));
