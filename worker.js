@@ -191,8 +191,8 @@ async function gatherLiveData(env, message) {
       const text = String(message || '');
       const sheetNames = ['Stock CV','Stock PT','Stock Bahan Baku','Barang masuk','Barang keluar','Barang Rusak','purchase order','Dashboard Live','Data Stok Per Divisi','System Log','Config','Stock Awal'];
       const requestedSheet = sheetNames.find((name) => text.toLowerCase().includes(name.toLowerCase()));
-      const pageMatch = text.match(/(?:baris|row)\\s*(\\d+)/i);
-      const columnMatch = text.match(/(?:kolom|column|col)\\s*(\\d+)/i);
+      const pageMatch = text.match(/(?:baris|row)\s*(\d+)/i);
+      const columnMatch = text.match(/(?:kolom|column|col)\s*(\d+)/i);
       const wantsPage = Boolean(requestedSheet && (pageMatch || columnMatch));
       const wantsManifest = /(?:daftar|nama|semua|seluruh|struktur).{0,30}(?:sheet|spreadsheet|tab)|(?:sheet|tab).{0,20}(?:apa saja|daftar|semua)/i.test(text);
       params.mode = wantsPage ? 'page' : wantsManifest ? 'manifest' : 'search';
