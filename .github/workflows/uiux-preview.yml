@@ -1,0 +1,92 @@
+name: GudangAI UIUX Preview — Read Only
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - "src/**"
+      - "public/**"
+      - "scripts/**"
+      - "index.html"
+      - "vite.config.js"
+      - "package.json"
+      - "package-lock.json"
+      - "wrangler.uiux-preview.jsonc"
+      - ".github/workflows/uiux-preview.yml"
+      - "docs/UIUX_WORKFLOW.md"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gudangai-uiux-preview
+  cancel-in-progress: true
+
+jobs:
+  preview:
+    name: Build, verify and deploy isolated UI preview
+    if: startsWith(github.head_ref, 'uiux/')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Lint frontend
+        run: npm run lint
+
+      - name: Run application tests
+        run: npm test
+
+      - name: Build with UIUX Preview safety guard
+        run: npm run build
+        env:
+          VITE_UIUX_PREVIEW: "true"
+
+      - name: Verify read-only guard is included in the preview bundle
+        run: |
+          node --input-type=module <<'NODE'
+          import { readdir, readFile } from 'node:fs/promises';
+          const files = await readdir('dist/assets');
+          const jsFiles = files.filter((name) => name.endsWith('.js'));
+          const bundle = (await Promise.all(jsFiles.map((name) => readFile('dist/assets/' + name, 'utf8')))).join('\n');
+          for (const marker of ['UIUX_PREVIEW_READ_ONLY', 'TRANSAKSI PRODUKSI DINONAKTIFKAN']) {
+            if (!bundle.includes(marker)) throw new Error('Preview safety marker missing: ' + marker);
+          }
+          console.log('Read-only preview guard verified in ' + jsFiles.length + ' JS assets.');
+          NODE
+
+      - name: Deploy to isolated Cloudflare UIUX Preview Worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          if [ -z "${CLOUDFLARE_API_TOKEN:-}" ] || [ -z "${CLOUDFLARE_ACCOUNT_ID:-}" ]; then
+            echo "Missing CLOUDFLARE_API_TOKEN or CLOUDFLARE_ACCOUNT_ID repository secrets."
+            exit 1
+          fi
+          npx wrangler@4.156.0 deploy --config wrangler.uiux-preview.jsonc
+
+      - name: Publish Preview URL and safety status
+        run: |
+          {
+            echo "## GudangAI UI/UX Preview"
+            echo ""
+            echo "- Preview: https://gudangai-rudy-pwa69-uiux-preview.rudivirawan69.workers.dev/"
+            echo "- Mode: **READ ONLY**"
+            echo "- Apps Script GET: allowed for display data"
+            echo "- Apps Script POST/PUT/PATCH/DELETE: blocked in the preview client"
+            echo "- Production Worker: untouched"
+            echo "- Merge/deploy production: requires owner approval"
+          } >> "$GITHUB_STEP_SUMMARY"
