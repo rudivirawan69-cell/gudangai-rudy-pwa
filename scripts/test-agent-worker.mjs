@@ -490,3 +490,8 @@ test('manifest is metadata-only and never returns sample transaction rows', () =
   assert.match(manifest, /redacted:sh.getName\(\) === "Config"/);
 });
 
+
+test('sensitive Config and System Log tabs are excluded from generic search and page reads', () => {
+  assert.match(codeGs, /\["Config", "System Log"\]/);
+  assert.match(codeGs, /name === "Config" \|\| name === "System Log"/);
+});
