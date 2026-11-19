@@ -216,8 +216,8 @@ export default function SettingsPage({ onNavigate }) {
   const isSupabaseSession = Boolean(user?.email);
 
   return (
-    <div className="settings-page space-y-2 pb-3">
-      <div className="flex items-center gap-3 rounded-2xl bg-white/95 border border-slate-200 shadow-sm px-3.5 py-3">
+    <div className="settings-page space-y-3 pb-6">
+      <div className="settings-profile-summary flex items-center gap-3 rounded-2xl bg-white/95 border border-slate-200 shadow-sm px-3.5 py-3">
         <Avatar name={user?.name || 'Rudi'} photo={user?.photo} size="lg" />
         <div className="flex-1 min-w-0">
           <p className="text-base font-extrabold text-slate-900 truncate">{user?.name || 'Rudi'}</p>
@@ -305,7 +305,7 @@ export default function SettingsPage({ onNavigate }) {
       </div>
 
       {panel === 'profile' && (
-        <div className="section-card p-4 space-y-3">
+        <div className="section-card settings-profile-editor p-4 space-y-3">
           <div className="flex items-center gap-3">
             <Avatar name={username} photo={photoPreview || user?.photo} size="lg" />
             <div className="flex-1 min-w-0">

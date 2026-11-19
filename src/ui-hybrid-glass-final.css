@@ -154,6 +154,41 @@ html[data-theme] .app-content :is(.sk-page,.rw-page) {
   .rw-page .rw-filters { gap:2px; }
   .sk-page .sk-div-chips button,.rw-page .rw-chips button { min-height:36px; }
 }
+/* Dashboard metric icons stay distinct and readable in every active palette. */
+html[data-theme] .app-content .dashboard-total-card .dashboard-icon-cyan {
+  color: var(--accent-strong) !important;
+  background: color-mix(in srgb, var(--accent) 18%, var(--bg-elevated)) !important;
+  border-color: color-mix(in srgb, var(--accent) 42%, var(--border)) !important;
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--text-main) 12%, transparent) !important;
+}
+html[data-theme] .app-content .dashboard-total-card .dashboard-icon-orange {
+  color: var(--warning) !important;
+  background: color-mix(in srgb, var(--warning) 18%, var(--bg-elevated)) !important;
+  border-color: color-mix(in srgb, var(--warning) 42%, var(--border)) !important;
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--text-main) 12%, transparent) !important;
+}
+
+/* Settings profile surfaces use the same readable colors as the selected theme. */
+html[data-theme] .app-content .settings-profile-summary {
+  background: var(--bg-elevated) !important;
+  border-color: var(--border) !important;
+  color: var(--text-main) !important;
+  box-shadow: var(--shadow-1) !important;
+}
+html[data-theme] .app-content .settings-profile-summary :is(.text-slate-900,.text-slate-800) {
+  color: var(--text-main) !important;
+  -webkit-text-fill-color: var(--text-main) !important;
+}
+html[data-theme] .app-content .settings-profile-summary .text-slate-600 {
+  color: var(--text-muted) !important;
+  -webkit-text-fill-color: var(--text-muted) !important;
+}
+html[data-theme] .app-content .settings-profile-editor {
+  background: var(--bg-elevated) !important;
+  border-color: var(--border) !important;
+  color: var(--text-main) !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .sk-page *, .rw-page * { transition:none !important;animation:none !important; }
 }
