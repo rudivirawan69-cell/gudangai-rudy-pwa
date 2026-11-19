@@ -4425,6 +4425,9 @@ function getAgentKnowledge_(params) {
   if (!terms.length) terms.push(query.toLowerCase());
   const requestedSheet = String(params.sheetName || params.sheet || "").trim();
   const sensitiveSheets = ["Config", "System Log"];
+  if (requestedSheet && sensitiveSheets.indexOf(requestedSheet) !== -1) {
+    return { success:false, readOnly:true, code:"SENSITIVE_SHEET_REDACTED", error:"Tab sensitif tidak diekspos melalui pencarian umum." };
+  }
   const sheets = ss.getSheets().filter(function(sh) { return sensitiveSheets.indexOf(sh.getName()) === -1 && (!requestedSheet || sh.getName() === requestedSheet); });
   if (requestedSheet && !sheets.length) return { success:false, readOnly:true, code:"SHEET_NOT_FOUND", error:"Tab yang diminta tidak ditemukan.", requestedSheet:requestedSheet };
   const maxResults = Math.min(40, Math.max(1, Math.floor(Number(params.limit) || 24)));
