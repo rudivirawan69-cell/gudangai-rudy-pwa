@@ -284,13 +284,26 @@ test('data questions trigger live read-only read and include provenance', async 
   assert.match(systemText, /Pisahkan entitas CV dan PT/);
 });
 
+test('spreadsheet structure questions route to getAgentKnowledge manifest through read-only gateway', async () => {
+  const { response, sheetCalls, payload, systemText } = await runLive('Tolong tampilkan daftar tab dan struktur sheet spreadsheet');
+  assert.equal(response.status, 200);
+  assert.equal(sheetCalls.length, 1);
+  assert.equal(sheetCalls[0].action, 'getAgentKnowledge');
+  assert.equal(sheetCalls[0].mode, 'manifest');
+  assert.equal(sheetCalls[0].client.mode, 'read_only');
+  assert.equal(payload.dataSources[0].action, 'getAgentKnowledge');
+  assert.equal(payload.dataSources[0].ok, true);
+  assert.match(systemText, /getAgentKnowledge/);
+  assert.match(systemText, /manifest/);
+});
+
 test('three-day stockout questions request the dedicated 30-day read-only forecast', async () => {
   const { sheetCalls, systemText } = await runLive('Prediksi stok yang akan habis dalam 3 hari');
   assert.equal(sheetCalls[0].action, 'getStockoutRisk');
   assert.equal(sheetCalls[0].windowDays, 30);
   assert.equal(sheetCalls[0].thresholdDays, 3);
   assert.match(systemText, /estimasi stok habis/i);
-  assert.match(systemText, /jangan.*kepastian/i);
+  assert.match(systemText, /bukan kepastian/i);
 });
 
 test('Apps Script forecast is routed by POST and declares read-only output', () => {
