@@ -173,6 +173,9 @@ export function detectLiveActions(message) {
     if (intent.pattern.test(text) && READ_ONLY_ACTIONS.has(intent.action)) matched.push(intent.action);
     if (matched.length >= MAX_LIVE_ACTIONS) break;
   }
+  // Struktur/isi spreadsheet adalah satu tugas retrieval tersendiri; jangan
+  // menambahkan pencarian stok kedua yang tidak diminta pada pertanyaan yang sama.
+  if (matched.includes('getAgentKnowledge')) return ['getAgentKnowledge'];
   return matched;
 }
 function extractStockQuery(message) {
