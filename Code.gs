@@ -4424,7 +4424,7 @@ function getAgentKnowledge_(params) {
   }).slice(0, 5);
   if (!terms.length) terms.push(query.toLowerCase());
   const requestedSheet = String(params.sheetName || params.sheet || "").trim();
-  const sheets = ss.getSheets().filter(function(sh) { return !requestedSheet || sh.getName() === requestedSheet; });
+  const sheets = ss.getSheets().filter(function(sh) { return sh.getName() !== "Config" && (!requestedSheet || sh.getName() === requestedSheet); });
   if (requestedSheet && !sheets.length) return { success:false, readOnly:true, code:"SHEET_NOT_FOUND", error:"Tab yang diminta tidak ditemukan.", requestedSheet:requestedSheet };
   const maxResults = Math.min(40, Math.max(1, Math.floor(Number(params.limit) || 24)));
   const results = [], seen = Object.create(null);
@@ -4460,11 +4460,11 @@ function getAgentKnowledge_(params) {
 function getAgentSheetManifest_(ss) {
   const sheets = ss.getSheets().map(function(sh) {
     const lastRow = sh.getLastRow(), lastCol = sh.getLastColumn();
-    const previewRows = Math.min(8, Math.max(0, lastRow));
+    const previewRows = Math.min(sh.getName() === "Config" ? 3 : 8, Math.max(0, lastRow));
     const previewCols = Math.min(20, Math.max(0, lastCol));
     const preview = previewRows && previewCols ? sh.getRange(1, 1, previewRows, previewCols).getDisplayValues() : [];
     return { sheetName:sh.getName(), sheetId:sh.getSheetId(), lastRow:lastRow, lastColumn:lastCol,
-      headerPreview:preview, dataRows:Math.max(0, lastRow - 1), hidden:sh.isSheetHidden() };
+      headerPreview:preview, usedRows:lastRow, redacted:sh.getName() === "Config", hidden:sh.isSheetHidden() };
   });
   return { success:true, readOnly:true, mode:"manifest", spreadsheetName:ss.getName(),
     activeMonth:getActiveMonth(), sheetCount:sheets.length, sheets:sheets, readAt:new Date().toISOString() };
@@ -4474,6 +4474,7 @@ function getAgentSheetPage_(ss, params) {
   const name = String(params.sheetName || params.sheet || "").trim();
   const sh = name ? ss.getSheetByName(name) : null;
   if (!sh) return { success:false, readOnly:true, code:"SHEET_NOT_FOUND", error:"Nama tab tidak valid atau tidak ditemukan." };
+  if (name === "Config") return { success:false, readOnly:true, code:"SENSITIVE_SHEET_REDACTED", error:"Nilai Config tidak diekspos ke Agent. Gunakan getConfig untuk metadata konfigurasi yang aman." };
   const lastRow = sh.getLastRow(), lastCol = Math.min(30, sh.getLastColumn());
   const startRow = Math.max(1, Math.floor(Number(params.startRow) || 1));
   const pageSize = Math.min(50, Math.max(1, Math.floor(Number(params.pageSize) || 25)));
