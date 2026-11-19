@@ -1,19 +1,22 @@
 import { parseTanggal, resolvePeriode } from './tanggal.js';
 import { AGENT_SKILL_RULES, EXTRA_LIVE_INTENTS, EXTRA_READ_ACTIONS, buildSystemPrompt } from './cloudflare/agentSkills.js';
+import { CODE_KNOWLEDGE } from './cloudflare/generated/code-knowledge.js';
 
 const DEFAULT_MODEL = '@cf/meta/llama-3.1-8b-instruct';
 const MAX_MESSAGE_LENGTH = 4000;
 const MAX_HISTORY_ITEMS = 8;
-const LIVE_DATA_CHAR_BUDGET = 3500;
+const LIVE_DATA_CHAR_BUDGET = 9000;
+const CODE_DATA_CHAR_BUDGET = 6500;
 const MAX_LIVE_ACTIONS = 2;
 const READ_ONLY_ACTIONS = new Set([
   'ping','status','getConfig','getDashboard','getDashboardData',
   'getAllStock','getStockAll','getStockByCode','searchByName',
   'getLowStock','getTransactionHistory','getStatusPO','bootstrap',
-  'getStockDelta','getSyncMetrics','getLastUpdate','getPOAnalysis',
+  'getStockDelta','getSyncMetrics','getLastUpdate','getPOAnalysis','getAgentKnowledge',
   ...EXTRA_READ_ACTIONS,
 ]);
 const LIVE_INTENTS = [
+  { action: 'getAgentKnowledge', pattern: /(?:daftar|nama|struktur|isi|seluruh|semua|baca|buka|tampilkan|ambil|lihat|cari|jelaskan|periksa).{0,45}(?:sheet|spreadsheet|tab|kolom|baris|formula|rumus|stock cv|stock pt|stock bahan baku)|(?:sheet|spreadsheet|tab|kolom|baris|formula|rumus).{0,45}(?:apa|mana|semua|seluruh|struktur|isi|data|header|judul)|rumus.{0,30}(?:stok|sisa|stock|perhitungan)/i },
   ...EXTRA_LIVE_INTENTS.filter((intent) => intent.action === 'getStockoutRisk'),
   { action: 'getDashboardData', pattern: /dashboard|ringkasan|rangkuman|kondisi gudang|overview/i },
   { action: 'getLowStock', pattern: /stok (menipis|kritis|rendah|habis)|low ?stock|di bawah minimum|hampir habis|kritis/i },
@@ -170,6 +173,9 @@ export function detectLiveActions(message) {
     if (intent.pattern.test(text) && READ_ONLY_ACTIONS.has(intent.action)) matched.push(intent.action);
     if (matched.length >= MAX_LIVE_ACTIONS) break;
   }
+  // Struktur/isi spreadsheet adalah satu tugas retrieval tersendiri; jangan
+  // menambahkan pencarian stok kedua yang tidak diminta pada pertanyaan yang sama.
+  if (matched.includes('getAgentKnowledge')) return ['getAgentKnowledge'];
   return matched;
 }
 function extractStockQuery(message) {
@@ -184,6 +190,26 @@ async function gatherLiveData(env, message) {
     const params = {};
     if (action === 'searchByName' && query) { params.q=query; params.query=query; params.nama=query; params.name=query; }
     if (action === 'getAllStock') params.entitas = 'ALL';
+    if (action === 'getAgentKnowledge') {
+      const text = String(message || '');
+      const sheetNames = ['Stock CV','Stock PT','Stock Bahan Baku','Barang masuk','Barang keluar','Barang Rusak','purchase order','Dashboard Live','Data Stok Per Divisi','System Log','Config','Stock Awal'];
+      const requestedSheet = sheetNames.find((name) => text.toLowerCase().includes(name.toLowerCase()));
+      const pageMatch = text.match(/(?:baris|row)\s*(\d+)/i);
+      const columnMatch = text.match(/(?:kolom|column|col)\s*(\d+)/i);
+      const wantsPage = Boolean(requestedSheet && (pageMatch || columnMatch));
+      const wantsManifest = /(?:daftar|nama|semua|seluruh|struktur).{0,30}(?:sheet|spreadsheet|tab)|(?:sheet|tab).{0,20}(?:apa saja|daftar|semua)/i.test(text);
+      params.mode = wantsPage ? 'page' : wantsManifest ? 'manifest' : 'search';
+      params.query = text.slice(0,240);
+      if (wantsPage) {
+        params.sheetName = requestedSheet;
+        params.startRow = pageMatch ? Number(pageMatch[1]) : 1;
+        params.startColumn = columnMatch ? Number(columnMatch[1]) : 1;
+        params.pageSize = 30;
+        params.pageColumns = 30;
+      }
+      params.includeFormulas = /formula|rumus|vlookup|arrayformula/i.test(text);
+      params.limit = 24;
+    }
     if (action === 'getStockoutRisk') { params.windowDays = 30; params.thresholdDays = 3; }
     if (action === 'getStockDelta') params.sinceTimestamp = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     if (action === 'getTransactionHistory') { params.sheet = 'Barang keluar'; params.limit = 100; }
@@ -197,13 +223,50 @@ async function gatherLiveData(env, message) {
 function truncate(text, limit) { return text.length > limit ? `${text.slice(0,limit)} …[dipotong]` : text; }
 export function liveDataBlock(live) {
   if (!live?.results?.length) return 'DATA LIVE: tidak ada untuk pertanyaan ini. Jawab hanya dari konteks operator dan jangan mengklaim membaca spreadsheet.';
-  const parts = live.results.map((item) => item.ok
-    ? `[${item.action} | dibaca ${item.readAt} | ${item.source}]\n${truncate(JSON.stringify(item.data), LIVE_DATA_CHAR_BUDGET)}`
-    : `[${item.action} | GAGAL ${item.code||'UNKNOWN'}] Data belum terkonfirmasi: ${item.error||'-'}`);
-  return `DATA LIVE (read-only):\n${parts.join('\n\n')}`;
+  let remaining = LIVE_DATA_CHAR_BUDGET;
+  const parts = live.results.map((item) => {
+    if (!item.ok) return '[' + item.action + ' | GAGAL ' + (item.code || 'UNKNOWN') + '] Data belum terkonfirmasi: ' + (item.error || '-');
+    if (remaining <= 0) return '[' + item.action + '] Hasil tidak dimasukkan karena batas konteks tercapai.';
+    const raw = JSON.stringify(item.data);
+    const clipped = truncate(raw, remaining);
+    remaining = Math.max(0, remaining - clipped.length);
+    return '[' + item.action + ' | dibaca ' + item.readAt + ' | ' + item.source + ']\n' + clipped;
+  });
+  return 'DATA LIVE (read-only): setiap hasil memiliki sumber dan waktu baca.\n' + parts.join('\n\n');
 }
-function systemPrompt(context={}, liveBlock='') {
-  return buildSystemPrompt(context, liveBlock);
+const CODE_STOP_WORDS = new Set(['dan','atau','yang','untuk','dari','dengan','pada','apa','bagaimana','berapa','tolong','jelaskan','periksa','cek','saya','kamu','agent','gudangai','rudy','rubee','tentang','sistem','aplikasi']);
+export function retrieveCodeKnowledge(message, maxChunks = 3) {
+  const terms = [...new Set(String(message || '').toLowerCase().match(/[a-z0-9_]{3,}/g) || [])].filter((term) => !CODE_STOP_WORDS.has(term));
+  if (!terms.length) return { block: '', sources: [] };
+  const ranked = CODE_KNOWLEDGE.chunks.map((chunk) => {
+    const text = String(chunk.text || '').toLowerCase();
+    let score = 0;
+    for (const term of terms) {
+      let count = 0;
+      let at = text.indexOf(term);
+      while (at >= 0 && count < 8) {
+        count += 1;
+        at = text.indexOf(term, at + term.length);
+      }
+      score += count * (term.length >= 7 ? 2 : 1);
+    }
+    return { chunk, score };
+  }).filter((item) => item.score > 0).sort((a, b) => b.score - a.score || a.chunk.id - b.chunk.id).slice(0, maxChunks);
+  const sources = ranked.map(({ chunk }) => ({
+    source: 'Code.gs', section: chunk.section, chunk: chunk.id,
+    sha256: CODE_KNOWLEDGE.sha256, version: CODE_KNOWLEDGE.version, ref: CODE_KNOWLEDGE.ref,
+  }));
+  let remaining = CODE_DATA_CHAR_BUDGET;
+  const block = ranked.map(({ chunk }) => {
+    if (remaining <= 0) return '';
+    const value = '[Code.gs · ' + chunk.section + ' · potongan ' + chunk.id + ']\n' + truncate(chunk.text, remaining);
+    remaining = Math.max(0, remaining - value.length);
+    return value;
+  }).filter(Boolean).join('\n\n');
+  return { block, sources };
+}
+function systemPrompt(context = {}, liveBlock = '', codeBlock = '') {
+  return buildSystemPrompt(context, liveBlock, codeBlock);
 }
 function normalizeHistory(history, currentMessage) {
   const normalized = (Array.isArray(history)?history:[]).slice(-MAX_HISTORY_ITEMS)
@@ -268,25 +331,26 @@ async function handleAgent(request, env, origin) {
   const context = body?.context && typeof body.context==='object' ? body.context : {};
   const history = normalizeHistory(body?.history, message);
   const live = await gatherLiveData(env, message);
-  const system = systemPrompt(context, liveDataBlock(live));
+  const codeKnowledge = retrieveCodeKnowledge(message);
+  const system = systemPrompt(context, liveDataBlock(live), codeKnowledge.block);
   const dataSources = live.results.map(({action,ok,readAt,code})=>({action,ok,readAt,...(code?{code}:{})}));
   const messages = [{ role:'system', content:system }, ...history, { role:'user', content:message }];
   try {
     if (env.NINE_ROUTER_API_KEY && env.NINE_ROUTER_MODEL) {
       try {
         const result = await runNineRouter(env, messages);
-        return json({ success:true, ...result, mode:'hybrid', dataSources }, 200, origin);
+        return json({ success:true, ...result, mode:'hybrid', dataSources, knowledgeSources:codeKnowledge.sources }, 200, origin);
       } catch (routerError) {
         try {
           const fallback = await runWorkersAI(env, messages);
-          return json({ success:true, ...fallback, mode:'hybrid', dataSources, fallbackReason:String(routerError?.message||'9Router unavailable').slice(0,240) }, 200, origin);
+          return json({ success:true, ...fallback, mode:'hybrid', dataSources, knowledgeSources:codeKnowledge.sources, fallbackReason:String(routerError?.message||'9Router unavailable').slice(0,240) }, 200, origin);
         } catch (primaryError) {
           return json({ success:false, code:'AI_PROVIDERS_UNAVAILABLE', error:'9Router dan Workers AI tidak tersedia.', detail:String(primaryError?.message||routerError?.message||'AI gagal').slice(0,240) }, 503, origin);
         }
       }
     }
     const result = await runWorkersAI(env, messages);
-    return json({ success:true, ...result, mode:'hybrid', dataSources }, 200, origin);
+    return json({ success:true, ...result, mode:'hybrid', dataSources, knowledgeSources:codeKnowledge.sources }, 200, origin);
   } catch (primaryError) {
     return json({ success:false, code:'WORKERS_AI_UNAVAILABLE', error:'Agent Workers AI sedang tidak tersedia.', detail:String(primaryError?.message||'Workers AI gagal').slice(0,240) }, 503, origin);
   }
@@ -323,6 +387,13 @@ export default {
         agentStage: configuredSheets(env) ? 'read_only_live_data' : 'analysis_only',
         liveIntentActions:LIVE_INTENTS.map(i=>i.action),
         readOnlyActions:Array.from(READ_ONLY_ACTIONS),
+        codeKnowledgeIndexed:true, codeKnowledgeSource:CODE_KNOWLEDGE.source,
+        codeKnowledgeVersion:CODE_KNOWLEDGE.version, codeKnowledgeRef:CODE_KNOWLEDGE.ref,
+        codeKnowledgeSha256:CODE_KNOWLEDGE.sha256, codeKnowledgeChunks:CODE_KNOWLEDGE.chunkCount,
+        codeKnowledgeLineCount:CODE_KNOWLEDGE.lineCount, codeKnowledgeCharacters:CODE_KNOWLEDGE.characterCount,
+        codeKnowledgeRetrievalMaxChunks:3, spreadsheetKnowledgeAction:'getAgentKnowledge',
+        liveDataCharacterBudget:LIVE_DATA_CHAR_BUDGET, codeDataCharacterBudget:CODE_DATA_CHAR_BUDGET,
+        maxLiveActions:MAX_LIVE_ACTIONS,
         deploymentTarget:new URL(request.url).origin,
       }, 200, corsOrigin);
     }
