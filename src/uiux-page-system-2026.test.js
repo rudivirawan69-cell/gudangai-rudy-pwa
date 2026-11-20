@@ -49,7 +49,7 @@ describe('GudangAI Metode C UI contract', () => {
   it('uses the approved cyan-indigo palette in Graphite runtime tokens and metadata', () => {
     const css = readFileSync(cssPath, 'utf8');
     const theme = readFileSync(themePath, 'utf8');
-    const graphite = css.match(/html\\[data-theme="graphite_titanium"\\]\\s*\\{([^}]+)\\}/)?.[1] || '';
+    const graphite = css.split('html[data-theme="graphite_titanium"]')[1]?.split('}')[0] || '';
     expect(graphite).toMatch(/--accent:\\s*#00e5ff/i);
     expect(graphite).toMatch(/--brand-teal:\\s*#00e5ff/i);
     expect(graphite).toMatch(/--brand-orange:\\s*#6366f1/i);
