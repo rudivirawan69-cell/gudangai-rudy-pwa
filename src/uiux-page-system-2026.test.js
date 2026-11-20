@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 const cssPath = resolve(process.cwd(), 'src/uiux-page-system-2026.css');
 const mainPath = resolve(process.cwd(), 'src/main.jsx');
 const appPath = resolve(process.cwd(), 'src/App.jsx');
+const themePath = resolve(process.cwd(), 'src/hooks/useTheme.jsx');
 
 describe('GudangAI Metode C UI contract', () => {
   it('includes a dedicated page-scoped visual stylesheet', () => {
@@ -45,4 +46,28 @@ describe('GudangAI Metode C UI contract', () => {
       expect(app).toContain(`case ${tab}`);
     }
   });
+  it('uses the approved cyan-indigo palette in Graphite runtime tokens and metadata', () => {
+    const css = readFileSync(cssPath, 'utf8');
+    const theme = readFileSync(themePath, 'utf8');
+    const graphite = css.match(/html\\[data-theme="graphite_titanium"\\]\\s*\\{([^}]+)\\}/)?.[1] || '';
+    expect(graphite).toMatch(/--accent:\\s*#00e5ff/i);
+    expect(graphite).toMatch(/--brand-teal:\\s*#00e5ff/i);
+    expect(graphite).toMatch(/--brand-orange:\\s*#6366f1/i);
+    expect(theme).toContain("description: 'Graphite · Cyan · Indigo — industrial premium'");
+    expect(theme).toContain("graphite_titanium: '#00e5ff'");
+  });
+
+  it('provides dark, readable surfaces for Agent chat and Dashboard chart', () => {
+    const css = readFileSync(cssPath, 'utf8');
+    expect(css).toContain('[data-ui-page="ai"] .max-w-4xl > :is(header,div.relative,form)');
+    expect(css).toContain('[data-ui-page="ai"] .max-w-4xl .bg-white');
+    expect(css).toContain('[data-ui-page="dashboard"] .dashboard-chart-wrap .relative.h-36');
+  });
+
+  it('uses the approved GUDANGAI RUDY PRO sticky header brand', () => {
+    const app = readFileSync(appPath, 'utf8');
+    expect(app).toContain('GUDANGAI RUDY PRO');
+    expect(app).not.toContain('GUDANG-69 RUDI');
+  });
+
 });
