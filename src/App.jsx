@@ -85,30 +85,13 @@ const TAB_SUBTITLE = {
   sync: 'Antrean sinkronisasi',
 };
 
-function ConnBanner({ online, hasUrl, status, message, syncing }) {
-  if (!hasUrl) return null;
-  if (syncing || status === 'syncing') {
-    return (
-      <div className="px-3 py-1.5 bg-cyan-700 text-white text-[11px] font-semibold flex items-center gap-2">
-        <Loader2 className="w-3.5 h-3.5 animate-spin" /> Menyinkronkan...
-      </div>
-    );
-  }
-  if (!online || status === 'offline') {
-    return (
-      <div className="px-3 py-1.5 bg-amber-600 text-white text-[11px] font-semibold flex items-center gap-2">
-        <WifiOff className="w-3.5 h-3.5" /> Offline — data antrian aman di perangkat
-      </div>
-    );
-  }
-  if (status === 'error') {
-    return (
-      <div className="px-3 py-1.5 bg-rose-700 text-white text-[11px] font-semibold flex items-center gap-2">
-        <AlertTriangle className="w-3.5 h-3.5" /> {message || 'Backend tidak merespons'}
-      </div>
-    );
-  }
-  return null;
+function ConnBanner({ hasUrl, status, message }) {
+  if (!hasUrl || status !== 'error') return null;
+  return (
+    <div className="px-3 py-1.5 bg-rose-700 text-white text-[11px] font-semibold flex items-center gap-2">
+      <AlertTriangle className="w-3.5 h-3.5" /> {message || 'Backend tidak merespons'}
+    </div>
+  );
 }
 
 function MoreSheet({ open, onClose, onNavigate, activeId, pendingCount }) {
@@ -136,10 +119,10 @@ function MoreSheet({ open, onClose, onNavigate, activeId, pendingCount }) {
   );
 }
 
-function AppHeader({ user, tab, onOpenSettings, online, status, syncing, sheetLabel, onRefresh }) {
+function AppHeader({ user, tab, onOpenSettings, online, hasUrl, status, syncing, sheetLabel, onRefresh }) {
   const [refreshing, setRefreshing] = useState(false);
   const photo = (user?.photo && String(user.photo).length > 40) ? user.photo : DEFAULT_PROFILE_PHOTO;
-  const connected = online && status !== 'offline' && status !== 'error';
+  const connected = hasUrl && online && status !== 'offline' && status !== 'error';
 
   const handleRefresh = async () => {
     if (refreshing) return;
@@ -166,7 +149,7 @@ function AppHeader({ user, tab, onOpenSettings, online, status, syncing, sheetLa
             >
               {syncing || status === 'syncing'
                 ? <><span className="sync-dot is-loading" />Memuat data...</>
-                : !online || status === 'offline' || status === 'error'
+                 : !hasUrl || !online || status === 'offline' || status === 'error'
                   ? <><span className="sync-dot is-offline" />Menunggu koneksi</>
                   : <><span className="sync-dot is-online" />Tersinkron{sheetLabel ? ` · ${formatSpreadsheetTimestamp(sheetLabel)}` : ''}</>}
             </p>
@@ -316,8 +299,8 @@ function AppShell() {
   return (
     <div className="app-shell min-h-screen text-[var(--text-main,#10232b)]">
       <div className="app-bg" aria-hidden="true" />
-      <ConnBanner online={online} hasUrl={hasUrl} status={status} message={message} syncing={syncing} />
-      <AppHeader user={user} tab={tab} onOpenSettings={() => goTab('settings')} online={online} status={status} syncing={syncing} sheetLabel={sheetLabel} onRefresh={() => Promise.allSettled([checkHealth({ quiet: false }), getDashboardData()])} />
+      <ConnBanner hasUrl={hasUrl} status={status} message={message} />
+      <AppHeader user={user} tab={tab} onOpenSettings={() => goTab('settings')} online={online} hasUrl={hasUrl} status={status} syncing={syncing} sheetLabel={sheetLabel} onRefresh={() => Promise.allSettled([checkHealth({ quiet: false }), getDashboardData()])} />
       <InstallBanner installPrompt={installPrompt} onInstall={installApp} onDismiss={dismissInstall} />
       <main data-ui-page={tab} className="page-content app-content w-full max-w-none mx-0 min-h-0 px-3 pb-32 pt-1">
         <div key={pageKey} className="animate-page-in">
