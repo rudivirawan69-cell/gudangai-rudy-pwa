@@ -61,7 +61,7 @@ const MORE_TABS = [
   { id: 'settings', label: 'Pengaturan', icon: Settings, chip: 'bg-slate-500/25' },
 ];
 
-const MORE_IDS = new Set([...MORE_TABS.map((t) => t.id), 'po']);
+const MORE_IDS = new Set(MORE_TABS.map((t) => t.id));
 
 const TAB_ACCENT = {
   dashboard: 'from-cyan-400 to-cyan-600',
