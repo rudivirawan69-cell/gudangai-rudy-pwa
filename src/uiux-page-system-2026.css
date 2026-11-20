@@ -1,0 +1,163 @@
+/* GudangAI RUDY — page-by-page visual system preview
+   UI-only stylesheet. Does not change data, API, transaction, auth, or queue logic.
+   Canva Metode C handoff adapted onto current main
+*/
+:root {
+  --ux-radius-xl: 22px;
+  --ux-radius-lg: 17px;
+  --ux-radius-md: 13px;
+  --ux-ease: cubic-bezier(.2,.75,.25,1);
+}
+html[data-theme="soft_light"] {
+  --ux-page: #f3f7fb;
+  --ux-panel: rgba(255,255,255,.96);
+  --ux-panel-2: #f7fafc;
+  --ux-line: #dce7f0;
+  --ux-ink: #183247;
+  --ux-muted: #60788c;
+  --ux-accent: #247ba8;
+  --ux-glow: rgba(36,123,168,.13);
+  --ux-shadow: 0 12px 28px rgba(28,61,83,.075), 0 2px 6px rgba(28,61,83,.04), inset 0 1px 0 rgba(255,255,255,.95);
+}
+html[data-theme="deep_ocean"] {
+  --ux-page: #0b1727;
+  --ux-panel: rgba(22,39,60,.96);
+  --ux-panel-2: #1b3048;
+  --ux-line: rgba(145,177,205,.2);
+  --ux-ink: #f2f7fc;
+  --ux-muted: #b5c7d8;
+  --ux-accent: #43c6d7;
+  --ux-glow: rgba(67,198,215,.16);
+  --ux-shadow: 0 14px 30px rgba(0,0,0,.25), inset 0 1px 0 rgba(255,255,255,.045);
+}
+html[data-theme="graphite_titanium"] {
+  --ux-page: #171c23;
+  --ux-panel: rgba(38,45,55,.97);
+  --ux-panel-2: #303946;
+  --ux-line: rgba(148,163,184,.22);
+  --ux-ink: #e6eaf1;
+  --ux-muted: #aebdcc;
+  --ux-accent: #00e5ff;
+  --ux-accent-secondary: #6366f1;
+  --ux-glow: rgba(0,229,255,.13);
+  --ux-shadow: 0 14px 30px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.045);
+}
+html[data-theme] body,
+html[data-theme] .app-shell { background: var(--ux-page) !important; color: var(--ux-ink); }
+html[data-theme] .app-bg { background: radial-gradient(ellipse at 90% 0%,var(--ux-glow),transparent 42%),var(--bg-app-grad) !important; }
+html[data-theme] .app-top-header { padding: 0 0 8px !important; }
+html[data-theme] .app-header-card {
+  margin: 0 auto !important; padding: 11px 15px !important;
+  border: 0 !important; border-bottom: 1px solid var(--ux-line) !important;
+  border-radius: 0 0 20px 20px !important; background: var(--ux-panel) !important;
+  box-shadow: 0 8px 24px rgba(8,28,46,.08) !important;
+}
+html[data-theme] .app-header-card h1 { font-size: 13px !important; letter-spacing: .11em !important; }
+html[data-theme] .page-content { max-width: 920px !important; margin-inline: auto !important; padding: 12px 15px calc(100px + env(safe-area-inset-bottom)) !important; }
+html[data-theme] .page-content > div { display: grid; gap: 15px; }
+html[data-theme] .page-content :is(.card,.surface,.section-card,.stat-tile,.stock-card,.dashboard-panel,.dashboard-total-card,.dashboard-po-card,.dashboard-header-card,.menu-group,.po-hub-card,.po-item-card,.stock-metric-surface,.division-status-card,.ops-card,.ops-notes-card) {
+  border: 1px solid var(--ux-line) !important; border-radius: var(--ux-radius-lg) !important;
+  background: var(--ux-panel) !important; color: var(--ux-ink) !important;
+  box-shadow: var(--ux-shadow) !important; text-shadow: none !important;
+}
+html[data-theme] .page-content :is(h1,h2,h3,h4,.page-title,.section-title) { color: var(--ux-ink); letter-spacing: -.025em; }
+html[data-theme] .page-content :is(p,small,.text-muted,.subtitle) { color: var(--ux-muted); }
+html[data-theme] .page-content :is(input,select,textarea) {
+  min-height: 44px; border: 1px solid var(--ux-line) !important; border-radius: 12px !important;
+  background: var(--ux-panel-2) !important; color: var(--ux-ink) !important;
+  box-shadow: inset 0 1px 2px rgba(0,0,0,.035) !important;
+}
+html[data-theme] .page-content :is(input,textarea)::placeholder { color: var(--ux-muted) !important; opacity: .72; }
+html[data-theme] .page-content :is(button,a) { -webkit-tap-highlight-color: transparent; }
+html[data-theme] .page-content button:not(.sk-item):not(.rw-row-head) {
+  transition: transform .18s var(--ux-ease), box-shadow .18s var(--ux-ease), border-color .18s ease;
+}
+html[data-theme] .page-content button:active { transform: scale(.985); }
+html[data-theme] .page-content :is(button,input,select,textarea,a):focus-visible {
+  outline: 3px solid color-mix(in srgb,var(--ux-accent) 35%,transparent) !important; outline-offset: 2px;
+}
+html[data-theme] .nav-bar {
+  max-width: 560px; left: 50% !important; right: auto !important; width: min(100%,560px);
+  transform: translateX(-50%); bottom: max(8px,env(safe-area-inset-bottom)) !important;
+  border: 1px solid var(--ux-line) !important; border-radius: 22px !important;
+  background: var(--ux-panel) !important; box-shadow: 0 12px 34px rgba(6,22,38,.18) !important;
+  overflow: hidden;
+}
+html[data-theme] .nav-bar > div { min-height: 68px !important; }
+html[data-theme] .nav-btn,.nav-label { color: var(--ux-muted) !important; }
+html[data-theme] .nav-btn.is-active { color: var(--ux-accent) !important; }
+html[data-theme] .nav-fab-btn { box-shadow: 0 8px 18px var(--ux-glow) !important; }
+html[data-theme] .more-sheet { background: var(--ux-panel) !important; border: 1px solid var(--ux-line) !important; box-shadow: var(--ux-shadow) !important; }
+
+/* BERANDA — hierarchy: operational status, stock risk, quick actions, PO, activity */
+html[data-theme] [data-ui-page="dashboard"] .dashboard-header-card { border-radius: 22px !important; }
+html[data-theme] [data-ui-page="dashboard"] .dashboard-total-card { min-height: 98px; padding: 16px !important; }
+html[data-theme] [data-ui-page="dashboard"] .dashboard-quick-card { border-radius: 16px !important; min-height: 112px; background: var(--ux-panel) !important; border-color: var(--ux-line) !important; color: var(--ux-ink) !important; box-shadow: var(--ux-shadow) !important; }
+html[data-theme] [data-ui-page="dashboard"] .dashboard-quick-card-label { color: var(--ux-ink) !important; }
+html[data-theme] [data-ui-page="dashboard"] .dashboard-panel { padding: 16px !important; }
+html[data-theme] [data-ui-page="dashboard"] .po-shortcut { border-radius: 16px !important; min-height: 132px; }
+
+/* STOK — compact inventory list, readable quantities and unmistakable risk chips */
+html[data-theme] [data-ui-page="stok"] .sk-item {
+  width: 100%; border: 1px solid var(--ux-line); border-radius: 14px;
+  background: var(--ux-panel); color: var(--ux-ink); padding: 13px 14px;
+  box-shadow: 0 5px 15px rgba(10,35,55,.045); gap: 10px;
+}
+html[data-theme] [data-ui-page="stok"] .sk-item-nama { color: var(--ux-ink); font-weight: 750; }
+html[data-theme] [data-ui-page="stok"] .sk-item-kode { color: var(--ux-muted); }
+html[data-theme] [data-ui-page="stok"] .sk-item-qty b { color: var(--ux-ink); font-size: 17px; font-variant-numeric: tabular-nums; }
+html[data-theme] [data-ui-page="stok"] .sk-item-status { border-radius: 999px; padding: 4px 9px; font-size: 10px; font-weight: 800; }
+html[data-theme] [data-ui-page="stok"] .sk-aman { color: #087a55; background: #dff7eb; }
+html[data-theme] [data-ui-page="stok"] .sk-waspada { color: #955d08; background: #fff0ce; }
+html[data-theme] [data-ui-page="stok"] .sk-kritis { color: #b42335; background: #ffe3e7; }
+html[data-theme="deep_ocean"] [data-ui-page="stok"] .sk-item,
+html[data-theme="graphite_titanium"] [data-ui-page="stok"] .sk-item { background: var(--ux-panel) !important; }
+
+/* INPUT — segmented transaction type, clear item rows and prominent submit action */
+html[data-theme] [data-ui-page="input"] .page-title,
+html[data-theme] [data-ui-page="input"] h1 { margin-bottom: 5px; }
+html[data-theme] [data-ui-page="input"] :is(.input-mode,.tx-tabs,.transaction-tabs) { border-radius: 15px; padding: 4px; background: var(--ux-panel-2); }
+html[data-theme] [data-ui-page="input"] :is(.input-cart,.cart-item,.input-item-card,.draft-card) {
+  border: 1px solid var(--ux-line); border-radius: 15px; background: var(--ux-panel) !important;
+}
+html[data-theme] [data-ui-page="input"] button[class*="bg-emerald"],
+html[data-theme] [data-ui-page="input"] button[class*="bg-teal"],
+html[data-theme] [data-ui-page="input"] button[type="submit"] { min-height: 48px; border-radius: 14px; font-weight: 800; }
+
+/* PURCHASE ORDER — clear summary blocks and grouped order cards */
+html[data-theme] [data-ui-page="po"] :is(.po-hub-card,.po-item-card,.po-shortcut,.dashboard-panel) { border-radius: 17px !important; }
+html[data-theme] [data-ui-page="po"] input { font-variant-numeric: tabular-nums; }
+
+/* RIWAYAT — transaction rows with strong type/status hierarchy */
+html[data-theme] [data-ui-page="riwayat"] .rw-row {
+  overflow: hidden; border: 1px solid var(--ux-line); border-radius: 15px;
+  background: var(--ux-panel); box-shadow: 0 6px 16px rgba(10,35,55,.05);
+}
+html[data-theme] [data-ui-page="riwayat"] .rw-row-head { color: var(--ux-ink); min-height: 68px; }
+html[data-theme] [data-ui-page="riwayat"] .rw-main b { color: var(--ux-ink); }
+html[data-theme] [data-ui-page="riwayat"] .rw-main small { color: var(--ux-muted); }
+
+/* AGENT — chat-like workspace, focused composer and readable answer surfaces */
+html[data-theme] [data-ui-page="ai"] :is(.chat-container,.agent-chat,.message-list,.assistant-panel) { border-radius: 20px; }
+html[data-theme] [data-ui-page="ai"] textarea { min-height: 52px; }
+
+/* SETTINGS / SYNC — grouped controls, account panel and clear queue status */
+html[data-theme] [data-ui-page="settings"] :is(.settings-section,.settings-card,.profile-card,.menu-group) { border-radius: 17px !important; }
+html[data-theme] [data-ui-page="sync"] :is(.queue-card,.sync-card,.pending-card) { border-radius: 16px !important; }
+html[data-theme] [data-ui-page="settings"] .theme-option,
+html[data-theme] [data-ui-page="settings"] [data-theme-option] { border-radius: 14px; }
+
+@media (min-width: 700px) {
+  html[data-theme] .page-content { padding-inline: 24px !important; }
+  html[data-theme] [data-ui-page="dashboard"] .dashboard-total-grid,
+  html[data-theme] [data-ui-page="dashboard"] .grid { gap: 14px; }
+}
+@media (max-width: 390px) {
+  html[data-theme] .page-content { padding-inline: 11px !important; }
+  html[data-theme] .app-header-card { padding-inline: 12px !important; }
+  html[data-theme] .nav-bar { width: calc(100% - 18px); }
+  html[data-theme] [data-ui-page="dashboard"] .dashboard-total-card { padding: 12px !important; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html[data-theme] *,html[data-theme] *::before,html[data-theme] *::after { transition-duration: .01ms !important; animation-duration: .01ms !important; }
+}
