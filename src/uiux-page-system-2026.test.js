@@ -6,6 +6,8 @@ const cssPath = resolve(process.cwd(), 'src/uiux-page-system-2026.css');
 const mainPath = resolve(process.cwd(), 'src/main.jsx');
 const appPath = resolve(process.cwd(), 'src/App.jsx');
 const themePath = resolve(process.cwd(), 'src/hooks/useTheme.jsx');
+const stockPagePath = resolve(process.cwd(), 'src/pages/StokPage.jsx');
+const stockCssPath = resolve(process.cwd(), 'src/pages/stok.css');
 
 describe('GudangAI Metode C UI contract', () => {
   it('includes a dedicated page-scoped visual stylesheet', () => {
@@ -74,4 +76,21 @@ describe('GudangAI Metode C UI contract', () => {
     expect(app).not.toContain('GUDANG-69 RUDI');
   });
 
+  it('renders entity-filtered inventory as compact status-coded item cards', () => {
+    const page = readFileSync(stockPagePath, 'utf8');
+    const css = readFileSync(stockCssPath, 'utf8');
+    expect(page).toContain('className="sk-item-list"');
+    expect(page).toContain('className="sk-item-metrics"');
+    expect(page).toContain('Sisa stok');
+    expect(page).toContain('Stok aman');
+    expect(page).toContain('{ENTITAS.map((e) => (');
+    expect(page).toContain('terfilter.slice(0, limit).map((it) => (');
+    expect(page).not.toContain('className="sk-desktop-table-wrap"');
+    expect(css).toContain('grid-template-columns:repeat(3,minmax(0,1fr))');
+    expect(css).toContain('content-visibility:auto; contain-intrinsic-size:0 96px;');
+    expect(css).toContain('border-left:4px solid var(--sk-mut)');
+    expect(css).toContain('var(--stok-kritis)');
+    expect(css).toContain('var(--stok-waspada)');
+    expect(css).toContain('var(--stok-aman)');
+  });
 });
