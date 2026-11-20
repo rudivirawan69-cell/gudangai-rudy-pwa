@@ -220,7 +220,7 @@ try {
   // Verify the restored Data Stock page keeps CV/PT selection and division expansion.
   await page.setViewportSize({ width: 390, height: 844 });
   await page.locator('nav.nav-bar button').filter({ hasText: 'Stok' }).first().click();
-  await page.getByText('Data Stok', { exact: false }).first().waitFor({ state: 'visible', timeout: 10000 });
+  await page.getByText('Stok Barang', { exact: false }).first().waitFor({ state: 'visible', timeout: 10000 });
   await page.getByRole('button', { name: 'CV', exact: true }).waitFor({ state: 'visible' });
   await page.getByRole('button', { name: 'PT', exact: true }).click();
   await page.getByRole('button').filter({ hasText: 'PRODUKSI' }).first().click();
@@ -258,7 +258,7 @@ try {
   await mkdir(screenshotRoot, { recursive: true });
   const visualPages = [
     ['Beranda', 'Status per Divisi', 'beranda'],
-    ['Stok', 'Data Stok', 'stok'],
+    ['Stok', 'Stok Barang', 'stok'],
     ['Input', 'Draft transaksi dipulihkan', 'input'],
     ['Agent', 'Agent Rubee Intelligence', 'agent'],
   ];
