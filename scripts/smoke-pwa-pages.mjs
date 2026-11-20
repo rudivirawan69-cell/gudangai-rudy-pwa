@@ -138,6 +138,7 @@ try {
 
   await page.goto(HOST, { waitUntil: 'domcontentloaded' });
   await page.locator('nav.nav-bar').waitFor({ state: 'visible', timeout: 15000 });
+  assert.equal((await page.locator('.app-header-card h1').innerText()).trim(), 'GUDANGAI RUDY PRO', 'Sticky header brand must match the approved product name.');
 
   const tabs = [
     ['Beranda', 'Status per Divisi'],
@@ -243,9 +244,18 @@ try {
         id: document.documentElement.getAttribute('data-theme'),
         surface: getComputedStyle(document.documentElement).getPropertyValue('--bg-elevated').trim(),
         text: getComputedStyle(document.documentElement).getPropertyValue('--text-main').trim(),
+        accent: getComputedStyle(document.documentElement).getPropertyValue('--accent').trim().toLowerCase(),
       }));
       assert.equal(themeState.id, theme, `Theme mismatch on ${label}: ${JSON.stringify(themeState)}`);
       assert.ok(themeState.surface && themeState.text, `Theme tokens missing on ${label} in ${theme}`);
+      if (theme === 'graphite_titanium') {
+        assert.equal(themeState.accent, '#00e5ff', `Graphite accent must be cyan on ${label}.`);
+      }
+      if (label === 'Agent' && theme !== 'soft_light') {
+        const agentSurface = await page.locator('[data-ui-page="ai"] .max-w-4xl > div.relative').evaluate((el) => getComputedStyle(el).backgroundColor);
+        assert.notEqual(agentSurface, 'rgba(248, 250, 252, 0.9)', `Agent chat surface must follow ${theme}, not remain light.`);
+        assert.notEqual(agentSurface, 'rgb(255, 255, 255)', `Agent chat surface must not be white in ${theme}.`);
+      }
       if (label === 'Input') {
         assert.equal(await page.locator('[data-testid="input-search-results"]').count(), 0,
           'Input search results must remain hidden when the search field is empty.');
