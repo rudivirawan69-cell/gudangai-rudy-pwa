@@ -304,7 +304,6 @@ export default function POPage({ onNavigate }) {
       <div className="flex items-start justify-between gap-2 mb-3">
         <div className="min-w-0">
           <h2 className="text-[22px] leading-7 font-extrabold text-slate-900">Purchase order</h2>
-          <p className="text-xs text-slate-500 mt-0.5">{hub ? 'Detail kartu aktif' : 'Generate, pantau, dan konfirmasi PO'}</p>
         </div>
         {hub && (
           <button type="button" onClick={() => setHub(null)} className="text-[10px] font-bold px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 shadow-sm shrink-0 flex items-center gap-1">
