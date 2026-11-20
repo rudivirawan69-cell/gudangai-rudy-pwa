@@ -236,7 +236,7 @@ try {
     }, theme);
     await page.reload({ waitUntil: 'domcontentloaded' });
     await page.locator('nav.nav-bar').waitFor({ state: 'visible', timeout: 15000 });
-    for (const [label, marker] of [['Beranda', 'Status per Divisi'], ['Stok', 'Data Stok'], ['Input', 'Draft transaksi dipulihkan'], ['Agent', 'Agent Rubee Intelligence']]) {
+    for (const [label, marker] of [['Beranda', 'Status per Divisi'], ['Stok', 'Stok Barang'], ['Input', 'Draft transaksi dipulihkan'], ['Agent', 'Agent Rubee Intelligence']]) {
       await page.locator('nav.nav-bar button').filter({ hasText: label }).first().click();
       await page.getByText(marker, { exact: false }).first().waitFor({ state: 'visible', timeout: 10000 });
       const themeState = await page.evaluate(() => ({
