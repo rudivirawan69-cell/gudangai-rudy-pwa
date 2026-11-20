@@ -428,3 +428,76 @@ html[data-theme] .home-agent-card { box-shadow:var(--shadow-card) !important; bo
 html[data-theme] .page-content :is(.text-slate-500,.text-slate-400) { color:var(--text-muted) !important; }
 html[data-theme] .page-content :is(.text-slate-900,.text-slate-800,.text-slate-700) { color:var(--text-main) !important; }
 html[data-theme] .page-content :is(.text-slate-600) { color:var(--text-muted) !important; }
+
+
+/* 2026-11-20 mobile viewport finish: bottom navigation sits flush with the device edge. */
+html, body, #root { min-height:100%; }
+html[data-theme] .app-shell { min-height:100dvh !important; }
+html[data-theme] .nav-bar {
+  position:fixed !important;
+  left:0 !important; right:0 !important; bottom:0 !important;
+  width:100% !important; max-width:none !important;
+  margin:0 !important; transform:none !important;
+  border-radius:18px 18px 0 0 !important;
+  border-bottom:0 !important; border-left:0 !important; border-right:0 !important;
+  padding-bottom:env(safe-area-inset-bottom,0px) !important;
+  z-index:60 !important;
+}
+html[data-theme] .nav-bar > div { min-height:64px !important; align-items:center !important; }
+html[data-theme] .nav-btn { min-height:58px; padding-top:6px !important; padding-bottom:6px !important; }
+html[data-theme] .nav-fab { min-height:58px; justify-content:flex-end; padding-bottom:5px !important; }
+html[data-theme] .nav-fab-btn {
+  width:44px !important; height:44px !important;
+  border-width:3px !important;
+  transform:translateY(-13px) !important;
+  margin-bottom:-13px !important;
+}
+html[data-theme] .nav-fab .nav-label { margin-top:0 !important; line-height:12px; }
+html[data-theme] .page-content {
+  padding-bottom:calc(84px + env(safe-area-inset-bottom,0px)) !important;
+}
+html[data-theme] .page-content [data-ui-page],
+html[data-theme] .app-content > div { min-width:0; }
+@media(max-width:600px) {
+  html[data-theme] .nav-bar { border-radius:18px 18px 0 0 !important; }
+  html[data-theme] .nav-bar > div { min-height:62px !important; }
+  html[data-theme] .nav-btn,.nav-fab { min-height:56px; }
+  html[data-theme] .page-content { padding-inline:14px !important; }
+}
+
+/* Settings: one shared menu surface, not a stack of cards nested inside wrappers. */
+html[data-theme] .settings-page { gap:9px !important; padding-bottom:8px !important; }
+html[data-theme] .settings-menu-list {
+  display:flex; flex-direction:column; min-width:0; overflow:hidden;
+  border:1px solid var(--border); border-radius:16px;
+  background:var(--bg-elevated); box-shadow:var(--shadow-card);
+}
+html[data-theme] .settings-menu-list .settings-menu-row {
+  min-height:52px; padding:8px 12px !important;
+  background:transparent !important; border:0 !important;
+  border-radius:0 !important; box-shadow:none !important;
+}
+html[data-theme] .settings-menu-list .settings-menu-row + .settings-menu-row {
+  border-top:1px solid var(--border) !important;
+}
+html[data-theme] .settings-menu-list .settings-menu-icon {
+  width:32px !important; height:32px !important; border-radius:10px !important;
+}
+html[data-theme] .settings-theme-card { padding:10px !important; gap:8px !important; }
+html[data-theme] .settings-theme-card .theme-picker-btn { padding:8px 5px !important; gap:4px !important; }
+html[data-theme] .settings-theme-card .theme-picker-btn > span:last-child { display:none; }
+html[data-theme] .settings-profile-summary { padding:9px 12px !important; }
+html[data-theme] .settings-auth-card button { min-height:42px !important; }
+html[data-theme] .settings-menu-logout { margin-top:0; }
+@media(max-height:760px) and (max-width:600px) {
+  html[data-theme] .settings-page { gap:7px !important; }
+  html[data-theme] .settings-profile-summary { padding-block:7px !important; }
+  html[data-theme] .settings-theme-card { padding:8px !important; }
+  html[data-theme] .settings-menu-list .settings-menu-row { min-height:46px; padding-block:6px !important; }
+}
+
+/* Remove the stock-page helper line: the requested page hierarchy starts at one title. */
+html[data-theme] .sk-head-subtitle { display:none !important; }
+
+/* PO heading uses one title only; detail remains inside the relevant action cards. */
+html[data-theme] [data-ui-page="po"] > div > div:first-child > div > p { display:none; }
