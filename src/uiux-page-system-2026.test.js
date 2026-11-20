@@ -1,10 +1,10 @@
 import { existsSync, readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
+import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-const cssPath = fileURLToPath(new URL('./uiux-page-system-2026.css', import.meta.url));
-const mainPath = fileURLToPath(new URL('./main.jsx', import.meta.url));
-const appPath = fileURLToPath(new URL('./App.jsx', import.meta.url));
+const cssPath = resolve(process.cwd(), 'src/uiux-page-system-2026.css');
+const mainPath = resolve(process.cwd(), 'src/main.jsx');
+const appPath = resolve(process.cwd(), 'src/App.jsx');
 
 describe('GudangAI Metode C UI contract', () => {
   it('includes a dedicated page-scoped visual stylesheet', () => {
