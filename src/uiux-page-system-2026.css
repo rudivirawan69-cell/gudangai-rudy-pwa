@@ -424,3 +424,7 @@ html[data-theme] .input-source-methods > button > span:last-child { color:var(--
 html[data-theme] .dashboard-ring-center { background:var(--bg-elevated) !important; }
 html[data-theme] .home-agent-title { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 html[data-theme] .home-agent-card { box-shadow:var(--shadow-card) !important; border-color:color-mix(in srgb,var(--accent) 40%,var(--border)) !important; }
+
+html[data-theme] .page-content :is(.text-slate-500,.text-slate-400) { color:var(--text-muted) !important; }
+html[data-theme] .page-content :is(.text-slate-900,.text-slate-800,.text-slate-700) { color:var(--text-main) !important; }
+html[data-theme] .page-content :is(.text-slate-600) { color:var(--text-muted) !important; }
