@@ -287,21 +287,13 @@ export default function SettingsPage({ onNavigate }) {
         </p>
       </div>
 
-      <div className="space-y-1.5">
-        <div className="card overflow-hidden">
-          <MenuRow icon={User} iconBg="bg-blue-50 text-blue-600" title="Profil Saya" subtitle="Nama & foto tampilan" onClick={() => setPanel(panel === 'profile' ? null : 'profile')} />
-        </div>
-        <div className="card overflow-hidden">
-          <MenuRow icon={Link2} iconBg="bg-cyan-50 text-cyan-700" title="Koneksi Google Sheets" subtitle={connSubtitle}
-            onClick={() => setPanel(panel === 'koneksi' ? null : 'koneksi')}
-            right={connStatus === 'ok' ? <CheckCircle2 className="w-5 h-5 text-emerald-500" /> : connStatus === 'fail' ? <XCircle className="w-5 h-5 text-red-500" /> : <ChevronRight className="w-4 h-4 text-slate-300" />} />
-        </div>
-        <div className="card overflow-hidden">
-          <MenuRow icon={KeyRound} iconBg="bg-amber-50 text-amber-700" title="PIN Perangkat (Lokal)" subtitle="Tidak digunakan untuk autentikasi server atau AI" onClick={() => setPanel(panel === 'pin' ? null : 'pin')} />
-        </div>
-        <div className="card overflow-hidden">
-          <MenuRow icon={SettingsIcon} iconBg="bg-slate-100 text-slate-600" title="Tentang Aplikasi" subtitle="GudangAI · Backend V6.6.5+BULK-STABLE" onClick={() => setPanel(panel === 'about' ? null : 'about')} />
-        </div>
+      <div className="settings-menu-list">
+        <MenuRow icon={User} iconBg="bg-blue-50 text-blue-600" title="Profil Saya" subtitle="Nama & foto tampilan" onClick={() => setPanel(panel === 'profile' ? null : 'profile')} />
+        <MenuRow icon={Link2} iconBg="bg-cyan-50 text-cyan-700" title="Koneksi Google Sheets" subtitle={connSubtitle}
+          onClick={() => setPanel(panel === 'koneksi' ? null : 'koneksi')}
+          right={connStatus === 'ok' ? <CheckCircle2 className="w-5 h-5 text-emerald-500" /> : connStatus === 'fail' ? <XCircle className="w-5 h-5 text-red-500" /> : <ChevronRight className="w-4 h-4 text-slate-300" />} />
+        <MenuRow icon={KeyRound} iconBg="bg-amber-50 text-amber-700" title="PIN Perangkat (Lokal)" subtitle="Tidak digunakan untuk autentikasi server atau AI" onClick={() => setPanel(panel === 'pin' ? null : 'pin')} />
+        <MenuRow icon={SettingsIcon} iconBg="bg-slate-100 text-slate-600" title="Tentang Aplikasi" subtitle="GudangAI · Backend V6.6.5+BULK-STABLE" onClick={() => setPanel(panel === 'about' ? null : 'about')} />
       </div>
 
       {panel === 'profile' && (
@@ -390,7 +382,7 @@ export default function SettingsPage({ onNavigate }) {
         </div>
       )}
 
-      <div className="card overflow-hidden">
+      <div className="settings-menu-list settings-menu-logout">
         <MenuRow icon={LogOut} iconBg="bg-red-50 text-red-600" title="Keluar" subtitle="Masuk kembali dengan metode autentikasi yang aktif" onClick={() => setShowLogout(true)} danger />
       </div>
 
