@@ -268,7 +268,9 @@ try {
         }));
         assert.ok(emptyState.scrollWidth <= emptyState.width + 1, `Agent empty state overflows horizontally in ${theme}: ${JSON.stringify(emptyState)}`);
         const headingBox = await page.getByText('Apa yang perlu dibantu?', { exact: true }).boundingBox();
-        assert.ok(headingBox && headingBox.x >= 0 && headingBox.x + headingBox.width <= 390, `Agent empty-state heading is clipped on mobile in ${theme}.`);
+        const viewportWidth = await page.evaluate(() => window.innerWidth);
+        assert.ok(headingBox && headingBox.x >= 0 && headingBox.x + headingBox.width <= viewportWidth,
+          `Agent empty-state heading is clipped on mobile in ${theme}: ${JSON.stringify({ headingBox, viewportWidth, emptyState })}`);
       }
       if (label === 'Input') {
         assert.equal(await page.locator('[data-testid="input-search-results"]').count(), 0,
