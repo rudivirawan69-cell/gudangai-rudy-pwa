@@ -37,20 +37,20 @@ html[data-theme="graphite_titanium"] {
   --ux-line: rgba(148,163,184,.22);
   --ux-ink: #e6eaf1;
   --ux-muted: #aebdcc;
-  --ux-accent: #00e5ff;
-  --ux-accent-secondary: #6366f1;
+  --ux-accent: #6366f1;
+  --ux-accent-secondary: #06b6d4;
   --ux-glow: rgba(0,229,255,.13);
-  --accent: #00e5ff;
-  --accent-strong: #00bcd4;
-  --accent-soft: rgba(0,229,255,.16);
-  --brand-teal: #00e5ff;
-  --brand-teal-dark: #0891b2;
-  --brand-teal-soft: rgba(0,229,255,.14);
-  --brand-orange: #6366f1;
-  --text-on-accent: #071c24;
-  --chart-line: #00e5ff;
-  --chart-fill: rgba(0,229,255,.18);
-  --focus-ring: 0 0 0 3px rgba(0,229,255,.35);
+  --accent: #6366f1;
+  --accent-strong: #4f46e5;
+  --accent-soft: rgba(99,102,241,.16);
+  --brand-teal: #6366f1;
+  --brand-teal-dark: #4f46e5;
+  --brand-teal-soft: rgba(99,102,241,.14);
+  --brand-orange: #06b6d4;
+  --text-on-accent: #ffffff;
+  --chart-line: #06b6d4;
+  --chart-fill: rgba(6,182,212,.18);
+  --focus-ring: 0 0 0 3px rgba(99,102,241,.35);
   --ux-shadow: 0 14px 30px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.045);
 }
 html[data-theme] body,
