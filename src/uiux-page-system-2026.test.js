@@ -50,9 +50,9 @@ describe('GudangAI Metode C UI contract', () => {
     const css = readFileSync(cssPath, 'utf8');
     const theme = readFileSync(themePath, 'utf8');
     const graphite = css.split('html[data-theme="graphite_titanium"]')[1]?.split('}')[0] || '';
-    expect(graphite).toMatch(/--accent:\\s*#00e5ff/i);
-    expect(graphite).toMatch(/--brand-teal:\\s*#00e5ff/i);
-    expect(graphite).toMatch(/--brand-orange:\\s*#6366f1/i);
+    expect(graphite).toContain('--accent: #00e5ff');
+    expect(graphite).toContain('--brand-teal: #00e5ff');
+    expect(graphite).toContain('--brand-orange: #6366f1');
     expect(theme).toContain("description: 'Graphite · Cyan · Indigo — industrial premium'");
     expect(theme).toContain("graphite_titanium: '#00e5ff'");
   });
