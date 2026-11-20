@@ -49,15 +49,16 @@ class ErrorBoundary extends Component {
 
 const MAIN_TABS = [
   { id: 'dashboard', label: 'Beranda', icon: LayoutDashboard, chip: 'bg-cyan-500/25' },
-  { id: 'ai', label: 'Agent', icon: BrainCircuit, chip: 'bg-orange-500/25' },
-  { id: 'input', label: 'Input', icon: PackagePlus, chip: 'bg-emerald-500/25', fab: true },
   { id: 'stok', label: 'Stok', icon: Package, chip: 'bg-blue-500/25' },
+  { id: 'input', label: 'Input', icon: PackagePlus, chip: 'bg-emerald-500/25', fab: true },
+  { id: 'po', label: 'PO', icon: ClipboardList, chip: 'bg-violet-500/25' },
   { id: 'more', label: 'Lainnya', icon: MoreHorizontal, chip: 'bg-slate-500/25' },
 ];
 
 const MORE_TABS = [
-  { id: 'riwayat', label: 'Riwayat', icon: Clock, chip: 'bg-amber-500/25' },
-  { id: 'sync', label: 'Antrian Sinkronisasi', icon: RefreshCw, chip: 'bg-teal-500/25' },
+  { id: 'ai', label: 'Agent Rubee AI', icon: BrainCircuit, chip: 'bg-orange-500/25' },
+  { id: 'riwayat', label: 'Riwayat Transaksi', icon: Clock, chip: 'bg-amber-500/25' },
+  { id: 'sync', label: 'Antrean sinkronisasi', icon: RefreshCw, chip: 'bg-teal-500/25' },
   { id: 'settings', label: 'Pengaturan', icon: Settings, chip: 'bg-slate-500/25' },
 ];
 
