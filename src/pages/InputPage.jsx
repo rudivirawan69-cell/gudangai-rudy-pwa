@@ -680,7 +680,7 @@ export default function InputPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-2.5">
+      <div className="input-tx-segmented grid grid-cols-3 gap-2.5">
         {TX.map((t) => {
           const Icon = t.icon;
           const on = txType === t.id;
