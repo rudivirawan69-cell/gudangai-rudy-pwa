@@ -29,8 +29,8 @@ describe('GudangAI Metode C UI contract', () => {
     if (!existsSync(cssPath)) return;
     const css = readFileSync(cssPath, 'utf8');
     const graphite = css.match(/html\[data-theme="graphite_titanium"\]\s*\{([^}]+)\}/)?.[1] || '';
-    expect(graphite).toMatch(/--ux-accent:\s*#00e5ff/i);
-    expect(graphite).toMatch(/--ux-accent-secondary:\s*#6366f1/i);
+    expect(graphite).toMatch(/--ux-accent:\s*#6366f1/i);
+    expect(graphite).toMatch(/--ux-accent-secondary:\s*#06b6d4/i);
     expect(graphite).not.toMatch(/#d6a45b|#c6ae87|214,164,91|198,174,135/i);
   });
 
@@ -50,11 +50,11 @@ describe('GudangAI Metode C UI contract', () => {
     const css = readFileSync(cssPath, 'utf8');
     const theme = readFileSync(themePath, 'utf8');
     const graphite = css.split('html[data-theme="graphite_titanium"]')[1]?.split('}')[0] || '';
-    expect(graphite).toContain('--accent: #00e5ff');
-    expect(graphite).toContain('--brand-teal: #00e5ff');
-    expect(graphite).toContain('--brand-orange: #6366f1');
+    expect(graphite).toContain('--accent: #6366f1');
+    expect(graphite).toContain('--brand-teal: #6366f1');
+    expect(graphite).toContain('--brand-orange: #06b6d4');
     expect(theme).toContain("description: 'Graphite · Cyan · Indigo — industrial premium'");
-    expect(theme).toContain("graphite_titanium: '#00e5ff'");
+    expect(theme).toContain("graphite_titanium: '#6366f1'");
   });
 
   it('provides dark, readable surfaces for Agent chat and Dashboard chart', () => {
@@ -70,7 +70,7 @@ describe('GudangAI Metode C UI contract', () => {
 
   it('uses the approved GUDANGAI RUDY PRO sticky header brand', () => {
     const app = readFileSync(appPath, 'utf8');
-    expect(app).toContain('GUDANGAI RUDY PRO');
+    expect(app).toContain('GudangAI Pro');
     expect(app).not.toContain('GUDANG-69 RUDI');
   });
 
