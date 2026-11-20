@@ -40,6 +40,17 @@ html[data-theme="graphite_titanium"] {
   --ux-accent: #00e5ff;
   --ux-accent-secondary: #6366f1;
   --ux-glow: rgba(0,229,255,.13);
+  --accent: #00e5ff;
+  --accent-strong: #00bcd4;
+  --accent-soft: rgba(0,229,255,.16);
+  --brand-teal: #00e5ff;
+  --brand-teal-dark: #0891b2;
+  --brand-teal-soft: rgba(0,229,255,.14);
+  --brand-orange: #6366f1;
+  --text-on-accent: #071c24;
+  --chart-line: #00e5ff;
+  --chart-fill: rgba(0,229,255,.18);
+  --focus-ring: 0 0 0 3px rgba(0,229,255,.35);
   --ux-shadow: 0 14px 30px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.045);
 }
 html[data-theme] body,
@@ -87,6 +98,10 @@ html[data-theme] .nav-bar > div { min-height: 68px !important; }
 html[data-theme] .nav-btn,.nav-label { color: var(--ux-muted) !important; }
 html[data-theme] .nav-btn.is-active { color: var(--ux-accent) !important; }
 html[data-theme] .nav-fab-btn { box-shadow: 0 8px 18px var(--ux-glow) !important; }
+html[data-theme] .nav-fab-btn.is-active {
+  background: linear-gradient(145deg,var(--accent),var(--accent-strong)) !important;
+  color: var(--text-on-accent) !important;
+}
 html[data-theme] .more-sheet { background: var(--ux-panel) !important; border: 1px solid var(--ux-line) !important; box-shadow: var(--ux-shadow) !important; }
 
 /* BERANDA — hierarchy: operational status, stock risk, quick actions, PO, activity */
@@ -96,6 +111,20 @@ html[data-theme] [data-ui-page="dashboard"] .dashboard-quick-card { border-radiu
 html[data-theme] [data-ui-page="dashboard"] .dashboard-quick-card-label { color: var(--ux-ink) !important; }
 html[data-theme] [data-ui-page="dashboard"] .dashboard-panel { padding: 16px !important; }
 html[data-theme] [data-ui-page="dashboard"] .po-shortcut { border-radius: 16px !important; min-height: 132px; }
+html:is([data-theme="deep_ocean"],[data-theme="graphite_titanium"]) [data-ui-page="dashboard"] .dashboard-chart-wrap > .relative.h-36 {
+  background: var(--ux-panel-2) !important;
+  border-color: var(--ux-line) !important;
+}
+html:is([data-theme="deep_ocean"],[data-theme="graphite_titanium"]) [data-ui-page="dashboard"] .dashboard-chart-wrap > .relative.h-36 [class~="border-slate-200/80"] {
+  border-color: var(--ux-line) !important;
+}
+html[data-theme="graphite_titanium"] [data-ui-page="dashboard"] .dashboard-chart-wrap .bg-orange-400\/90,
+html[data-theme="graphite_titanium"] [data-ui-page="dashboard"] .dashboard-chart-wrap .bg-orange-400 {
+  background-color: var(--ux-accent-secondary) !important;
+}
+html[data-theme="graphite_titanium"] [data-ui-page="dashboard"] .dashboard-chart-wrap .text-orange-600 {
+  color: var(--ux-accent-secondary) !important;
+}
 
 /* STOK — compact inventory list, readable quantities and unmistakable risk chips */
 html[data-theme] [data-ui-page="stok"] .sk-item {
@@ -140,6 +169,23 @@ html[data-theme] [data-ui-page="riwayat"] .rw-main small { color: var(--ux-muted
 /* AGENT — chat-like workspace, focused composer and readable answer surfaces */
 html[data-theme] [data-ui-page="ai"] :is(.chat-container,.agent-chat,.message-list,.assistant-panel) { border-radius: 20px; }
 html[data-theme] [data-ui-page="ai"] textarea { min-height: 52px; }
+html:is([data-theme="deep_ocean"],[data-theme="graphite_titanium"]) [data-ui-page="ai"] .max-w-4xl > :is(header,div.relative,form) {
+  background: var(--ux-panel) !important;
+  border-color: var(--ux-line) !important;
+  color: var(--ux-ink) !important;
+  box-shadow: var(--ux-shadow) !important;
+}
+html:is([data-theme="deep_ocean"],[data-theme="graphite_titanium"]) [data-ui-page="ai"] .max-w-4xl .bg-white {
+  background: var(--ux-panel-2) !important;
+  border-color: var(--ux-line) !important;
+  color: var(--ux-ink) !important;
+}
+html:is([data-theme="deep_ocean"],[data-theme="graphite_titanium"]) [data-ui-page="ai"] .max-w-4xl :is(.text-slate-900,.text-slate-800,.text-slate-700) {
+  color: var(--ux-ink) !important;
+}
+html:is([data-theme="deep_ocean"],[data-theme="graphite_titanium"]) [data-ui-page="ai"] .max-w-4xl :is(.text-slate-500,.text-slate-400) {
+  color: var(--ux-muted) !important;
+}
 
 /* SETTINGS / SYNC — grouped controls, account panel and clear queue status */
 html[data-theme] [data-ui-page="settings"] :is(.settings-section,.settings-card,.profile-card,.menu-group) { border-radius: 17px !important; }
