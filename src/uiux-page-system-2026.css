@@ -406,3 +406,7 @@ html[data-theme] .input-tx-segmented > button[class*="bg-rose-600"] > span:first
 html[data-theme] [data-ui-page="ai"] form { margin-bottom:2px; }
 html[data-theme] [data-ui-page="ai"] .relative.min-h-0.flex-1 { border-radius:16px; box-shadow:none !important; }
 html[data-theme] [data-ui-page="ai"] form { border-radius:14px; box-shadow:var(--shadow-card) !important; }
+
+html[data-theme] .app-top-header { padding-bottom:0 !important; }
+html[data-theme] .app-header-card { min-height:60px !important; height:60px; padding-block:8px !important; border-radius:0 !important; }
+html[data-theme] .app-header-card h1 { font-size:13px !important; letter-spacing:.04em !important; text-transform:none !important; }
