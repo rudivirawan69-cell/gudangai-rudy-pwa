@@ -138,7 +138,7 @@ try {
 
   await page.goto(HOST, { waitUntil: 'domcontentloaded' });
   await page.locator('nav.nav-bar').waitFor({ state: 'visible', timeout: 15000 });
-  assert.equal((await page.locator('.app-header-card h1').innerText()).trim(), 'GUDANGAI RUDY PRO', 'Sticky header brand must match the approved product name.');
+  assert.equal((await page.locator('.app-header-card h1').innerText()).trim(), 'GudangAI Pro', 'Sticky header brand must match the approved product name.');
 
   const tabs = [
     ['Beranda', 'Status per Divisi'],
@@ -250,7 +250,7 @@ try {
       assert.equal(themeState.id, theme, `Theme mismatch on ${label}: ${JSON.stringify(themeState)}`);
       assert.ok(themeState.surface && themeState.text, `Theme tokens missing on ${label} in ${theme}`);
       if (theme === 'graphite_titanium') {
-        assert.equal(themeState.accent, '#00e5ff', `Graphite accent must be cyan on ${label}.`);
+        assert.equal(themeState.accent, '#6366f1', `Graphite accent must be cyan on ${label}.`);
         if (label === 'Beranda') {
           const fabBackground = await page.locator('.nav-fab-btn').evaluate((el) => getComputedStyle(el).backgroundImage);
           const agentBorder = await page.locator('[data-ui-page="dashboard"] .home-agent-card').evaluate((el) => getComputedStyle(el).borderTopColor);
@@ -287,7 +287,7 @@ try {
     ['Beranda', 'Status per Divisi', 'beranda'],
     ['Stok', 'Stok Barang', 'stok'],
     ['Input', 'Draft transaksi dipulihkan', 'input'],
-    ['PO', 'Purchase Order', 'po'],
+    ['PO', 'Purchase order', 'po'],
     ['Riwayat', 'Riwayat Transaksi', 'riwayat'],
     ['Agent', 'Agent Rubee Intelligence', 'agent'],
     ['Pengaturan', 'Mode Tampilan', 'settings'],
@@ -323,8 +323,8 @@ try {
         if (label === 'PO') {
           await page.locator('nav.nav-bar button').filter({ hasText: 'Beranda' }).first().click();
           await page.getByRole('button', { name: 'PO', exact: true }).click();
-        } else if (['Riwayat', 'Pengaturan', 'Antrian Sinkronisasi'].includes(label)) {
-          await openMorePage(label, markerText);
+        } else if (['Riwayat', 'Pengaturan', 'Antrian Sinkronisasi', 'Agent'].includes(label)) {
+          await openMorePage(label === 'Agent' ? 'Agent Rubee AI' : label, markerText);
         } else {
           await page.locator('nav.nav-bar button').filter({ hasText: label }).first().click();
         }
@@ -355,7 +355,7 @@ try {
   await page.getByText('Draft transaksi dipulihkan', { exact: false }).waitFor({ state: 'visible' });
 
   assert.deepEqual(pageErrors, [], 'Uncaught browser errors were detected during page smoke tests.');
-  console.log('PASS: four primary tabs + MoreSheet destinations + Data Stock CV/PT/division behavior + full-screen edges + Input draft recovery + five viewport widths + three themes.');
+  console.log('PASS: five primary tabs + MoreSheet destinations + Data Stock CV/PT/division behavior + full-screen edges + Input draft recovery + five viewport widths + three themes.');
 } finally {
   await browser.close();
   server.kill('SIGTERM');
