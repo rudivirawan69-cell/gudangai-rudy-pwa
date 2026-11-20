@@ -63,7 +63,7 @@ describe('GudangAI Metode C UI contract', () => {
     expect(css).toContain('[data-ui-page="ai"] .max-w-4xl .bg-white');
     expect(css).toContain('html[data-theme] [data-ui-page="ai"] [role="log"] > .m-auto {\n  width: 100%');
     expect(css).toContain('html[data-theme="graphite_titanium"] .home-agent-card');
-    expect(css).toContain('html[data-theme] .nav-fab-btn { background: linear-gradient');
+    expect(css).toContain('background: linear-gradient(145deg,var(--accent),var(--accent-strong)) !important;');
     expect(css).toContain('[data-ui-page="dashboard"] .dashboard-chart-wrap > .relative.h-36');
   });
 
