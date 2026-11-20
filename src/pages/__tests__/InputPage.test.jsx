@@ -56,7 +56,7 @@ describe('InputPage PR 1', () => {
     const { container } = render(<InputPage />);
     fireEvent.change(container.querySelector('input[accept=\"image/*\"]'), { target: { files: [new File(['x'], 'foto.jpg', { type: 'image/jpeg' })] } });
     await waitFor(() => expect(screen.getByText('OCR gagal')).toBeInTheDocument());
-    for (const label of ['PDF', 'Foto', 'QR', 'Suara', '(paste)']) expect(screen.getByRole('button', { name: label })).not.toBeDisabled();
+    for (const label of ['PDF', 'Foto', 'QR', 'Suara', 'Tempel']) expect(screen.getByRole('button', { name: label })).not.toBeDisabled();
   });
   it('memakai koma desimal dan menyimpan 1,5 sebagai 1.5', async () => {
     seedCart([item('one', 1)]);
