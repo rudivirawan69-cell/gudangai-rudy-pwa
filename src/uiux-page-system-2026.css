@@ -410,3 +410,17 @@ html[data-theme] [data-ui-page="ai"] form { border-radius:14px; box-shadow:var(-
 html[data-theme] .app-top-header { padding-bottom:0 !important; }
 html[data-theme] .app-header-card { min-height:60px !important; height:60px; padding-block:8px !important; border-radius:0 !important; }
 html[data-theme] .app-header-card h1 { font-size:13px !important; letter-spacing:.04em !important; text-transform:none !important; }
+
+
+html[data-theme] .input-source-methods > button {
+  border-radius:12px !important; border-color:var(--border) !important;
+  background:var(--bg-elevated) !important; box-shadow:none !important;
+}
+html[data-theme] .input-source-methods > button > span:first-child {
+  background:transparent !important; border:0 !important; box-shadow:none !important;
+}
+html[data-theme] .input-source-methods > button > span:first-child svg { color:var(--accent) !important; }
+html[data-theme] .input-source-methods > button > span:last-child { color:var(--text-main) !important; }
+html[data-theme] .dashboard-ring-center { background:var(--bg-elevated) !important; }
+html[data-theme] .home-agent-title { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+html[data-theme] .home-agent-card { box-shadow:var(--shadow-card) !important; border-color:color-mix(in srgb,var(--accent) 40%,var(--border)) !important; }
