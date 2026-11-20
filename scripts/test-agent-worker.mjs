@@ -359,6 +359,67 @@ test('health reports the live-data agent stage', async () => {
 });
 
 
+test('GET /api/sync-all returns authenticated read-only data and summary', async () => {
+  const originalFetch = globalThis.fetch;
+  const calls = [];
+  globalThis.fetch = async (url, options) => {
+    if (String(url) === `${SUPABASE_URL}/auth/v1/user`) return new Response(JSON.stringify({ id:'sync-user' }), { status:200 });
+    assert.equal(String(url), SHEETS_URL);
+    const body = JSON.parse(options.body);
+    calls.push(body);
+    const responses = {
+      getDashboardData: { success:true, total:7, aman:4, waspada:2, kritis:1, divisi:{ A:7 } },
+      getStatusPO: { success:true, menunggu:2, sebagian:1, selesai:3 },
+      getLastUpdate: { success:true, lastUpdate:'2026-11-20T00:00:00.000Z' },
+    };
+    return new Response(JSON.stringify(responses[body.action] || { success:true, rows:[] }), { status:200 });
+  };
+  try {
+    const response = await worker.fetch(makeRequest('/api/sync-all'), { ...liveEnv, CACHE_VERSI:'7' });
+    const payload = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(payload.success, true);
+    assert.equal(payload.actor, 'sync-user');
+    assert.equal(payload.permissions, 'read_only');
+    assert.equal(payload.version, 7);
+    assert.equal(calls.length, 9);
+    assert.ok(calls.every((call) => call.client.mode === 'read_only'));
+    assert.ok(calls.every((call) => call.action !== 'bulkTransaction'));
+    assert.deepEqual(payload.summary, {
+      totalItem:7, stokAman:4, stokWaspada:2, stokKritis:1,
+      poMenunggu:2, poSebagian:1, poSelesai:3, divisi:{ A:7 }, lastUpdate:'2026-11-20T00:00:00.000Z',
+    });
+    assert.equal(payload.errors, undefined);
+    assert.equal(JSON.stringify(payload).includes('server-secret'), false);
+  } finally { globalThis.fetch = originalFetch; }
+});
+
+test('GET /api/sync-all reports partial gateway failures without dropping successful data', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url, options) => {
+    if (String(url) === `${SUPABASE_URL}/auth/v1/user`) return new Response(JSON.stringify({ id:'sync-user' }), { status:200 });
+    const { action } = JSON.parse(options.body);
+    if (action === 'getLowStock') return new Response(JSON.stringify({ error:'temporary failure' }), { status:503 });
+    return new Response(JSON.stringify({ success:true, total:4 }), { status:200 });
+  };
+  try {
+    const response = await worker.fetch(makeRequest('/api/sync-all'), liveEnv);
+    const payload = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(payload.success, true);
+    assert.equal(payload.data.dashboard.total, 4);
+    assert.deepEqual(payload.errors.lowStock, { error:'Apps Script HTTP 503', code:'SHEETS_HTTP_ERROR' });
+  } finally { globalThis.fetch = originalFetch; }
+});
+
+test('sync-all requires GET and an authenticated Supabase session', async () => {
+  const methodResponse = await worker.fetch(makeRequest('/api/sync-all', { method:'POST' }), liveEnv);
+  assert.equal(methodResponse.status, 405);
+  const authResponse = await worker.fetch(makeRequest('/api/sync-all', { token:null }), liveEnv);
+  assert.equal(authResponse.status, 401);
+  assert.equal((await authResponse.json()).code, 'AUTH_REQUIRED');
+});
+
 test('GET /api/getStatusPO filters the single active PO by PO date and returns overdue fields', async () => {
   const originalFetch = globalThis.fetch;
   const today = (await import('../tanggal.js')).parseTanggal(new Date());

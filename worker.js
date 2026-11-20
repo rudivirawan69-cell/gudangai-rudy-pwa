@@ -127,6 +127,65 @@ async function handleStatusPO(request, env, origin, url) {
   }
   return json({ ...data, actor:auth.userId, permissions:'read_only' }, 200, origin);
 }
+async function handleSyncAll(request, env, origin) {
+  const auth = await verifySupabaseAccessToken(request, env);
+  if (!auth.ok) return json({ success:false, code:auth.code, error:auth.error }, auth.status, origin);
+  if (!configuredSheets(env)) {
+    return json({ success:false, code:'DATA_TOOLS_NOT_CONFIGURED', error:'Gateway spreadsheet belum dikonfigurasi.' }, 503, origin);
+  }
+  const readAt = new Date().toISOString();
+  const actions = [
+    { key:'dashboard', action:'getDashboardData', params:{} },
+    { key:'stock', action:'getAllStock', params:{ entitas:'ALL' } },
+    { key:'po', action:'getStatusPO', params:{} },
+    { key:'lowStock', action:'getLowStock', params:{} },
+    { key:'transactionHistory', action:'getTransactionHistory', params:{} },
+    { key:'stockDelta', action:'getStockDelta', params:{} },
+    { key:'syncMetrics', action:'getSyncMetrics', params:{} },
+    { key:'lastUpdate', action:'getLastUpdate', params:{} },
+    { key:'config', action:'getConfig', params:{} },
+  ];
+  const results = await Promise.all(actions.map(async ({ key, action, params }) => {
+    try {
+      const raw = await callSheetsRead(env, action, params);
+      const ok = raw?.success !== false;
+      const { source, action: _action, readAt: _readAt, ...data } = raw || {};
+      return { key, ok, data:ok ? data : null, error:ok ? null : raw?.error, code:ok ? null : raw?.code };
+    } catch (error) {
+      return { key, ok:false, data:null, error:String(error?.message || error), code:'SYNC_FETCH_FAILED' };
+    }
+  }));
+  const data = {};
+  const errors = {};
+  for (const result of results) {
+    if (result.ok) data[result.key] = result.data;
+    else errors[result.key] = { error:result.error || 'Unknown error', code:result.code || 'UNKNOWN' };
+  }
+  return json({
+    success:true, readAt, data, summary:buildSyncSummary(data),
+    errors:Object.keys(errors).length ? errors : undefined,
+    actor:auth.userId, permissions:'read_only', version:Number(env.CACHE_VERSI || 2),
+  }, 200, origin);
+}
+function buildSyncSummary(data) {
+  const summary = { totalItem:null, stokAman:null, stokWaspada:null, stokKritis:null, poMenunggu:null, poSebagian:null, poSelesai:null, divisi:{}, lastUpdate:null };
+  if (data.dashboard) {
+    const dashboard = data.dashboard;
+    summary.totalItem = dashboard.total ?? dashboard.totalItem ?? dashboard.jumlahItem ?? null;
+    summary.stokAman = dashboard.aman ?? dashboard.stokAman ?? null;
+    summary.stokWaspada = dashboard.waspada ?? dashboard.stokWaspada ?? null;
+    summary.stokKritis = dashboard.kritis ?? dashboard.stokKritis ?? null;
+    if (dashboard.divisi && typeof dashboard.divisi === 'object') summary.divisi = dashboard.divisi;
+  }
+  if (data.po) {
+    const po = data.po;
+    summary.poMenunggu = po.menunggu ?? po.totalMenunggu ?? null;
+    summary.poSebagian = po.sebagian ?? po.totalSebagian ?? null;
+    summary.poSelesai = po.selesai ?? po.totalSelesai ?? null;
+  }
+  if (data.lastUpdate) summary.lastUpdate = data.lastUpdate.lastUpdate ?? data.lastUpdate.readAt ?? null;
+  return summary;
+}
 function configuredSheets(env) {
   return Boolean(String(env.GUDANGAI_SHEETS_API_URL||'').trim().startsWith('https://') && String(env.GUDANGAI_SHEETS_API_SECRET||'').trim());
 }
@@ -338,6 +397,10 @@ export default {
     if (url.pathname === '/api/agent' || url.pathname === '/api/claude') {
       if (request.method !== 'POST') return json({ success:false, error:'Method not allowed' }, 405, corsOrigin);
       return handleAgent(request, env, corsOrigin);
+    }
+    if (url.pathname === '/api/sync-all') {
+      if (request.method !== 'GET') return json({ success:false, error:'Method not allowed' }, 405, corsOrigin);
+      return handleSyncAll(request, env, corsOrigin);
     }
     return env.ASSETS.fetch(request);
   },
