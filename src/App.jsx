@@ -75,14 +75,14 @@ const TAB_ACCENT = {
 };
 
 const TAB_SUBTITLE = {
-  dashboard: 'STATUS UPDATE REAL TIME',
-  stok: 'MONITORING STOK RAK',
-  input: 'PENERIMAAN & PENGELUARAN',
-  po: 'PURCHASE ORDER SYSTEM',
-  ai: 'AGENT RUBEE INTELLIGENCE · WORKER AI',
-  riwayat: 'LOG AUDIT TRANSAKSI',
-  settings: 'PENGATURAN SYSTEM',
-  sync: 'ANTRIAN SINKRONISASI',
+  dashboard: 'Ringkasan operasional gudang',
+  stok: 'Monitoring stok rak',
+  input: 'Penerimaan dan pengeluaran',
+  po: 'Purchase order',
+  ai: 'Agent Rubee Intelligence · Worker AI',
+  riwayat: 'Log audit transaksi',
+  settings: 'Pengaturan sistem',
+  sync: 'Antrean sinkronisasi',
 };
 
 function ConnBanner({ online, hasUrl, status, message, syncing }) {
