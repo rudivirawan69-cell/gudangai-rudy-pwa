@@ -1274,9 +1274,7 @@ export default function DashboardPage({ onNavigate }) {
               <Layers3 className="h-4 w-4" aria-hidden="true" />
             </span>
             <span className="min-w-0 flex-1">
-              <span className="block text-[9px] font-extrabold uppercase tracking-[0.13em] text-cyan-700">Status Stok · per Divisi</span>
-              <span className="block text-[14px] font-extrabold text-slate-900 truncate mt-0.5">Status per Divisi</span>
-              <span className="block text-[11px] font-medium text-slate-500 leading-snug mt-0.5">Ringkas kondisi item di setiap divisi · ketuk untuk membuka</span>
+              <span className="block text-[14px] font-extrabold text-slate-900 truncate">Status per Divisi</span>
             </span>
             <ChevronDown className="h-4 w-4 shrink-0 text-slate-400 transition-transform duration-200 group-open:rotate-180" aria-hidden="true" />
           </div>
@@ -1301,9 +1299,7 @@ export default function DashboardPage({ onNavigate }) {
               <ClipboardCheck className="h-4 w-4" aria-hidden="true" />
             </span>
             <span className="min-w-0 flex-1">
-              <span className="block text-[9px] font-extrabold uppercase tracking-[0.13em] text-amber-700">Status PO · Purchase Order</span>
-              <span className="block text-[14px] font-extrabold text-slate-900 truncate mt-0.5">Status Purchase Order</span>
-              <span className="block text-[11px] font-medium text-slate-500 leading-snug mt-0.5">Pantau kedatangan & konfirmasi PO · ketuk untuk membuka</span>
+              <span className="block text-[14px] font-extrabold text-slate-900 truncate">Status PO</span>
             </span>
             <ChevronDown className="h-4 w-4 shrink-0 text-slate-400 transition-transform duration-200 group-open:rotate-180" aria-hidden="true" />
           </div>
