@@ -239,7 +239,7 @@ try {
     }, theme);
     await page.reload({ waitUntil: 'domcontentloaded' });
     await page.locator('nav.nav-bar').waitFor({ state: 'visible', timeout: 15000 });
-    for (const [label, marker] of [['Beranda', 'Status per Divisi'], ['Stok', 'Stok Barang'], ['Input', 'Draft transaksi dipulihkan'], ['Agent', 'Agent Rubee Intelligence']]) {
+    for (const [label, marker] of [['Beranda', 'Status per Divisi'], ['Stok', 'Stok barang'], ['Input', 'Draft transaksi dipulihkan'], ['Agent', 'Agent Rubee Intelligence']]) {
       if (label === 'Agent') await openMorePage('Agent Rubee AI', marker);
       else await page.locator('nav.nav-bar button').filter({ hasText: label }).first().click();
       await page.getByText(marker, { exact: false }).first().waitFor({ state: 'visible', timeout: 10000 });
@@ -287,7 +287,7 @@ try {
   await mkdir(screenshotRoot, { recursive: true });
   const visualPages = [
     ['Beranda', 'Status per Divisi', 'beranda'],
-    ['Stok', 'Stok Barang', 'stok'],
+    ['Stok', 'Stok barang', 'stok'],
     ['Input', 'Draft transaksi dipulihkan', 'input'],
     ['PO', 'Purchase order', 'po'],
     ['Riwayat', 'Riwayat Transaksi', 'riwayat'],
