@@ -211,7 +211,7 @@ export default function SyncQueuePage({ onBack }) {
           <ArrowLeft className="w-5 h-5" />
         </button>
         <div className="min-w-0 flex-1">
-          <h1 className="text-base font-bold text-slate-900">Antrean Sinkronisasi</h1>
+          <h1 className="text-base font-bold text-slate-900">Antrian Sinkronisasi</h1>
           <p className="text-[11px] text-slate-500">
             {total === 0 ? 'Tidak ada item tertunda' : `${total} item dalam antrean`}
           </p>
@@ -237,7 +237,7 @@ export default function SyncQueuePage({ onBack }) {
       {total === 0 ? (
         <div className="rounded-2xl bg-white border border-slate-200 shadow-sm p-6 text-center space-y-2">
           <CheckCircle2 className="w-10 h-10 text-emerald-500 mx-auto" />
-          <p className="text-sm font-semibold text-slate-700">Antrean kosong</p>
+          <p className="text-sm font-semibold text-slate-700">Antrian kosong</p>
           <p className="text-xs text-slate-500">Tidak ada transaksi yang menunggu sinkronisasi di perangkat ini.</p>
           <button type="button" onClick={onBack}
             className="mt-2 px-4 py-2.5 rounded-xl bg-cyan-700 text-white text-sm font-semibold">
@@ -251,7 +251,7 @@ export default function SyncQueuePage({ onBack }) {
               <div className="flex items-center gap-2">
                 <ClipboardList className="w-5 h-5 text-cyan-700" />
                 <div>
-                  <p className="text-sm font-bold text-cyan-900">Daftar Antrean</p>
+                  <p className="text-sm font-bold text-cyan-900">Daftar Antrian</p>
                   <p className="text-[11px] text-cyan-800/80">{total} item · belum dikirim ulang ke server</p>
                 </div>
               </div>

@@ -580,8 +580,8 @@ function StockComparison({ cv, pt }) {
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div className="rounded-xl bg-cyan-50 border border-cyan-100 p-3 text-center">
-          <div className="mx-auto w-16 h-16 rounded-full p-[6px]" style={{ background: `conic-gradient(#06b6d4 ${cvPct * 3.6}deg, #dbeafe 0deg)` }}>
-            <div className="w-full h-full rounded-full bg-white flex items-center justify-center">
+          <div className="mx-auto w-16 h-16 rounded-full p-[6px]" style={{ background: `conic-gradient(#06b6d4 ${cvPct * 3.6}deg, var(--border) 0deg)` }}>
+            <div className="dashboard-ring-center w-full h-full rounded-full flex items-center justify-center">
               <span className="text-base font-extrabold text-cyan-700 tabular-nums">{cvPct}%</span>
             </div>
           </div>
@@ -589,7 +589,7 @@ function StockComparison({ cv, pt }) {
           <p className="text-[10px] text-slate-500 tabular-nums">{(cv?.unit || 0).toLocaleString('id-ID')} unit</p>
         </div>
         <div className="rounded-xl bg-orange-50 border border-orange-100 p-3 text-center">
-          <div className="mx-auto w-16 h-16 rounded-full p-[6px]" style={{ background: `conic-gradient(#f59e0b ${ptPct * 3.6}deg, #ffedd5 0deg)` }}>
+          <div className="mx-auto w-16 h-16 rounded-full p-[6px]" style={{ background: `conic-gradient(#f59e0b ${ptPct * 3.6}deg, var(--border) 0deg)` }}>
             <div className="w-full h-full rounded-full bg-white flex items-center justify-center">
               <span className="text-base font-extrabold text-orange-700 tabular-nums">{ptPct}%</span>
             </div>

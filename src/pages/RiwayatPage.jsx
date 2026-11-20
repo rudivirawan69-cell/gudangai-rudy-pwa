@@ -368,10 +368,10 @@ export default function RiwayatPage({ onNavigate }) {
         <div className="rw-empty">
           <b>{adaFilter ? "Tidak ada hasil" : "Belum ada riwayat"}</b>
           <p>{adaFilter ? "Ubah filter atau reset." : "Transaksi berhasil akan muncul di sini."}</p>
-          {adaFilter && (
-            <button type="button" className="rw-primary" onClick={resetFilter}>
-              Reset filter
-            </button>
+          {adaFilter ? (
+            <button type="button" className="rw-primary" onClick={resetFilter}>Reset filter</button>
+          ) : (
+            <button type="button" className="rw-primary" onClick={() => onNavigate?.("input")}>Buat input baru</button>
           )}
         </div>
       )}

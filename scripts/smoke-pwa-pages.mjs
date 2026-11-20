@@ -27,6 +27,7 @@ function contrastRatio(foreground, background) {
 const items = [
   { kode: 'CV-0001', nama: 'Ayam Fillet Dada', entitas: 'CV', entity: 'CV', stok: 25, stockAkhir: 25, stockAman: 20, satuan: 'Pack', divisi: 'CS' },
   { kode: 'PT-0001', nama: 'Bebek', entitas: 'PT', entity: 'PT', stok: 8, stockAkhir: 8, stockAman: 15, satuan: 'Pack', divisi: 'PRODUKSI' },
+  { kode: 'BB-0001', nama: 'Tepung Bumbu', entitas: 'Bahan Baku', entity: 'Bahan Baku', stok: 18, stockAkhir: 18, stockAman: 24, satuan: 'Pail', divisi: 'BAHAN BAKU' },
 ];
 
 const server = spawn('npm', ['run', 'preview', '--', '--host', '127.0.0.1', '--port', '4173', '--strictPort'], {
@@ -138,10 +139,11 @@ try {
 
   await page.goto(HOST, { waitUntil: 'domcontentloaded' });
   await page.locator('nav.nav-bar').waitFor({ state: 'visible', timeout: 15000 });
+  assert.equal((await page.locator('.app-header-card h1').innerText()).trim(), 'GudangAI Pro', 'Sticky header brand must match the approved product name.');
 
   const tabs = [
     ['Beranda', 'Status per Divisi'],
-    ['Stok', 'Stok Barang'],
+    ['Stok', 'Stok barang'],
     ['Input', 'Draft transaksi dipulihkan'],
     ['Agent', 'Agent Rubee Intelligence'],
   ];
@@ -193,8 +195,8 @@ try {
   for (const viewport of viewports) {
     await page.setViewportSize(viewport);
     for (const [label, marker] of tabs) {
-      const button = page.locator('nav.nav-bar button').filter({ hasText: label }).first();
-      await button.click();
+      if (label === 'Agent') await openMorePage('Agent Rubee AI', marker);
+      else await page.locator('nav.nav-bar button').filter({ hasText: label }).first().click();
       const visibleMarker = page.getByText(marker, { exact: false }).last();
       try {
         await visibleMarker.waitFor({ state: 'visible', timeout: 10000 });
@@ -212,7 +214,7 @@ try {
     await assertNoHorizontalOverflow('Riwayat', viewport);
     await openMorePage('Pengaturan', 'Mode Tampilan');
     await assertNoHorizontalOverflow('Pengaturan', viewport);
-    await openMorePage('Antrian Sinkronisasi', 'Antrian Sinkronisasi');
+    await openMorePage('Antrean sinkronisasi', 'Antrian Sinkronisasi');
     await assertNoHorizontalOverflow('Antrian Sinkronisasi', viewport);
   }
 
@@ -220,32 +222,59 @@ try {
   // Verify the restored Data Stock page keeps CV/PT selection and division expansion.
   await page.setViewportSize({ width: 390, height: 844 });
   await page.locator('nav.nav-bar button').filter({ hasText: 'Stok' }).first().click();
-  await page.getByText('Data Stok', { exact: false }).first().waitFor({ state: 'visible', timeout: 10000 });
-  await page.getByRole('button', { name: 'CV', exact: true }).waitFor({ state: 'visible' });
-  await page.getByRole('button', { name: 'PT', exact: true }).click();
+  await page.getByText('Stok barang', { exact: false }).first().waitFor({ state: 'visible', timeout: 10000 });
+  await page.getByRole('tab', { name: 'CV', exact: true }).waitFor({ state: 'visible' });
+  await page.getByRole('tab', { name: 'PT', exact: true }).click();
   await page.getByRole('button').filter({ hasText: 'PRODUKSI' }).first().click();
   await page.getByText('Bebek', { exact: true }).waitFor({ state: 'visible', timeout: 10000 });
-  await page.getByRole('button', { name: 'CV', exact: true }).click();
+  await page.getByRole('tab', { name: 'CV', exact: true }).click();
   await page.getByRole('button').filter({ hasText: 'CS' }).first().click();
   await page.getByText('Ayam Fillet Dada', { exact: true }).waitFor({ state: 'visible', timeout: 10000 });
 
-  // Verify all three supported themes on the three requested primary pages.
+  // Verify all three supported themes on mobile; catches clipped Agent empty states.
+  await page.setViewportSize({ width: 390, height: 844 });
   for (const theme of ['soft_light', 'deep_ocean', 'graphite_titanium']) {
     await page.evaluate((value) => {
       localStorage.setItem('gudangai_theme', value);
     }, theme);
     await page.reload({ waitUntil: 'domcontentloaded' });
     await page.locator('nav.nav-bar').waitFor({ state: 'visible', timeout: 15000 });
-    for (const [label, marker] of [['Beranda', 'Status per Divisi'], ['Stok', 'Data Stok'], ['Input', 'Draft transaksi dipulihkan'], ['Agent', 'Agent Rubee Intelligence']]) {
-      await page.locator('nav.nav-bar button').filter({ hasText: label }).first().click();
+    for (const [label, marker] of [['Beranda', 'Status per Divisi'], ['Stok', 'Stok barang'], ['Input', 'Draft transaksi dipulihkan'], ['Agent', 'Agent Rubee Intelligence']]) {
+      if (label === 'Agent') await openMorePage('Agent Rubee AI', marker);
+      else await page.locator('nav.nav-bar button').filter({ hasText: label }).first().click();
       await page.getByText(marker, { exact: false }).first().waitFor({ state: 'visible', timeout: 10000 });
       const themeState = await page.evaluate(() => ({
         id: document.documentElement.getAttribute('data-theme'),
         surface: getComputedStyle(document.documentElement).getPropertyValue('--bg-elevated').trim(),
         text: getComputedStyle(document.documentElement).getPropertyValue('--text-main').trim(),
+        accent: getComputedStyle(document.documentElement).getPropertyValue('--accent').trim().toLowerCase(),
       }));
       assert.equal(themeState.id, theme, `Theme mismatch on ${label}: ${JSON.stringify(themeState)}`);
       assert.ok(themeState.surface && themeState.text, `Theme tokens missing on ${label} in ${theme}`);
+      if (theme === 'graphite_titanium') {
+        assert.equal(themeState.accent, '#6366f1', `Graphite navigation accent must be indigo on ${label}.`);
+        if (label === 'Beranda') {
+          const fabBackground = await page.locator('.nav-fab-btn').evaluate((el) => getComputedStyle(el).backgroundImage);
+          const agentBorder = await page.locator('[data-ui-page="dashboard"] .home-agent-card').evaluate((el) => getComputedStyle(el).borderTopColor);
+          assert.ok(!fabBackground.includes('16, 185, 129'), 'Graphite Input FAB must not retain the green legacy gradient.');
+          assert.notEqual(agentBorder, 'rgb(214, 154, 72)', 'Graphite Agent shortcut border must not remain amber.');
+        }
+      }
+      if (label === 'Agent' && theme !== 'soft_light') {
+        const agentSurface = await page.locator('[data-ui-page="ai"] .max-w-4xl > div.relative').evaluate((el) => getComputedStyle(el).backgroundColor);
+        assert.notEqual(agentSurface, 'rgba(248, 250, 252, 0.9)', `Agent chat surface must follow ${theme}, not remain light.`);
+        assert.notEqual(agentSurface, 'rgb(255, 255, 255)', `Agent chat surface must not be white in ${theme}.`);
+        const emptyState = await page.locator('[data-ui-page="ai"] [role="log"] > .m-auto').evaluate((el) => ({
+          width: el.clientWidth,
+          scrollWidth: el.scrollWidth,
+        }));
+        const viewportWidth = await page.evaluate(() => window.innerWidth);
+        assert.ok(emptyState.width <= viewportWidth, `Agent empty state exceeds mobile width in ${theme}: ${JSON.stringify({ emptyState, viewportWidth })}`);
+        assert.ok(emptyState.scrollWidth <= emptyState.width + 1, `Agent empty state overflows horizontally in ${theme}: ${JSON.stringify(emptyState)}`);
+        const headingBox = await page.getByText('Apa yang perlu dibantu?', { exact: true }).boundingBox();
+        assert.ok(headingBox && headingBox.x >= 0 && headingBox.x + headingBox.width <= viewportWidth,
+          `Agent empty-state heading is clipped on mobile in ${theme}: ${JSON.stringify({ headingBox, viewportWidth, emptyState })}`);
+      }
       if (label === 'Input') {
         assert.equal(await page.locator('[data-testid="input-search-results"]').count(), 0,
           'Input search results must remain hidden when the search field is empty.');
@@ -258,9 +287,13 @@ try {
   await mkdir(screenshotRoot, { recursive: true });
   const visualPages = [
     ['Beranda', 'Status per Divisi', 'beranda'],
-    ['Stok', 'Data Stok', 'stok'],
+    ['Stok', 'Stok barang', 'stok'],
     ['Input', 'Draft transaksi dipulihkan', 'input'],
+    ['PO', 'Purchase order', 'po'],
+    ['Riwayat', 'Riwayat Transaksi', 'riwayat'],
     ['Agent', 'Agent Rubee Intelligence', 'agent'],
+    ['Pengaturan', 'Mode Tampilan', 'settings'],
+    ['Antrian Sinkronisasi', 'Antrian Sinkronisasi', 'sync'],
   ];
   const visualViewports = [
     { width: 390, height: 844, label: 'mobile' },
@@ -289,7 +322,14 @@ try {
     for (const viewport of visualViewports) {
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
       for (const [label, markerText, slug] of visualPages) {
-        await page.locator('nav.nav-bar button').filter({ hasText: label }).first().click();
+        if (label === 'PO') {
+          await page.locator('nav.nav-bar button').filter({ hasText: 'Beranda' }).first().click();
+          await page.locator('nav.nav-bar button').filter({ hasText: 'PO' }).first().click();
+        } else if (['Riwayat', 'Pengaturan', 'Antrian Sinkronisasi', 'Agent'].includes(label)) {
+          await openMorePage(label === 'Agent' ? 'Agent Rubee AI' : label === 'Antrian Sinkronisasi' ? 'Antrean sinkronisasi' : label, markerText);
+        } else {
+          await page.locator('nav.nav-bar button').filter({ hasText: label }).first().click();
+        }
         await page.getByText(markerText, { exact: false }).first().waitFor({ state: 'visible', timeout: 10000 });
         const safeTheme = await page.evaluate(() => ({
           id: document.documentElement.dataset.theme,
@@ -309,6 +349,41 @@ try {
     }
   }
 
+  // Stock cards: all three entities at 360/412px across all three themes.
+  const stockEvidenceRoot = 'artifacts/visual-stock-cards';
+  await mkdir(stockEvidenceRoot, { recursive: true });
+  for (const theme of ['soft_light', 'deep_ocean', 'graphite_titanium']) {
+    await page.evaluate((value) => localStorage.setItem('gudangai_theme', value), theme);
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.locator('nav.nav-bar').waitFor({ state: 'visible', timeout: 15000 });
+    await page.locator('nav.nav-bar button').filter({ hasText: 'Stok' }).first().click();
+    await page.getByText('Stok barang', { exact: false }).first().waitFor({ state: 'visible', timeout: 10000 });
+    for (const viewport of [{ width: 360, height: 800 }, { width: 412, height: 915 }]) {
+      await page.setViewportSize(viewport);
+      for (const entity of ['CV', 'PT', 'Bahan Baku']) {
+        await page.getByRole('tab', { name: entity, exact: true }).click();
+        const itemCount = await page.locator('.sk-item-card').count();
+        assert.ok(itemCount > 0, `No stock item cards rendered for ${entity} in ${theme} at ${viewport.width}px.`);
+        const bounds = await page.evaluate(() => ({
+          viewport: document.documentElement.clientWidth,
+          document: document.documentElement.scrollWidth,
+          body: document.body.scrollWidth,
+        }));
+        assert.ok(bounds.document <= bounds.viewport + 2 && bounds.body <= bounds.viewport + 2,
+          `Stock horizontal overflow for ${entity} in ${theme} at ${viewport.width}px: ${JSON.stringify(bounds)}`);
+        assert.equal(await page.locator('.sk-item-card').filter({ hasText: 'Divisi' }).count(), 0,
+          'Item cards must not display a Divisi column or label.');
+        assert.equal(await page.locator('.sk-item-card').filter({ hasText: 'Entitas' }).count(), 0,
+          'Item cards must not display an Entitas column or label.');
+        await page.screenshot({
+          path: `${stockEvidenceRoot}/stok-${theme}-${entity.toLowerCase().replaceAll(' ', '-')}-${viewport.width}.png`,
+          fullPage: true,
+          animations: 'disabled',
+        });
+      }
+    }
+  }
+
   // Drafts must survive page unmount/remount caused by bottom navigation.
   await page.locator('nav.nav-bar button').filter({ hasText: 'Input' }).first().click();
   await page.getByText('Draft transaksi dipulihkan', { exact: false }).waitFor({ state: 'visible' });
@@ -317,7 +392,7 @@ try {
   await page.getByText('Draft transaksi dipulihkan', { exact: false }).waitFor({ state: 'visible' });
 
   assert.deepEqual(pageErrors, [], 'Uncaught browser errors were detected during page smoke tests.');
-  console.log('PASS: four primary tabs + MoreSheet destinations + Data Stock CV/PT/division behavior + full-screen edges + Input draft recovery + five viewport widths + three themes.');
+  console.log('PASS: five primary tabs + MoreSheet destinations + Data Stock CV/PT/division behavior + full-screen edges + Input draft recovery + five viewport widths + three themes.');
 } finally {
   await browser.close();
   server.kill('SIGTERM');

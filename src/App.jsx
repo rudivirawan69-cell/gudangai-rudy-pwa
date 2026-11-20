@@ -11,7 +11,7 @@ import { startRealtimeSync, syncNow } from './data/realTimeSync';
 import { getPendingQueue, getDashboardData } from './data/api';
 import {
   LayoutDashboard, Package, PackagePlus, Clock, Settings, ClipboardList,
-  WifiOff, AlertTriangle, Loader2, RefreshCw, BrainCircuit, MoreHorizontal, X,
+  AlertTriangle, Loader2, RefreshCw, BrainCircuit, MoreHorizontal, X,
 } from 'lucide-react';
 
 const DashboardPage = lazy(() => import('./pages/DashboardPage'));
@@ -49,19 +49,20 @@ class ErrorBoundary extends Component {
 
 const MAIN_TABS = [
   { id: 'dashboard', label: 'Beranda', icon: LayoutDashboard, chip: 'bg-cyan-500/25' },
-  { id: 'ai', label: 'Agent', icon: BrainCircuit, chip: 'bg-orange-500/25' },
-  { id: 'input', label: 'Input', icon: PackagePlus, chip: 'bg-emerald-500/25', fab: true },
   { id: 'stok', label: 'Stok', icon: Package, chip: 'bg-blue-500/25' },
+  { id: 'input', label: 'Input', icon: PackagePlus, chip: 'bg-emerald-500/25', fab: true },
+  { id: 'po', label: 'PO', icon: ClipboardList, chip: 'bg-violet-500/25' },
   { id: 'more', label: 'Lainnya', icon: MoreHorizontal, chip: 'bg-slate-500/25' },
 ];
 
 const MORE_TABS = [
-  { id: 'riwayat', label: 'Riwayat', icon: Clock, chip: 'bg-amber-500/25' },
-  { id: 'sync', label: 'Antrian Sinkronisasi', icon: RefreshCw, chip: 'bg-teal-500/25' },
+  { id: 'ai', label: 'Agent Rubee AI', icon: BrainCircuit, chip: 'bg-orange-500/25' },
+  { id: 'riwayat', label: 'Riwayat Transaksi', icon: Clock, chip: 'bg-amber-500/25' },
+  { id: 'sync', label: 'Antrean sinkronisasi', icon: RefreshCw, chip: 'bg-teal-500/25' },
   { id: 'settings', label: 'Pengaturan', icon: Settings, chip: 'bg-slate-500/25' },
 ];
 
-const MORE_IDS = new Set([...MORE_TABS.map((t) => t.id), 'po']);
+const MORE_IDS = new Set(MORE_TABS.map((t) => t.id));
 
 const TAB_ACCENT = {
   dashboard: 'from-cyan-400 to-cyan-600',
@@ -74,40 +75,23 @@ const TAB_ACCENT = {
 };
 
 const TAB_SUBTITLE = {
-  dashboard: 'STATUS UPDATE REAL TIME',
-  stok: 'MONITORING STOK RAK',
-  input: 'PENERIMAAN & PENGELUARAN',
-  po: 'PURCHASE ORDER SYSTEM',
-  ai: 'AGENT RUBEE INTELLIGENCE · WORKER AI',
-  riwayat: 'LOG AUDIT TRANSAKSI',
-  settings: 'PENGATURAN SYSTEM',
-  sync: 'ANTRIAN SINKRONISASI',
+  dashboard: 'Ringkasan operasional gudang',
+  stok: 'Monitoring stok rak',
+  input: 'Penerimaan dan pengeluaran',
+  po: 'Purchase order',
+  ai: 'Agent Rubee Intelligence · Worker AI',
+  riwayat: 'Log audit transaksi',
+  settings: 'Pengaturan sistem',
+  sync: 'Antrean sinkronisasi',
 };
 
-function ConnBanner({ online, hasUrl, status, message, syncing }) {
-  if (!hasUrl) return null;
-  if (syncing || status === 'syncing') {
-    return (
-      <div className="px-3 py-1.5 bg-cyan-700 text-white text-[11px] font-semibold flex items-center gap-2">
-        <Loader2 className="w-3.5 h-3.5 animate-spin" /> Menyinkronkan...
-      </div>
-    );
-  }
-  if (!online || status === 'offline') {
-    return (
-      <div className="px-3 py-1.5 bg-amber-600 text-white text-[11px] font-semibold flex items-center gap-2">
-        <WifiOff className="w-3.5 h-3.5" /> Offline — data antrian aman di perangkat
-      </div>
-    );
-  }
-  if (status === 'error') {
-    return (
-      <div className="px-3 py-1.5 bg-rose-700 text-white text-[11px] font-semibold flex items-center gap-2">
-        <AlertTriangle className="w-3.5 h-3.5" /> {message || 'Backend tidak merespons'}
-      </div>
-    );
-  }
-  return null;
+function ConnBanner({ hasUrl, status, message }) {
+  if (!hasUrl || status !== 'error') return null;
+  return (
+    <div className="px-3 py-1.5 bg-rose-700 text-white text-[11px] font-semibold flex items-center gap-2">
+      <AlertTriangle className="w-3.5 h-3.5" /> {message || 'Backend tidak merespons'}
+    </div>
+  );
 }
 
 function MoreSheet({ open, onClose, onNavigate, activeId, pendingCount }) {
@@ -135,10 +119,10 @@ function MoreSheet({ open, onClose, onNavigate, activeId, pendingCount }) {
   );
 }
 
-function AppHeader({ user, tab, onOpenSettings, online, status, sheetLabel, onRefresh }) {
+function AppHeader({ user, tab, onOpenSettings, online, hasUrl, status, syncing, sheetLabel, onRefresh }) {
   const [refreshing, setRefreshing] = useState(false);
   const photo = (user?.photo && String(user.photo).length > 40) ? user.photo : DEFAULT_PROFILE_PHOTO;
-  const connected = online && status !== 'offline' && status !== 'error';
+  const connected = hasUrl && online && status !== 'offline' && status !== 'error';
 
   const handleRefresh = async () => {
     if (refreshing) return;
@@ -155,19 +139,19 @@ function AppHeader({ user, tab, onOpenSettings, online, status, sheetLabel, onRe
             <span className={`absolute bottom-0.5 right-0.5 w-2.5 h-2.5 rounded-full border-2 border-[var(--bg-elevated,#fff)] ${connected ? 'bg-emerald-500' : 'bg-amber-400'}`} />
           </button>
           <div className="min-w-0 flex-1">
-            <h1 className="text-[13px] font-black tracking-wide text-[var(--text-main,#0f172a)] uppercase truncate leading-tight">
-              GUDANG-69 RUDI
+            <h1 className="text-[13px] font-black tracking-[0.04em] text-[var(--text-main,#0f172a)] truncate leading-tight">
+              GudangAI Pro
             </h1>
             <p
-              className="mt-0.5 text-[10px] font-semibold text-[var(--text-muted,#475569)] truncate leading-tight"
+              className="mt-0.5 text-[10px] font-semibold text-[var(--text-muted,#475569)] truncate leading-tight app-sync-status"
               title={sheetLabel || undefined}
               aria-live="polite"
             >
-              {sheetLabel
-                ? `Update ${formatSpreadsheetTimestamp(sheetLabel)}`
-                : connected
-                  ? 'Update — menunggu data spreadsheet'
-                  : 'Update — belum terhubung'}
+              {syncing || status === 'syncing'
+                ? <><span className="sync-dot is-loading" />Memuat data...</>
+                 : !hasUrl || !online || status === 'offline' || status === 'error'
+                  ? <><span className="sync-dot is-offline" />Menunggu koneksi</>
+                  : <><span className="sync-dot is-online" />Tersinkron{sheetLabel ? ` · ${formatSpreadsheetTimestamp(sheetLabel)}` : ''}</>}
             </p>
           </div>
           <button type="button" onClick={handleRefresh} disabled={refreshing} className="shrink-0 w-10 h-10 rounded-xl bg-[var(--bg-muted,#f8fafc)] border border-[var(--border,#e2e8f0)] flex items-center justify-center active:scale-95 disabled:opacity-60" aria-label="Cek koneksi ke spreadsheet" title="Cek koneksi">
@@ -315,10 +299,10 @@ function AppShell() {
   return (
     <div className="app-shell min-h-screen text-[var(--text-main,#10232b)]">
       <div className="app-bg" aria-hidden="true" />
-      <ConnBanner online={online} hasUrl={hasUrl} status={status} message={message} syncing={syncing} />
-      <AppHeader user={user} tab={tab} onOpenSettings={() => goTab('settings')} online={online} status={status} sheetLabel={sheetLabel} onRefresh={() => Promise.allSettled([checkHealth({ quiet: false }), getDashboardData()])} />
+      <ConnBanner hasUrl={hasUrl} status={status} message={message} />
+      <AppHeader user={user} tab={tab} onOpenSettings={() => goTab('settings')} online={online} hasUrl={hasUrl} status={status} syncing={syncing} sheetLabel={sheetLabel} onRefresh={() => Promise.allSettled([checkHealth({ quiet: false }), getDashboardData()])} />
       <InstallBanner installPrompt={installPrompt} onInstall={installApp} onDismiss={dismissInstall} />
-      <main className="page-content app-content w-full max-w-none mx-0 min-h-0 px-3 pb-32 pt-1">
+      <main data-ui-page={tab} className="page-content app-content w-full max-w-none mx-0 min-h-0 px-3 pb-32 pt-1">
         <div key={pageKey} className="animate-page-in">
           <ErrorBoundary>
             <Suspense fallback={<div className="flex justify-center py-20"><Loader2 className="w-7 h-7 text-cyan-500 animate-spin" /></div>}>

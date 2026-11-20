@@ -95,7 +95,7 @@ function Avatar({ name, photo, size = 'md' }) {
       src={src}
       alt={name || 'Avatar'}
       onError={() => setErr(true)}
-      className={`${dim} rounded-2xl object-cover shadow-md ring-2 ring-white/40 shrink-0 bg-slate-200`}
+      className={`${dim} rounded-full object-cover object-top aspect-square shadow-none ring-0 shrink-0 bg-slate-200`}
     />
   );
 }

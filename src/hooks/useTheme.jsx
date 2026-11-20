@@ -21,14 +21,14 @@ export const THEME_META = {
     id: 'graphite_titanium',
     label: 'Graphite Titanium',
     short: 'Graphite',
-    description: 'Graphite · Titanium · Amber — industrial premium',
+    description: 'Graphite · Cyan · Indigo — industrial premium',
   },
 };
 
 const THEME_COLORS = {
-  soft_light: '#247ba8',
-  deep_ocean: '#35b9b0',
-  graphite_titanium: '#d69a48',
+  soft_light: '#0D9488',
+  deep_ocean: '#38BDF8',
+  graphite_titanium: '#6366f1',
 };
 
 const ThemeContext = createContext(null);
