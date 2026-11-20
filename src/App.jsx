@@ -136,7 +136,7 @@ function MoreSheet({ open, onClose, onNavigate, activeId, pendingCount }) {
   );
 }
 
-function AppHeader({ user, tab, onOpenSettings, online, status, sheetLabel, onRefresh }) {
+function AppHeader({ user, tab, onOpenSettings, online, status, syncing, sheetLabel, onRefresh }) {
   const [refreshing, setRefreshing] = useState(false);
   const photo = (user?.photo && String(user.photo).length > 40) ? user.photo : DEFAULT_PROFILE_PHOTO;
   const connected = online && status !== 'offline' && status !== 'error';
@@ -156,19 +156,19 @@ function AppHeader({ user, tab, onOpenSettings, online, status, sheetLabel, onRe
             <span className={`absolute bottom-0.5 right-0.5 w-2.5 h-2.5 rounded-full border-2 border-[var(--bg-elevated,#fff)] ${connected ? 'bg-emerald-500' : 'bg-amber-400'}`} />
           </button>
           <div className="min-w-0 flex-1">
-            <h1 className="text-[13px] font-black tracking-wide text-[var(--text-main,#0f172a)] uppercase truncate leading-tight">
-              GUDANGAI RUDY PRO
+            <h1 className="text-[13px] font-black tracking-[0.04em] text-[var(--text-main,#0f172a)] truncate leading-tight">
+              GudangAI Pro
             </h1>
             <p
-              className="mt-0.5 text-[10px] font-semibold text-[var(--text-muted,#475569)] truncate leading-tight"
+              className="mt-0.5 text-[10px] font-semibold text-[var(--text-muted,#475569)] truncate leading-tight app-sync-status"
               title={sheetLabel || undefined}
               aria-live="polite"
             >
-              {sheetLabel
-                ? `Update ${formatSpreadsheetTimestamp(sheetLabel)}`
-                : connected
-                  ? 'Update — menunggu data spreadsheet'
-                  : 'Update — belum terhubung'}
+              {syncing || status === 'syncing'
+                ? <><span className="sync-dot is-loading" />Memuat data...</>
+                : !online || status === 'offline' || status === 'error'
+                  ? <><span className="sync-dot is-offline" />Menunggu koneksi</>
+                  : <><span className="sync-dot is-online" />Tersinkron{sheetLabel ? ` · ${formatSpreadsheetTimestamp(sheetLabel)}` : ''}</>}
             </p>
           </div>
           <button type="button" onClick={handleRefresh} disabled={refreshing} className="shrink-0 w-10 h-10 rounded-xl bg-[var(--bg-muted,#f8fafc)] border border-[var(--border,#e2e8f0)] flex items-center justify-center active:scale-95 disabled:opacity-60" aria-label="Cek koneksi ke spreadsheet" title="Cek koneksi">
@@ -317,7 +317,7 @@ function AppShell() {
     <div className="app-shell min-h-screen text-[var(--text-main,#10232b)]">
       <div className="app-bg" aria-hidden="true" />
       <ConnBanner online={online} hasUrl={hasUrl} status={status} message={message} syncing={syncing} />
-      <AppHeader user={user} tab={tab} onOpenSettings={() => goTab('settings')} online={online} status={status} sheetLabel={sheetLabel} onRefresh={() => Promise.allSettled([checkHealth({ quiet: false }), getDashboardData()])} />
+      <AppHeader user={user} tab={tab} onOpenSettings={() => goTab('settings')} online={online} status={status} syncing={syncing} sheetLabel={sheetLabel} onRefresh={() => Promise.allSettled([checkHealth({ quiet: false }), getDashboardData()])} />
       <InstallBanner installPrompt={installPrompt} onInstall={installApp} onDismiss={dismissInstall} />
       <main data-ui-page={tab} className="page-content app-content w-full max-w-none mx-0 min-h-0 px-3 pb-32 pt-1">
         <div key={pageKey} className="animate-page-in">
