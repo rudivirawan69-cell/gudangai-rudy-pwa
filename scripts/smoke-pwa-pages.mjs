@@ -27,6 +27,7 @@ function contrastRatio(foreground, background) {
 const items = [
   { kode: 'CV-0001', nama: 'Ayam Fillet Dada', entitas: 'CV', entity: 'CV', stok: 25, stockAkhir: 25, stockAman: 20, satuan: 'Pack', divisi: 'CS' },
   { kode: 'PT-0001', nama: 'Bebek', entitas: 'PT', entity: 'PT', stok: 8, stockAkhir: 8, stockAman: 15, satuan: 'Pack', divisi: 'PRODUKSI' },
+  { kode: 'BB-0001', nama: 'Tepung Bumbu', entitas: 'Bahan Baku', entity: 'Bahan Baku', stok: 18, stockAkhir: 18, stockAman: 24, satuan: 'Pail', divisi: 'BAHAN BAKU' },
 ];
 
 const server = spawn('npm', ['run', 'preview', '--', '--host', '127.0.0.1', '--port', '4173', '--strictPort'], {
@@ -142,7 +143,7 @@ try {
 
   const tabs = [
     ['Beranda', 'Status per Divisi'],
-    ['Stok', 'Stok Barang'],
+    ['Stok', 'Stok barang'],
     ['Input', 'Draft transaksi dipulihkan'],
     ['Agent', 'Agent Rubee Intelligence'],
   ];
@@ -221,7 +222,7 @@ try {
   // Verify the restored Data Stock page keeps CV/PT selection and division expansion.
   await page.setViewportSize({ width: 390, height: 844 });
   await page.locator('nav.nav-bar button').filter({ hasText: 'Stok' }).first().click();
-  await page.getByText('Stok Barang', { exact: false }).first().waitFor({ state: 'visible', timeout: 10000 });
+  await page.getByText('Stok barang', { exact: false }).first().waitFor({ state: 'visible', timeout: 10000 });
   await page.getByRole('tab', { name: 'CV', exact: true }).waitFor({ state: 'visible' });
   await page.getByRole('tab', { name: 'PT', exact: true }).click();
   await page.getByRole('button').filter({ hasText: 'PRODUKSI' }).first().click();
@@ -341,6 +342,41 @@ try {
         assert.ok(ratio >= 4.5, `Text contrast below WCAG AA on ${label} in ${theme}: ${ratio.toFixed(2)}:1`);
         await page.screenshot({
           path: `${screenshotRoot}/${theme}-${slug}-${viewport.label}.png`,
+          fullPage: true,
+          animations: 'disabled',
+        });
+      }
+    }
+  }
+
+  // Stock cards: all three entities at 360/412px across all three themes.
+  const stockEvidenceRoot = 'artifacts/visual-stock-cards';
+  await mkdir(stockEvidenceRoot, { recursive: true });
+  for (const theme of ['soft_light', 'deep_ocean', 'graphite_titanium']) {
+    await page.evaluate((value) => localStorage.setItem('gudangai_theme', value), theme);
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.locator('nav.nav-bar').waitFor({ state: 'visible', timeout: 15000 });
+    await page.locator('nav.nav-bar button').filter({ hasText: 'Stok' }).first().click();
+    await page.getByText('Stok barang', { exact: false }).first().waitFor({ state: 'visible', timeout: 10000 });
+    for (const viewport of [{ width: 360, height: 800 }, { width: 412, height: 915 }]) {
+      await page.setViewportSize(viewport);
+      for (const entity of ['CV', 'PT', 'Bahan Baku']) {
+        await page.getByRole('tab', { name: entity, exact: true }).click();
+        const itemCount = await page.locator('.sk-item-card').count();
+        assert.ok(itemCount > 0, `No stock item cards rendered for ${entity} in ${theme} at ${viewport.width}px.`);
+        const bounds = await page.evaluate(() => ({
+          viewport: document.documentElement.clientWidth,
+          document: document.documentElement.scrollWidth,
+          body: document.body.scrollWidth,
+        }));
+        assert.ok(bounds.document <= bounds.viewport + 2 && bounds.body <= bounds.viewport + 2,
+          `Stock horizontal overflow for ${entity} in ${theme} at ${viewport.width}px: ${JSON.stringify(bounds)}`);
+        assert.equal(await page.locator('.sk-item-card').filter({ hasText: 'Divisi' }).count(), 0,
+          'Item cards must not display a Divisi column or label.');
+        assert.equal(await page.locator('.sk-item-card').filter({ hasText: 'Entitas' }).count(), 0,
+          'Item cards must not display an Entitas column or label.');
+        await page.screenshot({
+          path: `${stockEvidenceRoot}/stok-${theme}-${entity.toLowerCase().replaceAll(' ', '-')}-${viewport.width}.png`,
           fullPage: true,
           animations: 'disabled',
         });
