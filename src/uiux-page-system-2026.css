@@ -175,8 +175,15 @@ html[data-theme] [data-ui-page="riwayat"] .rw-main b { color: var(--ux-ink); }
 html[data-theme] [data-ui-page="riwayat"] .rw-main small { color: var(--ux-muted); }
 
 /* AGENT — chat-like workspace, focused composer and readable answer surfaces */
+html[data-theme] [data-ui-page="ai"] [role="log"] {
+  overflow-x: hidden !important;
+}
 html[data-theme] [data-ui-page="ai"] [role="log"] > .m-auto {
-  width: 100%; min-width: 0; max-width: 28rem; box-sizing: border-box; margin-inline: auto;
+  width: 100%; min-width: 0; max-width: min(28rem,100%); box-sizing: border-box;
+  margin-inline: auto; align-self: stretch; flex: 0 1 100%;
+}
+html[data-theme] [data-ui-page="ai"] [role="log"] > .m-auto > :is(h3,p) {
+  width: 100%; max-width: 100%; min-width: 0; overflow-wrap: anywhere; white-space: normal;
 }
 html[data-theme] [data-ui-page="ai"] [role="log"] > .m-auto p { overflow-wrap: anywhere; }
 html[data-theme] [data-ui-page="ai"] :is(.chat-container,.agent-chat,.message-list,.assistant-panel) { border-radius: 20px; }
