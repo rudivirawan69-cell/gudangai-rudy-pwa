@@ -61,7 +61,7 @@ describe('GudangAI Metode C UI contract', () => {
     const css = readFileSync(cssPath, 'utf8');
     expect(css).toContain('[data-ui-page="ai"] .max-w-4xl > :is(header,div.relative,form)');
     expect(css).toContain('[data-ui-page="ai"] .max-w-4xl .bg-white');
-    expect(css).toContain('[data-ui-page="dashboard"] .dashboard-chart-wrap .relative.h-36');
+    expect(css).toContain('[data-ui-page="dashboard"] .dashboard-chart-wrap > .relative.h-36');
   });
 
   it('uses the approved GUDANGAI RUDY PRO sticky header brand', () => {
