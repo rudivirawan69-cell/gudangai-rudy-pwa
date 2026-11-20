@@ -221,11 +221,11 @@ try {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.locator('nav.nav-bar button').filter({ hasText: 'Stok' }).first().click();
   await page.getByText('Stok Barang', { exact: false }).first().waitFor({ state: 'visible', timeout: 10000 });
-  await page.getByRole('button', { name: 'CV', exact: true }).waitFor({ state: 'visible' });
-  await page.getByRole('button', { name: 'PT', exact: true }).click();
+  await page.getByRole('tab', { name: 'CV', exact: true }).waitFor({ state: 'visible' });
+  await page.getByRole('tab', { name: 'PT', exact: true }).click();
   await page.getByRole('button').filter({ hasText: 'PRODUKSI' }).first().click();
   await page.getByText('Bebek', { exact: true }).waitFor({ state: 'visible', timeout: 10000 });
-  await page.getByRole('button', { name: 'CV', exact: true }).click();
+  await page.getByRole('tab', { name: 'CV', exact: true }).click();
   await page.getByRole('button').filter({ hasText: 'CS' }).first().click();
   await page.getByText('Ayam Fillet Dada', { exact: true }).waitFor({ state: 'visible', timeout: 10000 });
 
