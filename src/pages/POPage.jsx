@@ -303,8 +303,8 @@ export default function POPage({ onNavigate }) {
     <div className="pb-28 animate-fade-in">
       <div className="flex items-start justify-between gap-2 mb-3">
         <div className="min-w-0">
-          <h2 className="text-lg font-extrabold text-slate-900">Purchase Order</h2>
-          <p className="text-xs text-slate-500 mt-0.5">{hub ? 'Detail kartu aktif' : 'Pilih salah satu kartu untuk membuka isi'}</p>
+          <h2 className="text-[22px] leading-7 font-extrabold text-slate-900">Purchase order</h2>
+          <p className="text-xs text-slate-500 mt-0.5">{hub ? 'Detail kartu aktif' : 'Generate, pantau, dan konfirmasi PO'}</p>
         </div>
         {hub && (
           <button type="button" onClick={() => setHub(null)} className="text-[10px] font-bold px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 shadow-sm shrink-0 flex items-center gap-1">
@@ -317,13 +317,13 @@ export default function POPage({ onNavigate }) {
           const Icon = h.Icon;
           return (
             <button key={h.id} type="button" onClick={() => setHub(h.id)} className={`po-hub-card-btn ${hub === h.id ? 'is-active' : ''}`}>
-              <div className="flex items-center gap-2 mb-1"><Icon className="w-4 h-4 text-cyan-600" /><span className="hub-title">{h.title}</span></div>
+              <div className="flex flex-col items-center text-center gap-2 mb-1"><Icon className="w-5 h-5 text-cyan-600" /><span className="hub-title">{h.title}</span></div>
               <p className="hub-sub">{h.sub}</p>
             </button>
           );
         })}
       </div>
-      {!hub && <p className="text-[12px] text-slate-500 text-center py-6">Ketuk salah satu kartu di atas untuk membuka generate, status, atau konfirmasi.</p>}
+      {!hub && <section className="po-overview-summary rounded-2xl border border-slate-200 bg-white p-4 mb-3"><p className="text-xs font-bold text-slate-500">Ringkasan kebutuhan PO · {tab === 'cs' ? 'Cold Storage' : 'Produksi'}</p><div className="mt-2 grid grid-cols-2 gap-3"><div><b className="block text-2xl font-extrabold tabular-nums text-slate-900">{loading ? '…' : activeList.length}</b><span className="text-[11px] text-slate-500">Item prioritas</span></div><div><b className="block text-2xl font-extrabold tabular-nums text-slate-900">{loading ? '…' : totalKurang.toLocaleString('id-ID')}</b><span className="text-[11px] text-slate-500">Total kekurangan</span></div></div></section>}
       {hub === 'generate' && (
         <>
           <div className="flex items-start justify-between gap-2 mb-2">
