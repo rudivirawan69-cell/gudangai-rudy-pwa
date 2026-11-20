@@ -175,8 +175,14 @@ html[data-theme] [data-ui-page="riwayat"] .rw-main b { color: var(--ux-ink); }
 html[data-theme] [data-ui-page="riwayat"] .rw-main small { color: var(--ux-muted); }
 
 /* AGENT — chat-like workspace, focused composer and readable answer surfaces */
+html[data-theme] [data-ui-page="ai"] .max-w-4xl {
+  width: 100%; max-width: 56rem; min-width: 0;
+}
+html[data-theme] [data-ui-page="ai"] .max-w-4xl > .relative {
+  width: 100%; max-width: 100%; min-width: 0; flex: 1 1 0%;
+}
 html[data-theme] [data-ui-page="ai"] [role="log"] {
-  overflow-x: hidden !important;
+  width: 100%; max-width: 100%; min-width: 0; overflow-x: hidden !important;
 }
 html[data-theme] [data-ui-page="ai"] [role="log"] > .m-auto {
   width: 100%; min-width: 0; max-width: min(28rem,100%); box-sizing: border-box;
