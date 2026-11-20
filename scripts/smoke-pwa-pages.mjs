@@ -323,7 +323,7 @@ try {
       for (const [label, markerText, slug] of visualPages) {
         if (label === 'PO') {
           await page.locator('nav.nav-bar button').filter({ hasText: 'Beranda' }).first().click();
-          await page.getByRole('button', { name: 'PO', exact: true }).click();
+          await page.locator('nav.nav-bar button').filter({ hasText: 'PO' }).first().click();
         } else if (['Riwayat', 'Pengaturan', 'Antrian Sinkronisasi', 'Agent'].includes(label)) {
           await openMorePage(label === 'Agent' ? 'Agent Rubee AI' : label === 'Antrian Sinkronisasi' ? 'Antrean sinkronisasi' : label, markerText);
         } else {
