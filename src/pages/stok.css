@@ -252,7 +252,7 @@
 .sk-status-row .sk-chips button.sk-c-kritis.on,
 .sk-status-row .sk-chips button.sk-c-waspada.on,
 .sk-status-row .sk-chips button.sk-c-aman.on { background:var(--accent-strong); border-color:var(--accent-strong); color:var(--text-on-accent); }
-.sk-div-chips { mask-image:linear-gradient(90deg,#000 0%,#000 94%,transparent 100%); }
+.sk-div-chips { mask-image:linear-gradient(90deg,var(--sk-bg) 0%,var(--sk-bg) 94%,transparent 100%); }
 .sk-status-row .sk-chips { mask-image:linear-gradient(90deg,#000 0%,#000 94%,transparent 100%); }
 .sk-search { position:relative; top:auto; z-index:auto; margin:8px 0 10px; padding:0; background:transparent; }
 .sk-search input { width:100%; min-width:0; min-height:44px; padding:0 42px 0 14px; border-radius:12px; border:1px solid var(--border); background:var(--surface,var(--bg-elevated)); color:var(--text-main); font-size:14px; }
