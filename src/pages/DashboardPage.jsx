@@ -1,7 +1,8 @@
 import { useMemo, useState, useEffect, useCallback, useRef } from 'react';
 import { useStock } from '../hooks/useStock';
 import {
-  getPendingQueue, getStatusPO, getDashboardData, confirmPOStatus, getLocalHistory, getApiUrl, getApiSecret,
+  getPendingQueue, getStatusPO, getDashboardData, getCachedDashboardData, getDashboardDataSignature,
+  confirmPOStatus, getLocalHistory, getApiUrl, getApiSecret,
 } from '../data/api';
 import { classifyStockLevel } from '../data/stockStatus';
 import HomeAgentAssistant from '../components/HomeAgentAssistant';
@@ -601,7 +602,7 @@ function StockComparison({ cv, pt }) {
   );
 }
 
-function DashboardTotals({ totalItem }) {
+function DashboardTotals({ totalItem, loading }) {
   const parsedTotal = Number(totalItem);
   const itemCount = totalItem == null ? null : (Number.isFinite(parsedTotal) && parsedTotal >= 0 ? parsedTotal : null);
   return (
@@ -609,8 +610,8 @@ function DashboardTotals({ totalItem }) {
       <div className="dashboard-total-card border-cyan-100">
         <div className="flex items-start justify-between gap-2"><span className="dashboard-icon-badge dashboard-icon-cyan"><Package className="w-4 h-4" /></span><span className="text-[9px] font-extrabold text-slate-400">MASTER</span></div>
         <p className="text-[10px] font-bold uppercase tracking-wider text-cyan-700 mt-2">Total Item</p>
-        <p className="text-2xl font-extrabold text-slate-900 tabular-nums mt-1">{itemCount == null ? '—' : itemCount.toLocaleString('id-ID')}</p>
-        <p className="text-[10px] text-slate-500 mt-0.5">{itemCount == null ? 'Ringkasan resmi belum diterima' : 'SKU aktif · Dashboard Live'}</p>
+        <p className="text-2xl font-extrabold text-slate-900 tabular-nums mt-1" aria-live="polite">{itemCount == null ? (loading ? 'Memuat…' : '—') : itemCount.toLocaleString('id-ID')}</p>
+        <p className="text-[10px] text-slate-500 mt-0.5">{itemCount == null ? (loading ? 'Mengambil ringkasan Dashboard Live' : 'Ringkasan resmi belum diterima') : 'SKU aktif · Dashboard Live'}</p>
       </div>
       <div className="dashboard-total-card border-orange-100">
         <div className="flex items-start justify-between gap-2"><span className="dashboard-icon-badge dashboard-icon-orange"><Users className="w-4 h-4" /></span><span className="text-[9px] font-extrabold text-slate-400">JARINGAN</span></div>
@@ -622,7 +623,7 @@ function DashboardTotals({ totalItem }) {
   );
 }
 
-function DashboardStatusSummary({ data }) {
+function DashboardStatusSummary({ data, loading }) {
   const values = [
     { key: 'aman', label: 'Aman' },
     { key: 'waspada', label: 'Waspada' },
@@ -638,15 +639,15 @@ function DashboardStatusSummary({ data }) {
         return (
           <div key={item.key} className={`dashboard-status-tile dashboard-status-${item.key} rounded-xl border p-3 text-center`}>
             <p className="text-[9px] font-extrabold uppercase tracking-wide">{item.label}</p>
-            <p className="mt-1 text-xl font-extrabold tabular-nums">{hasSummary && count != null ? count.toLocaleString('id-ID') : '—'}</p>
+            <p className="mt-1 text-xl font-extrabold tabular-nums" aria-live="polite">{hasSummary && count != null ? count.toLocaleString('id-ID') : loading ? 'Memuat…' : '—'}</p>
             <p className="text-[9px] font-semibold opacity-70">item</p>
           </div>
         );
       })}
     </section>
       {!hasSummary && (
-        <p className="mt-2 px-1 text-[11px] leading-relaxed text-slate-500" role="status">
-          Menunggu respons resmi Dashboard Live. Angka stok lokal tidak digunakan sebagai pengganti ringkasan ini.
+        <p className="mt-2 px-1 text-[11px] leading-relaxed text-slate-500" role="status" aria-live="polite">
+          {loading ? 'Memuat ringkasan resmi Dashboard Live…' : 'Menunggu respons resmi Dashboard Live. Angka stok lokal tidak digunakan sebagai pengganti ringkasan ini.'}
         </p>
       )}
     </>
@@ -1029,13 +1030,15 @@ export default function DashboardPage({ onNavigate }) {
   const [poData, setPoData] = useState(null);
   const [poLoading, setPoLoading] = useState(true);
   const [poError, setPoError] = useState('');
-  const [dashboardData, setDashboardData] = useState(null);
+  const [dashboardData, setDashboardData] = useState(() => getCachedDashboardData());
+  const [dashboardLoading, setDashboardLoading] = useState(() => !getCachedDashboardData());
   const [dashboardError, setDashboardError] = useState('');
   const [confirmingId, setConfirmingId] = useState(null);
   const [confirmMsg, setConfirmMsg] = useState('');
   const poSignatureRef = useRef('');
   const poDataRef = useRef(null);
-  const dashboardSignatureRef = useRef('');
+  const dashboardDataRef = useRef(getCachedDashboardData());
+  const dashboardSignatureRef = useRef(getDashboardDataSignature(getCachedDashboardData()));
   const historySignatureRef = useRef('');
   const [history, setHistory] = useState(() => getLocalHistory());
   const loadMovementHistory = useCallback(async () => {
@@ -1125,23 +1128,38 @@ export default function DashboardPage({ onNavigate }) {
     }
   }, []);
 
+  const applyDashboardSnapshot = useCallback((data) => {
+    if (!data?.success) return;
+    const signature = getDashboardDataSignature(data);
+    if (signature !== dashboardSignatureRef.current) {
+      dashboardSignatureRef.current = signature;
+      dashboardDataRef.current = data;
+      setDashboardData(data);
+    }
+  }, []);
+
   const loadDashboardData = useCallback(async () => {
+    if (!dashboardDataRef.current) setDashboardLoading(true);
     try {
       const res = await getDashboardData();
       if (res?.success) {
-        const signature = JSON.stringify(res);
-        if (signature !== dashboardSignatureRef.current) {
-          dashboardSignatureRef.current = signature;
-          setDashboardData(res);
-        }
+        applyDashboardSnapshot(res);
         setDashboardError('');
       } else {
         setDashboardError(res?.error || 'Ringkasan Dashboard Live tidak tersedia.');
       }
     } catch (err) {
       setDashboardError(err?.message || 'Gagal membaca Dashboard Live.');
+    } finally {
+      setDashboardLoading(false);
     }
-  }, []);
+  }, [applyDashboardSnapshot]);
+
+  useEffect(() => {
+    const onDashboardLiveUpdated = (event) => applyDashboardSnapshot(event?.detail);
+    window.addEventListener('gudangai-dashboard-live-updated', onDashboardLiveUpdated);
+    return () => window.removeEventListener('gudangai-dashboard-live-updated', onDashboardLiveUpdated);
+  }, [applyDashboardSnapshot]);
 
   useEffect(() => {
     void loadPO();
@@ -1233,10 +1251,10 @@ export default function DashboardPage({ onNavigate }) {
 
       <section className="dashboard-overview-grid grid grid-cols-1 xl:grid-cols-2 gap-4" aria-label="Ringkasan operasional">
         <div className="xl:col-span-2">
-          <DashboardTotals totalItem={dashboardTotalItem} />
+          <DashboardTotals totalItem={dashboardTotalItem} loading={dashboardLoading} />
         </div>
         <div className="xl:col-span-2">
-          <DashboardStatusSummary data={dashboardData} />
+          <DashboardStatusSummary data={dashboardData} loading={dashboardLoading} />
         </div>
         <div className="xl:col-span-2">
           <HomeAgentAssistant onNavigate={onNavigate} />

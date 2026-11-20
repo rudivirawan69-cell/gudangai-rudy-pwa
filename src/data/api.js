@@ -26,6 +26,9 @@ const DEFAULT_API_SECRET = 'adadd47759234a7f94acb230c0cc7ff479c4e4f79a674714';
 let _syncLock = false;
 let _queueRevision = 0;
 let _batchSupported = null;
+let _dashboardLiveSnapshot = null;
+let _dashboardLiveSignature = '';
+let _dashboardLivePromise = null;
 
 import { hydrateQueueBackup, persistQueueBackup } from './offlineStore';
 import { classifyStockLevel } from './stockStatus';
@@ -38,7 +41,12 @@ export function getApiUrl() {
 }
 export function setApiUrl(url) {
   const c = (url || '').trim();
+  const previous = (localStorage.getItem('gudangai_api_url') || '').trim();
   localStorage.setItem('gudangai_api_url', c || DEFAULT_API_URL);
+  if (previous !== c) {
+    _dashboardLiveSnapshot = null;
+    _dashboardLiveSignature = '';
+  }
   _batchSupported = null;
 }
 export function getApiSecret() { return (localStorage.getItem('gudangai_api_secret') || '').trim() || DEFAULT_API_SECRET; }
@@ -270,16 +278,42 @@ export async function getStatusPO() {
     return { success: false, error: err?.message || 'Gagal status PO' };
   }
 }
+export function getDashboardDataSignature(data) {
+  if (!data || typeof data !== 'object') return '';
+  const { generatedAt: _generatedAt, dashboardReadAt: _dashboardReadAt, ...spreadsheetData } = data;
+  return JSON.stringify(spreadsheetData);
+}
+
+export function getCachedDashboardData() {
+  return _dashboardLiveSnapshot;
+}
+
 export async function getDashboardData() {
+  if (_dashboardLivePromise) return _dashboardLivePromise;
+  _dashboardLivePromise = (async () => {
+    try {
+      const data = await getJson('getDashboard');
+      if (!data || data.success !== true) return {
+        success: false, code: data?.code || 'DASHBOARD_LIVE_UNAVAILABLE',
+        error: data?.error || 'Dashboard Live tidak mengembalikan ringkasan valid.',
+      };
+      const signature = getDashboardDataSignature(data);
+      if (signature !== _dashboardLiveSignature) {
+        _dashboardLiveSignature = signature;
+        _dashboardLiveSnapshot = data;
+        try {
+          window.dispatchEvent(new CustomEvent('gudangai-dashboard-live-updated', { detail: data }));
+        } catch {}
+      }
+      return data;
+    } catch (err) {
+      return { success: false, code: 'DASHBOARD_LIVE_READ_FAILED', error: err?.message || 'Gagal membaca ringkasan Dashboard Live.' };
+    }
+  })();
   try {
-    const data = await getJson('getDashboard');
-    if (!data || data.success !== true) return {
-      success: false, code: data?.code || 'DASHBOARD_LIVE_UNAVAILABLE',
-      error: data?.error || 'Dashboard Live tidak mengembalikan ringkasan valid.',
-    };
-    return data;
-  } catch (err) {
-    return { success: false, code: 'DASHBOARD_LIVE_READ_FAILED', error: err?.message || 'Gagal membaca ringkasan Dashboard Live.' };
+    return await _dashboardLivePromise;
+  } finally {
+    _dashboardLivePromise = null;
   }
 }
 export async function confirmPOStatus(payload) {
