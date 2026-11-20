@@ -93,4 +93,39 @@ describe('GudangAI Metode C UI contract', () => {
     expect(css).toContain('var(--stok-waspada)');
     expect(css).toContain('var(--stok-aman)');
   });
+
+  it('keeps bottom navigation flush to the viewport and reserves content space', () => {
+    const css = readFileSync(cssPath, 'utf8');
+    const app = readFileSync(appPath, 'utf8');
+    expect(css).toContain('bottom:0 !important;');
+    expect(css).toContain('padding-bottom:env(safe-area-inset-bottom,0px) !important;');
+    expect(css).toContain('width:44px !important; height:44px !important;');
+    expect(css).toContain('padding-bottom:calc(84px + env(safe-area-inset-bottom,0px)) !important;');
+    expect(app).toContain('className="nav-bar fixed bottom-0 left-0 right-0 safe-bottom z-40"');
+  });
+
+  it('removes duplicate dashboard and page helper headings while keeping the primary titles', () => {
+    const dashboard = readFileSync(resolve(process.cwd(), 'src/pages/DashboardPage.jsx'), 'utf8');
+    const stock = readFileSync(stockPagePath, 'utf8');
+    const po = readFileSync(resolve(process.cwd(), 'src/pages/POPage.jsx'), 'utf8');
+    expect(dashboard).not.toContain('Status Stok · per Divisi');
+    expect(dashboard).not.toContain('Status PO · Purchase Order');
+    expect(dashboard).toContain('Status per Divisi');
+    expect(dashboard).toContain('Status PO</span>');
+    expect(stock).toContain('<h1>Stok barang</h1>');
+    expect(stock).not.toContain('sk-head-subtitle');
+    expect(po).toContain('Purchase order</h2>');
+    expect(po).not.toContain("'Generate, pantau, dan konfirmasi PO'");
+  });
+
+  it('uses a single shared surface for settings menu rows instead of nested cards', () => {
+    const settings = readFileSync(resolve(process.cwd(), 'src/pages/SettingsPage.jsx'), 'utf8');
+    const css = readFileSync(cssPath, 'utf8');
+    expect(settings).toContain('className="settings-menu-list"');
+    expect(settings).toContain('settings-menu-logout');
+    expect(settings).not.toContain('<div className="card overflow-hidden">');
+    expect(css).toContain('.settings-menu-list .settings-menu-row + .settings-menu-row');
+    expect(css).toContain('min-height:46px; padding-block:6px !important;');
+  });
+
 });
