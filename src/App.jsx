@@ -156,7 +156,7 @@ function AppHeader({ user, tab, onOpenSettings, online, status, sheetLabel, onRe
           </button>
           <div className="min-w-0 flex-1">
             <h1 className="text-[13px] font-black tracking-wide text-[var(--text-main,#0f172a)] uppercase truncate leading-tight">
-              GUDANG-69 RUDI
+              GUDANGAI RUDY PRO
             </h1>
             <p
               className="mt-0.5 text-[10px] font-semibold text-[var(--text-muted,#475569)] truncate leading-tight"
