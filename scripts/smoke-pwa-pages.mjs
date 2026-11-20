@@ -266,10 +266,10 @@ try {
           width: el.clientWidth,
           scrollWidth: el.scrollWidth,
         }));
+        const viewportWidth = await page.evaluate(() => window.innerWidth);
         assert.ok(emptyState.width <= viewportWidth, `Agent empty state exceeds mobile width in ${theme}: ${JSON.stringify({ emptyState, viewportWidth })}`);
         assert.ok(emptyState.scrollWidth <= emptyState.width + 1, `Agent empty state overflows horizontally in ${theme}: ${JSON.stringify(emptyState)}`);
         const headingBox = await page.getByText('Apa yang perlu dibantu?', { exact: true }).boundingBox();
-        const viewportWidth = await page.evaluate(() => window.innerWidth);
         assert.ok(headingBox && headingBox.x >= 0 && headingBox.x + headingBox.width <= viewportWidth,
           `Agent empty-state heading is clipped on mobile in ${theme}: ${JSON.stringify({ headingBox, viewportWidth, emptyState })}`);
       }
