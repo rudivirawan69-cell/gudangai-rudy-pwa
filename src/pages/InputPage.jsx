@@ -699,7 +699,7 @@ export default function InputPage() {
         })}
       </div>
 
-      <div className="grid grid-cols-5 gap-2.5" role="group" aria-label="Metode input">
+      <div className="input-source-methods grid grid-cols-5 gap-2.5" role="group" aria-label="Metode input">
         <button type="button" onClick={() => filePdfRef.current?.click()} disabled={busy}
           className="rounded-2xl bg-white border border-slate-200 shadow-sm py-3 flex flex-col items-center gap-1.5 disabled:opacity-50">
           <span className="w-9 h-9 rounded-xl bg-violet-50 border border-violet-100 flex items-center justify-center">
