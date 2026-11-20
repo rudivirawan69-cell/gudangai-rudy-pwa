@@ -48,45 +48,26 @@ function Bar({ c }) {
 }
 
 const ItemRow = memo(function ItemRow({ it, onOpen }) {
-  const target = it.min > 0 ? it.min : null;
-  const pct = target ? Math.min(100, Math.round((it.stok / target) * 100)) : 0;
   return (
-    <button type="button" className="sk-item" onClick={() => onOpen(it)}>
-      <div className="sk-item-main">
-        <span className="sk-item-nama">{it.nama}</span>
-        <span className="sk-item-kode">{it.kode}</span>
-      </div>
-      <div className="sk-item-qty">
-        <b>{fmt(it.stok)}</b>
-        <small>{it.satuan}</small>
-      </div>
-      <span className={`sk-item-status sk-${it.status}`}>{LABEL[it.status]}</span>
-      {target && (
-        <div className="sk-meter">
-          <i className={`sk-${it.status}`} style={{ width: `${pct}%` }} />
+    <button type="button" className={`sk-item sk-item-card sk-card-${it.status}`} onClick={() => onOpen(it)}>
+      <div className="sk-item-top">
+        <div className="sk-item-main">
+          <span className="sk-item-nama">{it.nama}</span>
+          <span className="sk-item-kode">{it.kode || "Tanpa kode"}</span>
         </div>
-      )}
+        <span className={`sk-item-status sk-${it.status}`}>{LABEL[it.status]}</span>
+      </div>
+      <div className="sk-item-metrics">
+        <div className="sk-item-metric">
+          <span className="sk-item-metric-label">Sisa stok</span>
+          <strong>{fmt(it.stok)} <small>{it.satuan}</small></strong>
+        </div>
+        <div className="sk-item-metric">
+          <span className="sk-item-metric-label">Stok aman</span>
+          <strong>{it.min > 0 ? <>{fmt(it.min)} <small>{it.satuan}</small></> : "—"}</strong>
+        </div>
+      </div>
     </button>
-  );
-});
-
-const Divisi = memo(function Divisi({ nama, items, open, onToggle, onOpen }) {
-  return (
-    <section className={`sk-div${open ? " is-open" : ""}`}>
-      <button type="button" className="sk-div-head" onClick={() => onToggle(nama)} aria-expanded={open}>
-        <div className="sk-div-title">
-          <h3>{nama}</h3>
-        </div>
-        <span className="sk-chev" aria-hidden="true">›</span>
-      </button>
-      {open && (
-        <div className="sk-div-body">
-          {items.map((it) => (
-            <ItemRow key={`${it.entitas}-${it.kode}`} it={it} onOpen={onOpen} />
-          ))}
-        </div>
-      )}
-    </section>
   );
 });
 
@@ -281,14 +262,15 @@ export default function StokPage() {
   return (
     <div className="sk-page">
       <header className="sk-head">
-        <h1>Stok Barang</h1>
+        <h1>Stok barang</h1>
+        <p className="sk-head-subtitle">Pantau sisa stok dan kebutuhan restok</p>
       </header>
 
       <section className="sk-filter-block sk-entity-block" aria-label="Pilih entitas">
         <div className="sk-seg" role="tablist" aria-label="Entitas">
-        {tabs.map((e) => (
+        {ENTITAS.map((e) => (
           <button key={e} type="button" role="tab" aria-selected={entitas === e} className={entitas === e ? "on" : ""} onClick={() => setEntitas(e)}>
-            {e === TIDAK_TERKLASIFIKASI ? "Lainnya" : e}
+            {e === "BB" ? "Bahan Baku" : e}
 
           </button>
         ))}
@@ -324,7 +306,7 @@ export default function StokPage() {
       </section>
 
       <div className="sk-search">
-        <input type="search" aria-label="Cari barang" placeholder="Cari nama barang atau kode…" value={q} onChange={(e) => setQ(e.target.value)} autoComplete="off" spellCheck={false} />
+        <input type="search" aria-label="Cari barang" placeholder="Cari nama atau kode barang" value={q} onChange={(e) => setQ(e.target.value)} autoComplete="off" spellCheck={false} />
         {q && (
           <button type="button" onClick={() => setQ("")} aria-label="Hapus">✕</button>
         )}
@@ -336,7 +318,7 @@ export default function StokPage() {
             <b>{restokItems.length} item perlu restok</b>
             <small>{divFilter ? `Divisi ${divFilter}` : "Semua divisi"} · {entitas}</small>
           </div>
-          <button type="button" className="sk-primary" onClick={bagikan}>Bagikan</button>
+          <button type="button" className="sk-share-outline" onClick={bagikan}>Bagikan</button>
         </div>
       )}
 
@@ -356,7 +338,7 @@ export default function StokPage() {
       <div className="sk-list-head">
         <div>
           <h2>Daftar barang</h2>
-          <p>{divFilter || "Semua divisi"} · {entitas}</p>
+          {(divFilter || filter !== "semua" || qDeferred) && <p className="sk-list-active-filter">{[divFilter, filter !== "semua" ? LABEL[filter] : null, qDeferred ? `“${qDeferred}”` : null].filter(Boolean).join(" · ")}</p> }
         </div>
         <span>{fmtCount(terfilter.length)} barang</span>
       </div>
@@ -380,36 +362,11 @@ export default function StokPage() {
         </div>
       )}
 
-      <div className="sk-desktop-table-wrap" aria-label="Tabel audit stok">
-        <table className="sk-desktop-table">
-          <thead>
-            <tr><th>Nama barang</th><th>Divisi</th><th>Entitas</th><th style={{textAlign:"right"}}>Sisa stok</th><th style={{textAlign:"right"}}>Stok aman</th><th>Status</th></tr>
-          </thead>
-          <tbody>
-            {terfilter.slice(0, limit).map((it) => (
-              <tr key={`${it.entitas}-${it.kode}-desktop`}>
-                <td><button type="button" className="sk-table-name" onClick={() => onOpenItem(it)}>{it.nama}<span className="sk-table-code">{it.kode || "Tanpa kode"}</span></button></td>
-                <td>{it.divisi}</td>
-                <td>{it.entitas}</td>
-                <td className="sk-table-qty">{fmt(it.stok)} {it.satuan}</td>
-                <td className="sk-table-qty">{it.min > 0 ? `${fmt(it.min)} ${it.satuan}` : "—"}</td>
-                <td><span className={`sk-table-status ${it.status}`}>{LABEL[it.status]}</span></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div className="sk-item-list" aria-label="Daftar item stok">
+        {terfilter.slice(0, limit).map((it) => (
+          <ItemRow key={`${it.entitas}-${it.kode}`} it={it} onOpen={onOpenItem} />
+        ))}
       </div>
-
-      {tampilDivisi.map(([nama, items]) => (
-        <Divisi
-          key={nama}
-          nama={nama}
-          items={items}
-          open={isOpen(nama)}
-          onToggle={onToggleDiv}
-          onOpen={onOpenItem}
-        />
-      ))}
       {sisaItem > 0 && (
         <button type="button" className="sk-more" onClick={() => setLimit((n) => n + BATCH)}>
           Tampilkan lebih banyak ({sisaItem} item tersisa)
