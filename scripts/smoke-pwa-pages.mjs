@@ -266,6 +266,7 @@ try {
           width: el.clientWidth,
           scrollWidth: el.scrollWidth,
         }));
+        assert.ok(emptyState.width <= viewportWidth, `Agent empty state exceeds mobile width in ${theme}: ${JSON.stringify({ emptyState, viewportWidth })}`);
         assert.ok(emptyState.scrollWidth <= emptyState.width + 1, `Agent empty state overflows horizontally in ${theme}: ${JSON.stringify(emptyState)}`);
         const headingBox = await page.getByText('Apa yang perlu dibantu?', { exact: true }).boundingBox();
         const viewportWidth = await page.evaluate(() => window.innerWidth);
