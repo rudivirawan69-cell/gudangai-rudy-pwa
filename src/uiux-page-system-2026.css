@@ -97,7 +97,11 @@ html[data-theme] .nav-bar {
 html[data-theme] .nav-bar > div { min-height: 68px !important; }
 html[data-theme] .nav-btn,.nav-label { color: var(--ux-muted) !important; }
 html[data-theme] .nav-btn.is-active { color: var(--ux-accent) !important; }
-html[data-theme] .nav-fab-btn { box-shadow: 0 8px 18px var(--ux-glow) !important; }
+html[data-theme] .nav-fab-btn {
+  background: linear-gradient(145deg,var(--accent),var(--accent-strong)) !important;
+  color: var(--text-on-accent,#fff) !important;
+  box-shadow: 0 8px 18px var(--ux-glow) !important;
+}
 html[data-theme] .nav-fab-btn.is-active {
   background: linear-gradient(145deg,var(--accent),var(--accent-strong)) !important;
   color: var(--text-on-accent) !important;
@@ -124,6 +128,10 @@ html[data-theme="graphite_titanium"] [data-ui-page="dashboard"] .dashboard-chart
 }
 html[data-theme="graphite_titanium"] [data-ui-page="dashboard"] .dashboard-chart-wrap .text-orange-600 {
   color: var(--ux-accent-secondary) !important;
+}
+html[data-theme="graphite_titanium"] .home-agent-card {
+  border-color: var(--ux-accent) !important;
+  box-shadow: var(--ux-shadow), 0 0 0 1px var(--ux-glow) !important;
 }
 
 /* STOK — compact inventory list, readable quantities and unmistakable risk chips */
@@ -167,6 +175,10 @@ html[data-theme] [data-ui-page="riwayat"] .rw-main b { color: var(--ux-ink); }
 html[data-theme] [data-ui-page="riwayat"] .rw-main small { color: var(--ux-muted); }
 
 /* AGENT — chat-like workspace, focused composer and readable answer surfaces */
+html[data-theme] [data-ui-page="ai"] [role="log"] > .m-auto {
+  width: 100%; min-width: 0; max-width: 28rem; box-sizing: border-box; margin-inline: auto;
+}
+html[data-theme] [data-ui-page="ai"] [role="log"] > .m-auto p { overflow-wrap: anywhere; }
 html[data-theme] [data-ui-page="ai"] :is(.chat-container,.agent-chat,.message-list,.assistant-panel) { border-radius: 20px; }
 html[data-theme] [data-ui-page="ai"] textarea { min-height: 52px; }
 html:is([data-theme="deep_ocean"],[data-theme="graphite_titanium"]) [data-ui-page="ai"] .max-w-4xl > :is(header,div.relative,form) {
