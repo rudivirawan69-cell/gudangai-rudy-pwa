@@ -287,7 +287,11 @@ try {
     ['Beranda', 'Status per Divisi', 'beranda'],
     ['Stok', 'Stok Barang', 'stok'],
     ['Input', 'Draft transaksi dipulihkan', 'input'],
+    ['PO', 'Purchase Order', 'po'],
+    ['Riwayat', 'Riwayat Transaksi', 'riwayat'],
     ['Agent', 'Agent Rubee Intelligence', 'agent'],
+    ['Pengaturan', 'Mode Tampilan', 'settings'],
+    ['Antrian Sinkronisasi', 'Antrian Sinkronisasi', 'sync'],
   ];
   const visualViewports = [
     { width: 390, height: 844, label: 'mobile' },
@@ -316,7 +320,14 @@ try {
     for (const viewport of visualViewports) {
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
       for (const [label, markerText, slug] of visualPages) {
-        await page.locator('nav.nav-bar button').filter({ hasText: label }).first().click();
+        if (label === 'PO') {
+          await page.locator('nav.nav-bar button').filter({ hasText: 'Beranda' }).first().click();
+          await page.getByRole('button', { name: 'PO', exact: true }).click();
+        } else if (['Riwayat', 'Pengaturan', 'Antrian Sinkronisasi'].includes(label)) {
+          await openMorePage(label, markerText);
+        } else {
+          await page.locator('nav.nav-bar button').filter({ hasText: label }).first().click();
+        }
         await page.getByText(markerText, { exact: false }).first().waitFor({ state: 'visible', timeout: 10000 });
         const safeTheme = await page.evaluate(() => ({
           id: document.documentElement.dataset.theme,
