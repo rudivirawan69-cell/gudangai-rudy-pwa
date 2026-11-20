@@ -230,7 +230,8 @@ try {
   await page.getByRole('button').filter({ hasText: 'CS' }).first().click();
   await page.getByText('Ayam Fillet Dada', { exact: true }).waitFor({ state: 'visible', timeout: 10000 });
 
-  // Verify all three supported themes on the three requested primary pages.
+  // Verify all three supported themes on mobile; catches clipped Agent empty states.
+  await page.setViewportSize({ width: 390, height: 844 });
   for (const theme of ['soft_light', 'deep_ocean', 'graphite_titanium']) {
     await page.evaluate((value) => {
       localStorage.setItem('gudangai_theme', value);
@@ -250,11 +251,24 @@ try {
       assert.ok(themeState.surface && themeState.text, `Theme tokens missing on ${label} in ${theme}`);
       if (theme === 'graphite_titanium') {
         assert.equal(themeState.accent, '#00e5ff', `Graphite accent must be cyan on ${label}.`);
+        if (label === 'Beranda') {
+          const fabBackground = await page.locator('.nav-fab-btn').evaluate((el) => getComputedStyle(el).backgroundImage);
+          const agentBorder = await page.locator('[data-ui-page="dashboard"] .home-agent-card').evaluate((el) => getComputedStyle(el).borderTopColor);
+          assert.ok(!fabBackground.includes('16, 185, 129'), 'Graphite Input FAB must not retain the green legacy gradient.');
+          assert.notEqual(agentBorder, 'rgb(214, 154, 72)', 'Graphite Agent shortcut border must not remain amber.');
+        }
       }
       if (label === 'Agent' && theme !== 'soft_light') {
         const agentSurface = await page.locator('[data-ui-page="ai"] .max-w-4xl > div.relative').evaluate((el) => getComputedStyle(el).backgroundColor);
         assert.notEqual(agentSurface, 'rgba(248, 250, 252, 0.9)', `Agent chat surface must follow ${theme}, not remain light.`);
         assert.notEqual(agentSurface, 'rgb(255, 255, 255)', `Agent chat surface must not be white in ${theme}.`);
+        const emptyState = await page.locator('[data-ui-page="ai"] [role="log"] > .m-auto').evaluate((el) => ({
+          width: el.clientWidth,
+          scrollWidth: el.scrollWidth,
+        }));
+        assert.ok(emptyState.scrollWidth <= emptyState.width + 1, `Agent empty state overflows horizontally in ${theme}: ${JSON.stringify(emptyState)}`);
+        const headingBox = await page.getByText('Apa yang perlu dibantu?', { exact: true }).boundingBox();
+        assert.ok(headingBox && headingBox.x >= 0 && headingBox.x + headingBox.width <= 390, `Agent empty-state heading is clipped on mobile in ${theme}.`);
       }
       if (label === 'Input') {
         assert.equal(await page.locator('[data-testid="input-search-results"]').count(), 0,
