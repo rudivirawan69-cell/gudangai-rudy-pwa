@@ -194,8 +194,8 @@ try {
   for (const viewport of viewports) {
     await page.setViewportSize(viewport);
     for (const [label, marker] of tabs) {
-      const button = page.locator('nav.nav-bar button').filter({ hasText: label }).first();
-      await button.click();
+      if (label === 'Agent') await openMorePage('Agent Rubee AI', marker);
+      else await page.locator('nav.nav-bar button').filter({ hasText: label }).first().click();
       const visibleMarker = page.getByText(marker, { exact: false }).last();
       try {
         await visibleMarker.waitFor({ state: 'visible', timeout: 10000 });
@@ -239,7 +239,8 @@ try {
     await page.reload({ waitUntil: 'domcontentloaded' });
     await page.locator('nav.nav-bar').waitFor({ state: 'visible', timeout: 15000 });
     for (const [label, marker] of [['Beranda', 'Status per Divisi'], ['Stok', 'Stok Barang'], ['Input', 'Draft transaksi dipulihkan'], ['Agent', 'Agent Rubee Intelligence']]) {
-      await page.locator('nav.nav-bar button').filter({ hasText: label }).first().click();
+      if (label === 'Agent') await openMorePage('Agent Rubee AI', marker);
+      else await page.locator('nav.nav-bar button').filter({ hasText: label }).first().click();
       await page.getByText(marker, { exact: false }).first().waitFor({ state: 'visible', timeout: 10000 });
       const themeState = await page.evaluate(() => ({
         id: document.documentElement.getAttribute('data-theme'),
