@@ -11,7 +11,7 @@ import { startRealtimeSync, syncNow } from './data/realTimeSync';
 import { getPendingQueue, getDashboardData } from './data/api';
 import {
   LayoutDashboard, Package, PackagePlus, Clock, Settings, ClipboardList,
-  WifiOff, AlertTriangle, Loader2, RefreshCw, BrainCircuit, MoreHorizontal, X,
+  AlertTriangle, Loader2, RefreshCw, BrainCircuit, MoreHorizontal, X,
 } from 'lucide-react';
 
 const DashboardPage = lazy(() => import('./pages/DashboardPage'));
