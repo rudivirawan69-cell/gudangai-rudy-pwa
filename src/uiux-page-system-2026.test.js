@@ -27,9 +27,9 @@ describe('GudangAI Metode C UI contract', () => {
   it('keeps Graphite Titanium on the approved cyan and indigo palette, not gold', () => {
     if (!existsSync(cssPath)) return;
     const css = readFileSync(cssPath, 'utf8');
-    const graphite = css.match(/html\\[data-theme="graphite_titanium"\\]\\s*\\{([^}]+)\\}/)?.[1] || '';
-    expect(graphite).toMatch(/--ux-accent:\\s*#00e5ff/i);
-    expect(graphite).toMatch(/--ux-accent-secondary:\\s*#6366f1/i);
+    const graphite = css.match(/html\[data-theme="graphite_titanium"\]\s*\{([^}]+)\}/)?.[1] || '';
+    expect(graphite).toMatch(/--ux-accent:\s*#00e5ff/i);
+    expect(graphite).toMatch(/--ux-accent-secondary:\s*#6366f1/i);
     expect(graphite).not.toMatch(/#d6a45b|#c6ae87|214,164,91|198,174,135/i);
   });
 
