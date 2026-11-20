@@ -77,8 +77,8 @@ html[data-theme] .page-content :is(button,input,select,textarea,a):focus-visible
   outline: 3px solid color-mix(in srgb,var(--ux-accent) 35%,transparent) !important; outline-offset: 2px;
 }
 html[data-theme] .nav-bar {
-  max-width: 560px; left: 50% !important; right: auto !important; width: min(100%,560px);
-  transform: translateX(-50%); bottom: max(8px,env(safe-area-inset-bottom)) !important;
+  max-width: none; left: 0 !important; right: 0 !important; width: 100%;
+  transform: none; bottom: max(8px,env(safe-area-inset-bottom)) !important;
   border: 1px solid var(--ux-line) !important; border-radius: 22px !important;
   background: var(--ux-panel) !important; box-shadow: 0 12px 34px rgba(6,22,38,.18) !important;
   overflow: hidden;
