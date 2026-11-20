@@ -263,7 +263,6 @@ export default function StokPage() {
     <div className="sk-page">
       <header className="sk-head">
         <h1>Stok barang</h1>
-        <p className="sk-head-subtitle">Pantau sisa stok dan kebutuhan restok</p>
       </header>
 
       <section className="sk-filter-block sk-entity-block" aria-label="Pilih entitas">
