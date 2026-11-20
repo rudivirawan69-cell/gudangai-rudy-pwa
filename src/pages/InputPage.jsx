@@ -733,7 +733,7 @@ export default function InputPage() {
           <span className="w-9 h-9 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center">
             <Clipboard className="w-5 h-5 text-indigo-600" />
           </span>
-          <span className="text-[11px] font-semibold text-slate-700">(paste)</span>
+          <span className="text-[11px] font-semibold text-slate-700">Tempel</span>
         </button>
       </div>
       <p className="-mt-2 px-1 text-[10px] leading-relaxed text-slate-500" id="input-methods-note">
@@ -778,7 +778,7 @@ export default function InputPage() {
 
       <div className="relative">
         <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-        <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Cari nama / kode barang…"
+        <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Cari nama atau kode barang"
           className="w-full rounded-xl bg-white border border-slate-200 text-slate-900 pl-9 pr-3 py-2.5 text-sm shadow-sm" />
       </div>
 
