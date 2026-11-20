@@ -213,7 +213,7 @@ try {
     await assertNoHorizontalOverflow('Riwayat', viewport);
     await openMorePage('Pengaturan', 'Mode Tampilan');
     await assertNoHorizontalOverflow('Pengaturan', viewport);
-    await openMorePage('Antrian Sinkronisasi', 'Antrian Sinkronisasi');
+    await openMorePage('Antrean sinkronisasi', 'Antrian Sinkronisasi');
     await assertNoHorizontalOverflow('Antrian Sinkronisasi', viewport);
   }
 
@@ -325,7 +325,7 @@ try {
           await page.locator('nav.nav-bar button').filter({ hasText: 'Beranda' }).first().click();
           await page.getByRole('button', { name: 'PO', exact: true }).click();
         } else if (['Riwayat', 'Pengaturan', 'Antrian Sinkronisasi', 'Agent'].includes(label)) {
-          await openMorePage(label === 'Agent' ? 'Agent Rubee AI' : label, markerText);
+          await openMorePage(label === 'Agent' ? 'Agent Rubee AI' : label === 'Antrian Sinkronisasi' ? 'Antrean sinkronisasi' : label, markerText);
         } else {
           await page.locator('nav.nav-bar button').filter({ hasText: label }).first().click();
         }
