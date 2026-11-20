@@ -207,3 +207,29 @@
 .sk-div-title p,.sk-div-title .sk-bar{display:none!important}
 .sk-div-head{min-height:48px;padding:10px 13px}
 .sk-div-chips button em{display:none}
+
+
+/* 2026-11-20 — entity tabs fit the viewport without horizontal scrolling */
+.sk-page { min-width:0; max-width:100%; overflow-x:clip; padding-inline:0; }
+.sk-entity-block .sk-seg {
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:6px;
+  overflow:visible;
+}
+.sk-entity-block .sk-seg button {
+  min-width:0;
+  white-space:normal;
+  padding-inline:6px;
+  border-radius:12px;
+}
+.sk-list-head { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.sk-list-head h2 { white-space:nowrap; }
+.sk-list-head > span { flex-shrink:0; font-variant-numeric:tabular-nums; }
+.sk-banner {
+  background:color-mix(in srgb,#EF4444 13%,var(--sk-card)) !important;
+  border-color:color-mix(in srgb,#EF4444 40%,var(--sk-line)) !important;
+  color:var(--sk-ink) !important;
+}
+.sk-page :is(.sk-div-head,.sk-item,.sk-card) { border-radius:16px; }
+.sk-page :is(.sk-div-head,.sk-item,.sk-card) { box-shadow:var(--shadow-card,none); }
