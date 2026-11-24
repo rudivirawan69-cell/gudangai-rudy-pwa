@@ -265,7 +265,7 @@ export default function InputPage() {
       const safeExtractionIssues = Array.isArray(extractionIssues) ? extractionIssues : [];
       await new Promise((resolve) => setTimeout(resolve, 0));
       if (!rows.length && !safeExtractionIssues.length) { setStatusBanner('Tidak ada baris barang terdeteksi dari ' + sourceLabel + '.'); return; }
-      const validation = validateItems(rows, useEntity);
+      const validation = validateItems(rows, useEntity, { includeRawMaterials: sourceLabel === 'Foto' });
       await new Promise((resolve) => setTimeout(resolve, 0));
       let stock = null;
       // Reuse the catalog already loaded for this entity; never race a slow fetch here.
