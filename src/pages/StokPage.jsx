@@ -11,24 +11,11 @@ import { ENTITAS, TIDAK_TERKLASIFIKASI, normalizeAll } from "../data/stokAdapter
 const RANK = { kritis: 0, waspada: 1, aman: 2 };
 const LABEL = { kritis: "Kritis", waspada: "Waspada", aman: "Aman" };
 const CACHE_KEY = "gudangai:stok:snapshot:v1";
-const STALE_MENIT = 10;
 const BATCH = 60;
 
 const fmt = (n) =>
   new Intl.NumberFormat("id-ID", { maximumFractionDigits: 2 }).format(n);
 const fmtCount = (n) => new Intl.NumberFormat("id-ID", { maximumFractionDigits: 0 }).format(n);
-
-function relatif(ts) {
-  if (!ts) return null;
-  const d = new Date(ts).getTime();
-  if (!d) return null;
-  const m = Math.max(0, Math.round((Date.now() - d) / 60000));
-  if (m < 1) return "baru saja";
-  if (m < 60) return `${m} mnt lalu`;
-  const j = Math.round(m / 60);
-  if (j < 24) return `${j} jam lalu`;
-  return `${Math.round(j / 24)} hari lalu`;
-}
 
 function ringkas(list) {
   const c = { total: list.length, kritis: 0, waspada: 0, aman: 0 };
@@ -141,7 +128,6 @@ export default function StokPage() {
 
   const memakaiCache = !(rawItems && rawItems.length) && cache?.data?.length;
   const sumber = memakaiCache ? cache.data : rawItems || [];
-  const waktu = memakaiCache ? cache.at : lastRefresh;
 
   const { items: semua, laporan } = useMemo(
     () => normalizeAll(sumber, { targetTotal: 193 }),
