@@ -777,7 +777,10 @@ export function detectEntityFromText(text) {
   // Remove these trailing supplier annotations before counting CV/PT markers.
   const t = String(text || '')
     .split(/\r?\n/)
-    .map((line) => line.replace(/\s*[/|]\s*pt\.?\s*(?:citra\s*guna|reza\s*perkasa)\b.*$/i, ''))
+    .map((line) => line
+      // Supplier suffixes such as "/ CV. PD3 CHICKEN" are not the document entity.
+      .replace(/\s*[/|]\s*(?:cv|pt)\.?\s*(?:pd3\s*chicken|citra\s*guna|reza\s*perkasa|supplier|vendor)\b.*$/i, '')
+    )
     .join('\n')
     .toLowerCase();
   if (/\bpt\.?\s*rasyuka|\brasyuka\b/.test(t)) return 'PT';
