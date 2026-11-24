@@ -159,6 +159,7 @@ try {
     { width: 360, height: 800 },
     { width: 390, height: 844 },
     { width: 412, height: 915 },
+    { width: 430, height: 932 },
     { width: 768, height: 1024 },
     { width: 1366, height: 768 },
   ];
@@ -296,8 +297,9 @@ try {
     ['Antrian Sinkronisasi', 'Antrian Sinkronisasi', 'sync'],
   ];
   const visualViewports = [
-    { width: 390, height: 844, label: 'mobile' },
-    { width: 1366, height: 768, label: 'desktop' },
+    { width: 360, height: 800, label: '360' },
+    { width: 390, height: 844, label: '390' },
+    { width: 430, height: 932, label: '430' },
   ];
   await openMorePage('Pengaturan', 'Mode Tampilan');
   const themeButtons = page.locator('.theme-picker-btn');
