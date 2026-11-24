@@ -140,7 +140,7 @@ function AppHeader({ user, tab, onOpenSettings, online, hasUrl, status, syncing,
           </button>
           <div className="min-w-0 flex-1">
             <h1 className="text-[13px] font-black tracking-[0.04em] text-[var(--text-main,#0f172a)] truncate leading-tight">
-              GudangAI Pro
+              GUDANG69_PRODIS
             </h1>
             <p
               className="mt-0.5 text-[10px] font-semibold text-[var(--text-muted,#475569)] truncate leading-tight app-sync-status"
