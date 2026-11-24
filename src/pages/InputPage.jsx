@@ -715,7 +715,6 @@ export default function InputPage() {
                 <Icon className="w-5 h-5" strokeWidth={on ? 2.25 : 2} />
               </span>
               <span className="input-tx-label">{t.label}</span>
-              {on && <span className="input-tx-selected" aria-hidden="true">TERPILIH</span>}
             </button>
           );
         })}
