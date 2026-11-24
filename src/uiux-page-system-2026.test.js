@@ -134,4 +134,25 @@ describe('GudangAI Metode C UI contract', () => {
     expect(css).toContain('min-height:46px; padding-block:6px !important;');
   });
 
+  it('keeps PO recommendation cards flat, caption-light, and theme-aware', () => {
+    const po = readFileSync(resolve(process.cwd(), 'src/pages/POPage.jsx'), 'utf8');
+    const css = readFileSync(resolve(process.cwd(), 'src/ui-human-operator-refinement.css'), 'utf8');
+    expect(po).toContain('po-recommendation-panel');
+    expect(po).toContain('po-generator-tab-cs');
+    expect(po).toContain('po-generator-tab-produksi');
+    expect(po).not.toContain('hub-sub');
+    expect(po).not.toContain('po-overview-summary');
+    expect(po).not.toContain('2 jalur:');
+    expect(po).not.toContain('Cold Storage</p>');
+    expect(po).not.toContain('Prioritas dapur');
+    expect(css).toContain('.po-recommendation-icon');
+    expect(css).toContain('background: transparent !important;');
+    expect(css).toContain('box-shadow: none !important;');
+    for (const theme of ['soft_light', 'deep_ocean', 'graphite_titanium']) {
+      expect(css).toContain(`html[data-theme="${theme}"]`);
+    }
+    expect(css).toContain('--po-cs-bg:');
+    expect(css).toContain('--po-prod-bg:');
+  });
+
 });
