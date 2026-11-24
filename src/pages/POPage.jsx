@@ -178,7 +178,6 @@ function ItemCard({ item, onUpdate, onRemove, editable }) {
           <input type="date" value={item.tglKedatangan || defaultTglISO()} onChange={(e) => onUpdate && onUpdate(item, { tglKedatangan: e.target.value })} disabled={!editable} className="text-[11px] font-semibold text-slate-800 border border-slate-200 rounded-lg px-1.5 py-1 bg-white max-w-[8.5rem]" />
         </label>
       </div>
-      <p className="text-[10px] text-cyan-700 font-semibold mt-1 tabular-nums">Kedatangan: {formatTglKedatangan(item.tglKedatangan || defaultTglISO())}</p>
     </div>
   );
 }
@@ -294,13 +293,13 @@ export default function POPage({ onNavigate }) {
   };
   const totalKurang = activeList.reduce((s, i) => s + i.kurang, 0);
   const hubs = [
-    { id: 'generate', title: 'PO', sub: 'Generate dan simpan PO', Icon: FilePlus2 },
-    { id: 'current', title: 'PO Minggu Ini', sub: 'Status periode berjalan', Icon: CalendarDays },
-    { id: 'previous', title: 'PO Minggu Lalu', sub: 'Status periode sebelumnya', Icon: CalendarClock },
-    { id: 'confirm', title: 'Konfirmasi PO', sub: 'Kedatangan yang perlu dicatat', Icon: ClipboardCheck },
+    { id: 'generate', title: 'PO', Icon: FilePlus2 },
+    { id: 'current', title: 'PO Minggu Ini', Icon: CalendarDays },
+    { id: 'previous', title: 'PO Minggu Lalu', Icon: CalendarClock },
+    { id: 'confirm', title: 'Konfirmasi PO', Icon: ClipboardCheck },
   ];
   return (
-    <div className="pb-28 animate-fade-in">
+    <div className="pb-28 animate-fade-in po-page">
       <div className="flex items-start justify-between gap-2 mb-3">
         <div className="min-w-0">
           <h2 className="text-[22px] leading-7 font-extrabold text-slate-900">Purchase order</h2>
@@ -316,39 +315,36 @@ export default function POPage({ onNavigate }) {
           const Icon = h.Icon;
           return (
             <button key={h.id} type="button" onClick={() => setHub(h.id)} className={`po-hub-card-btn ${hub === h.id ? 'is-active' : ''}`}>
-              <div className="flex flex-col items-center text-center gap-2 mb-1"><Icon className="w-5 h-5 text-cyan-600" /><span className="hub-title">{h.title}</span></div>
-              <p className="hub-sub">{h.sub}</p>
+              <div className="flex flex-col items-center text-center gap-2 mb-1"><Icon className="po-hub-icon w-5 h-5" aria-hidden="true" /><span className="hub-title">{h.title}</span></div>
             </button>
           );
         })}
       </div>
-      {!hub && <section className="po-overview-summary rounded-2xl border border-slate-200 bg-white p-4 mb-3"><p className="text-xs font-bold text-slate-500">Ringkasan kebutuhan PO · {tab === 'cs' ? 'Cold Storage' : 'Produksi'}</p><div className="mt-2 grid grid-cols-2 gap-3"><div><b className="block text-2xl font-extrabold tabular-nums text-slate-900">{loading ? '…' : activeList.length}</b><span className="text-[11px] text-slate-500">Item prioritas</span></div><div><b className="block text-2xl font-extrabold tabular-nums text-slate-900">{loading ? '…' : totalKurang.toLocaleString('id-ID')}</b><span className="text-[11px] text-slate-500">Total kekurangan</span></div></div></section>}
       {hub === 'generate' && (
         <>
           <div className="flex items-start justify-between gap-2 mb-2">
             <div className="min-w-0">
               <h3 className="text-sm font-extrabold text-slate-900">PO Generator</h3>
-              <p className="text-xs text-slate-500 mt-0.5">2 jalur: <b className="text-cyan-700">PO CS</b> · <b className="text-orange-700">PO Produksi</b></p>
             </div>
             <button type="button" onClick={() => { const next = density === 'compact' ? 'comfortable' : 'compact'; setDensity(next); try { localStorage.setItem('gudangai_density', next); } catch (_) {} }} className="text-[10px] font-bold px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 shadow-sm">{density === 'compact' ? 'Grid padat' : 'Grid longgar'}</button>
           </div>
           <div className="grid grid-cols-2 gap-2 mb-3">
-            <button type="button" onClick={() => setTab('cs')} className={`rounded-xl px-3 py-3 flex items-center gap-2 border-2 ${tab === 'cs' ? 'border-cyan-500 bg-cyan-50' : 'border-slate-200 bg-white'}`}>
-              <Snowflake className={`w-5 h-5 ${tab === 'cs' ? 'text-cyan-600' : 'text-slate-400'}`} />
-              <div className="text-left"><p className={`text-xs font-bold ${tab === 'cs' ? 'text-cyan-800' : 'text-slate-800'}`}>PO CS</p><p className="text-[9px] text-slate-500">Cold Storage</p></div>
+            <button type="button" onClick={() => setTab('cs')} className={`po-generator-tab po-generator-tab-cs rounded-xl px-3 py-3 flex items-center gap-2 border-2 ${tab === 'cs' ? 'is-active' : ''}`}>
+              <Snowflake className="po-generator-tab-icon w-5 h-5" aria-hidden="true" />
+              <div className="text-left"><p className="po-generator-tab-title text-xs font-bold">PO CS</p></div>
             </button>
-            <button type="button" onClick={() => setTab('produksi')} className={`rounded-xl px-3 py-3 flex items-center gap-2 border-2 ${tab === 'produksi' ? 'border-orange-500 bg-orange-50' : 'border-slate-200 bg-white'}`}>
-              <ChefHat className={`w-5 h-5 ${tab === 'produksi' ? 'text-orange-600' : 'text-slate-400'}`} />
-              <div className="text-left"><p className={`text-xs font-bold ${tab === 'produksi' ? 'text-orange-800' : 'text-slate-800'}`}>PO Produksi</p><p className="text-[9px] text-slate-500">Prioritas dapur</p></div>
+            <button type="button" onClick={() => setTab('produksi')} className={`po-generator-tab po-generator-tab-produksi rounded-xl px-3 py-3 flex items-center gap-2 border-2 ${tab === 'produksi' ? 'is-active' : ''}`}>
+              <ChefHat className="po-generator-tab-icon w-5 h-5" aria-hidden="true" />
+              <div className="text-left"><p className="po-generator-tab-title text-xs font-bold">PO Produksi</p></div>
             </button>
           </div>
-          <div className={`rounded-2xl p-4 mb-3 text-white bg-gradient-to-br ${tab === 'cs' ? 'from-cyan-600 to-teal-700' : 'from-orange-600 to-amber-800'}`}>
-            <div className="flex items-center gap-3 mb-3"><ShoppingCart className="w-6 h-6" /><div><p className="text-sm font-bold">{tab === 'cs' ? 'Rekomendasi PO · CS' : 'Prioritas Produksi'}</p></div></div>
-            <div className="flex gap-4">
-              <div className="flex-1"><p className="text-white/60 text-[10px] uppercase font-bold">Item Kritis</p><p className="text-2xl font-extrabold tabular-nums">{loading ? '…' : activeList.length}</p></div>
-              <div className="flex-1"><p className="text-white/60 text-[10px] uppercase font-bold">Total Kurang</p><p className="text-2xl font-extrabold tabular-nums">{loading ? '…' : totalKurang.toLocaleString('id-ID')}</p></div>
+          <section className={`po-recommendation-panel po-recommendation-${tab} mb-3`}>
+            <div className="po-recommendation-heading"><ShoppingCart className="po-recommendation-icon" aria-hidden="true" /><p className="text-sm font-bold">{tab === 'cs' ? 'Rekomendasi PO · CS' : 'Rekomendasi PO · Produksi'}</p></div>
+            <div className="po-recommendation-metrics">
+              <div><span className="po-metric-label">Item kritis</span><strong>{loading ? '…' : activeList.length}</strong></div>
+              <div><span className="po-metric-label">Total kurang</span><strong>{loading ? '…' : totalKurang.toLocaleString('id-ID')}</strong></div>
             </div>
-          </div>
+          </section>
           {!generated ? (
             <>
               {loading ? <div className={gapClass}>{[...Array(5)].map((_, i) => <div key={i} className="skeleton h-14 rounded-xl" />)}</div>

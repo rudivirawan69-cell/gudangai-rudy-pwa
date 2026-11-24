@@ -668,31 +668,35 @@ export default function InputPage() {
         <h1 className="text-xl font-extrabold flex items-center gap-2 text-slate-900">
           <PackagePlus className="w-6 h-6 text-cyan-300" /> Input
         </h1>
-        <div className="flex items-center gap-1.5">
-          <button type="button" onClick={() => {
-            const next = !dense;
-            setDense(next);
-            try { localStorage.setItem('gudangai_density', next ? 'compact' : 'comfortable'); } catch (_) {}
-          }} className="text-[10px] font-semibold px-2.5 py-1.5 rounded-lg bg-white border border-slate-200 text-slate-600 shadow-sm">
-            {dense ? 'Grid padat' : 'Grid longgar'}
-          </button>
-          <button type="button" onClick={openNotif} className="relative p-2 rounded-xl bg-white border border-slate-200 shadow-sm text-slate-700">
-            <Bell className="w-5 h-5" />
-            {unread > 0 && <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-rose-500 text-[10px] text-white flex items-center justify-center">{unread}</span>}
-          </button>
-        </div>
+        <button type="button" onClick={() => {
+          const next = !dense;
+          setDense(next);
+          try { localStorage.setItem('gudangai_density', next ? 'compact' : 'comfortable'); } catch (_) {}
+        }} className="text-[10px] font-semibold px-2.5 py-1.5 rounded-lg bg-white border border-slate-200 text-slate-600 shadow-sm">
+          {dense ? 'Grid padat' : 'Grid longgar'}
+        </button>
       </div>
 
-      <div className="flex items-center gap-2.5 flex-wrap">
-        <input type="text" value={tanggal} onChange={(e) => setTanggal(e.target.value)}
-          className="rounded-xl bg-white border border-slate-200 text-slate-900 px-3 py-2 text-sm w-32 shadow-sm font-semibold" />
-        <div className="flex rounded-xl overflow-hidden border border-slate-200 shadow-sm">
+      <section className="input-control-card" aria-label="Kontrol transaksi">
+        <label className="input-date-control">
+          <span className="sr-only">Tanggal transaksi</span>
+          <input type="text" value={tanggal} onChange={(e) => setTanggal(e.target.value)}
+            aria-label="Tanggal transaksi"
+            className="input-date-field" />
+        </label>
+        <div className="input-entity-control" role="group" aria-label="Entitas">
           {['CV', 'PT'].map((e) => (
             <button key={e} type="button" onClick={() => changeEntity(e)}
-              className={`px-4 py-2 text-sm font-semibold ${entity === e ? 'bg-cyan-600 text-white' : 'bg-white text-slate-600'}`}>{e}</button>
+              aria-pressed={entity === e}
+              className={`input-entity-btn ${entity === e ? 'is-active' : ''}`}>{e}</button>
           ))}
         </div>
-      </div>
+        <button type="button" onClick={openNotif} aria-label={unread > 0 ? `Notifikasi, ${unread} belum dibaca` : 'Notifikasi'}
+          className="input-notification-btn">
+          <Bell className="w-5 h-5" aria-hidden="true" />
+          {unread > 0 && <span className="input-notification-badge" aria-hidden="true">{unread > 99 ? '99+' : unread}</span>}
+        </button>
+      </section>
 
       <div className="input-tx-segmented grid grid-cols-3 gap-3.5 sm:gap-4" role="group" aria-label="Jenis transaksi">
         {TX.map((t) => {
@@ -711,7 +715,6 @@ export default function InputPage() {
                 <Icon className="w-5 h-5" strokeWidth={on ? 2.25 : 2} />
               </span>
               <span className="input-tx-label">{t.label}</span>
-              {on && <span className="input-tx-selected" aria-hidden="true">TERPILIH</span>}
             </button>
           );
         })}

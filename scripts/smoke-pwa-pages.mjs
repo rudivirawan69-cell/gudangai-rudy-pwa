@@ -24,6 +24,12 @@ function contrastRatio(foreground, background) {
   return (values[0] + 0.05) / (values[1] + 0.05);
 }
 
+function computedRgbToHex(value) {
+  const channels = String(value).match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/i);
+  assert.ok(channels, `Expected computed RGB color, received: ${value}`);
+  return `#${channels.slice(1, 4).map((channel) => Number(channel).toString(16).padStart(2, '0')).join('')}`;
+}
+
 const items = [
   { kode: 'CV-0001', nama: 'Ayam Fillet Dada', entitas: 'CV', entity: 'CV', stok: 25, stockAkhir: 25, stockAman: 20, satuan: 'Pack', divisi: 'CS' },
   { kode: 'PT-0001', nama: 'Bebek', entitas: 'PT', entity: 'PT', stok: 8, stockAkhir: 8, stockAman: 15, satuan: 'Pack', divisi: 'PRODUKSI' },
@@ -147,6 +153,60 @@ try {
     ['Input', 'Draft transaksi dipulihkan'],
     ['Agent', 'Agent Rubee Intelligence'],
   ];
+  // PO recommendation visual contract: run before unrelated Input-page assertions.
+  const poScreenshotRoot = 'artifacts/visual-phase3';
+  await mkdir(poScreenshotRoot, { recursive: true });
+  const originalTheme = await page.evaluate(() => localStorage.getItem('gudangai_theme'));
+  for (const theme of ['soft_light', 'deep_ocean', 'graphite_titanium']) {
+    await page.evaluate((value) => localStorage.setItem('gudangai_theme', value), theme);
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.locator('nav.nav-bar').waitFor({ state: 'visible', timeout: 15000 });
+    await page.locator('nav.nav-bar button').filter({ hasText: 'PO' }).first().click();
+    await page.getByText('Purchase order', { exact: false }).first().waitFor({ state: 'visible', timeout: 10000 });
+    for (const viewport of [{ width: 360, height: 800 }, { width: 390, height: 844 }, { width: 430, height: 932 }]) {
+      await page.setViewportSize(viewport);
+      for (const [tabLabel, panelClass, slugSuffix] of [
+        ['PO CS', 'po-recommendation-cs', 'cs'],
+        ['PO Produksi', 'po-recommendation-produksi', 'produksi'],
+      ]) {
+        await page.locator('main[data-ui-page="po"] .po-generator-tab').filter({ hasText: tabLabel }).click();
+        const panel = page.locator(`main[data-ui-page="po"] .${panelClass}`);
+        await panel.waitFor({ state: 'visible', timeout: 5000 });
+        const visual = await panel.evaluate((el) => {
+          const icon = el.querySelector('.po-recommendation-icon');
+          const style = getComputedStyle(el);
+          const iconStyle = getComputedStyle(icon);
+          return {
+            background: style.backgroundColor,
+            foreground: style.color,
+            iconBackground: iconStyle.backgroundColor,
+            iconShadow: iconStyle.boxShadow,
+            iconFilter: iconStyle.filter,
+            nestedSurfaces: el.querySelectorAll('.card,.surface,.section-card,.stock-card').length,
+          };
+        });
+        const ratio = contrastRatio(computedRgbToHex(visual.foreground), computedRgbToHex(visual.background));
+        assert.ok(ratio >= 4.5, `PO ${tabLabel} contrast below WCAG AA in ${theme}: ${ratio.toFixed(2)}:1; ${JSON.stringify(visual)}`);
+        assert.equal(visual.iconBackground, 'rgba(0, 0, 0, 0)', `PO ${tabLabel} icon tile background must be transparent in ${theme}.`);
+        assert.equal(visual.iconShadow, 'none', `PO ${tabLabel} icon must not have a shadow in ${theme}.`);
+        assert.equal(visual.iconFilter, 'none', `PO ${tabLabel} icon must not have a filter in ${theme}.`);
+        assert.equal(visual.nestedSurfaces, 0, `PO ${tabLabel} recommendation must not contain nested card surfaces in ${theme}.`);
+        await page.screenshot({
+          path: `${poScreenshotRoot}/${theme}-po-${slugSuffix}-${viewport.width}.png`,
+          fullPage: true,
+          animations: 'disabled',
+        });
+        console.log(`[PO VISUAL PASS] ${theme} / ${tabLabel} / ${viewport.width}px / contrast ${ratio.toFixed(2)}:1`);
+      }
+    }
+  }
+  await page.evaluate((value) => {
+    if (value) localStorage.setItem('gudangai_theme', value);
+    else localStorage.removeItem('gudangai_theme');
+  }, originalTheme);
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.locator('nav.nav-bar').waitFor({ state: 'visible', timeout: 15000 });
+
   const openMorePage = async (label, marker) => {
     await page.locator('nav.nav-bar button').filter({ hasText: 'Lainnya' }).first().click();
     const sheet = page.locator('.more-sheet');
@@ -159,6 +219,7 @@ try {
     { width: 360, height: 800 },
     { width: 390, height: 844 },
     { width: 412, height: 915 },
+    { width: 430, height: 932 },
     { width: 768, height: 1024 },
     { width: 1366, height: 768 },
   ];
@@ -194,6 +255,17 @@ try {
   // Every primary page is opened at every target viewport.
   for (const viewport of viewports) {
     await page.setViewportSize(viewport);
+    const navAudit = await page.locator('nav.nav-bar').evaluate((nav) => ({
+      height: nav.getBoundingClientRect().height,
+      labels: [...nav.querySelectorAll('.nav-label')].map((node) => ({
+        text: node.textContent.trim(),
+        visible: node.getBoundingClientRect().height > 0 && getComputedStyle(node).visibility !== 'hidden',
+        fits: node.scrollWidth <= node.clientWidth + 1,
+      })),
+    }));
+    assert.ok(navAudit.height >= 64, `Bottom navigation is shorter than 64px: ${JSON.stringify(navAudit)}`);
+    assert.deepEqual(navAudit.labels.map((node) => node.text), ['Beranda', 'Stok', 'Input', 'PO', 'Lainnya']);
+    assert.ok(navAudit.labels.every((node) => node.visible && node.fits), `Navigation labels are clipped: ${JSON.stringify(navAudit)}`);
     for (const [label, marker] of tabs) {
       if (label === 'Agent') await openMorePage('Agent Rubee AI', marker);
       else await page.locator('nav.nav-bar button').filter({ hasText: label }).first().click();
@@ -206,6 +278,24 @@ try {
       }
       const boundaryErrors = await page.getByText('Halaman gagal dimuat', { exact: false }).count();
       assert.equal(boundaryErrors, 0, `Error boundary shown on ${label}`);
+      if (label === 'Input') {
+        const inputAudit = await page.evaluate(() => {
+          const controls = [...document.querySelectorAll('.input-date-field,.input-entity-btn,.input-notification-btn')];
+          const cards = [...document.querySelectorAll('.input-tx-btn')];
+          return {
+            controlHeights: controls.map((node) => node.getBoundingClientRect().height),
+            cardBounds: cards.map((node) => {
+              const rect = node.getBoundingClientRect();
+              return { width: rect.width, height: rect.height };
+            }),
+          };
+        });
+        assert.equal(inputAudit.controlHeights.length, 4, 'Input must show date, CV, PT, and notification controls.');
+        assert.ok(inputAudit.controlHeights.every((height) => height >= 44), `Input control touch target below 44px: ${JSON.stringify(inputAudit)}`);
+        assert.equal(inputAudit.cardBounds.length, 3, 'Input must show Masuk, Keluar, and Rusak cards.');
+        assert.ok(inputAudit.cardBounds.every((box) => box.height >= 96), `Input transaction cards are too short: ${JSON.stringify(inputAudit)}`);
+        assert.ok(inputAudit.cardBounds.every((box) => Math.abs(box.width - inputAudit.cardBounds[0].width) < 1 && Math.abs(box.height - inputAudit.cardBounds[0].height) < 1), `Input transaction cards are not equal-sized: ${JSON.stringify(inputAudit)}`);
+      }
       await assertNoHorizontalOverflow(label, viewport);
     }
 
@@ -252,7 +342,7 @@ try {
       assert.equal(themeState.id, theme, `Theme mismatch on ${label}: ${JSON.stringify(themeState)}`);
       assert.ok(themeState.surface && themeState.text, `Theme tokens missing on ${label} in ${theme}`);
       if (theme === 'graphite_titanium') {
-        assert.equal(themeState.accent, '#6366f1', `Graphite navigation accent must be indigo on ${label}.`);
+        assert.equal(themeState.accent, '#91b9ad', `Graphite theme accent must match the active operator refinement token on ${label}.`);
         if (label === 'Beranda') {
           const fabBackground = await page.locator('.nav-fab-btn').evaluate((el) => getComputedStyle(el).backgroundImage);
           const agentBorder = await page.locator('[data-ui-page="dashboard"] .home-agent-card').evaluate((el) => getComputedStyle(el).borderTopColor);
@@ -291,13 +381,15 @@ try {
     ['Input', 'Draft transaksi dipulihkan', 'input'],
     ['PO', 'Purchase order', 'po'],
     ['Riwayat', 'Riwayat Transaksi', 'riwayat'],
+    ['Lainnya', 'Agent Rubee AI', 'more'],
     ['Agent', 'Agent Rubee Intelligence', 'agent'],
     ['Pengaturan', 'Mode Tampilan', 'settings'],
     ['Antrian Sinkronisasi', 'Antrian Sinkronisasi', 'sync'],
   ];
   const visualViewports = [
-    { width: 390, height: 844, label: 'mobile' },
-    { width: 1366, height: 768, label: 'desktop' },
+    { width: 360, height: 800, label: '360' },
+    { width: 390, height: 844, label: '390' },
+    { width: 430, height: 932, label: '430' },
   ];
   await openMorePage('Pengaturan', 'Mode Tampilan');
   const themeButtons = page.locator('.theme-picker-btn');
@@ -325,12 +417,51 @@ try {
         if (label === 'PO') {
           await page.locator('nav.nav-bar button').filter({ hasText: 'Beranda' }).first().click();
           await page.locator('nav.nav-bar button').filter({ hasText: 'PO' }).first().click();
+        } else if (label === 'Lainnya') {
+          await page.locator('nav.nav-bar button').filter({ hasText: 'Lainnya' }).first().click();
+          await page.locator('.more-sheet').waitFor({ state: 'visible', timeout: 10000 });
         } else if (['Riwayat', 'Pengaturan', 'Antrian Sinkronisasi', 'Agent'].includes(label)) {
           await openMorePage(label === 'Agent' ? 'Agent Rubee AI' : label === 'Antrian Sinkronisasi' ? 'Antrean sinkronisasi' : label, markerText);
         } else {
           await page.locator('nav.nav-bar button').filter({ hasText: label }).first().click();
         }
-        await page.getByText(markerText, { exact: false }).first().waitFor({ state: 'visible', timeout: 10000 });
+        if (label !== 'Lainnya') {
+          await page.getByText(markerText, { exact: false }).first().waitFor({ state: 'visible', timeout: 10000 });
+        }
+        if (label === 'PO') {
+          for (const [tabLabel, panelClass, slugSuffix] of [
+            ['PO CS', 'po-recommendation-cs', 'cs'],
+            ['PO Produksi', 'po-recommendation-produksi', 'produksi'],
+          ]) {
+            await page.locator('main[data-ui-page="po"] .po-generator-tab').filter({ hasText: tabLabel }).click();
+            const panel = page.locator(`main[data-ui-page="po"] .${panelClass}`);
+            await panel.waitFor({ state: 'visible', timeout: 5000 });
+            const visual = await panel.evaluate((el) => {
+              const icon = el.querySelector('.po-recommendation-icon');
+              const style = getComputedStyle(el);
+              const iconStyle = getComputedStyle(icon);
+              return {
+                background: style.backgroundColor,
+                foreground: style.color,
+                iconBackground: iconStyle.backgroundColor,
+                iconShadow: iconStyle.boxShadow,
+                iconFilter: iconStyle.filter,
+                nestedSurfaces: el.querySelectorAll('.card,.surface,.section-card,.stock-card').length,
+              };
+            });
+            const ratio = contrastRatio(computedRgbToHex(visual.foreground), computedRgbToHex(visual.background));
+            assert.ok(ratio >= 4.5, `PO ${tabLabel} contrast below WCAG AA in ${theme}: ${ratio.toFixed(2)}:1; ${JSON.stringify(visual)}`);
+            assert.equal(visual.iconBackground, 'rgba(0, 0, 0, 0)', `PO ${tabLabel} icon tile background must be transparent in ${theme}.`);
+            assert.equal(visual.iconShadow, 'none', `PO ${tabLabel} icon must not have a shadow in ${theme}.`);
+            assert.equal(visual.iconFilter, 'none', `PO ${tabLabel} icon must not have a filter in ${theme}.`);
+            assert.equal(visual.nestedSurfaces, 0, `PO ${tabLabel} recommendation must not contain nested card surfaces in ${theme}.`);
+            await page.screenshot({
+              path: `${screenshotRoot}/${theme}-po-${slugSuffix}-${viewport.label}.png`,
+              fullPage: true,
+              animations: 'disabled',
+            });
+          }
+        }
         const safeTheme = await page.evaluate(() => ({
           id: document.documentElement.dataset.theme,
           bg: getComputedStyle(document.documentElement).getPropertyValue('--bg-elevated').trim(),

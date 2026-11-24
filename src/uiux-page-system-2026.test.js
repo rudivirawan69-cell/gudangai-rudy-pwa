@@ -66,7 +66,10 @@ describe('GudangAI Metode C UI contract', () => {
     expect(css).toContain('html[data-theme] [data-ui-page="ai"] .max-w-4xl > .relative {\n  width: 100%; max-width: 100%; min-width: 0;');
     expect(css).toContain('html[data-theme] [data-ui-page="ai"] [role="log"] > .m-auto {\n  width: 100%');
     expect(css).toContain('html[data-theme="graphite_titanium"] .home-agent-card');
-    expect(css).toContain('background: linear-gradient(145deg,var(--accent),var(--accent-strong)) !important;');
+    const navCss = readFileSync(resolve(process.cwd(), 'src/ui-nav-layout.css'), 'utf8');
+    expect(navCss).toContain('background: transparent;');
+    expect(navCss).toContain('box-shadow: none;');
+    expect(navCss).toContain('filter: none;');
     expect(css).toContain('[data-ui-page="dashboard"] .dashboard-chart-wrap > .relative.h-36');
   });
 
@@ -94,13 +97,16 @@ describe('GudangAI Metode C UI contract', () => {
     expect(css).toContain('var(--stok-aman)');
   });
 
-  it('keeps bottom navigation flush to the viewport and reserves content space', () => {
-    const css = readFileSync(cssPath, 'utf8');
+  it('keeps bottom navigation flush, safe-area aware, and reserves content space', () => {
+    const navCss = readFileSync(resolve(process.cwd(), 'src/ui-nav-layout.css'), 'utf8');
     const app = readFileSync(appPath, 'utf8');
-    expect(css).toContain('bottom:0 !important;');
-    expect(css).toContain('padding-bottom:env(safe-area-inset-bottom,0px) !important;');
-    expect(css).toContain('width:44px !important; height:44px !important;');
-    expect(css).toContain('padding-bottom:calc(84px + env(safe-area-inset-bottom,0px)) !important;');
+    const main = readFileSync(mainPath, 'utf8');
+    expect(navCss).toContain('min-height: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom, 0px));');
+    expect(navCss).toContain('padding-bottom: env(safe-area-inset-bottom, 0px);');
+    expect(navCss).toContain('body:has(.nav-bar) { padding-bottom: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom, 0px)); }');
+    expect(navCss).toContain('width: 28px;');
+    expect(navCss).toContain('white-space: nowrap;');
+    expect(main).toContain("import './ui-nav-layout.css'");
     expect(app).toContain('className="nav-bar fixed bottom-0 left-0 right-0 safe-bottom z-40"');
   });
 
@@ -126,6 +132,30 @@ describe('GudangAI Metode C UI contract', () => {
     expect(settings).not.toContain('<div className="card overflow-hidden">');
     expect(css).toContain('.settings-menu-list .settings-menu-row + .settings-menu-row');
     expect(css).toContain('min-height:46px; padding-block:6px !important;');
+  });
+
+  it('keeps PO recommendation cards flat, caption-light, and theme-aware', () => {
+    const po = readFileSync(resolve(process.cwd(), 'src/pages/POPage.jsx'), 'utf8');
+    const css = readFileSync(resolve(process.cwd(), 'src/ui-human-operator-refinement.css'), 'utf8');
+    expect(po).toContain('po-recommendation-panel');
+    expect(po).toContain('po-generator-tab-cs');
+    expect(po).toContain('po-generator-tab-produksi');
+    expect(po).not.toContain('hub-sub');
+    expect(po).not.toContain('po-overview-summary');
+    expect(po).not.toContain('2 jalur:');
+    expect(po).not.toContain('Cold Storage</p>');
+    expect(po).not.toContain('Prioritas dapur');
+    expect(po).not.toContain('>Kedatangan:');
+    expect(css).toContain('.po-recommendation-icon');
+    expect(css).toContain('.po-recommendation-metrics > div');
+    expect(css).toContain('.po-recommendation-panel :is(.card,.surface,.section-card,.stock-card)');
+    expect(css).toContain('background: transparent !important;');
+    expect(css).toContain('box-shadow: none !important;');
+    for (const theme of ['soft_light', 'deep_ocean', 'graphite_titanium']) {
+      expect(css).toContain(`html[data-theme="${theme}"]`);
+    }
+    expect(css).toContain('--po-cs-bg:');
+    expect(css).toContain('--po-prod-bg:');
   });
 
 });

@@ -193,29 +193,9 @@ html[data-theme] .app-content :is(input,select,textarea)::placeholder {
 }
 
 /* Input: make the three transaction choices unmistakable without decorative shine. */
-html[data-theme] .input-tx-btn,
-html[data-theme] .input-tx-segmented .input-tx-btn {
-  min-height: 88px;
-  border: 1px solid var(--border) !important;
-  border-radius: 14px !important;
-  background: var(--bg-elevated) !important;
-  color: var(--text-main) !important;
-  box-shadow: none !important;
-}
 html[data-theme] .input-tx-btn .input-tx-icon {
   box-shadow: none !important;
   filter: none !important;
-}
-html[data-theme] .input-tx-btn[aria-pressed="true"],
-html[data-theme] .input-tx-selected {
-  border: 2px solid var(--accent) !important;
-  background: var(--accent-soft) !important;
-  color: var(--text-main) !important;
-  box-shadow: inset 0 0 0 1px var(--accent-soft) !important;
-}
-html[data-theme] .input-tx-btn[aria-pressed="true"] .input-tx-icon {
-  background: var(--accent) !important;
-  color: #fff !important;
 }
 html[data-theme] .input-tx-label {
   font-weight: 700;
@@ -282,27 +262,11 @@ html[data-theme] .app-header-card h1 {
 html[data-theme] .app-header-card .app-sync-status {
   color: var(--text-muted) !important;
 }
-html[data-theme] .nav-bar {
-  background: var(--nav-bg) !important;
-  border-top: 1px solid var(--border) !important;
-  box-shadow: 0 -2px 8px rgba(0,0,0,.055) !important;
-  backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
-}
 html[data-theme] .nav-btn.is-active .nav-icon-wrap {
   background: var(--accent-soft) !important;
   box-shadow: none !important;
   transform: none !important;
 }
-html[data-theme] .nav-fab-btn {
-  box-shadow: 0 3px 8px rgba(0,0,0,.14) !important;
-  filter: none !important;
-}
-html[data-theme] .nav-fab-btn.is-active {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 10px rgba(0,0,0,.18) !important;
-}
-
 /* Preserve status semantics; soften decorative glows only. */
 html[data-theme] .app-content :is(.ops-icon-amber,.ops-icon-emerald,.ops-icon-indigo,.ops-icon-sky) {
   box-shadow: none !important;
@@ -439,4 +403,171 @@ html[data-theme="graphite_titanium"] .app-content .input-source-methods > .input
   html[data-theme] .app-content .input-source-methods > .input-method-card > .input-method-icon {
     transition: none !important;
   }
+}
+
+
+/* PO visual refinement — flat hierarchy, accessible contrast, existing themes only. */
+html[data-theme="soft_light"] {
+  --po-cs-bg: #e7f5f5;
+  --po-cs-border: #0b7070;
+  --po-cs-ink: #123b3d;
+  --po-prod-bg: #fff1e8;
+  --po-prod-border: #a94f2b;
+  --po-prod-ink: #572b1c;
+}
+html[data-theme="deep_ocean"] {
+  --po-cs-bg: #123b52;
+  --po-cs-border: #72c6df;
+  --po-cs-ink: #f2fbff;
+  --po-prod-bg: #49301f;
+  --po-prod-border: #f2ae69;
+  --po-prod-ink: #fff7ed;
+}
+html[data-theme="graphite_titanium"] {
+  --po-cs-bg: #202b31;
+  --po-cs-border: #8fb8c3;
+  --po-cs-ink: #f1f5f6;
+  --po-prod-bg: #30291d;
+  --po-prod-border: #d4af37;
+  --po-prod-ink: #fff8e6;
+}
+html[data-theme] .po-page .po-generator-tab {
+  min-width: 0;
+  min-height: 58px;
+  border: 1px solid var(--border) !important;
+  border-radius: 14px !important;
+  background: var(--bg-elevated) !important;
+  color: var(--text-muted) !important;
+  box-shadow: none !important;
+  transition: background-color .18s ease, border-color .18s ease, color .18s ease, transform .18s ease;
+}
+html[data-theme] .po-page .po-generator-tab-title { color: inherit !important; }
+html[data-theme] .po-page .po-generator-tab-icon {
+  flex: 0 0 auto;
+  color: inherit !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  filter: none !important;
+}
+html[data-theme] .po-page .po-generator-tab-cs.is-active {
+  color: var(--po-cs-ink) !important;
+  border-color: var(--po-cs-border) !important;
+  background: var(--po-cs-bg) !important;
+}
+html[data-theme] .po-page .po-generator-tab-produksi.is-active {
+  color: var(--po-prod-ink) !important;
+  border-color: var(--po-prod-border) !important;
+  background: var(--po-prod-bg) !important;
+}
+html[data-theme] .po-page .po-generator-tab:focus-visible {
+  outline: 3px solid var(--accent) !important;
+  outline-offset: 3px;
+}
+html[data-theme] .po-page .po-recommendation-panel {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--bg-elevated);
+  color: var(--text-main);
+  box-shadow: none !important;
+}
+html[data-theme] .po-page .po-recommendation-cs {
+  background: var(--po-cs-bg);
+  border-color: var(--po-cs-border);
+  color: var(--po-cs-ink);
+}
+html[data-theme] .po-page .po-recommendation-produksi {
+  background: var(--po-prod-bg);
+  border-color: var(--po-prod-border);
+  color: var(--po-prod-ink);
+}
+html[data-theme] .po-page .po-recommendation-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  color: inherit;
+}
+html[data-theme] .po-page .po-recommendation-heading p { color: inherit !important; }
+html[data-theme] .po-page .po-recommendation-icon {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: inherit !important;
+  box-shadow: none !important;
+  filter: none !important;
+}
+html[data-theme] .po-page .po-recommendation-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+html[data-theme] .po-page .po-recommendation-metrics > div {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+html[data-theme] .po-page .po-metric-label {
+  color: inherit;
+  opacity: .86;
+  font-size: 10px;
+  line-height: 1.35;
+  font-weight: 750;
+  text-transform: uppercase;
+  letter-spacing: .045em;
+}
+html[data-theme] .po-page .po-recommendation-metrics strong {
+  color: inherit;
+  font-size: 25px;
+  line-height: 1.15;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+html[data-theme] .po-page .po-hub-card-btn {
+  min-height: 76px;
+  padding: 12px 10px;
+  gap: 0;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  box-shadow: none !important;
+}
+html[data-theme] .po-page .po-hub-card-btn .hub-title { color: var(--text-main); }
+html[data-theme] .po-page .po-hub-card-btn.is-active {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+html[data-theme] .po-page .po-hub-card-btn :is(svg,span) { box-shadow: none !important; }
+html[data-theme] .po-page .po-recommendation-panel :is(.card,.surface,.section-card,.stock-card) {
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+html[data-theme] .po-page :is(.po-generator-tab,.po-recommendation-panel,.po-hub-card-btn) { box-sizing: border-box; }
+@media (max-width: 380px) {
+  html[data-theme] .po-page .po-recommendation-panel { padding: 13px; gap: 12px; }
+  html[data-theme] .po-page .po-recommendation-metrics { gap: 8px; }
+  html[data-theme] .po-page .po-recommendation-metrics strong { font-size: 22px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html[data-theme] .po-page .po-generator-tab { transition: none; }
+}
+
+html[data-theme] .po-page .po-hub-icon {
+  color: var(--accent);
+  background: transparent !important;
+  box-shadow: none !important;
+  filter: none !important;
 }

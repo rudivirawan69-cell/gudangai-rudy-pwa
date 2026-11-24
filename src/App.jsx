@@ -64,16 +64,6 @@ const MORE_TABS = [
 
 const MORE_IDS = new Set(MORE_TABS.map((t) => t.id));
 
-const TAB_ACCENT = {
-  dashboard: 'from-cyan-400 to-cyan-600',
-  stok: 'from-blue-400 to-blue-600',
-  input: 'from-emerald-400 to-emerald-600',
-  ai: 'from-orange-400 to-amber-600',
-  po: 'from-violet-400 to-violet-600',
-  riwayat: 'from-amber-400 to-amber-600',
-  settings: 'from-slate-400 to-slate-600',
-};
-
 const TAB_SUBTITLE = {
   dashboard: 'Ringkasan operasional gudang',
   stok: 'Monitoring stok rak',
@@ -302,7 +292,7 @@ function AppShell() {
       <ConnBanner hasUrl={hasUrl} status={status} message={message} />
       <AppHeader user={user} tab={tab} onOpenSettings={() => goTab('settings')} online={online} hasUrl={hasUrl} status={status} syncing={syncing} sheetLabel={sheetLabel} onRefresh={() => Promise.allSettled([checkHealth({ quiet: false }), getDashboardData()])} />
       <InstallBanner installPrompt={installPrompt} onInstall={installApp} onDismiss={dismissInstall} />
-      <main data-ui-page={tab} className="page-content app-content w-full max-w-none mx-0 min-h-0 px-3 pb-32 pt-1">
+      <main data-ui-page={tab} className="page-content app-content w-full max-w-none mx-0 min-h-0 px-3 pb-6 pt-1">
         <div key={pageKey} className="animate-page-in">
           <ErrorBoundary>
             <Suspense fallback={<div className="flex justify-center py-20"><Loader2 className="w-7 h-7 text-cyan-500 animate-spin" /></div>}>
@@ -320,8 +310,8 @@ function AppShell() {
             if (t.fab) {
               return (
                 <button key={t.id} type="button" onClick={() => goTab(t.id)} aria-current={isActive ? 'page' : undefined} aria-label="Input barang masuk atau keluar" className="nav-fab flex-1 flex flex-col items-center relative min-w-0">
-                  <span className={`nav-fab-btn ${isActive ? 'is-active' : ''}`}><Icon className="w-6 h-6" strokeWidth={2.4} /></span>
-                  <span className={`nav-label text-[9px] sm:text-[10px] mt-1 truncate max-w-full px-0.5 ${isActive ? 'font-bold opacity-100' : 'font-semibold opacity-80'}`}>{t.label}</span>
+                  <span className={`nav-fab-btn ${isActive ? 'is-active' : ''}`} aria-hidden="true"><Icon className="w-6 h-6" strokeWidth={2.4} /></span>
+                  <span className={`nav-label ${isActive ? 'is-active' : 'is-inactive'}`}>{t.label}</span>
                 </button>
               );
             }
@@ -329,9 +319,9 @@ function AppShell() {
             return (
               <button key={t.id} type="button" onClick={onClick} aria-current={isActive ? 'page' : undefined} aria-haspopup={t.id === 'more' ? 'dialog' : undefined} aria-expanded={t.id === 'more' ? moreOpen : undefined} className={`nav-btn flex-1 flex flex-col items-center pt-2 pb-2 relative min-w-0 ${isActive ? 'is-active' : 'is-inactive'}`}>
                 <div className={`nav-icon-wrap p-1 rounded-xl ${isActive ? t.chip : ''}`}><Icon className="w-[22px] h-[22px]" strokeWidth={isActive ? 2.5 : 2.15} /></div>
-                <span className={`nav-label text-[9px] sm:text-[10px] mt-0.5 truncate max-w-full px-0.5 ${isActive ? 'font-bold opacity-100' : 'font-semibold opacity-80'}`}>{t.label}</span>
+                <span className={`nav-label ${isActive ? 'is-active' : 'is-inactive'}`}>{t.label}</span>
                 {t.id === 'more' && pendingCount > 0 && <span className="nav-badge" aria-label={`${pendingCount} item antrian sinkronisasi`}>{pendingCount > 99 ? '99+' : pendingCount}</span>}
-                {isActive && t.id !== 'more' && <span className={`nav-underline absolute bottom-0 left-1/2 -translate-x-1/2 w-6 h-[3px] rounded-full bg-gradient-to-r ${TAB_ACCENT[t.id] || 'from-slate-400 to-slate-600'}`} />}
+                {isActive && t.id !== 'more' && <span className="nav-underline absolute bottom-1 left-1/2 -translate-x-1/2 w-6 h-[3px] rounded-full" />}
               </button>
             );
           })}

@@ -151,18 +151,12 @@ html[data-theme] .nav-bar {
   background: var(--nav-bg) !important;
   border-color: var(--border) !important;
   box-shadow: var(--shadow-nav) !important;
-  -webkit-backdrop-filter: blur(16px) saturate(1.08);
-  backdrop-filter: blur(16px) saturate(1.08);
 }
-html[data-theme] .nav-btn { color: var(--text-muted) !important; }
-html[data-theme] .nav-btn.is-active { color: var(--accent) !important; }
+html[data-theme] .nav-btn { color: var(--nav-idle, var(--text-muted)); }
+html[data-theme] .nav-btn.is-active { color: var(--nav-active, var(--accent)); }
 html[data-theme] .nav-btn.is-active .nav-icon-wrap {
   background: var(--accent-soft) !important;
   box-shadow: none !important;
-}
-html[data-theme] .nav-fab {
-  background: linear-gradient(145deg,var(--brand-teal),var(--brand-teal-dark)) !important;
-  border-color: var(--bg-elevated) !important;
 }
 html[data-theme] .app-header {
   background: linear-gradient(135deg,var(--brand-teal-dark),var(--brand-teal)) !important;
@@ -171,7 +165,6 @@ html[data-theme] .app-header,
 html[data-theme] .app-header :is(h1,h2,h3,p,span,svg) {
   color: var(--header-text);
 }
-html[data-theme] .nav-fab { color: var(--header-text) !important; }
 html[data-theme] .more-sheet-backdrop {
   background: var(--modal-backdrop) !important;
   -webkit-backdrop-filter: blur(3px);
