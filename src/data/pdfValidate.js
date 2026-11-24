@@ -209,7 +209,11 @@ export function isLowQualityOcrLine(value) {
 }
 
 function normalizeTotalHeader(value) {
-  return String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '').replace(/1/g, 'l');
+  return String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '').replace(/0/g, 'o').replace(/1/g, 'l');
+}
+
+function isNumericOcrToken(value) {
+  return /^\d[\d.,]*$/.test(String(value || '').replace(/[Oo]/g, '0'));
 }
 
 function groupOcrWordsIntoRows(words) {
@@ -333,7 +337,7 @@ export function parseOrderSummaryFromOcr(ocrData) {
     ? Math.max(...nameHeaderWords.map((word) => word.x1))
     : null;
   const numericWords = bodyRows.flatMap((row) => row.filter((word) =>
-    /^\d[\d.,]*$/.test(word.text) &&
+    isNumericOcrToken(word.text) &&
     (nameHeaderRight == null || ((word.x0 + word.x1) / 2) > nameHeaderRight + 18)
   ));
   const numericColumns = [];
@@ -379,7 +383,7 @@ export function parseOrderSummaryFromOcr(ocrData) {
     if (!rawName || rawName.length < 2) continue;
 
     const totalCandidates = row
-      .filter((word) => /^\d[\d.,]*$/.test(word.text))
+      .filter((word) => isNumericOcrToken(word.text))
       .filter((word) => ((word.x0 + word.x1) / 2) >= totalCenter - 70)
       .sort((a, b) => Math.abs(a.x1 - totalHeader.word.x1) - Math.abs(b.x1 - totalHeader.word.x1));
     const totalWord = totalCandidates[0];
