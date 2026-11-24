@@ -1,0 +1,95 @@
+/* GudangAI RUDY — input transaction controls and category cards. */
+html[data-theme="soft_light"] {
+  --in: #148a8a;
+  --out: #e8896f;
+  --damage: #d9534f;
+  --input-control-bg: #ffffff;
+  --input-control-text: #12383a;
+}
+html[data-theme="deep_ocean"] {
+  --in: #8fb8e8;
+  --out: #ffffff;
+  --damage: #f2a65a;
+  --input-control-bg: #102844;
+  --input-control-text: #ffffff;
+}
+html[data-theme="graphite_titanium"] {
+  --in: #d4af37;
+  --out: #e8ddb5;
+  --damage: #c0583f;
+  --input-control-bg: #161616;
+  --input-control-text: #f5f1e6;
+}
+.input-control-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(112px, 1fr) 48px;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--card-radius, 16px);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-card, none);
+  box-sizing: border-box;
+}
+.input-date-control { display: flex; min-width: 0; align-items: center; }
+.input-date-field, .input-entity-btn, .input-notification-btn {
+  min-height: 48px;
+  box-sizing: border-box;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: var(--input-control-bg);
+  color: var(--input-control-text);
+}
+.input-date-field { width: 100%; min-width: 0; padding: 0 12px; font-size: 14px; font-weight: 700; }
+.input-entity-control { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); min-width: 0; gap: 6px; }
+.input-entity-btn { width: 100%; padding: 0 10px; font-size: 13px; font-weight: 800; }
+.input-entity-btn.is-active { background: var(--accent); color: var(--text-on-accent); border-color: var(--accent); }
+.input-notification-btn { position: relative; display: grid; place-items: center; width: 48px; min-width: 48px; padding: 0; color: var(--accent); }
+.input-notification-badge { position: absolute; top: -5px; right: -5px; min-width: 18px; height: 18px; padding: 0 4px; display: grid; place-items: center; border-radius: 999px; border: 2px solid var(--bg-elevated); background: var(--danger); color: #ffffff; font-size: 9px; line-height: 1; font-weight: 800; }
+.input-tx-segmented { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 12px; }
+.input-tx-btn {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: 100px;
+  height: 100px;
+  padding: 10px 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--card-radius, 16px);
+  background: var(--bg-elevated);
+  color: var(--text-muted);
+  box-shadow: var(--shadow-card, none);
+  transition: transform .15s ease, background-color .15s ease, color .15s ease, border-color .15s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.input-tx-btn.tx-masuk { --tx-accent: var(--in); }
+.input-tx-btn.tx-keluar { --tx-accent: var(--out); }
+.input-tx-btn.tx-rusak { --tx-accent: var(--damage); }
+.input-tx-btn.is-active {
+  border: 2px solid var(--tx-accent);
+  background: color-mix(in srgb, var(--tx-accent) 14%, var(--bg-elevated));
+  color: var(--tx-accent);
+  box-shadow: none;
+}
+.input-tx-btn:active { transform: scale(.97); }
+.input-tx-btn:focus-visible { outline: 2px solid var(--tx-accent, var(--accent)); outline-offset: 3px; }
+.input-tx-icon { display: grid; place-items: center; width: 28px; height: 28px; color: inherit; }
+.input-tx-label { color: inherit; font-size: 12px; line-height: 1.25; font-weight: 800; text-align: center; }
+.input-tx-selected { position: absolute; top: 5px; right: 6px; color: inherit; font-size: 8px; line-height: 1; font-weight: 900; letter-spacing: .04em; }
+@media (max-width: 380px) {
+  .input-control-card { grid-template-columns: minmax(0,1fr) minmax(100px,.9fr); gap: 8px; }
+  .input-date-control { grid-column: 1; }
+  .input-entity-control { grid-column: 2; }
+  .input-notification-btn { grid-column: 2; justify-self: end; width: 48px; }
+  .input-tx-segmented { gap: 8px; }
+  .input-tx-btn { min-height: 96px; height: 96px; padding-inline: 3px; }
+  .input-tx-selected { font-size: 7px; }
+}
+@media (prefers-reduced-motion: reduce) { .input-tx-btn { transition: none; } }
