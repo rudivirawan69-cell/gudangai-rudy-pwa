@@ -24,6 +24,12 @@ function contrastRatio(foreground, background) {
   return (values[0] + 0.05) / (values[1] + 0.05);
 }
 
+function computedRgbToHex(value) {
+  const channels = String(value).match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/i);
+  assert.ok(channels, `Expected computed RGB color, received: ${value}`);
+  return `#${channels.slice(1, 4).map((channel) => Number(channel).toString(16).padStart(2, '0')).join('')}`;
+}
+
 const items = [
   { kode: 'CV-0001', nama: 'Ayam Fillet Dada', entitas: 'CV', entity: 'CV', stok: 25, stockAkhir: 25, stockAman: 20, satuan: 'Pack', divisi: 'CS' },
   { kode: 'PT-0001', nama: 'Bebek', entitas: 'PT', entity: 'PT', stok: 8, stockAkhir: 8, stockAman: 15, satuan: 'Pack', divisi: 'PRODUKSI' },
@@ -367,6 +373,40 @@ try {
         }
         if (label !== 'Lainnya') {
           await page.getByText(markerText, { exact: false }).first().waitFor({ state: 'visible', timeout: 10000 });
+        }
+        if (label === 'PO') {
+          for (const [tabLabel, panelClass, slugSuffix] of [
+            ['PO CS', 'po-recommendation-cs', 'cs'],
+            ['PO Produksi', 'po-recommendation-produksi', 'produksi'],
+          ]) {
+            await page.locator('main[data-ui-page="po"] .po-generator-tab').filter({ hasText: tabLabel }).click();
+            const panel = page.locator(`main[data-ui-page="po"] .${panelClass}`);
+            await panel.waitFor({ state: 'visible', timeout: 5000 });
+            const visual = await panel.evaluate((el) => {
+              const icon = el.querySelector('.po-recommendation-icon');
+              const style = getComputedStyle(el);
+              const iconStyle = getComputedStyle(icon);
+              return {
+                background: style.backgroundColor,
+                foreground: style.color,
+                iconBackground: iconStyle.backgroundColor,
+                iconShadow: iconStyle.boxShadow,
+                iconFilter: iconStyle.filter,
+                nestedSurfaces: el.querySelectorAll('.card,.surface,.section-card,.stock-card').length,
+              };
+            });
+            const ratio = contrastRatio(computedRgbToHex(visual.foreground), computedRgbToHex(visual.background));
+            assert.ok(ratio >= 4.5, `PO ${tabLabel} contrast below WCAG AA in ${theme}: ${ratio.toFixed(2)}:1; ${JSON.stringify(visual)}`);
+            assert.equal(visual.iconBackground, 'rgba(0, 0, 0, 0)', `PO ${tabLabel} icon tile background must be transparent in ${theme}.`);
+            assert.equal(visual.iconShadow, 'none', `PO ${tabLabel} icon must not have a shadow in ${theme}.`);
+            assert.equal(visual.iconFilter, 'none', `PO ${tabLabel} icon must not have a filter in ${theme}.`);
+            assert.equal(visual.nestedSurfaces, 0, `PO ${tabLabel} recommendation must not contain nested card surfaces in ${theme}.`);
+            await page.screenshot({
+              path: `${screenshotRoot}/${theme}-po-${slugSuffix}-${viewport.label}.png`,
+              fullPage: true,
+              animations: 'disabled',
+            });
+          }
         }
         const safeTheme = await page.evaluate(() => ({
           id: document.documentElement.dataset.theme,
