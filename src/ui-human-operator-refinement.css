@@ -1,0 +1,324 @@
+/* GUDANG69_PRODIS — Human operator visual refinement
+   A restrained, consistent surface system for daily warehouse work.
+   Presentation only: no data, workflow, auth, or navigation behavior changes. */
+
+:root {
+  --human-radius-card: 15px;
+  --human-radius-control: 10px;
+  --human-shadow-card: 0 2px 8px rgba(12, 24, 32, .055);
+  --human-shadow-raised: 0 4px 12px rgba(12, 24, 32, .09);
+  --human-motion: 160ms ease;
+  --human-content-width: 1180px;
+}
+
+html[data-theme="soft_light"] {
+  --bg-app: #f2f5f4;
+  --bg-app-grad: none;
+  --bg-elevated: #ffffff;
+  --bg-muted: #f5f7f6;
+  --text-main: #202d32;
+  --text-muted: #68777b;
+  --border: #dfe7e4;
+  --accent: #167b70;
+  --accent-strong: #11665e;
+  --accent-soft: rgba(22, 123, 112, .10);
+  --shadow-card: var(--human-shadow-card);
+  --shadow-1: var(--human-shadow-card);
+  --shadow-2: var(--human-shadow-raised);
+  --nav-bg: rgba(255,255,255,.98);
+  --nav-blur: none;
+  --focus-ring: 0 0 0 3px rgba(22,123,112,.20);
+}
+html[data-theme="deep_ocean"] {
+  --bg-app: #101b24;
+  --bg-app-grad: none;
+  --bg-elevated: #192832;
+  --bg-muted: #202f39;
+  --text-main: #edf3f4;
+  --text-muted: #afbec2;
+  --border: #344650;
+  --accent: #65b9a8;
+  --accent-strong: #83d0bf;
+  --accent-soft: rgba(101,185,168,.13);
+  --shadow-card: 0 2px 8px rgba(0,0,0,.16);
+  --shadow-1: 0 2px 8px rgba(0,0,0,.16);
+  --shadow-2: 0 5px 14px rgba(0,0,0,.22);
+  --nav-bg: rgba(25,40,50,.98);
+  --nav-blur: none;
+  --focus-ring: 0 0 0 3px rgba(101,185,168,.25);
+}
+html[data-theme="graphite_titanium"] {
+  --bg-app: #181a1e;
+  --bg-app-grad: none;
+  --bg-elevated: #23262c;
+  --bg-muted: #2b3037;
+  --text-main: #edf0f2;
+  --text-muted: #b3bbc1;
+  --border: #3d444c;
+  --accent: #91b9ad;
+  --accent-strong: #b0d2c8;
+  --accent-soft: rgba(145,185,173,.13);
+  --shadow-card: 0 2px 8px rgba(0,0,0,.18);
+  --shadow-1: 0 2px 8px rgba(0,0,0,.18);
+  --shadow-2: 0 5px 14px rgba(0,0,0,.24);
+  --nav-bg: rgba(35,38,44,.98);
+  --nav-blur: none;
+  --focus-ring: 0 0 0 3px rgba(145,185,173,.25);
+}
+
+/* Remove decorative atmospheric layers. Keep the page calm and legible. */
+html[data-theme] .app-bg {
+  background: var(--bg-app) !important;
+  background-image: none !important;
+}
+html[data-theme] .app-bg::before,
+html[data-theme] .app-bg::after {
+  content: none !important;
+  display: none !important;
+}
+html[data-theme] .app-shell {
+  background: transparent;
+  color: var(--text-main);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  letter-spacing: normal;
+  font-synthesis: none;
+}
+html[data-theme] .app-content {
+  width: 100%;
+  max-width: var(--human-content-width);
+  margin-inline: auto;
+  padding-top: 12px;
+}
+html[data-theme] .app-content :is(h1,h2,h3) {
+  color: var(--text-main);
+  letter-spacing: -.025em;
+  text-shadow: none !important;
+}
+html[data-theme] .app-content :is(p,small,label) {
+  text-shadow: none !important;
+}
+
+/* One consistent card language: solid surfaces, fine borders, restrained elevation. */
+html[data-theme] .app-content :is(
+  .dashboard-panel,.dashboard-total-card,.dashboard-po-card,.dashboard-3d-card,
+  .dashboard-quick-card,.stock-card,.stock-metric-surface,.sk-entity-block,
+  .sk-filter-block,.sk-sheet,.rw-row,.rw-audit-detail,.po-hub-grid > *,
+  .settings-profile-summary,.settings-profile-editor,.settings-auth-card,
+  .settings-theme-card,.ops-card,.ops-notes-card
+) {
+  border-radius: var(--human-radius-card) !important;
+  border: 1px solid var(--border) !important;
+  box-shadow: var(--human-shadow-card) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  background-image: none !important;
+}
+html[data-theme] .app-content :is(
+  .dashboard-panel,.dashboard-total-card,.dashboard-po-card,.dashboard-3d-card,
+  .dashboard-quick-card,.stock-card,.stock-metric-surface,.sk-entity-block,
+  .sk-filter-block,.sk-sheet,.rw-row,.rw-audit-detail,.po-hub-grid > *,
+  .settings-profile-summary,.settings-profile-editor,.settings-theme-card,
+  .ops-card,.ops-notes-card
+) {
+  background-color: var(--bg-elevated) !important;
+  color: var(--text-main) !important;
+}
+html[data-theme] .app-content :is(
+  .dashboard-panel,.dashboard-total-card,.dashboard-po-card,.dashboard-3d-card,
+  .dashboard-quick-card,.stock-card,.stock-metric-surface,.sk-entity-block,
+  .sk-filter-block,.rw-row,.po-hub-grid > *
+):hover {
+  transform: none;
+  box-shadow: var(--human-shadow-card) !important;
+}
+html[data-theme] .app-content :is(.dashboard-panel,.dashboard-total-card,.dashboard-po-card) {
+  padding: clamp(14px, 2.4vw, 20px);
+}
+html[data-theme] .app-content .dashboard-overview-grid {
+  gap: 12px !important;
+}
+html[data-theme] .app-content .dashboard-overview-grid > .dashboard-panel {
+  min-width: 0;
+}
+html[data-theme] .app-content .dashboard-chart-wrap {
+  border-radius: 12px !important;
+  box-shadow: none !important;
+}
+
+/* Keep hierarchy typographic, not dependent on oversized gradients or decorative badges. */
+html[data-theme] .app-content :is(.page-title,.dashboard-panel h2,.dashboard-total-card h2) {
+  font-size: clamp(1rem, 2.8vw, 1.15rem);
+  font-weight: 720;
+  line-height: 1.3;
+}
+html[data-theme] .app-content :is(.page-subtitle,.dashboard-panel > p,.dashboard-total-card .text-slate-500) {
+  color: var(--text-muted) !important;
+  line-height: 1.5;
+}
+html[data-theme] .app-content .dashboard-icon-badge {
+  box-shadow: none !important;
+  filter: none !important;
+}
+
+/* Controls feel like physical controls: clear state, modest corners, no exaggerated bounce. */
+html[data-theme] .app-content :is(button,a,[role="button"],input,select,textarea) {
+  transition:
+    background-color var(--human-motion),
+    border-color var(--human-motion),
+    color var(--human-motion),
+    box-shadow var(--human-motion),
+    transform var(--human-motion);
+}
+html[data-theme] .app-content :is(button,input,select,textarea) {
+  border-radius: var(--human-radius-control);
+}
+html[data-theme] .app-content :is(button,a,[role="button"]):focus-visible,
+html[data-theme] .app-content :is(input,select,textarea):focus-visible {
+  outline: 2px solid var(--accent) !important;
+  outline-offset: 2px;
+  box-shadow: var(--focus-ring) !important;
+}
+html[data-theme] .app-content :is(button,a,[role="button"]):active {
+  transform: translateY(1px);
+}
+html[data-theme] .app-content :is(input,select,textarea) {
+  background: var(--bg-elevated) !important;
+  color: var(--text-main) !important;
+  border-color: var(--border) !important;
+  box-shadow: none !important;
+}
+html[data-theme] .app-content :is(input,select,textarea)::placeholder {
+  color: var(--text-muted) !important;
+  opacity: .82;
+}
+
+/* Input: make the three transaction choices unmistakable without decorative shine. */
+html[data-theme] .input-tx-btn,
+html[data-theme] .input-tx-segmented .input-tx-btn {
+  min-height: 88px;
+  border: 1px solid var(--border) !important;
+  border-radius: 14px !important;
+  background: var(--bg-elevated) !important;
+  color: var(--text-main) !important;
+  box-shadow: none !important;
+}
+html[data-theme] .input-tx-btn .input-tx-icon {
+  box-shadow: none !important;
+  filter: none !important;
+}
+html[data-theme] .input-tx-btn[aria-pressed="true"],
+html[data-theme] .input-tx-selected {
+  border: 2px solid var(--accent) !important;
+  background: var(--accent-soft) !important;
+  color: var(--text-main) !important;
+  box-shadow: inset 0 0 0 1px var(--accent-soft) !important;
+}
+html[data-theme] .input-tx-btn[aria-pressed="true"] .input-tx-icon {
+  background: var(--accent) !important;
+  color: #fff !important;
+}
+html[data-theme] .input-tx-label {
+  font-weight: 700;
+  letter-spacing: -.01em;
+}
+
+/* Stok and history: prioritize rows, SKU and quantities over ornament. */
+html[data-theme] .sk-page,
+html[data-theme] .rw-page {
+  color: var(--text-main);
+}
+html[data-theme] .sk-page .sk-head,
+html[data-theme] .rw-page .rw-head {
+  margin-bottom: 14px;
+}
+html[data-theme] .sk-page .sk-item-list,
+html[data-theme] .rw-page .rw-row {
+  border-color: var(--border) !important;
+}
+html[data-theme] .sk-page .sk-item-nama,
+html[data-theme] .rw-page .rw-main {
+  color: var(--text-main) !important;
+  font-weight: 650;
+}
+html[data-theme] .sk-page .sk-item-kode,
+html[data-theme] .rw-page .rw-sub,
+html[data-theme] .rw-page .rw-ket {
+  color: var(--text-muted) !important;
+}
+
+/* PO and settings: simple grouped lists instead of nested glass cards. */
+html[data-theme] .po-hub-grid {
+  gap: 12px !important;
+}
+html[data-theme] .settings-page .settings-menu-list {
+  gap: 0 !important;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--human-radius-card);
+  background: var(--bg-elevated);
+}
+html[data-theme] .settings-page .settings-menu-list .menu-row,
+html[data-theme] .settings-page .settings-menu-list .settings-menu-row {
+  border-radius: 0 !important;
+  border-bottom: 1px solid var(--border);
+  box-shadow: none !important;
+}
+html[data-theme] .settings-page .settings-menu-list :is(.menu-row,.settings-menu-row):last-child {
+  border-bottom: 0;
+}
+
+/* Header and bottom navigation: opaque, stable, and visually quiet. */
+html[data-theme] .app-header-card {
+  background: var(--bg-elevated) !important;
+  border-color: var(--border) !important;
+  box-shadow: 0 1px 4px rgba(0,0,0,.06) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+html[data-theme] .app-header-card h1 {
+  color: var(--text-main) !important;
+  letter-spacing: .015em;
+}
+html[data-theme] .app-header-card .app-sync-status {
+  color: var(--text-muted) !important;
+}
+html[data-theme] .nav-bar {
+  background: var(--nav-bg) !important;
+  border-top: 1px solid var(--border) !important;
+  box-shadow: 0 -2px 8px rgba(0,0,0,.055) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+html[data-theme] .nav-btn.is-active .nav-icon-wrap {
+  background: var(--accent-soft) !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+html[data-theme] .nav-fab-btn {
+  box-shadow: 0 3px 8px rgba(0,0,0,.14) !important;
+  filter: none !important;
+}
+html[data-theme] .nav-fab-btn.is-active {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 10px rgba(0,0,0,.18) !important;
+}
+
+/* Preserve status semantics; soften decorative glows only. */
+html[data-theme] .app-content :is(.ops-icon-amber,.ops-icon-emerald,.ops-icon-indigo,.ops-icon-sky) {
+  box-shadow: none !important;
+  filter: none !important;
+}
+html[data-theme] .app-content :is(.dashboard-status-tile,.sk-alert,.rw-alert) {
+  box-shadow: none !important;
+}
+
+/* Respect operator motion preferences. */
+@media (prefers-reduced-motion: reduce) {
+  html[data-theme] .app-content *,
+  html[data-theme] .nav-bar * {
+    scroll-behavior: auto !important;
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+}
