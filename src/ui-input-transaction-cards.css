@@ -1,8 +1,8 @@
 /* GudangAI RUDY — input transaction controls and category cards. */
 html[data-theme="soft_light"] {
-  --in: #148a8a;
-  --out: #e8896f;
-  --damage: #d9534f;
+  --in: #0b7070;
+  --out: #a94e37;
+  --damage: #b32d2a;
   --input-control-bg: #ffffff;
   --input-control-text: #12383a;
 }
@@ -16,7 +16,7 @@ html[data-theme="deep_ocean"] {
 html[data-theme="graphite_titanium"] {
   --in: #d4af37;
   --out: #e8ddb5;
-  --damage: #c0583f;
+  --damage: #e17a5e;
   --input-control-bg: #161616;
   --input-control-text: #f5f1e6;
 }
