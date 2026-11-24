@@ -684,20 +684,28 @@ function findFuzzyMasterMatch(entity, rawName, master) {
   return { item: best.item, matchType: 'fuzzy-ocr', score: best.score };
 }
 
-export function filterPdfMasterForEntity(entity, masterList) {
+export function filterPdfMasterForEntity(entity, masterList, includeRawMaterials = false) {
   const ent = String(entity || '').trim().toUpperCase() === 'CV' ? 'CV' : 'PT';
   const source = Array.isArray(masterList) ? masterList : [];
   return source.filter((item) => {
     const kode = String(item?.kode || item?.kodeBarang || '').trim().toUpperCase();
-    if (ent === 'CV') return /^(?:CV|BBCV)-\d{3,4}$/.test(kode);
-    return /^(?:PT|WK|MM|BBPT)-\d{3,4}$/.test(kode);
+    const divisi = String(item?.divisi || item?.division || '').trim().toUpperCase().replace(/\s+/g, ' ');
+    if (ent === 'CV') {
+      if (includeRawMaterials) return /^(?:CV|BBCV)-\d{3,4}$/.test(kode);
+      // Preserve the established PDF rule: ordinary PDF/paste imports cannot emit BBCV/BBPT.
+      return /^CV-/.test(kode) && divisi !== 'BAHAN BAKU' && !/^(?:BBCV|BBPT)-/.test(kode);
+    }
+    // PT validation may need to disambiguate finished goods against BBPT stock.
+    // Keep BBPT candidates visible for manual selection when the product name is similar.
+    return /^(?:PT|WK|MM|BBPT)-/.test(kode) && (divisi !== 'BAHAN BAKU' || /^BBPT-/.test(kode));
   });
 }
 
-export function validatePdfItems(entity, textOrItems, masterOverride) {
+export function validatePdfItems(entity, textOrItems, masterOverride, options = {}) {
   const selectedEntity = String(entity || '').trim().toUpperCase() === 'CV' ? 'CV' : 'PT';
+  const includeRawMaterials = options?.includeRawMaterials === true;
   const sourceMaster = Array.isArray(masterOverride) ? masterOverride : (getMasterByEntity(selectedEntity) || []);
-  const master = filterPdfMasterForEntity(selectedEntity, sourceMaster);
+  const master = filterPdfMasterForEntity(selectedEntity, sourceMaster, includeRawMaterials);
   const allowedCodes = new Set(master.map((item) => String(item?.kode || item?.kodeBarang || '').trim().toUpperCase()));
   const items = Array.isArray(textOrItems) ? textOrItems : parsePdfLinesToItems(textOrItems);
   const results = [];
@@ -708,33 +716,64 @@ export function validatePdfItems(entity, textOrItems, masterOverride) {
     const qty = Number(it.qty) || 0;
     if (!rawNameOriginal || qty <= 0) continue;
 
+    const explicitRawCode = rawNameOriginal.match(/\b(BBCV|BBPT)[\s-]?(\d{3,4})\b/i);
     let match = null;
     let status = 'matched';
     let note = '';
-    // CV master includes CV + BBCV; PT master includes PT + WK + MM + BBPT.
-    // Only exact/alias/deterministic/fuzzy candidates present in that entity's
-    // authoritative master may be emitted. No cross-entity or invented codes.
-    const deterministic = resolvePdfNameDeterministic(selectedEntity, rawNameOriginal, master);
-    if (deterministic) {
-      match = deterministic.item || deterministic;
-      note = deterministic.matchType || 'deterministic';
-    }
-    if (!match) {
-      const aliasResult = matchByAlias(selectedEntity, sanitizePdfProductName(rawNameOriginal));
-      if (aliasResult) {
-        const aliasItem = aliasResult.item || aliasResult;
-        const aliasKode = String(aliasItem?.kode || aliasItem?.kodeBarang || '').trim().toUpperCase();
-        if (aliasKode && allowedCodes.has(aliasKode)) {
-          match = aliasResult;
-          note = aliasResult.matchType || 'alias';
-        }
+
+    if (!includeRawMaterials && explicitRawCode) {
+      status = 'unmatched';
+      note = 'upload PDF tidak boleh menghasilkan kode bahan baku';
+    } else {
+      let exactRawName = null;
+      if (!includeRawMaterials) {
+        // Prevent a short raw-material name (e.g. "Ayam Negeri" or "Bebek")
+        // from being substring/fuzzy-matched to a different finished-goods SKU.
+        const cleanNameForRawCheck = normalizeMatchText(rawNameOriginal)
+          .replace(/\b(?:bahan\s+baku|raw\s+material)\b/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim();
+        exactRawName = sourceMaster.find((item) => {
+          const kode = String(item?.kode || item?.kodeBarang || '').trim().toUpperCase();
+          const divisi = String(item?.divisi || item?.division || '').trim().toUpperCase().replace(/\s+/g, ' ');
+          const isRawMaterial = /^(?:BBCV|BBPT)-/.test(kode) || divisi === 'BAHAN BAKU';
+          const masterName = normalizeMatchText(item?.nama || item?.namaBarang || '')
+            .replace(/\b(?:bahan\s+baku|raw\s+material)\b/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+          return isRawMaterial && masterName && masterName === cleanNameForRawCheck;
+        });
       }
-    }
-    if (!match) {
-      const fuzzy = findFuzzyMasterMatch(selectedEntity, rawNameOriginal, master);
-      if (fuzzy) {
-        match = fuzzy;
-        note = fuzzy.matchType;
+
+      if (exactRawName) {
+        status = 'unmatched';
+        note = 'nama bahan baku hanya valid melalui kode BBCV/BBPT eksplisit';
+      } else {
+        const deterministic = resolvePdfNameDeterministic(selectedEntity, rawNameOriginal, master);
+        if (deterministic) {
+          match = deterministic.item || deterministic;
+          note = deterministic.matchType || 'deterministic';
+        }
+
+        if (!match) {
+          const aliasResult = matchByAlias(selectedEntity, sanitizePdfProductName(rawNameOriginal));
+          if (aliasResult) {
+            const aliasItem = aliasResult.item || aliasResult;
+            const aliasKode = String(aliasItem?.kode || aliasItem?.kodeBarang || '').trim().toUpperCase();
+            if (aliasKode && allowedCodes.has(aliasKode)) {
+              match = aliasResult;
+              note = aliasResult.matchType || 'alias';
+            }
+          }
+        }
+
+        if (!match) {
+          const fuzzy = findFuzzyMasterMatch(selectedEntity, rawNameOriginal, master);
+          if (fuzzy) {
+            match = fuzzy;
+            note = fuzzy.matchType;
+          }
+        }
       }
     }
 
@@ -743,7 +782,16 @@ export function validatePdfItems(entity, textOrItems, masterOverride) {
       note = 'tidak cocok master';
     }
 
-    // Entity-scoped master filtering above is the final code allow-list.
+    // Final fail-closed guard: ordinary PDF/paste paths cannot emit raw-material SKU.
+    const candidate = match?.kode ? match : (match?.item || null);
+    const candidateCode = String(candidate?.kode || candidate?.kodeBarang || '').trim().toUpperCase();
+    if (/^(?:BBCV|BBPT)-\d{3,4}$/.test(candidateCode)) {
+      if (!includeRawMaterials) {
+        match = null;
+        status = 'unmatched';
+        note = 'upload PDF tidak boleh menghasilkan kode bahan baku';
+      }
+    }
     const masterItem = match?.kode ? match : (match?.item || null);
     const kode = masterItem?.kode || match?.kode || null;
     results.push({
@@ -776,8 +824,8 @@ export function parseLinesFromText(text, _lines = []) {
   }));
 }
 
-export function validateItems(rows, entity) {
-  const results = validatePdfItems(entity, rows);
+export function validateItems(rows, entity, options = {}) {
+  const results = validatePdfItems(entity, rows, undefined, options);
   const matched = [], ambiguous = [], unmatched = [];
   for (const r of results) {
     const base = { ...r, name: r.nama || r.rawName, nameFromPdf: r.rawName, qty: r.qty };
