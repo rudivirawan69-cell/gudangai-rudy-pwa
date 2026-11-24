@@ -327,7 +327,14 @@ export function parseOrderSummaryFromOcr(ocrData) {
     const centerY = row.reduce((sum, word) => sum + ((word.y0 + word.y1) / 2), 0) / row.length;
     return centerY > headerY + 2;
   });
-  const numericWords = bodyRows.flatMap((row) => row.filter((word) => /^\d[\d.,]*$/.test(word.text)));
+  const nameHeaderWords = headerRow.filter((word) => /^(?:nama|barang|item|produk)$/i.test(word.text.replace(/[^a-z]/gi, '')));
+  const nameHeaderRight = nameHeaderWords.length
+    ? Math.max(...nameHeaderWords.map((word) => word.x1))
+    : null;
+  const numericWords = bodyRows.flatMap((row) => row.filter((word) =>
+    /^\d[\d.,]*$/.test(word.text) &&
+    (nameHeaderRight == null || ((word.x0 + word.x1) / 2) > nameHeaderRight + 18)
+  ));
   const numericColumns = [];
   for (const word of numericWords) {
     const center = (word.x0 + word.x1) / 2;
@@ -343,9 +350,21 @@ export function parseOrderSummaryFromOcr(ocrData) {
   const repeatedColumns = numericColumns
     .filter((column) => column.rows.size >= Math.min(2, bodyRows.length))
     .sort((a, b) => a.x - b.x);
+  const onePageFirstNumeric = numericWords
+    .map((word) => (word.x0 + word.x1) / 2)
+    .filter((x) => x < totalCenter - 70)
+    .sort((a, b) => a - b)[0];
   const firstQtyColumnX = repeatedColumns[0]?.x
-    ?? Math.min(...numericWords.map((word) => (word.x0 + word.x1) / 2).filter((x) => x < totalCenter - 70), totalCenter - 80);
-  const nameBoundary = Number.isFinite(firstQtyColumnX) ? firstQtyColumnX - 14 : totalHeader.word.x0 - 100;
+    ?? (nameHeaderRight != null ? onePageFirstNumeric : null);
+  if (!Number.isFinite(firstQtyColumnX)) {
+    return {
+      ok: false,
+      error: 'Kolom nama barang atau batas kolom angka tidak cukup jelas. Foto ditahan agar angka outlet tidak salah dibaca.',
+      items: [],
+      issues: [],
+    };
+  }
+  const nameBoundary = firstQtyColumnX - 14;
 
   const items = [];
   const issues = [];
@@ -354,7 +373,7 @@ export function parseOrderSummaryFromOcr(ocrData) {
     const rowText = row.map((word) => word.text).join(' ').replace(/\s+/g, ' ').trim();
     if (!rowText || /^(?:total|grand total|subtotal|sub total|jumlah|keterangan|catatan)\b/i.test(rowText)) continue;
 
-    const nameWords = row.filter((word) => word.x0 < nameBoundary && !/^\d[\d.,]*$/.test(word.text));
+    const nameWords = row.filter((word) => word.x0 < nameBoundary);
     const rawName = cleanRekapProductName(nameWords.map((word) => word.text).join(' '));
     if (!rawName || rawName.length < 2) continue;
 
