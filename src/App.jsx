@@ -302,7 +302,7 @@ function AppShell() {
       <ConnBanner hasUrl={hasUrl} status={status} message={message} />
       <AppHeader user={user} tab={tab} onOpenSettings={() => goTab('settings')} online={online} hasUrl={hasUrl} status={status} syncing={syncing} sheetLabel={sheetLabel} onRefresh={() => Promise.allSettled([checkHealth({ quiet: false }), getDashboardData()])} />
       <InstallBanner installPrompt={installPrompt} onInstall={installApp} onDismiss={dismissInstall} />
-      <main data-ui-page={tab} className="page-content app-content w-full max-w-none mx-0 min-h-0 px-3 pb-32 pt-1">
+      <main data-ui-page={tab} className="page-content app-content w-full max-w-none mx-0 min-h-0 px-3 pb-6 pt-1">
         <div key={pageKey} className="animate-page-in">
           <ErrorBoundary>
             <Suspense fallback={<div className="flex justify-center py-20"><Loader2 className="w-7 h-7 text-cyan-500 animate-spin" /></div>}>
