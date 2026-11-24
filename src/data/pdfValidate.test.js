@@ -122,12 +122,19 @@ describe('photo recap TOTAL-column extraction', () => {
 
 describe('entity-scoped source master includes raw materials', () => {
   it('maps CV bahan baku from BBCV master', () => {
-    const result = validatePdfItems('CV', [{ rawName: 'Bonelles Dada', qty: 4 }]);
+    const result = validatePdfItems('CV', [{ rawName: 'Bonelles Dada', qty: 4 }], undefined, { includeRawMaterials: true });
     expect(result[0]).toMatchObject({ status: 'matched', kode: 'BBCV-0001' });
   });
 
-  it('maps PT bahan baku from BBPT master', () => {
+
+  it('keeps ordinary PDF imports blocked from raw-material SKUs', () => {
     const result = validatePdfItems('PT', [{ rawName: 'Bebek', qty: 2 }]);
+    expect(result[0]).toMatchObject({ status: 'unmatched', kode: null });
+    expect(result[0].note).toMatch(/bahan baku/i);
+  });
+
+  it('maps PT bahan baku from BBPT master', () => {
+    const result = validatePdfItems('PT', [{ rawName: 'Bebek', qty: 2 }], undefined, { includeRawMaterials: true });
     expect(result[0]).toMatchObject({ status: 'matched', kode: 'BBPT-0012' });
   });
 });
