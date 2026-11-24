@@ -292,6 +292,7 @@ function cleanRekapProductName(value) {
     .replace(/\([^)]*\)/g, ' ')
     .replace(/\[[^\]]*\]/g, ' ')
     .replace(/\s*\/.*$/g, ' ')
+    .replace(/\s+\d+(?:[.,]\d+)?\s*(?:pcs?|pack|pail|kg|gram|gr|liter|ml)\b.*$/i, ' ')
     .replace(/\s{2,}/g, ' ')
     .replace(/^[\s:;|.-]+|[\s:;|.-]+$/g, '')
     .trim());
