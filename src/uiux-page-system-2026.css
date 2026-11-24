@@ -64,7 +64,7 @@ html[data-theme] .app-header-card {
   box-shadow: 0 8px 24px rgba(8,28,46,.08) !important;
 }
 html[data-theme] .app-header-card h1 { font-size: 13px !important; letter-spacing: .11em !important; }
-html[data-theme] .page-content { max-width: 920px !important; margin-inline: auto !important; padding: 12px 15px calc(100px + env(safe-area-inset-bottom)) !important; }
+html[data-theme] .page-content { max-width: 920px !important; margin-inline: auto !important; padding: 12px 15px 24px !important; }
 html[data-theme] .page-content > div { display: grid; gap: 15px; }
 html[data-theme] .page-content :is(.card,.surface,.section-card,.stat-tile,.stock-card,.dashboard-panel,.dashboard-total-card,.dashboard-po-card,.dashboard-header-card,.menu-group,.po-hub-card,.po-item-card,.stock-metric-surface,.division-status-card,.ops-card,.ops-notes-card) {
   border: 1px solid var(--ux-line) !important; border-radius: var(--ux-radius-lg) !important;
