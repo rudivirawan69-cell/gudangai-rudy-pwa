@@ -70,7 +70,7 @@ describe('GudangAI Metode C UI contract', () => {
     expect(css).toContain('[data-ui-page="dashboard"] .dashboard-chart-wrap > .relative.h-36');
   });
 
-  it('uses the approved GUDANG69_PRODIS sticky header brand', () => {
+  it('enforces the GUDANG69_PRODIS sticky header brand contract', () => {
     const app = readFileSync(appPath, 'utf8');
     expect(app).toContain('GUDANG69_PRODIS');
     expect(app).not.toContain('GUDANG-69 RUDI');
