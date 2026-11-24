@@ -109,3 +109,14 @@ describe('entity-scoped source master includes raw materials', () => {
     expect(result[0]).toMatchObject({ status: 'matched', kode: 'BBPT-0012' });
   });
 });
+
+describe('document entity detection ignores product supplier suffixes', () => {
+  it('does not mistake CV. PD3 CHICKEN supplier labels for the PT document entity', () => {
+    const text = [
+      'PT. Rasyuka',
+      '1 Ayam Fillet Dada / CV. PD3 CHICKEN 400.00',
+      '2 Ayam Fillet Paha / CV. PD3 CHICKEN 250.00',
+    ].join('\\n');
+    expect(detectEntityFromText(text)).toBe('PT');
+  });
+});
