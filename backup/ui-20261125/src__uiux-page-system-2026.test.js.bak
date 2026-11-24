@@ -1,0 +1,131 @@
+import { existsSync, readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { describe, expect, it } from 'vitest';
+
+const cssPath = resolve(process.cwd(), 'src/uiux-page-system-2026.css');
+const mainPath = resolve(process.cwd(), 'src/main.jsx');
+const appPath = resolve(process.cwd(), 'src/App.jsx');
+const themePath = resolve(process.cwd(), 'src/hooks/useTheme.jsx');
+const stockPagePath = resolve(process.cwd(), 'src/pages/StokPage.jsx');
+const stockCssPath = resolve(process.cwd(), 'src/pages/stok.css');
+
+describe('GudangAI Metode C UI contract', () => {
+  it('includes a dedicated page-scoped visual stylesheet', () => {
+    expect(existsSync(cssPath)).toBe(true);
+    if (!existsSync(cssPath)) return;
+    const css = readFileSync(cssPath, 'utf8');
+    for (const page of ['dashboard', 'stok', 'input', 'po', 'riwayat', 'ai', 'settings', 'sync']) {
+      expect(css).toContain(`[data-ui-page="${page}"]`);
+    }
+  });
+
+  it('defines all three official themes', () => {
+    if (!existsSync(cssPath)) return;
+    const css = readFileSync(cssPath, 'utf8');
+    for (const theme of ['soft_light', 'deep_ocean', 'graphite_titanium']) {
+      expect(css).toContain(`html[data-theme="${theme}"]`);
+    }
+  });
+
+  it('keeps Graphite Titanium on the approved cyan and indigo palette, not gold', () => {
+    if (!existsSync(cssPath)) return;
+    const css = readFileSync(cssPath, 'utf8');
+    const graphite = css.match(/html\[data-theme="graphite_titanium"\]\s*\{([^}]+)\}/)?.[1] || '';
+    expect(graphite).toMatch(/--ux-accent:\s*#6366f1/i);
+    expect(graphite).toMatch(/--ux-accent-secondary:\s*#06b6d4/i);
+    expect(graphite).not.toMatch(/#d6a45b|#c6ae87|214,164,91|198,174,135/i);
+  });
+
+  it('loads the visual stylesheet from the application entry point', () => {
+    const main = readFileSync(mainPath, 'utf8');
+    expect(main).toContain("import './uiux-page-system-2026.css'");
+  });
+
+  it('marks the active tab on the main page container without changing routing', () => {
+    const app = readFileSync(appPath, 'utf8');
+    expect(app).toContain('<main data-ui-page={tab}');
+    for (const tab of ["'dashboard'", "'stok'", "'input'", "'po'", "'ai'", "'riwayat'", "'settings'", "'sync'"]) {
+      expect(app).toContain(`case ${tab}`);
+    }
+  });
+  it('uses the approved cyan-indigo palette in Graphite runtime tokens and metadata', () => {
+    const css = readFileSync(cssPath, 'utf8');
+    const theme = readFileSync(themePath, 'utf8');
+    const graphite = css.split('html[data-theme="graphite_titanium"]')[1]?.split('}')[0] || '';
+    expect(graphite).toContain('--accent: #6366f1');
+    expect(graphite).toContain('--brand-teal: #6366f1');
+    expect(graphite).toContain('--brand-orange: #06b6d4');
+    expect(theme).toContain("description: 'Graphite · Cyan · Indigo — industrial premium'");
+    expect(theme).toContain("graphite_titanium: '#6366f1'");
+  });
+
+  it('provides dark, readable surfaces for Agent chat and Dashboard chart', () => {
+    const css = readFileSync(cssPath, 'utf8');
+    expect(css).toContain('[data-ui-page="ai"] .max-w-4xl > :is(header,div.relative,form)');
+    expect(css).toContain('[data-ui-page="ai"] .max-w-4xl .bg-white');
+    expect(css).toContain('html[data-theme] [data-ui-page="ai"] .max-w-4xl > .relative {\n  width: 100%; max-width: 100%; min-width: 0;');
+    expect(css).toContain('html[data-theme] [data-ui-page="ai"] [role="log"] > .m-auto {\n  width: 100%');
+    expect(css).toContain('html[data-theme="graphite_titanium"] .home-agent-card');
+    expect(css).toContain('background: linear-gradient(145deg,var(--accent),var(--accent-strong)) !important;');
+    expect(css).toContain('[data-ui-page="dashboard"] .dashboard-chart-wrap > .relative.h-36');
+  });
+
+  it('enforces the GUDANG69_PRODIS sticky header brand contract', () => {
+    const app = readFileSync(appPath, 'utf8');
+    expect(app).toContain('GUDANG69_PRODIS');
+    expect(app).not.toContain('GUDANG-69 RUDI');
+  });
+
+  it('renders entity-filtered inventory as compact status-coded item cards', () => {
+    const page = readFileSync(stockPagePath, 'utf8');
+    const css = readFileSync(stockCssPath, 'utf8');
+    expect(page).toContain('className="sk-item-list"');
+    expect(page).toContain('className="sk-item-metrics"');
+    expect(page).toContain('Sisa stok');
+    expect(page).toContain('Stok aman');
+    expect(page).toContain('{ENTITAS.map((e) => (');
+    expect(page).toContain('terfilter.slice(0, limit).map((it) => (');
+    expect(page).not.toContain('className="sk-desktop-table-wrap"');
+    expect(css).toContain('grid-template-columns:repeat(3,minmax(0,1fr))');
+    expect(css).toContain('content-visibility:auto; contain-intrinsic-size:0 96px;');
+    expect(css).toContain('border-left:4px solid var(--sk-mut)');
+    expect(css).toContain('var(--stok-kritis)');
+    expect(css).toContain('var(--stok-waspada)');
+    expect(css).toContain('var(--stok-aman)');
+  });
+
+  it('keeps bottom navigation flush to the viewport and reserves content space', () => {
+    const css = readFileSync(cssPath, 'utf8');
+    const app = readFileSync(appPath, 'utf8');
+    expect(css).toContain('bottom:0 !important;');
+    expect(css).toContain('padding-bottom:env(safe-area-inset-bottom,0px) !important;');
+    expect(css).toContain('width:44px !important; height:44px !important;');
+    expect(css).toContain('padding-bottom:calc(84px + env(safe-area-inset-bottom,0px)) !important;');
+    expect(app).toContain('className="nav-bar fixed bottom-0 left-0 right-0 safe-bottom z-40"');
+  });
+
+  it('removes duplicate dashboard and page helper headings while keeping the primary titles', () => {
+    const dashboard = readFileSync(resolve(process.cwd(), 'src/pages/DashboardPage.jsx'), 'utf8');
+    const stock = readFileSync(stockPagePath, 'utf8');
+    const po = readFileSync(resolve(process.cwd(), 'src/pages/POPage.jsx'), 'utf8');
+    expect(dashboard).not.toContain('Status Stok · per Divisi');
+    expect(dashboard).not.toContain('Status PO · Purchase Order');
+    expect(dashboard).toContain('Status per Divisi');
+    expect(dashboard).toContain('Status PO</span>');
+    expect(stock).toContain('<h1>Stok barang</h1>');
+    expect(stock).not.toContain('sk-head-subtitle');
+    expect(po).toContain('Purchase order</h2>');
+    expect(po).not.toContain("'Generate, pantau, dan konfirmasi PO'");
+  });
+
+  it('uses a single shared surface for settings menu rows instead of nested cards', () => {
+    const settings = readFileSync(resolve(process.cwd(), 'src/pages/SettingsPage.jsx'), 'utf8');
+    const css = readFileSync(cssPath, 'utf8');
+    expect(settings).toContain('className="settings-menu-list"');
+    expect(settings).toContain('settings-menu-logout');
+    expect(settings).not.toContain('<div className="card overflow-hidden">');
+    expect(css).toContain('.settings-menu-list .settings-menu-row + .settings-menu-row');
+    expect(css).toContain('min-height:46px; padding-block:6px !important;');
+  });
+
+});
