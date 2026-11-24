@@ -824,3 +824,67 @@ html[data-theme="warm_productive"] .page-content :is(.page-header, .section-card
     animation: none !important;
   }
 }
+
+
+/* ── Input TX type cards (Masuk / Keluar / Rusak) — clear selection, soft contrast, theme-aware ── */
+.input-tx-segmented { width: 100%; }
+.input-tx-btn {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 0.4rem; min-height: 5.25rem; padding: 0.85rem 0.5rem;
+  border-radius: 1rem; border: 1.5px solid var(--line, #e1eaec);
+  background: var(--surface, #fff); color: var(--ink, #10232b);
+  box-shadow: 0 2px 8px rgba(16, 55, 64, 0.05);
+  transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, color 0.18s ease, transform 0.16s var(--ease-out, cubic-bezier(0.22, 1, 0.36, 1));
+  -webkit-tap-highlight-color: transparent;
+}
+.input-tx-btn:active { transform: scale(0.97); }
+.input-tx-icon {
+  width: 2.35rem; height: 2.35rem; border-radius: 0.75rem;
+  display: grid; place-items: center; border: 1px solid transparent;
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.18s ease;
+}
+.input-tx-label { font-size: 0.75rem; font-weight: 700; letter-spacing: 0.01em; line-height: 1.2; }
+
+/* Soft accents (default light) */
+.input-tx-btn.tx-masuk .input-tx-icon { background: #ecfdf5; border-color: #a7f3d0; color: #047857; }
+.input-tx-btn.tx-keluar .input-tx-icon { background: #ecfeff; border-color: #a5f3fc; color: #0e7490; }
+.input-tx-btn.tx-rusak .input-tx-icon { background: #fff1f2; border-color: #fecdd3; color: #be123c; }
+
+/* Active: soft fill + ring (no solid flash) */
+.input-tx-btn.is-active { border-width: 2px; box-shadow: 0 0 0 3px rgba(8, 145, 178, 0.12), 0 4px 12px rgba(16, 55, 64, 0.08); }
+.input-tx-btn.tx-masuk.is-active { background: #ecfdf5; border-color: #10b981; color: #065f46; box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.18), 0 4px 12px rgba(16, 55, 64, 0.08); }
+.input-tx-btn.tx-masuk.is-active .input-tx-icon { background: #d1fae5; border-color: #6ee7b7; color: #047857; }
+.input-tx-btn.tx-keluar.is-active { background: #ecfeff; border-color: #06b6d4; color: #0e7490; box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.18), 0 4px 12px rgba(16, 55, 64, 0.08); }
+.input-tx-btn.tx-keluar.is-active .input-tx-icon { background: #cffafe; border-color: #67e8f9; color: #0e7490; }
+.input-tx-btn.tx-rusak.is-active { background: #fff1f2; border-color: #f43f5e; color: #9f1239; box-shadow: 0 0 0 3px rgba(244, 63, 94, 0.16), 0 4px 12px rgba(16, 55, 64, 0.08); }
+.input-tx-btn.tx-rusak.is-active .input-tx-icon { background: #ffe4e6; border-color: #fda4af; color: #be123c; }
+
+/* Theme overrides */
+html[data-theme="deep_ocean"] .input-tx-btn,
+html[data-theme="ocean_glass"] .input-tx-btn {
+  background: rgba(22, 50, 79, 0.85); border-color: rgba(56, 189, 248, 0.28); color: #e2e8f0;
+  box-shadow: 4px 4px 12px rgba(3, 10, 18, 0.35), -2px -2px 8px rgba(26, 58, 88, 0.25);
+}
+html[data-theme="deep_ocean"] .input-tx-btn .input-tx-icon,
+html[data-theme="ocean_glass"] .input-tx-btn .input-tx-icon {
+  background: rgba(15, 40, 65, 0.9); border-color: rgba(56, 189, 248, 0.25); color: #7dd3fc;
+}
+html[data-theme="deep_ocean"] .input-tx-btn.tx-masuk .input-tx-icon,
+html[data-theme="ocean_glass"] .input-tx-btn.tx-masuk .input-tx-icon { color: #6ee7b7; border-color: rgba(52, 211, 153, 0.35); }
+html[data-theme="deep_ocean"] .input-tx-btn.tx-rusak .input-tx-icon,
+html[data-theme="ocean_glass"] .input-tx-btn.tx-rusak .input-tx-icon { color: #fda4af; border-color: rgba(251, 113, 133, 0.35); }
+html[data-theme="deep_ocean"] .input-tx-btn.is-active,
+html[data-theme="ocean_glass"] .input-tx-btn.is-active { background: rgba(30, 64, 100, 0.95); border-width: 2px; color: #f1f5f9; }
+html[data-theme="deep_ocean"] .input-tx-btn.tx-masuk.is-active,
+html[data-theme="ocean_glass"] .input-tx-btn.tx-masuk.is-active { border-color: #34d399; box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.22), 4px 4px 14px rgba(3, 10, 18, 0.4); }
+html[data-theme="deep_ocean"] .input-tx-btn.tx-keluar.is-active,
+html[data-theme="ocean_glass"] .input-tx-btn.tx-keluar.is-active { border-color: #22d3ee; box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.22), 4px 4px 14px rgba(3, 10, 18, 0.4); }
+html[data-theme="deep_ocean"] .input-tx-btn.tx-rusak.is-active,
+html[data-theme="ocean_glass"] .input-tx-btn.tx-rusak.is-active { border-color: #fb7185; box-shadow: 0 0 0 3px rgba(251, 113, 133, 0.2), 4px 4px 14px rgba(3, 10, 18, 0.4); }
+
+html[data-theme="warm_productive"] .input-tx-btn { background: #fffdf8; border-color: #e8dfd0; color: #3d2e1f; }
+html[data-theme="warm_productive"] .input-tx-btn.is-active { background: #fff7ed; }
+
+@media (prefers-reduced-motion: reduce) {
+  .input-tx-btn { transition: none !important; }
+}
