@@ -320,8 +320,8 @@ function AppShell() {
             if (t.fab) {
               return (
                 <button key={t.id} type="button" onClick={() => goTab(t.id)} aria-current={isActive ? 'page' : undefined} aria-label="Input barang masuk atau keluar" className="nav-fab flex-1 flex flex-col items-center relative min-w-0">
-                  <span className={`nav-fab-btn ${isActive ? 'is-active' : ''}`}><Icon className="w-6 h-6" strokeWidth={2.4} /></span>
-                  <span className={`nav-label text-[9px] sm:text-[10px] mt-1 truncate max-w-full px-0.5 ${isActive ? 'font-bold opacity-100' : 'font-semibold opacity-80'}`}>{t.label}</span>
+                  <span className={`nav-fab-btn ${isActive ? 'is-active' : ''}`} aria-hidden="true"><Icon className="w-6 h-6" strokeWidth={2.4} /></span>
+                  <span className={`nav-label ${isActive ? 'is-active' : 'is-inactive'}`}>{t.label}</span>
                 </button>
               );
             }
@@ -329,9 +329,9 @@ function AppShell() {
             return (
               <button key={t.id} type="button" onClick={onClick} aria-current={isActive ? 'page' : undefined} aria-haspopup={t.id === 'more' ? 'dialog' : undefined} aria-expanded={t.id === 'more' ? moreOpen : undefined} className={`nav-btn flex-1 flex flex-col items-center pt-2 pb-2 relative min-w-0 ${isActive ? 'is-active' : 'is-inactive'}`}>
                 <div className={`nav-icon-wrap p-1 rounded-xl ${isActive ? t.chip : ''}`}><Icon className="w-[22px] h-[22px]" strokeWidth={isActive ? 2.5 : 2.15} /></div>
-                <span className={`nav-label text-[9px] sm:text-[10px] mt-0.5 truncate max-w-full px-0.5 ${isActive ? 'font-bold opacity-100' : 'font-semibold opacity-80'}`}>{t.label}</span>
+                <span className={`nav-label ${isActive ? 'is-active' : 'is-inactive'}`}>{t.label}</span>
                 {t.id === 'more' && pendingCount > 0 && <span className="nav-badge" aria-label={`${pendingCount} item antrian sinkronisasi`}>{pendingCount > 99 ? '99+' : pendingCount}</span>}
-                {isActive && t.id !== 'more' && <span className={`nav-underline absolute bottom-0 left-1/2 -translate-x-1/2 w-6 h-[3px] rounded-full bg-gradient-to-r ${TAB_ACCENT[t.id] || 'from-slate-400 to-slate-600'}`} />}
+                {isActive && t.id !== 'more' && <span className="nav-underline absolute bottom-1 left-1/2 -translate-x-1/2 w-6 h-[3px] rounded-full" />}
               </button>
             );
           })}
