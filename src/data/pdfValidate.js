@@ -208,6 +208,222 @@ export function isLowQualityOcrLine(value) {
   return false;
 }
 
+function normalizeTotalHeader(value) {
+  return String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '').replace(/0/g, 'o').replace(/1/g, 'l');
+}
+
+function isNumericOcrToken(value) {
+  return /^\d[\d.,]*$/.test(String(value || '').replace(/[Oo]/g, '0'));
+}
+
+function groupOcrWordsIntoRows(words) {
+  const valid = (Array.isArray(words) ? words : [])
+    .filter((word) => String(word?.text || '').trim() && word?.bbox)
+    .map((word) => ({
+      text: String(word.text).trim(),
+      x0: Number(word.bbox.x0) || 0,
+      x1: Number(word.bbox.x1) || 0,
+      y0: Number(word.bbox.y0) || 0,
+      y1: Number(word.bbox.y1) || 0,
+      confidence: Number(word.confidence),
+      block: word.block_num,
+      paragraph: word.par_num,
+      line: word.line_num,
+    }))
+    .sort((a, b) => ((a.y0 + a.y1) / 2) - ((b.y0 + b.y1) / 2) || a.x0 - b.x0);
+
+  const grouped = new Map();
+  for (const word of valid) {
+    const hasLineIdentity = word.block != null && word.paragraph != null && word.line != null;
+    const key = hasLineIdentity
+      ? [word.block, word.paragraph, word.line].join(':')
+      : null;
+    if (key) {
+      if (!grouped.has(key)) grouped.set(key, []);
+      grouped.get(key).push(word);
+      continue;
+    }
+    let row = [...grouped.values()].find((candidate) => {
+      const center = candidate.reduce((sum, item) => sum + ((item.y0 + item.y1) / 2), 0) / candidate.length;
+      return Math.abs(center - ((word.y0 + word.y1) / 2)) <= 10;
+    });
+    if (!row) {
+      row = [];
+      grouped.set('y:' + grouped.size, row);
+    }
+    row.push(word);
+  }
+  return [...grouped.values()]
+    .map((row) => row.sort((a, b) => a.x0 - b.x0))
+    .sort((a, b) => {
+      const ay = a.reduce((sum, item) => sum + ((item.y0 + item.y1) / 2), 0) / a.length;
+      const by = b.reduce((sum, item) => sum + ((item.y0 + item.y1) / 2), 0) / b.length;
+      return ay - by;
+    });
+}
+
+function parseWholeOrderQuantity(token) {
+  let value = String(token || '').replace(/\s/g, '').replace(/[Oo]/g, '0');
+  if (!/^\d[\d.,]*$/.test(value)) return null;
+  if (value.includes('.') && value.includes(',')) {
+    const decimalSeparator = value.lastIndexOf('.') > value.lastIndexOf(',') ? '.' : ',';
+    const integerPart = value.slice(0, value.lastIndexOf(decimalSeparator)).replace(/[.,]/g, '');
+    const decimalPart = value.slice(value.lastIndexOf(decimalSeparator) + 1);
+    if (!integerPart || !/^\d+$/.test(integerPart) || !/^\d+$/.test(decimalPart)) return null;
+    if (/[1-9]/.test(decimalPart)) return { value: null, reason: 'Jumlah TOTAL memiliki pecahan; perlu pemeriksaan manual.' };
+    value = integerPart;
+  } else {
+    const separator = value.includes('.') ? '.' : value.includes(',') ? ',' : '';
+    if (separator) {
+      const parts = value.split(separator);
+      if (parts.length !== 2 || !parts[0] || !/^\d+$/.test(parts[1])) return null;
+      if (parts[1].length === 3 && parts[0].length <= 3) {
+        value = parts.join('');
+      } else {
+        if (/[1-9]/.test(parts[1])) return { value: null, reason: 'Jumlah TOTAL memiliki pecahan; perlu pemeriksaan manual.' };
+        value = parts[0];
+      }
+    }
+  }
+  const qty = Number(value);
+  return Number.isSafeInteger(qty) && qty > 0 && qty <= 999999
+    ? { value: qty, reason: '' }
+    : null;
+}
+
+function cleanRekapProductName(value) {
+  return stripLeadingNo(String(value || '')
+    .replace(/\([^)]*\)/g, ' ')
+    .replace(/\[[^\]]*\]/g, ' ')
+    .replace(/\s*\/.*$/g, ' ')
+    .replace(/\s+\d+(?:[.,]\d+)?\s*(?:pcs?|pack|pail|kg|gram|gr|liter|ml)\b.*$/i, ' ')
+    .replace(/\s{2,}/g, ' ')
+    .replace(/^[\s:;|.-]+|[\s:;|.-]+$/g, '')
+    .trim());
+}
+
+/**
+ * Read only the extreme-right TOTAL column from OCR word geometry.
+ * Outlet/branch quantities between the product name and TOTAL are never used.
+ */
+export function parseOrderSummaryFromOcr(ocrData) {
+  const words = Array.isArray(ocrData?.words) ? ocrData.words : [];
+  if (!words.length) {
+    return { ok: false, error: 'Koordinat teks OCR tidak tersedia. Ambil foto rekap dengan posisi tabel terlihat utuh.', items: [], issues: [] };
+  }
+  const rows = groupOcrWordsIntoRows(words);
+  const headerCandidates = [];
+  rows.forEach((row, rowIndex) => row.forEach((word) => {
+    if (normalizeTotalHeader(word.text) === 'totall' || normalizeTotalHeader(word.text) === 'total') {
+      headerCandidates.push({ word, rowIndex });
+    }
+  }));
+  if (!headerCandidates.length) {
+    return { ok: false, error: 'Judul kolom TOTAL tidak ditemukan. Sistem tidak akan menebak dari kolom outlet.', items: [], issues: [] };
+  }
+  // If the form repeats TOTAL labels, use the one furthest to the right.
+  const totalHeader = headerCandidates.sort((a, b) => b.word.x1 - a.word.x1)[0];
+  const headerRow = rows[totalHeader.rowIndex];
+  const headerY = headerRow.reduce((sum, word) => sum + ((word.y0 + word.y1) / 2), 0) / headerRow.length;
+  const totalCenter = (totalHeader.word.x0 + totalHeader.word.x1) / 2;
+
+  const bodyRows = rows.filter((row, index) => {
+    if (index <= totalHeader.rowIndex) return false;
+    const centerY = row.reduce((sum, word) => sum + ((word.y0 + word.y1) / 2), 0) / row.length;
+    return centerY > headerY + 2;
+  });
+  const nameHeaderWords = headerRow.filter((word) => /^(?:nama|barang|item|produk)$/i.test(word.text.replace(/[^a-z]/gi, '')));
+  const nameHeaderRight = nameHeaderWords.length
+    ? Math.max(...nameHeaderWords.map((word) => word.x1))
+    : null;
+  const numericWords = bodyRows.flatMap((row) => row.filter((word) =>
+    isNumericOcrToken(word.text) &&
+    (nameHeaderRight == null || ((word.x0 + word.x1) / 2) > nameHeaderRight + 50)
+  ));
+  const numericColumns = [];
+  for (const word of numericWords) {
+    const center = (word.x0 + word.x1) / 2;
+    if (Math.abs(center - totalCenter) < 70) continue;
+    let cluster = numericColumns.find((item) => Math.abs(item.x - center) < 42);
+    if (!cluster) {
+      cluster = { x: center, rows: new Set() };
+      numericColumns.push(cluster);
+    }
+    cluster.rows.add(word.y0 + ':' + word.y1);
+    cluster.x = ((cluster.x * (cluster.rows.size - 1)) + center) / cluster.rows.size;
+  }
+  const repeatedColumns = numericColumns
+    .filter((column) => column.rows.size >= Math.min(2, bodyRows.length))
+    .sort((a, b) => a.x - b.x);
+  const onePageFirstNumeric = numericWords
+    .map((word) => (word.x0 + word.x1) / 2)
+    .filter((x) => x < totalCenter - 70)
+    .sort((a, b) => a - b)[0];
+  const firstQtyColumnX = repeatedColumns[0]?.x
+    ?? (nameHeaderRight != null ? (onePageFirstNumeric ?? (totalHeader.word.x0 - 20)) : null);
+  if (!Number.isFinite(firstQtyColumnX)) {
+    return {
+      ok: false,
+      error: 'Kolom nama barang atau batas kolom angka tidak cukup jelas. Foto ditahan agar angka outlet tidak salah dibaca.',
+      items: [],
+      issues: [],
+    };
+  }
+  const nameBoundary = firstQtyColumnX - 14;
+
+  const items = [];
+  const issues = [];
+  let sourceSequence = 0;
+  for (const row of bodyRows) {
+    const rowText = row.map((word) => word.text).join(' ').replace(/\s+/g, ' ').trim();
+    if (!rowText || /^(?:total|grand total|subtotal|sub total|jumlah|keterangan|catatan)\b/i.test(rowText)) continue;
+
+    const nameWords = row.filter((word) => word.x0 < nameBoundary);
+    const rawName = cleanRekapProductName(nameWords.map((word) => word.text).join(' '));
+    if (!rawName || rawName.length < 2) continue;
+
+    const totalCandidates = row
+      .filter((word) => isNumericOcrToken(word.text))
+      .filter((word) => ((word.x0 + word.x1) / 2) >= totalCenter - 70)
+      .sort((a, b) => Math.abs(a.x1 - totalHeader.word.x1) - Math.abs(b.x1 - totalHeader.word.x1));
+    const totalWord = totalCandidates[0];
+    if (!totalWord) {
+      issues.push({ rawName, qty: 0, sourceLine: rowText, reason: 'Angka pada kolom TOTAL tidak terbaca; cek foto asli.', sourceIndex: ++sourceSequence });
+      continue;
+    }
+    const parsedQty = parseWholeOrderQuantity(totalWord.text);
+    if (!parsedQty) {
+      issues.push({ rawName, qty: 0, sourceLine: rowText, reason: 'Angka TOTAL tidak dapat dibaca dengan aman.', sourceIndex: ++sourceSequence });
+      continue;
+    }
+    if (parsedQty.reason) {
+      issues.push({ rawName, qty: 0, sourceLine: rowText, reason: parsedQty.reason, sourceIndex: ++sourceSequence });
+      continue;
+    }
+    const lowConfidence = [totalWord, ...nameWords].some((word) => Number.isFinite(word.confidence) && word.confidence > 0 && word.confidence < 45);
+    if (lowConfidence) {
+      issues.push({ rawName, qty: parsedQty.value, sourceLine: rowText, reason: 'Sebagian teks memiliki keyakinan OCR rendah; verifikasi manual.', sourceIndex: ++sourceSequence });
+      continue;
+    }
+    sourceSequence += 1;
+    items.push({
+      no: items.length + 1,
+      sourceIndex: sourceSequence,
+      rawName,
+      qty: parsedQty.value,
+      sourceLine: rowText,
+      totalRaw: totalWord.text,
+    });
+  }
+  return {
+    ok: items.length > 0 || issues.length > 0,
+    error: items.length || issues.length ? '' : 'Tidak ada baris barang yang dapat dibaca di bawah kolom TOTAL.',
+    items,
+    issues,
+    totalColumnX: totalCenter,
+  };
+}
+
 export async function extractTextFromImage(file, onProgress) {
   if (onProgress) onProgress('OCR foto...');
   try {
@@ -229,7 +445,8 @@ export async function extractTextFromImage(file, onProgress) {
     const cleaned = cleanOcrText(rawText);
     const lines = cleaned.split(/\n/).map((l) => l.trim()).filter((l) => l && !isLowQualityOcrLine(l));
     const text = lines.join('\n');
-    return { ok: true, text, lines, method: 'preprocessed-image' };
+    const orderSummary = parseOrderSummaryFromOcr(result?.data || {});
+    return { ok: true, text, lines, method: 'preprocessed-image', orderSummary };
   } catch (err) {
     return { ok: false, error: err.message || 'OCR gagal' };
   }
@@ -467,26 +684,28 @@ function findFuzzyMasterMatch(entity, rawName, master) {
   return { item: best.item, matchType: 'fuzzy-ocr', score: best.score };
 }
 
-function filterPdfMasterForEntity(entity, masterList) {
+export function filterPdfMasterForEntity(entity, masterList, includeRawMaterials = false) {
   const ent = String(entity || '').trim().toUpperCase() === 'CV' ? 'CV' : 'PT';
   const source = Array.isArray(masterList) ? masterList : [];
   return source.filter((item) => {
     const kode = String(item?.kode || item?.kodeBarang || '').trim().toUpperCase();
     const divisi = String(item?.divisi || item?.division || '').trim().toUpperCase().replace(/\s+/g, ' ');
     if (ent === 'CV') {
-      // CV PDF hanya memakai barang jadi/produksi; bahan baku BBCV/BBPT tidak boleh masuk keranjang CV.
+      if (includeRawMaterials) return /^(?:CV|BBCV)-\d{3,4}$/.test(kode);
+      // Preserve the established PDF rule: ordinary PDF/paste imports cannot emit BBCV/BBPT.
       return /^CV-/.test(kode) && divisi !== 'BAHAN BAKU' && !/^(?:BBCV|BBPT)-/.test(kode);
     }
-  // PT validation may need to disambiguate finished goods against BBPT stock.
-  // Keep BBPT candidates visible for manual selection when the product name is similar.
-  return /^(?:PT|WK|MM|BBPT)-/.test(kode) && (divisi !== 'BAHAN BAKU' || /^BBPT-/.test(kode));
+    // PT validation may need to disambiguate finished goods against BBPT stock.
+    // Keep BBPT candidates visible for manual selection when the product name is similar.
+    return /^(?:PT|WK|MM|BBPT)-/.test(kode) && (divisi !== 'BAHAN BAKU' || /^BBPT-/.test(kode));
   });
 }
 
-export function validatePdfItems(entity, textOrItems, masterOverride) {
+export function validatePdfItems(entity, textOrItems, masterOverride, options = {}) {
   const selectedEntity = String(entity || '').trim().toUpperCase() === 'CV' ? 'CV' : 'PT';
+  const includeRawMaterials = options?.includeRawMaterials === true;
   const sourceMaster = Array.isArray(masterOverride) ? masterOverride : (getMasterByEntity(selectedEntity) || []);
-  const master = filterPdfMasterForEntity(selectedEntity, sourceMaster);
+  const master = filterPdfMasterForEntity(selectedEntity, sourceMaster, includeRawMaterials);
   const allowedCodes = new Set(master.map((item) => String(item?.kode || item?.kodeBarang || '').trim().toUpperCase()));
   const items = Array.isArray(textOrItems) ? textOrItems : parsePdfLinesToItems(textOrItems);
   const results = [];
@@ -497,33 +716,34 @@ export function validatePdfItems(entity, textOrItems, masterOverride) {
     const qty = Number(it.qty) || 0;
     if (!rawNameOriginal || qty <= 0) continue;
 
-    // PDF upload is for finished-goods/order SKUs only. Raw-material codes
-    // (BBCV/BBPT) are never valid output from this flow, even when explicitly typed.
     const explicitRawCode = rawNameOriginal.match(/\b(BBCV|BBPT)[\s-]?(\d{3,4})\b/i);
     let match = null;
     let status = 'matched';
     let note = '';
 
-    if (explicitRawCode) {
+    if (!includeRawMaterials && explicitRawCode) {
       status = 'unmatched';
       note = 'upload PDF tidak boleh menghasilkan kode bahan baku';
     } else {
-      // Prevent a short raw-material name (e.g. "Ayam Negeri" or "Bebek")
-      // from being substring/fuzzy-matched to a different finished-goods SKU.
-      const cleanNameForRawCheck = normalizeMatchText(rawNameOriginal)
-        .replace(/\b(?:bahan\s+baku|raw\s+material)\b/g, ' ')
-        .replace(/\s+/g, ' ')
-        .trim();
-      const exactRawName = sourceMaster.find((item) => {
-        const kode = String(item?.kode || item?.kodeBarang || '').trim().toUpperCase();
-        const divisi = String(item?.divisi || item?.division || '').trim().toUpperCase().replace(/\s+/g, ' ');
-        const isRawMaterial = /^(?:BBCV|BBPT)-/.test(kode) || divisi === 'BAHAN BAKU';
-        const masterName = normalizeMatchText(item?.nama || item?.namaBarang || '')
+      let exactRawName = null;
+      if (!includeRawMaterials) {
+        // Prevent a short raw-material name (e.g. "Ayam Negeri" or "Bebek")
+        // from being substring/fuzzy-matched to a different finished-goods SKU.
+        const cleanNameForRawCheck = normalizeMatchText(rawNameOriginal)
           .replace(/\b(?:bahan\s+baku|raw\s+material)\b/g, ' ')
           .replace(/\s+/g, ' ')
           .trim();
-        return isRawMaterial && masterName && masterName === cleanNameForRawCheck;
-      });
+        exactRawName = sourceMaster.find((item) => {
+          const kode = String(item?.kode || item?.kodeBarang || '').trim().toUpperCase();
+          const divisi = String(item?.divisi || item?.division || '').trim().toUpperCase().replace(/\s+/g, ' ');
+          const isRawMaterial = /^(?:BBCV|BBPT)-/.test(kode) || divisi === 'BAHAN BAKU';
+          const masterName = normalizeMatchText(item?.nama || item?.namaBarang || '')
+            .replace(/\b(?:bahan\s+baku|raw\s+material)\b/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+          return isRawMaterial && masterName && masterName === cleanNameForRawCheck;
+        });
+      }
 
       if (exactRawName) {
         status = 'unmatched';
@@ -562,13 +782,15 @@ export function validatePdfItems(entity, textOrItems, masterOverride) {
       note = 'tidak cocok master';
     }
 
-    // Final fail-closed guard: no matching route may emit raw-material SKU.
+    // Final fail-closed guard: ordinary PDF/paste paths cannot emit raw-material SKU.
     const candidate = match?.kode ? match : (match?.item || null);
     const candidateCode = String(candidate?.kode || candidate?.kodeBarang || '').trim().toUpperCase();
     if (/^(?:BBCV|BBPT)-\d{3,4}$/.test(candidateCode)) {
-      match = null;
-      status = 'unmatched';
-      note = 'upload PDF tidak boleh menghasilkan kode bahan baku';
+      if (!includeRawMaterials) {
+        match = null;
+        status = 'unmatched';
+        note = 'upload PDF tidak boleh menghasilkan kode bahan baku';
+      }
     }
     const masterItem = match?.kode ? match : (match?.item || null);
     const kode = masterItem?.kode || match?.kode || null;
@@ -602,8 +824,8 @@ export function parseLinesFromText(text, _lines = []) {
   }));
 }
 
-export function validateItems(rows, entity) {
-  const results = validatePdfItems(entity, rows);
+export function validateItems(rows, entity, options = {}) {
+  const results = validatePdfItems(entity, rows, undefined, options);
   const matched = [], ambiguous = [], unmatched = [];
   for (const r of results) {
     const base = { ...r, name: r.nama || r.rawName, nameFromPdf: r.rawName, qty: r.qty };
@@ -628,7 +850,10 @@ export function detectEntityFromText(text) {
   // Remove these trailing supplier annotations before counting CV/PT markers.
   const t = String(text || '')
     .split(/\r?\n/)
-    .map((line) => line.replace(/\s*[/|]\s*pt\.?\s*(?:citra\s*guna|reza\s*perkasa)\b.*$/i, ''))
+    .map((line) => line
+      // Supplier suffixes such as "/ CV. PD3 CHICKEN" are not the document entity.
+      .replace(/\s*[/|]\s*(?:cv|pt)\.?\s*(?:pd3\s*chicken|citra\s*guna|reza\s*perkasa|supplier|vendor)\b.*$/i, '')
+    )
     .join('\n')
     .toLowerCase();
   if (/\bpt\.?\s*rasyuka|\brasyuka\b/.test(t)) return 'PT';

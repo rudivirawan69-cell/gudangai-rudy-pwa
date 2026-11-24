@@ -254,17 +254,18 @@ export default function InputPage() {
     setTimeout(() => { try { cartRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' }); } catch (_) {} }, 150);
   }, []);
 
-  const runValidationPipeline = useCallback(async (text, lines = [], sourceLabel = 'Validasi') => {
+  const runValidationPipeline = useCallback(async (text, lines = [], sourceLabel = 'Validasi', parsedRows = null, extractionIssues = []) => {
     if (!text || !String(text).trim()) { setStatusBanner('Tidak ada teks untuk divalidasi.'); return; }
     setBusy(true); setStatusBanner(''); setAccuracy(null);
     try {
       const detected = detectEntityFromText(text);
       const useEntity = detected || entity;
       if (detected && detected !== entity) setEntity(detected);
-      const rows = parseLinesFromText(text, lines);
+      const rows = Array.isArray(parsedRows) ? parsedRows : parseLinesFromText(text, lines);
+      const safeExtractionIssues = Array.isArray(extractionIssues) ? extractionIssues : [];
       await new Promise((resolve) => setTimeout(resolve, 0));
-      if (!rows.length) { setStatusBanner('Tidak ada baris barang terdeteksi dari ' + sourceLabel + '.'); return; }
-      const validation = validateItems(rows, useEntity);
+      if (!rows.length && !safeExtractionIssues.length) { setStatusBanner('Tidak ada baris barang terdeteksi dari ' + sourceLabel + '.'); return; }
+      const validation = validateItems(rows, useEntity, { includeRawMaterials: sourceLabel === 'Foto' });
       await new Promise((resolve) => setTimeout(resolve, 0));
       let stock = null;
       // Reuse the catalog already loaded for this entity; never race a slow fetch here.
@@ -287,14 +288,22 @@ export default function InputPage() {
       const amb = reviewRows.filter((m) => m.status === 'ambiguous');
       const un = reviewRows.filter((m) => m.status !== 'ambiguous');
       const reviewRunId = Date.now().toString(36);
-      const review = [...amb, ...un].map((r, idx) => ({
+      const review = [...amb, ...un, ...safeExtractionIssues.map((issue) => ({
+        status: 'unmatched',
+        rawName: issue.rawName || 'Baris rekap tidak terbaca',
+        nameFromPdf: issue.rawName || 'Baris rekap tidak terbaca',
+        qty: Number(issue.qty) || 0,
+        note: issue.reason || 'Perlu pemeriksaan manual.',
+        sourceLine: issue.sourceLine || '',
+        sourceIndex: Number(issue.sourceIndex) || 0,
+      }))].map((r, idx) => ({
         ...r,
         reviewId: 'PR-' + reviewRunId + '-' + idx,
         reviewNo: idx + 1,
         namaPdf: r.nameFromPdf || r.rawName || r.name || '',
         qty: Number(r.qty) || 0,
       }));
-      const total = matched.length + amb.length + un.length;
+      const total = matched.length + amb.length + un.length + safeExtractionIssues.length;
       const acc = total ? Math.round((matched.length / total) * 100) : 0;
       setAccuracy({ pct: acc, matched: matched.length, skipped: 0, needPick: review.length, total });
       // Only confirmed master matches enter the transaction cart.
@@ -305,7 +314,7 @@ export default function InputPage() {
       const parts = [];
       if (matched.length) parts.push(matched.length + ' cocok');
       if (review.length) parts.push(review.length + ' perlu validasi');
-      setStatusBanner(sourceLabel + ' ' + total + ' baris · ' + parts.join(' · '));
+      setStatusBanner(sourceLabel + ' ' + total + ' baris · ' + parts.join(' · ') + (safeExtractionIssues.length ? ' · ' + safeExtractionIssues.length + ' perlu cek foto/TOTAL' : ''));
     } catch (err) {
       setStatusBanner(err.message || 'Gagal memvalidasi ' + sourceLabel);
     } finally { setBusy(false); }
@@ -364,7 +373,8 @@ export default function InputPage() {
       if (res && res.ok === false) { setStatusBanner(res.error || 'Gagal OCR foto'); setBusy(false); return; }
       const text = res?.text || ''; const lines = res?.lines || [];
       if (!text.trim()) { setStatusBanner('Foto tidak berisi teks terbaca. Coba foto lebih jelas.'); setBusy(false); return; }
-      await runValidationPipeline(text, lines, 'Foto');
+      if (!res?.orderSummary?.ok) { setStatusBanner(res?.orderSummary?.error || 'Kolom TOTAL belum terbaca. Ambil ulang foto seluruh tabel.'); setBusy(false); return; }
+      await runValidationPipeline(text, lines, 'Foto', res.orderSummary.items, res.orderSummary.issues);
     } catch (err) { setStatusBanner(err.message || 'Gagal OCR foto'); setBusy(false); }
   };
 
@@ -461,7 +471,11 @@ export default function InputPage() {
         setStatusBanner('Foto tidak berisi teks terbaca. Ambil foto ulang dengan pencahayaan dan fokus lebih baik.');
         return;
       }
-      await runValidationPipeline(text, lines, 'Foto');
+      if (!res?.orderSummary?.ok) {
+        setStatusBanner(res?.orderSummary?.error || 'Kolom TOTAL belum terbaca. Ambil foto ulang seluruh tabel.');
+        return;
+      }
+      await runValidationPipeline(text, lines, 'Foto', res.orderSummary.items, res.orderSummary.issues);
     } catch (err) {
       closePhotoCamera();
       setStatusBanner(err?.message || 'Gagal mengambil / membaca foto');
@@ -816,7 +830,7 @@ export default function InputPage() {
             <p className="text-sm font-bold text-slate-900">Validasi {reviewSourceLabel} — {pdfReview.length} baris perlu dicocokkan</p>
             <p className="text-[11px] text-slate-500 mt-0.5">
               {reviewSourceLabel === 'Foto'
-                ? 'Hasil OCR foto. Baris berisik otomatis dibuang. Nama yang tidak cocok master perlu dipilih manual atau diabaikan.'
+                ? 'Pembacaan memakai kolom TOTAL. Baris yang tidak jelas atau tidak cocok master ditahan untuk pemeriksaan manual.'
                 : 'Nomor di PDF diabaikan. Urutan mengikuti PDF dan nomor di aplikasi dibuat ulang mulai 1.'}
             </p>
           </div>

@@ -139,7 +139,7 @@ try {
 
   await page.goto(HOST, { waitUntil: 'domcontentloaded' });
   await page.locator('nav.nav-bar').waitFor({ state: 'visible', timeout: 15000 });
-  assert.equal((await page.locator('.app-header-card h1').innerText()).trim(), 'GudangAI Pro', 'Sticky header brand must match the approved product name.');
+  assert.equal((await page.locator('.app-header-card h1').innerText()).trim(), 'GUDANG69_PRODIS', 'Sticky header brand must match the approved product name.');
 
   const tabs = [
     ['Beranda', 'Status per Divisi'],
