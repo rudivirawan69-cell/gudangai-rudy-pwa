@@ -565,3 +565,10 @@ html[data-theme] .po-page :is(.po-generator-tab,.po-recommendation-panel,.po-hub
 @media (prefers-reduced-motion: reduce) {
   html[data-theme] .po-page .po-generator-tab { transition: none; }
 }
+
+html[data-theme] .po-page .po-hub-icon {
+  color: var(--accent);
+  background: transparent !important;
+  box-shadow: none !important;
+  filter: none !important;
+}
