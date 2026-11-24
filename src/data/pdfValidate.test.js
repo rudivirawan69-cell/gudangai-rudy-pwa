@@ -158,7 +158,7 @@ describe('recap aliases resolve only to the selected entity master', () => {
     ['PT', 'Saos Ayam Frozen', 'WK-0021'],
     ['PT', 'Iga Sapi', 'WK-0004'],
   ])('maps %s alias %s to %s', (entity, rawName, kode) => {
-    const result = validatePdfItems(entity, [{ rawName, qty: 2 }]);
+    const result = validatePdfItems(entity, [{ rawName, qty: 2 }], undefined, { includeRawMaterials: true });
     expect(result[0]).toMatchObject({ status: 'matched', kode });
   });
 });
