@@ -338,7 +338,7 @@ export function parseOrderSummaryFromOcr(ocrData) {
     : null;
   const numericWords = bodyRows.flatMap((row) => row.filter((word) =>
     isNumericOcrToken(word.text) &&
-    (nameHeaderRight == null || ((word.x0 + word.x1) / 2) > nameHeaderRight + 18)
+    (nameHeaderRight == null || ((word.x0 + word.x1) / 2) > nameHeaderRight + 50)
   ));
   const numericColumns = [];
   for (const word of numericWords) {
