@@ -360,7 +360,7 @@ export function parseOrderSummaryFromOcr(ocrData) {
     const totalCandidates = row
       .filter((word) => /^\d[\d.,]*$/.test(word.text))
       .filter((word) => ((word.x0 + word.x1) / 2) >= totalCenter - 70)
-      .sort((a, b) => Math.abs(b.x1 - totalHeader.word.x1) - Math.abs(a.x1 - totalHeader.word.x1));
+      .sort((a, b) => Math.abs(a.x1 - totalHeader.word.x1) - Math.abs(b.x1 - totalHeader.word.x1));
     const totalWord = totalCandidates[0];
     if (!totalWord) {
       issues.push({ rawName, qty: 0, sourceLine: rowText, reason: 'Angka pada kolom TOTAL tidak terbaca; cek foto asli.', sourceIndex: items.length + issues.length + 1 });
@@ -658,19 +658,13 @@ function findFuzzyMasterMatch(entity, rawName, master) {
   return { item: best.item, matchType: 'fuzzy-ocr', score: best.score };
 }
 
-function filterPdfMasterForEntity(entity, masterList) {
+export function filterPdfMasterForEntity(entity, masterList) {
   const ent = String(entity || '').trim().toUpperCase() === 'CV' ? 'CV' : 'PT';
   const source = Array.isArray(masterList) ? masterList : [];
   return source.filter((item) => {
     const kode = String(item?.kode || item?.kodeBarang || '').trim().toUpperCase();
-    const divisi = String(item?.divisi || item?.division || '').trim().toUpperCase().replace(/\s+/g, ' ');
-    if (ent === 'CV') {
-      // CV PDF hanya memakai barang jadi/produksi; bahan baku BBCV/BBPT tidak boleh masuk keranjang CV.
-      return /^CV-/.test(kode) && divisi !== 'BAHAN BAKU' && !/^(?:BBCV|BBPT)-/.test(kode);
-    }
-  // PT validation may need to disambiguate finished goods against BBPT stock.
-  // Keep BBPT candidates visible for manual selection when the product name is similar.
-  return /^(?:PT|WK|MM|BBPT)-/.test(kode) && (divisi !== 'BAHAN BAKU' || /^BBPT-/.test(kode));
+    if (ent === 'CV') return /^(?:CV|BBCV)-\d{3,4}$/.test(kode);
+    return /^(?:PT|WK|MM|BBPT)-\d{3,4}$/.test(kode);
   });
 }
 
@@ -688,63 +682,33 @@ export function validatePdfItems(entity, textOrItems, masterOverride) {
     const qty = Number(it.qty) || 0;
     if (!rawNameOriginal || qty <= 0) continue;
 
-    // PDF upload is for finished-goods/order SKUs only. Raw-material codes
-    // (BBCV/BBPT) are never valid output from this flow, even when explicitly typed.
-    const explicitRawCode = rawNameOriginal.match(/\b(BBCV|BBPT)[\s-]?(\d{3,4})\b/i);
     let match = null;
     let status = 'matched';
     let note = '';
-
-    if (explicitRawCode) {
-      status = 'unmatched';
-      note = 'upload PDF tidak boleh menghasilkan kode bahan baku';
-    } else {
-      // Prevent a short raw-material name (e.g. "Ayam Negeri" or "Bebek")
-      // from being substring/fuzzy-matched to a different finished-goods SKU.
-      const cleanNameForRawCheck = normalizeMatchText(rawNameOriginal)
-        .replace(/\b(?:bahan\s+baku|raw\s+material)\b/g, ' ')
-        .replace(/\s+/g, ' ')
-        .trim();
-      const exactRawName = sourceMaster.find((item) => {
-        const kode = String(item?.kode || item?.kodeBarang || '').trim().toUpperCase();
-        const divisi = String(item?.divisi || item?.division || '').trim().toUpperCase().replace(/\s+/g, ' ');
-        const isRawMaterial = /^(?:BBCV|BBPT)-/.test(kode) || divisi === 'BAHAN BAKU';
-        const masterName = normalizeMatchText(item?.nama || item?.namaBarang || '')
-          .replace(/\b(?:bahan\s+baku|raw\s+material)\b/g, ' ')
-          .replace(/\s+/g, ' ')
-          .trim();
-        return isRawMaterial && masterName && masterName === cleanNameForRawCheck;
-      });
-
-      if (exactRawName) {
-        status = 'unmatched';
-        note = 'nama bahan baku hanya valid melalui kode BBCV/BBPT eksplisit';
-      } else {
-        const deterministic = resolvePdfNameDeterministic(selectedEntity, rawNameOriginal, master);
-        if (deterministic) {
-          match = deterministic.item || deterministic;
-          note = deterministic.matchType || 'deterministic';
+    // CV master includes CV + BBCV; PT master includes PT + WK + MM + BBPT.
+    // Only exact/alias/deterministic/fuzzy candidates present in that entity's
+    // authoritative master may be emitted. No cross-entity or invented codes.
+    const deterministic = resolvePdfNameDeterministic(selectedEntity, rawNameOriginal, master);
+    if (deterministic) {
+      match = deterministic.item || deterministic;
+      note = deterministic.matchType || 'deterministic';
+    }
+    if (!match) {
+      const aliasResult = matchByAlias(selectedEntity, sanitizePdfProductName(rawNameOriginal));
+      if (aliasResult) {
+        const aliasItem = aliasResult.item || aliasResult;
+        const aliasKode = String(aliasItem?.kode || aliasItem?.kodeBarang || '').trim().toUpperCase();
+        if (aliasKode && allowedCodes.has(aliasKode)) {
+          match = aliasResult;
+          note = aliasResult.matchType || 'alias';
         }
-
-        if (!match) {
-          const aliasResult = matchByAlias(selectedEntity, sanitizePdfProductName(rawNameOriginal));
-          if (aliasResult) {
-            const aliasItem = aliasResult.item || aliasResult;
-            const aliasKode = String(aliasItem?.kode || aliasItem?.kodeBarang || '').trim().toUpperCase();
-            if (aliasKode && allowedCodes.has(aliasKode)) {
-              match = aliasResult;
-              note = aliasResult.matchType || 'alias';
-            }
-          }
-        }
-
-        if (!match) {
-          const fuzzy = findFuzzyMasterMatch(selectedEntity, rawNameOriginal, master);
-          if (fuzzy) {
-            match = fuzzy;
-            note = fuzzy.matchType;
-          }
-        }
+      }
+    }
+    if (!match) {
+      const fuzzy = findFuzzyMasterMatch(selectedEntity, rawNameOriginal, master);
+      if (fuzzy) {
+        match = fuzzy;
+        note = fuzzy.matchType;
       }
     }
 
@@ -753,15 +717,7 @@ export function validatePdfItems(entity, textOrItems, masterOverride) {
       note = 'tidak cocok master';
     }
 
-    // Final fail-closed guard: no matching route may emit raw-material SKU.
-    const candidate = match?.kode ? match : (match?.item || null);
-    const candidateCode = String(candidate?.kode || candidate?.kodeBarang || '').trim().toUpperCase();
-    if (/^(?:BBCV|BBPT)-\d{3,4}$/.test(candidateCode)) {
-      match = null;
-      status = 'unmatched';
-      note = 'upload PDF tidak boleh menghasilkan kode bahan baku';
-    }
-    const masterItem = match?.kode ? match : (match?.item || null);
+    // Entity-scoped master filtering above is the final code allow-list.\n    const masterItem = match?.kode ? match : (match?.item || null);
     const kode = masterItem?.kode || match?.kode || null;
     results.push({
       no: i + 1,
