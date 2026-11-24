@@ -127,3 +127,16 @@ describe('document entity detection ignores product supplier suffixes', () => {
     expect(detectEntityFromText(text)).toBe('PT');
   });
 });
+
+describe('recap aliases resolve only to the selected entity master', () => {
+  it.each([
+    ['CV', 'Ice Cream INDOLAKTO (8 Liter)', 'CV-0030'],
+    ['PT', 'Ice Cream INDOLAKTO (8 Liter)', 'PT-0029'],
+    ['CV', 'Saos Ayam Frozen', 'CV-0036'],
+    ['PT', 'Saos Ayam Frozen', 'WK-0021'],
+    ['PT', 'Iga Sapi', 'WK-0004'],
+  ])('maps %s alias %s to %s', (entity, rawName, kode) => {
+    const result = validatePdfItems(entity, [{ rawName, qty: 2 }]);
+    expect(result[0]).toMatchObject({ status: 'matched', kode });
+  });
+});
