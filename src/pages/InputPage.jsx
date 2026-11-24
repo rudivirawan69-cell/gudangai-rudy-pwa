@@ -830,7 +830,7 @@ export default function InputPage() {
             <p className="text-sm font-bold text-slate-900">Validasi {reviewSourceLabel} — {pdfReview.length} baris perlu dicocokkan</p>
             <p className="text-[11px] text-slate-500 mt-0.5">
               {reviewSourceLabel === 'Foto'
-                ? 'Hasil OCR foto. Baris berisik otomatis dibuang. Nama yang tidak cocok master perlu dipilih manual atau diabaikan.'
+                ? 'Pembacaan memakai kolom TOTAL. Baris yang tidak jelas atau tidak cocok master ditahan untuk pemeriksaan manual.'
                 : 'Nomor di PDF diabaikan. Urutan mengikuti PDF dan nomor di aplikasi dibuat ulang mulai 1.'}
             </p>
           </div>
