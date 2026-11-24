@@ -153,6 +153,60 @@ try {
     ['Input', 'Draft transaksi dipulihkan'],
     ['Agent', 'Agent Rubee Intelligence'],
   ];
+  // PO recommendation visual contract: run before unrelated Input-page assertions.
+  const poScreenshotRoot = 'artifacts/visual-phase3';
+  await mkdir(poScreenshotRoot, { recursive: true });
+  const originalTheme = await page.evaluate(() => localStorage.getItem('gudangai_theme'));
+  for (const theme of ['soft_light', 'deep_ocean', 'graphite_titanium']) {
+    await page.evaluate((value) => localStorage.setItem('gudangai_theme', value), theme);
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.locator('nav.nav-bar').waitFor({ state: 'visible', timeout: 15000 });
+    await page.locator('nav.nav-bar button').filter({ hasText: 'PO' }).first().click();
+    await page.getByText('Purchase order', { exact: false }).first().waitFor({ state: 'visible', timeout: 10000 });
+    for (const viewport of [{ width: 360, height: 800 }, { width: 390, height: 844 }, { width: 430, height: 932 }]) {
+      await page.setViewportSize(viewport);
+      for (const [tabLabel, panelClass, slugSuffix] of [
+        ['PO CS', 'po-recommendation-cs', 'cs'],
+        ['PO Produksi', 'po-recommendation-produksi', 'produksi'],
+      ]) {
+        await page.locator('main[data-ui-page="po"] .po-generator-tab').filter({ hasText: tabLabel }).click();
+        const panel = page.locator(`main[data-ui-page="po"] .${panelClass}`);
+        await panel.waitFor({ state: 'visible', timeout: 5000 });
+        const visual = await panel.evaluate((el) => {
+          const icon = el.querySelector('.po-recommendation-icon');
+          const style = getComputedStyle(el);
+          const iconStyle = getComputedStyle(icon);
+          return {
+            background: style.backgroundColor,
+            foreground: style.color,
+            iconBackground: iconStyle.backgroundColor,
+            iconShadow: iconStyle.boxShadow,
+            iconFilter: iconStyle.filter,
+            nestedSurfaces: el.querySelectorAll('.card,.surface,.section-card,.stock-card').length,
+          };
+        });
+        const ratio = contrastRatio(computedRgbToHex(visual.foreground), computedRgbToHex(visual.background));
+        assert.ok(ratio >= 4.5, `PO ${tabLabel} contrast below WCAG AA in ${theme}: ${ratio.toFixed(2)}:1; ${JSON.stringify(visual)}`);
+        assert.equal(visual.iconBackground, 'rgba(0, 0, 0, 0)', `PO ${tabLabel} icon tile background must be transparent in ${theme}.`);
+        assert.equal(visual.iconShadow, 'none', `PO ${tabLabel} icon must not have a shadow in ${theme}.`);
+        assert.equal(visual.iconFilter, 'none', `PO ${tabLabel} icon must not have a filter in ${theme}.`);
+        assert.equal(visual.nestedSurfaces, 0, `PO ${tabLabel} recommendation must not contain nested card surfaces in ${theme}.`);
+        await page.screenshot({
+          path: `${poScreenshotRoot}/${theme}-po-${slugSuffix}-${viewport.width}.png`,
+          fullPage: true,
+          animations: 'disabled',
+        });
+        console.log(`[PO VISUAL PASS] ${theme} / ${tabLabel} / ${viewport.width}px / contrast ${ratio.toFixed(2)}:1`);
+      }
+    }
+  }
+  await page.evaluate((value) => {
+    if (value) localStorage.setItem('gudangai_theme', value);
+    else localStorage.removeItem('gudangai_theme');
+  }, originalTheme);
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.locator('nav.nav-bar').waitFor({ state: 'visible', timeout: 15000 });
+
   const openMorePage = async (label, marker) => {
     await page.locator('nav.nav-bar button').filter({ hasText: 'Lainnya' }).first().click();
     const sheet = page.locator('.more-sheet');
