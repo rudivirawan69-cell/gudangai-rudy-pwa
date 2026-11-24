@@ -195,6 +195,17 @@ try {
   // Every primary page is opened at every target viewport.
   for (const viewport of viewports) {
     await page.setViewportSize(viewport);
+    const navAudit = await page.locator('nav.nav-bar').evaluate((nav) => ({
+      height: nav.getBoundingClientRect().height,
+      labels: [...nav.querySelectorAll('.nav-label')].map((node) => ({
+        text: node.textContent.trim(),
+        visible: node.getBoundingClientRect().height > 0 && getComputedStyle(node).visibility !== 'hidden',
+        fits: node.scrollWidth <= node.clientWidth + 1,
+      })),
+    }));
+    assert.ok(navAudit.height >= 64, `Bottom navigation is shorter than 64px: ${JSON.stringify(navAudit)}`);
+    assert.deepEqual(navAudit.labels.map((node) => node.text), ['Beranda', 'Stok', 'Input', 'PO', 'Lainnya']);
+    assert.ok(navAudit.labels.every((node) => node.visible && node.fits), `Navigation labels are clipped: ${JSON.stringify(navAudit)}`);
     for (const [label, marker] of tabs) {
       if (label === 'Agent') await openMorePage('Agent Rubee AI', marker);
       else await page.locator('nav.nav-bar button').filter({ hasText: label }).first().click();
@@ -207,6 +218,24 @@ try {
       }
       const boundaryErrors = await page.getByText('Halaman gagal dimuat', { exact: false }).count();
       assert.equal(boundaryErrors, 0, `Error boundary shown on ${label}`);
+      if (label === 'Input') {
+        const inputAudit = await page.evaluate(() => {
+          const controls = [...document.querySelectorAll('.input-date-field,.input-entity-btn,.input-notification-btn')];
+          const cards = [...document.querySelectorAll('.input-tx-btn')];
+          return {
+            controlHeights: controls.map((node) => node.getBoundingClientRect().height),
+            cardBounds: cards.map((node) => {
+              const rect = node.getBoundingClientRect();
+              return { width: rect.width, height: rect.height };
+            }),
+          };
+        });
+        assert.equal(inputAudit.controlHeights.length, 4, 'Input must show date, CV, PT, and notification controls.');
+        assert.ok(inputAudit.controlHeights.every((height) => height >= 44), `Input control touch target below 44px: ${JSON.stringify(inputAudit)}`);
+        assert.equal(inputAudit.cardBounds.length, 3, 'Input must show Masuk, Keluar, and Rusak cards.');
+        assert.ok(inputAudit.cardBounds.every((box) => box.height >= 96), `Input transaction cards are too short: ${JSON.stringify(inputAudit)}`);
+        assert.ok(inputAudit.cardBounds.every((box) => Math.abs(box.width - inputAudit.cardBounds[0].width) < 1 && Math.abs(box.height - inputAudit.cardBounds[0].height) < 1), `Input transaction cards are not equal-sized: ${JSON.stringify(inputAudit)}`);
+      }
       await assertNoHorizontalOverflow(label, viewport);
     }
 
