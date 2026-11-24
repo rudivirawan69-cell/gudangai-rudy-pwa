@@ -552,3 +552,26 @@ html[data-theme="deep_ocean"] [data-ui-page="dashboard"] .dashboard-stock-entity
 html[data-theme] [data-ui-page="dashboard"] .dashboard-stock-entity .text-slate-500 {
   color: var(--text-muted) !important;
 }
+
+
+/* Remove ornamental package/box watermark overlays from Beranda and Atur surfaces.
+   Functional icons inside cards remain visible. */
+html[data-theme] [data-ui-page="dashboard"] :is(
+  .dashboard-panel,.dashboard-total-card,.dashboard-po-card,.dashboard-overview-grid
+)::before,
+html[data-theme] [data-ui-page="dashboard"] :is(
+  .dashboard-panel,.dashboard-total-card,.dashboard-po-card,.dashboard-overview-grid
+)::after,
+html[data-theme] [data-ui-page="settings"] .settings-page::before,
+html[data-theme] [data-ui-page="settings"] .settings-page::after,
+html[data-theme] [data-ui-page="settings"] .settings-page > :is(
+  .card,.settings-profile-summary,.settings-auth-card,.settings-theme-card
+)::before,
+html[data-theme] [data-ui-page="settings"] .settings-page > :is(
+  .card,.settings-profile-summary,.settings-auth-card,.settings-theme-card
+)::after {
+  content: none !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  pointer-events: none !important;
+}
