@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { MASTER_PT } from './master';
 import {
   detectEntityFromText,
   parsePdfLinesToItems,
@@ -156,9 +157,14 @@ describe('recap aliases resolve only to the selected entity master', () => {
     ['PT', 'Ice Cream INDOLAKTO (8 Liter)', 'PT-0029'],
     ['CV', 'Saos Ayam Frozen', 'CV-0036'],
     ['PT', 'Saos Ayam Frozen', 'WK-0021'],
-    ['PT', 'Iga Sapi', 'WK-0004'],
   ])('maps %s alias %s to %s', (entity, rawName, kode) => {
     const result = validatePdfItems(entity, [{ rawName, qty: 2 }], undefined, { includeRawMaterials: true });
     expect(result[0]).toMatchObject({ status: 'matched', kode });
   });
+
+  it('maps Iga Sapi to WK-0004 when that code exists in the supplied PT master', () => {
+    const result = validatePdfItems('PT', [{ rawName: 'Iga Sapi', qty: 2 }], MASTER_PT, { includeRawMaterials: true });
+    expect(result[0]).toMatchObject({ status: 'matched', kode: 'WK-0004' });
+  });
+
 });
