@@ -86,7 +86,7 @@ function Sheet({ it, onClose, onInput }) {
 }
 
 export default function StokPage() {
-  const { items: rawItems, loading, error, refresh, lastRefresh } = useStock("ALL");
+  const { items: rawItems, loading, error, refresh } = useStock("ALL");
   const onInput = undefined;
 
   const [entitas, setEntitas] = useState("CV");
