@@ -62,12 +62,19 @@ describe('photo recap TOTAL-column extraction', () => {
       ocrWord('69', 110, 128, 95, 3), ocrWord('(Frozen)', 132, 190, 95, 3),
       ocrWord('3', 310, 325, 95, 3), ocrWord('5', 450, 465, 95, 3),
       ocrWord('20.00', 700, 750, 95, 3),
+      ocrWord('Ayam', 20, 60, 130, 4), ocrWord('Penyet', 65, 115, 130, 4),
+      ocrWord('(2', 120, 135, 130, 4), ocrWord('Dada', 140, 175, 130, 4),
+      ocrWord('+', 180, 188, 130, 4), ocrWord('2', 190, 202, 130, 4),
+      ocrWord('Paha)', 205, 245, 130, 4), ocrWord('4pcs', 250, 280, 130, 4),
+      ocrWord('7', 310, 325, 130, 4), ocrWord('3', 450, 465, 130, 4),
+      ocrWord('12.00', 700, 750, 130, 4),
     ];
     const result = parseOrderSummaryFromOcr({ words });
     expect(result.ok).toBe(true);
     expect(result.items.map(({ no, rawName, qty }) => ({ no, rawName, qty }))).toEqual([
       { no: 1, rawName: 'Ayam Fillet dada', qty: 400 },
       { no: 2, rawName: 'Saos Ayam 69', qty: 20 },
+      { no: 3, rawName: 'Ayam Penyet', qty: 12 },
     ]);
     expect(result.issues).toEqual([]);
   });
