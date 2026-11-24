@@ -11,24 +11,11 @@ import { ENTITAS, TIDAK_TERKLASIFIKASI, normalizeAll } from "../data/stokAdapter
 const RANK = { kritis: 0, waspada: 1, aman: 2 };
 const LABEL = { kritis: "Kritis", waspada: "Waspada", aman: "Aman" };
 const CACHE_KEY = "gudangai:stok:snapshot:v1";
-const STALE_MENIT = 10;
 const BATCH = 60;
 
 const fmt = (n) =>
   new Intl.NumberFormat("id-ID", { maximumFractionDigits: 2 }).format(n);
 const fmtCount = (n) => new Intl.NumberFormat("id-ID", { maximumFractionDigits: 0 }).format(n);
-
-function relatif(ts) {
-  if (!ts) return null;
-  const d = new Date(ts).getTime();
-  if (!d) return null;
-  const m = Math.max(0, Math.round((Date.now() - d) / 60000));
-  if (m < 1) return "baru saja";
-  if (m < 60) return `${m} mnt lalu`;
-  const j = Math.round(m / 60);
-  if (j < 24) return `${j} jam lalu`;
-  return `${Math.round(j / 24)} hari lalu`;
-}
 
 function ringkas(list) {
   const c = { total: list.length, kritis: 0, waspada: 0, aman: 0 };
@@ -99,7 +86,7 @@ function Sheet({ it, onClose, onInput }) {
 }
 
 export default function StokPage() {
-  const { items: rawItems, loading, error, refresh, lastRefresh } = useStock("ALL");
+  const { items: rawItems, loading, error, refresh } = useStock("ALL");
   const onInput = undefined;
 
   const [entitas, setEntitas] = useState("CV");
@@ -141,7 +128,6 @@ export default function StokPage() {
 
   const memakaiCache = !(rawItems && rawItems.length) && cache?.data?.length;
   const sumber = memakaiCache ? cache.data : rawItems || [];
-  const waktu = memakaiCache ? cache.at : lastRefresh;
 
   const { items: semua, laporan } = useMemo(
     () => normalizeAll(sumber, { targetTotal: 193 }),
@@ -247,17 +233,7 @@ export default function StokPage() {
     return { tampilDivisi: out, sisaItem: Math.max(0, total - limit) };
   }, [divisi, limit]);
 
-  const rel = relatif(waktu);
-  const basi = !waktu || Date.now() - new Date(waktu).getTime() > STALE_MENIT * 60000;
   const kosong = !loading && semua.length === 0;
-  const koneksi = memakaiCache ? "offline" : error ? "gagal" : kosong ? "kosong" : basi ? "basi" : "ok";
-  const teksKoneksi = {
-    ok: `Tersinkron · ${rel}`,
-    basi: `Data ${rel || "belum ada"}`,
-    offline: `Offline · data ${rel}`,
-    kosong: "Belum ada data dari spreadsheet",
-    gagal: "Gagal memuat data",
-  }[koneksi];
 
   return (
     <div className="sk-page">
@@ -327,12 +303,6 @@ export default function StokPage() {
           <button type="button" onClick={segarkan}>Coba lagi</button>
         </div>
       )}
-
-      <div className={`sk-conn sk-c-${koneksi} sk-conn-inline`}>
-        <span className="sk-conn-dot" />
-        <span className="sk-conn-txt">{teksKoneksi}</span>
-        <button type="button" className={`sk-refresh${refreshing ? " spin" : ""}`} onClick={segarkan} aria-label="Muat ulang">⟳</button>
-      </div>
 
       <div className="sk-list-head">
         <div>
