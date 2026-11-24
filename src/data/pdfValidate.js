@@ -393,12 +393,12 @@ export function parseOrderSummaryFromOcr(ocrData) {
       continue;
     }
     if (parsedQty.reason) {
-      issues.push({ rawName, qty: 0, sourceLine: rowText, reason: parsedQty.reason, sourceIndex: items.length + issues.length + 1 });
+      issues.push({ rawName, qty: 0, sourceLine: rowText, reason: parsedQty.reason, sourceIndex: ++sourceSequence });
       continue;
     }
     const lowConfidence = [totalWord, ...nameWords].some((word) => Number.isFinite(word.confidence) && word.confidence > 0 && word.confidence < 45);
     if (lowConfidence) {
-      issues.push({ rawName, qty: parsedQty.value, sourceLine: rowText, reason: 'Sebagian teks memiliki keyakinan OCR rendah; verifikasi manual.', sourceIndex: items.length + issues.length + 1 });
+      issues.push({ rawName, qty: parsedQty.value, sourceLine: rowText, reason: 'Sebagian teks memiliki keyakinan OCR rendah; verifikasi manual.', sourceIndex: ++sourceSequence });
       continue;
     }
     sourceSequence += 1;
@@ -739,7 +739,8 @@ export function validatePdfItems(entity, textOrItems, masterOverride) {
       note = 'tidak cocok master';
     }
 
-    // Entity-scoped master filtering above is the final code allow-list.\n    const masterItem = match?.kode ? match : (match?.item || null);
+    // Entity-scoped master filtering above is the final code allow-list.
+    const masterItem = match?.kode ? match : (match?.item || null);
     const kode = masterItem?.kode || match?.kode || null;
     results.push({
       no: i + 1,
