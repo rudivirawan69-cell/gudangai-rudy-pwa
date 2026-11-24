@@ -549,7 +549,6 @@ html[data-theme] .po-page .po-hub-card-btn.is-active {
   border-color: var(--accent);
 }
 html[data-theme] .po-page .po-hub-card-btn :is(svg,span) { box-shadow: none !important; }
-html[data-theme] .po-page .po-overview-summary { display: none !important; }
 html[data-theme] .po-page .po-recommendation-panel :is(.card,.surface,.section-card,.stock-card) {
   background: transparent !important;
   border: 0 !important;
