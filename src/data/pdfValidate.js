@@ -355,7 +355,7 @@ export function parseOrderSummaryFromOcr(ocrData) {
     .filter((x) => x < totalCenter - 70)
     .sort((a, b) => a - b)[0];
   const firstQtyColumnX = repeatedColumns[0]?.x
-    ?? (nameHeaderRight != null ? onePageFirstNumeric : null);
+    ?? (nameHeaderRight != null ? (onePageFirstNumeric ?? (totalHeader.word.x0 - 20)) : null);
   if (!Number.isFinite(firstQtyColumnX)) {
     return {
       ok: false,
