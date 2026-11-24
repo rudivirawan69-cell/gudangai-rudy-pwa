@@ -321,6 +321,7 @@ try {
     ['Input', 'Draft transaksi dipulihkan', 'input'],
     ['PO', 'Purchase order', 'po'],
     ['Riwayat', 'Riwayat Transaksi', 'riwayat'],
+    ['Lainnya', 'Agent Rubee AI', 'more'],
     ['Agent', 'Agent Rubee Intelligence', 'agent'],
     ['Pengaturan', 'Mode Tampilan', 'settings'],
     ['Antrian Sinkronisasi', 'Antrian Sinkronisasi', 'sync'],
@@ -356,12 +357,17 @@ try {
         if (label === 'PO') {
           await page.locator('nav.nav-bar button').filter({ hasText: 'Beranda' }).first().click();
           await page.locator('nav.nav-bar button').filter({ hasText: 'PO' }).first().click();
+        } else if (label === 'Lainnya') {
+          await page.locator('nav.nav-bar button').filter({ hasText: 'Lainnya' }).first().click();
+          await page.locator('.more-sheet').waitFor({ state: 'visible', timeout: 10000 });
         } else if (['Riwayat', 'Pengaturan', 'Antrian Sinkronisasi', 'Agent'].includes(label)) {
           await openMorePage(label === 'Agent' ? 'Agent Rubee AI' : label === 'Antrian Sinkronisasi' ? 'Antrean sinkronisasi' : label, markerText);
         } else {
           await page.locator('nav.nav-bar button').filter({ hasText: label }).first().click();
         }
-        await page.getByText(markerText, { exact: false }).first().waitFor({ state: 'visible', timeout: 10000 });
+        if (label !== 'Lainnya') {
+          await page.getByText(markerText, { exact: false }).first().waitFor({ state: 'visible', timeout: 10000 });
+        }
         const safeTheme = await page.evaluate(() => ({
           id: document.documentElement.dataset.theme,
           bg: getComputedStyle(document.documentElement).getPropertyValue('--bg-elevated').trim(),
