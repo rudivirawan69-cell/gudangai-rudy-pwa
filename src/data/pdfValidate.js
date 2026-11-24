@@ -388,7 +388,7 @@ export function parseOrderSummaryFromOcr(ocrData) {
     }
     const parsedQty = parseWholeOrderQuantity(totalWord.text);
     if (!parsedQty) {
-      issues.push({ rawName, qty: 0, sourceLine: rowText, reason: 'Angka TOTAL tidak dapat dibaca dengan aman.', sourceIndex: items.length + issues.length + 1 });
+      issues.push({ rawName, qty: 0, sourceLine: rowText, reason: 'Angka TOTAL tidak dapat dibaca dengan aman.', sourceIndex: ++sourceSequence });
       continue;
     }
     if (parsedQty.reason) {
