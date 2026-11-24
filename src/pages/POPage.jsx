@@ -316,7 +316,6 @@ export default function POPage({ onNavigate }) {
           return (
             <button key={h.id} type="button" onClick={() => setHub(h.id)} className={`po-hub-card-btn ${hub === h.id ? 'is-active' : ''}`}>
               <div className="flex flex-col items-center text-center gap-2 mb-1"><Icon className="po-hub-icon w-5 h-5" aria-hidden="true" /><span className="hub-title">{h.title}</span></div>
-              
             </button>
           );
         })}
