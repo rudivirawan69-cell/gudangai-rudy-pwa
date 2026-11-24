@@ -247,17 +247,7 @@ export default function StokPage() {
     return { tampilDivisi: out, sisaItem: Math.max(0, total - limit) };
   }, [divisi, limit]);
 
-  const rel = relatif(waktu);
-  const basi = !waktu || Date.now() - new Date(waktu).getTime() > STALE_MENIT * 60000;
   const kosong = !loading && semua.length === 0;
-  const koneksi = memakaiCache ? "offline" : error ? "gagal" : kosong ? "kosong" : basi ? "basi" : "ok";
-  const teksKoneksi = {
-    ok: `Tersinkron · ${rel}`,
-    basi: `Data ${rel || "belum ada"}`,
-    offline: `Offline · data ${rel}`,
-    kosong: "Belum ada data dari spreadsheet",
-    gagal: "Gagal memuat data",
-  }[koneksi];
 
   return (
     <div className="sk-page">
@@ -327,12 +317,6 @@ export default function StokPage() {
           <button type="button" onClick={segarkan}>Coba lagi</button>
         </div>
       )}
-
-      <div className={`sk-conn sk-c-${koneksi} sk-conn-inline`}>
-        <span className="sk-conn-dot" />
-        <span className="sk-conn-txt">{teksKoneksi}</span>
-        <button type="button" className={`sk-refresh${refreshing ? " spin" : ""}`} onClick={segarkan} aria-label="Muat ulang">⟳</button>
-      </div>
 
       <div className="sk-list-head">
         <div>
