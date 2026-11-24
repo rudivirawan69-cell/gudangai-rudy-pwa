@@ -193,29 +193,9 @@ html[data-theme] .app-content :is(input,select,textarea)::placeholder {
 }
 
 /* Input: make the three transaction choices unmistakable without decorative shine. */
-html[data-theme] .input-tx-btn,
-html[data-theme] .input-tx-segmented .input-tx-btn {
-  min-height: 88px;
-  border: 1px solid var(--border) !important;
-  border-radius: 14px !important;
-  background: var(--bg-elevated) !important;
-  color: var(--text-main) !important;
-  box-shadow: none !important;
-}
 html[data-theme] .input-tx-btn .input-tx-icon {
   box-shadow: none !important;
   filter: none !important;
-}
-html[data-theme] .input-tx-btn[aria-pressed="true"],
-html[data-theme] .input-tx-selected {
-  border: 2px solid var(--accent) !important;
-  background: var(--accent-soft) !important;
-  color: var(--text-main) !important;
-  box-shadow: inset 0 0 0 1px var(--accent-soft) !important;
-}
-html[data-theme] .input-tx-btn[aria-pressed="true"] .input-tx-icon {
-  background: var(--accent) !important;
-  color: #fff !important;
 }
 html[data-theme] .input-tx-label {
   font-weight: 700;
@@ -282,27 +262,11 @@ html[data-theme] .app-header-card h1 {
 html[data-theme] .app-header-card .app-sync-status {
   color: var(--text-muted) !important;
 }
-html[data-theme] .nav-bar {
-  background: var(--nav-bg) !important;
-  border-top: 1px solid var(--border) !important;
-  box-shadow: 0 -2px 8px rgba(0,0,0,.055) !important;
-  backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
-}
 html[data-theme] .nav-btn.is-active .nav-icon-wrap {
   background: var(--accent-soft) !important;
   box-shadow: none !important;
   transform: none !important;
 }
-html[data-theme] .nav-fab-btn {
-  box-shadow: 0 3px 8px rgba(0,0,0,.14) !important;
-  filter: none !important;
-}
-html[data-theme] .nav-fab-btn.is-active {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 10px rgba(0,0,0,.18) !important;
-}
-
 /* Preserve status semantics; soften decorative glows only. */
 html[data-theme] .app-content :is(.ops-icon-amber,.ops-icon-emerald,.ops-icon-indigo,.ops-icon-sky) {
   box-shadow: none !important;
