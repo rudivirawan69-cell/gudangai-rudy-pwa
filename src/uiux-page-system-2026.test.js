@@ -145,7 +145,10 @@ describe('GudangAI Metode C UI contract', () => {
     expect(po).not.toContain('2 jalur:');
     expect(po).not.toContain('Cold Storage</p>');
     expect(po).not.toContain('Prioritas dapur');
+    expect(po).not.toContain('>Kedatangan:');
     expect(css).toContain('.po-recommendation-icon');
+    expect(css).toContain('.po-recommendation-metrics > div');
+    expect(css).toContain('.po-recommendation-panel :is(.card,.surface,.section-card,.stock-card)');
     expect(css).toContain('background: transparent !important;');
     expect(css).toContain('box-shadow: none !important;');
     for (const theme of ['soft_light', 'deep_ocean', 'graphite_titanium']) {
