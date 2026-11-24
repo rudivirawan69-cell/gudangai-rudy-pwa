@@ -65,23 +65,21 @@ export default function LoginPage() {
     >
       <main className="relative z-10 w-full max-w-sm">
         <section
-          className="rounded-3xl border px-6 py-8 shadow-2xl"
+          className="login-card rounded-2xl border px-5 py-7 shadow-sm"
           style={{ backgroundColor: CARD_BG, borderColor: CARD_BORDER }}
         >
           <div className="text-center mb-7">
             <div
-              className="mx-auto mb-4 w-16 h-16 rounded-2xl flex items-center justify-center shadow-lg"
+              className="login-brand-mark mx-auto mb-4 w-14 h-14 rounded-xl flex items-center justify-center"
               style={{
-                background: 'linear-gradient(145deg, #0d9488 0%, #0891b2 100%)',
-                boxShadow: '0 8px 24px rgba(13, 148, 136, 0.35)',
+                backgroundColor: 'var(--accent, #0d9488)',
               }}
               aria-hidden="true"
             >
-              <span className="text-white text-3xl font-black tracking-tight select-none">R</span>
+              <span className="text-white text-2xl font-extrabold tracking-tight select-none">69</span>
             </div>
             <h1 className="text-2xl font-extrabold tracking-tight">
-              <span style={{ color: TEXT_MAIN }}>GudangAI</span>{' '}
-              <span style={{ color: 'var(--accent-strong)' }}>RUDY</span>
+              <span style={{ color: TEXT_MAIN }}>GUDANG69_PRODIS</span>
             </h1>
             <p className="text-xs mt-1.5 font-medium" style={{ color: TEXT_MUTED }}>
               Cold Storage Control System
