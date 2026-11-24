@@ -94,13 +94,16 @@ describe('GudangAI Metode C UI contract', () => {
     expect(css).toContain('var(--stok-aman)');
   });
 
-  it('keeps bottom navigation flush to the viewport and reserves content space', () => {
-    const css = readFileSync(cssPath, 'utf8');
+  it('keeps bottom navigation flush, safe-area aware, and reserves content space', () => {
+    const navCss = readFileSync(resolve(process.cwd(), 'src/ui-nav-layout.css'), 'utf8');
     const app = readFileSync(appPath, 'utf8');
-    expect(css).toContain('bottom:0 !important;');
-    expect(css).toContain('padding-bottom:env(safe-area-inset-bottom,0px) !important;');
-    expect(css).toContain('width:44px !important; height:44px !important;');
-    expect(css).toContain('padding-bottom:calc(84px + env(safe-area-inset-bottom,0px)) !important;');
+    const main = readFileSync(mainPath, 'utf8');
+    expect(navCss).toContain('min-height: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom, 0px));');
+    expect(navCss).toContain('padding-bottom: env(safe-area-inset-bottom, 0px);');
+    expect(navCss).toContain('body:has(.nav-bar) { padding-bottom: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom, 0px)); }');
+    expect(navCss).toContain('width: 28px;');
+    expect(navCss).toContain('white-space: nowrap;');
+    expect(main).toContain("import './ui-nav-layout.css'");
     expect(app).toContain('className="nav-bar fixed bottom-0 left-0 right-0 safe-bottom z-40"');
   });
 
