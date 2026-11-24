@@ -501,3 +501,54 @@ html[data-theme] .sk-head-subtitle { display:none !important; }
 
 /* PO heading uses one title only; detail remains inside the relevant action cards. */
 html[data-theme] [data-ui-page="po"] > div > div:first-child > div > p { display:none; }
+
+
+/* 2026-11-25 — remove decorative box glyph watermarks; keep functional icons */
+html[data-theme] [data-ui-page="dashboard"] .dashboard-panel > svg[aria-hidden="true"].absolute,
+html[data-theme] [data-ui-page="dashboard"] .dashboard-panel svg[aria-hidden="true"].dashboard-watermark,
+html[data-theme] [data-ui-page="settings"] .settings-page > svg[aria-hidden="true"].absolute,
+html[data-theme] [data-ui-page="settings"] .settings-page svg[aria-hidden="true"].settings-watermark {
+  display: none !important;
+}
+
+/* Stock entity comparison: controlled contrast on all themes */
+html[data-theme] [data-ui-page="dashboard"] .dashboard-stock-entity {
+  border-color: var(--border) !important;
+  color: var(--text-main) !important;
+  transition: background-color .2s ease, border-color .2s ease, box-shadow .2s ease;
+}
+html[data-theme="soft_light"] [data-ui-page="dashboard"] .dashboard-stock-entity-cv {
+  background: #eafaff !important; border-color: #a9e7f2 !important;
+}
+html[data-theme="soft_light"] [data-ui-page="dashboard"] .dashboard-stock-entity-pt {
+  background: #fff5e9 !important; border-color: #f3d3a7 !important;
+}
+html[data-theme="deep_ocean"] [data-ui-page="dashboard"] .dashboard-stock-entity-cv {
+  background: #123747 !important; border-color: #287f99 !important;
+}
+html[data-theme="deep_ocean"] [data-ui-page="dashboard"] .dashboard-stock-entity-pt {
+  background: #3d3020 !important; border-color: #9a7138 !important;
+}
+html[data-theme="graphite_titanium"] [data-ui-page="dashboard"] .dashboard-stock-entity-cv {
+  background: #182f3b !important; border-color: #376a7b !important;
+}
+html[data-theme="graphite_titanium"] [data-ui-page="dashboard"] .dashboard-stock-entity-pt {
+  background: #382d20 !important; border-color: #98713d !important;
+}
+html[data-theme="graphite_titanium"] [data-ui-page="dashboard"] .dashboard-stock-entity-pt .dashboard-ring-center {
+  background: #29251f !important;
+}
+html[data-theme="graphite_titanium"] [data-ui-page="dashboard"] .dashboard-stock-entity-pt .text-orange-700,
+html[data-theme="graphite_titanium"] [data-ui-page="dashboard"] .dashboard-stock-entity-pt .text-slate-800 {
+  color: #f4d5a5 !important;
+}
+html[data-theme="deep_ocean"] [data-ui-page="dashboard"] .dashboard-stock-entity-pt .dashboard-ring-center {
+  background: #302719 !important;
+}
+html[data-theme="deep_ocean"] [data-ui-page="dashboard"] .dashboard-stock-entity-pt .text-orange-700,
+html[data-theme="deep_ocean"] [data-ui-page="dashboard"] .dashboard-stock-entity-pt .text-slate-800 {
+  color: #f5d7a6 !important;
+}
+html[data-theme] [data-ui-page="dashboard"] .dashboard-stock-entity .text-slate-500 {
+  color: var(--text-muted) !important;
+}
