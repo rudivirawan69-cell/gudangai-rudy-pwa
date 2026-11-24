@@ -252,7 +252,7 @@ try {
       assert.equal(themeState.id, theme, `Theme mismatch on ${label}: ${JSON.stringify(themeState)}`);
       assert.ok(themeState.surface && themeState.text, `Theme tokens missing on ${label} in ${theme}`);
       if (theme === 'graphite_titanium') {
-        assert.equal(themeState.accent, '#6366f1', `Graphite navigation accent must be indigo on ${label}.`);
+        assert.equal(themeState.accent, '#91b9ad', `Graphite theme accent must match the active operator refinement token on ${label}.`);
         if (label === 'Beranda') {
           const fabBackground = await page.locator('.nav-fab-btn').evaluate((el) => getComputedStyle(el).backgroundImage);
           const agentBorder = await page.locator('[data-ui-page="dashboard"] .home-agent-card').evaluate((el) => getComputedStyle(el).borderTopColor);
