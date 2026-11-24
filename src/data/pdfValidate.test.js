@@ -123,7 +123,7 @@ describe('document entity detection ignores product supplier suffixes', () => {
       'PT. Rasyuka',
       '1 Ayam Fillet Dada / CV. PD3 CHICKEN 400.00',
       '2 Ayam Fillet Paha / CV. PD3 CHICKEN 250.00',
-    ].join('\\n');
+    ].join('\n');
     expect(detectEntityFromText(text)).toBe('PT');
   });
 });
