@@ -705,36 +705,36 @@ export default function InputPage() {
 
       <div className="input-source-methods grid grid-cols-5 gap-2.5" role="group" aria-label="Metode input">
         <button type="button" onClick={() => filePdfRef.current?.click()} disabled={busy}
-          className="rounded-2xl bg-white border border-slate-200 shadow-sm py-3 flex flex-col items-center gap-1.5 disabled:opacity-50">
-          <span className="w-9 h-9 rounded-xl bg-violet-50 border border-violet-100 flex items-center justify-center">
+          className="input-method-card input-method-pdf rounded-2xl bg-white border border-slate-200 shadow-sm py-3 flex flex-col items-center gap-1.5 disabled:opacity-50"
+          <span className="input-method-icon input-method-icon-pdf w-9 h-9 rounded-xl bg-violet-50 border border-violet-100 flex items-center justify-center">
             <Upload className="w-5 h-5 text-violet-600" />
           </span>
           <span className="text-[11px] font-semibold text-slate-700">PDF</span>
         </button>
         <button type="button" onClick={() => setShowPhotoSource(true)} disabled={busy}
           className="rounded-2xl bg-white border border-slate-200 shadow-sm py-3 flex flex-col items-center gap-1.5 disabled:opacity-50">
-          <span className="w-9 h-9 rounded-xl bg-amber-50 border border-amber-100 flex items-center justify-center">
+          <span className="input-method-icon input-method-icon-foto w-9 h-9 rounded-xl bg-amber-50 border border-amber-100 flex items-center justify-center">
             <Image className="w-5 h-5 text-amber-600" />
           </span>
           <span className="text-[11px] font-semibold text-slate-700">Foto</span>
         </button>
         <button type="button" onClick={startScan} disabled={busy || scanning}
           className="rounded-2xl bg-white border border-slate-200 shadow-sm py-3 flex flex-col items-center gap-1.5 disabled:opacity-50">
-          <span className="w-9 h-9 rounded-xl bg-cyan-50 border border-cyan-100 flex items-center justify-center">
+          <span className="input-method-icon input-method-icon-qr w-9 h-9 rounded-xl bg-cyan-50 border border-cyan-100 flex items-center justify-center">
             <QrCode className="w-5 h-5 text-cyan-600" />
           </span>
           <span className="text-[11px] font-semibold text-slate-700">QR</span>
         </button>
         <button type="button" onClick={startVoice} disabled={busy}
           className="rounded-2xl bg-white border border-slate-200 shadow-sm py-3 flex flex-col items-center gap-1.5 disabled:opacity-50">
-          <span className="w-9 h-9 rounded-xl bg-rose-50 border border-rose-100 flex items-center justify-center">
+          <span className="input-method-icon input-method-icon-suara w-9 h-9 rounded-xl bg-rose-50 border border-rose-100 flex items-center justify-center">
             <Mic className="w-5 h-5 text-rose-600" />
           </span>
           <span className="text-[11px] font-semibold text-slate-700">Suara</span>
         </button>
         <button type="button" onClick={() => setShowPaste(true)} disabled={busy}
           className="rounded-2xl bg-white border border-slate-200 shadow-sm py-3 flex flex-col items-center gap-1.5 disabled:opacity-50">
-          <span className="w-9 h-9 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center">
+          <span className="input-method-icon input-method-icon-tempel w-9 h-9 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center">
             <Clipboard className="w-5 h-5 text-indigo-600" />
           </span>
           <span className="text-[11px] font-semibold text-slate-700">Tempel</span>
