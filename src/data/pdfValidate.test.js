@@ -92,6 +92,21 @@ describe('photo recap TOTAL-column extraction', () => {
     expect(result.error).toMatch(/TOTAL/i);
   });
 
+
+  it('keeps digits that belong to a product name when the table has only TOTAL quantities', () => {
+    const result = parseOrderSummaryFromOcr({
+      words: [
+        ocrWord('BARANG', 20, 100, 20, 1), ocrWord('TOTAL', 700, 760, 20, 1),
+        ocrWord('Ice', 20, 42, 60, 2), ocrWord('Cream', 48, 88, 60, 2),
+        ocrWord('3', 92, 104, 60, 2), ocrWord('Rasa', 108, 145, 60, 2),
+        ocrWord('2.00', 700, 750, 60, 2),
+      ],
+    });
+    expect(result.items).toEqual([
+      expect.objectContaining({ no: 1, rawName: 'Ice Cream 3 Rasa', qty: 2 }),
+    ]);
+  });
+
   it('routes non-whole TOTAL quantities to manual review', () => {
     const result = parseOrderSummaryFromOcr({
       words: [
