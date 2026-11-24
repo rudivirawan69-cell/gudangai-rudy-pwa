@@ -888,3 +888,93 @@ html[data-theme="warm_productive"] .input-tx-btn.is-active { background: #fff7ed
 @media (prefers-reduced-motion: reduce) {
   .input-tx-btn { transition: none !important; }
 }
+
+
+/* Input transaction selector — card geometry aligned with source-method cards */
+.input-tx-segmented {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: .625rem;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.input-tx-btn {
+  position: relative;
+  min-width: 0;
+  min-height: 7rem;
+  padding: .85rem .45rem .75rem;
+  gap: .48rem;
+  border: 1px solid var(--line, #dce7eb);
+  border-radius: 1.35rem;
+  background: var(--surface, #fff);
+  color: var(--ink, #243b49);
+  box-shadow: 0 5px 14px rgba(22, 54, 69, .07), inset 0 1px 0 rgba(255,255,255,.92);
+  transform: translateZ(0);
+  transition: transform .22s cubic-bezier(.22,1,.36,1), background .22s ease,
+    border-color .22s ease, box-shadow .22s ease, color .18s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.input-tx-btn:active { transform: scale(.965); }
+.input-tx-btn:focus-visible { outline: 3px solid #38bdf8; outline-offset: 3px; }
+.input-tx-icon {
+  width: 3rem; height: 3rem; border-radius: 1rem;
+  display: grid; place-items: center; border: 1px solid transparent;
+  transition: transform .22s cubic-bezier(.22,1,.36,1), background .2s ease, border-color .2s ease, color .2s ease;
+}
+.input-tx-label { font-size: .88rem; font-weight: 800; line-height: 1.15; letter-spacing: .005em; }
+.input-tx-selected {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-height: 1.1rem; padding: .12rem .45rem;
+  border-radius: 999px; font-size: .55rem; line-height: 1;
+  font-weight: 900; letter-spacing: .075em;
+  background: currentColor; color: inherit;
+  box-shadow: 0 1px 3px rgba(0,0,0,.08);
+}
+.input-tx-btn.is-active .input-tx-selected { background: rgba(255,255,255,.78); }
+.input-tx-btn.is-active .input-tx-icon { transform: translateY(-1px) scale(1.04); }
+
+/* Soft Light / Arctic Professional */
+html[data-theme="soft_light"] .input-tx-btn.tx-masuk .input-tx-icon,
+html:not([data-theme]) .input-tx-btn.tx-masuk .input-tx-icon { background:#e8fbf2; border-color:#8de0bc; color:#08794f; }
+html[data-theme="soft_light"] .input-tx-btn.tx-keluar .input-tx-icon,
+html:not([data-theme]) .input-tx-btn.tx-keluar .input-tx-icon { background:#e8f8ff; border-color:#8bd8f2; color:#086c9b; }
+html[data-theme="soft_light"] .input-tx-btn.tx-rusak .input-tx-icon,
+html:not([data-theme]) .input-tx-btn.tx-rusak .input-tx-icon { background:#fff0f1; border-color:#f4aab4; color:#b4233c; }
+html[data-theme="soft_light"] .input-tx-btn.tx-masuk.is-active,
+html:not([data-theme]) .input-tx-btn.tx-masuk.is-active { background:#e8fbf2; border:2px solid #07965f; color:#075d40; box-shadow:0 0 0 3px rgba(16,185,129,.2),0 9px 20px rgba(16,90,65,.12); }
+html[data-theme="soft_light"] .input-tx-btn.tx-keluar.is-active,
+html:not([data-theme]) .input-tx-btn.tx-keluar.is-active { background:#e8f8ff; border:2px solid #0789bd; color:#075b83; box-shadow:0 0 0 3px rgba(14,165,233,.2),0 9px 20px rgba(8,77,120,.12); }
+html[data-theme="soft_light"] .input-tx-btn.tx-rusak.is-active,
+html:not([data-theme]) .input-tx-btn.tx-rusak.is-active { background:#fff0f1; border:2px solid #d93450; color:#9e1932; box-shadow:0 0 0 3px rgba(244,63,94,.18),0 9px 20px rgba(120,25,45,.12); }
+
+/* Deep Ocean — bright readable edge and high contrast */
+html[data-theme="deep_ocean"] .input-tx-btn { background:linear-gradient(145deg,#183653,#10283f); border-color:#355875; color:#f0f7ff; box-shadow:5px 6px 14px rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.07); }
+html[data-theme="deep_ocean"] .input-tx-btn.tx-masuk .input-tx-icon { background:#123d39; border-color:#2a9878; color:#6ee7b7; }
+html[data-theme="deep_ocean"] .input-tx-btn.tx-keluar .input-tx-icon { background:#123b52; border-color:#278db4; color:#7dd3fc; }
+html[data-theme="deep_ocean"] .input-tx-btn.tx-rusak .input-tx-icon { background:#492b3c; border-color:#b65370; color:#fda4af; }
+html[data-theme="deep_ocean"] .input-tx-btn.tx-masuk.is-active { background:#12483d; border:2px solid #4adea6; box-shadow:0 0 0 3px rgba(74,222,166,.24),0 9px 20px rgba(0,0,0,.24); }
+html[data-theme="deep_ocean"] .input-tx-btn.tx-keluar.is-active { background:#123f5a; border:2px solid #38c8f5; box-shadow:0 0 0 3px rgba(56,200,245,.24),0 9px 20px rgba(0,0,0,.24); }
+html[data-theme="deep_ocean"] .input-tx-btn.tx-rusak.is-active { background:#51283b; border:2px solid #fb7185; box-shadow:0 0 0 3px rgba(251,113,133,.22),0 9px 20px rgba(0,0,0,.24); }
+
+/* Graphite Titanium — industrial surface with distinct status accents */
+html[data-theme="graphite_titanium"] .input-tx-btn { background:linear-gradient(145deg,#303b4a,#222d3b); border-color:#536174; color:#f4f7fb; box-shadow:6px 6px 14px rgba(9,15,25,.25),inset 0 1px 0 rgba(255,255,255,.08); }
+html[data-theme="graphite_titanium"] .input-tx-btn.tx-masuk .input-tx-icon { background:#183f39; border-color:#399a7c; color:#80edc2; }
+html[data-theme="graphite_titanium"] .input-tx-btn.tx-keluar .input-tx-icon { background:#1a3b52; border-color:#3b8dbb; color:#8bd8ff; }
+html[data-theme="graphite_titanium"] .input-tx-btn.tx-rusak .input-tx-icon { background:#4a2b3a; border-color:#bb637a; color:#ffadb9; }
+html[data-theme="graphite_titanium"] .input-tx-btn.tx-masuk.is-active { background:#17473c; border:2px solid #55d6a5; box-shadow:0 0 0 3px rgba(85,214,165,.22),0 9px 20px rgba(0,0,0,.24); }
+html[data-theme="graphite_titanium"] .input-tx-btn.tx-keluar.is-active { background:#17425c; border:2px solid #58c9f2; box-shadow:0 0 0 3px rgba(88,201,242,.22),0 9px 20px rgba(0,0,0,.24); }
+html[data-theme="graphite_titanium"] .input-tx-btn.tx-rusak.is-active { background:#542b40; border:2px solid #fb8299; box-shadow:0 0 0 3px rgba(251,130,153,.2),0 9px 20px rgba(0,0,0,.24); }
+
+@media(max-width:380px) {
+  .input-tx-segmented { gap:.45rem; }
+  .input-tx-btn { min-height:6.65rem; padding:.7rem .25rem; border-radius:1.1rem; }
+  .input-tx-icon { width:2.65rem; height:2.65rem; }
+  .input-tx-label { font-size:.8rem; }
+}
+@media(prefers-reduced-motion:reduce) {
+  .input-tx-btn,.input-tx-icon { transition:none!important; }
+  .input-tx-btn:active,.input-tx-btn.is-active .input-tx-icon { transform:none!important; }
+}
