@@ -178,7 +178,6 @@ function ItemCard({ item, onUpdate, onRemove, editable }) {
           <input type="date" value={item.tglKedatangan || defaultTglISO()} onChange={(e) => onUpdate && onUpdate(item, { tglKedatangan: e.target.value })} disabled={!editable} className="text-[11px] font-semibold text-slate-800 border border-slate-200 rounded-lg px-1.5 py-1 bg-white max-w-[8.5rem]" />
         </label>
       </div>
-      <p className="text-[10px] text-cyan-700 font-semibold mt-1 tabular-nums">Kedatangan: {formatTglKedatangan(item.tglKedatangan || defaultTglISO())}</p>
     </div>
   );
 }
@@ -316,7 +315,7 @@ export default function POPage({ onNavigate }) {
           const Icon = h.Icon;
           return (
             <button key={h.id} type="button" onClick={() => setHub(h.id)} className={`po-hub-card-btn ${hub === h.id ? 'is-active' : ''}`}>
-              <div className="flex flex-col items-center text-center gap-2 mb-1"><Icon className="w-5 h-5 text-cyan-600" /><span className="hub-title">{h.title}</span></div>
+              <div className="flex flex-col items-center text-center gap-2 mb-1"><Icon className="po-hub-icon w-5 h-5" aria-hidden="true" /><span className="hub-title">{h.title}</span></div>
               
             </button>
           );
