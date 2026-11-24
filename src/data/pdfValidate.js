@@ -208,6 +208,196 @@ export function isLowQualityOcrLine(value) {
   return false;
 }
 
+function normalizeTotalHeader(value) {
+  return String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '').replace(/1/g, 'l');
+}
+
+function groupOcrWordsIntoRows(words) {
+  const valid = (Array.isArray(words) ? words : [])
+    .filter((word) => String(word?.text || '').trim() && word?.bbox)
+    .map((word) => ({
+      text: String(word.text).trim(),
+      x0: Number(word.bbox.x0) || 0,
+      x1: Number(word.bbox.x1) || 0,
+      y0: Number(word.bbox.y0) || 0,
+      y1: Number(word.bbox.y1) || 0,
+      confidence: Number(word.confidence),
+      block: word.block_num,
+      paragraph: word.par_num,
+      line: word.line_num,
+    }))
+    .sort((a, b) => ((a.y0 + a.y1) / 2) - ((b.y0 + b.y1) / 2) || a.x0 - b.x0);
+
+  const grouped = new Map();
+  for (const word of valid) {
+    const hasLineIdentity = word.block != null && word.paragraph != null && word.line != null;
+    const key = hasLineIdentity
+      ? [word.block, word.paragraph, word.line].join(':')
+      : null;
+    if (key) {
+      if (!grouped.has(key)) grouped.set(key, []);
+      grouped.get(key).push(word);
+      continue;
+    }
+    let row = [...grouped.values()].find((candidate) => {
+      const center = candidate.reduce((sum, item) => sum + ((item.y0 + item.y1) / 2), 0) / candidate.length;
+      return Math.abs(center - ((word.y0 + word.y1) / 2)) <= 10;
+    });
+    if (!row) {
+      row = [];
+      grouped.set('y:' + grouped.size, row);
+    }
+    row.push(word);
+  }
+  return [...grouped.values()]
+    .map((row) => row.sort((a, b) => a.x0 - b.x0))
+    .sort((a, b) => {
+      const ay = a.reduce((sum, item) => sum + ((item.y0 + item.y1) / 2), 0) / a.length;
+      const by = b.reduce((sum, item) => sum + ((item.y0 + item.y1) / 2), 0) / b.length;
+      return ay - by;
+    });
+}
+
+function parseWholeOrderQuantity(token) {
+  let value = String(token || '').replace(/\s/g, '').replace(/[Oo]/g, '0');
+  if (!/^\d[\d.,]*$/.test(value)) return null;
+  if (value.includes('.') && value.includes(',')) {
+    const decimalSeparator = value.lastIndexOf('.') > value.lastIndexOf(',') ? '.' : ',';
+    const integerPart = value.slice(0, value.lastIndexOf(decimalSeparator)).replace(/[.,]/g, '');
+    const decimalPart = value.slice(value.lastIndexOf(decimalSeparator) + 1);
+    if (!integerPart || !/^\d+$/.test(integerPart) || !/^\d+$/.test(decimalPart)) return null;
+    if (/[1-9]/.test(decimalPart)) return { value: null, reason: 'Jumlah TOTAL memiliki pecahan; perlu pemeriksaan manual.' };
+    value = integerPart;
+  } else {
+    const separator = value.includes('.') ? '.' : value.includes(',') ? ',' : '';
+    if (separator) {
+      const parts = value.split(separator);
+      if (parts.length !== 2 || !parts[0] || !/^\d+$/.test(parts[1])) return null;
+      if (parts[1].length === 3 && parts[0].length <= 3) {
+        value = parts.join('');
+      } else {
+        if (/[1-9]/.test(parts[1])) return { value: null, reason: 'Jumlah TOTAL memiliki pecahan; perlu pemeriksaan manual.' };
+        value = parts[0];
+      }
+    }
+  }
+  const qty = Number(value);
+  return Number.isSafeInteger(qty) && qty > 0 && qty <= 999999
+    ? { value: qty, reason: '' }
+    : null;
+}
+
+function cleanRekapProductName(value) {
+  return stripLeadingNo(String(value || '')
+    .replace(/\([^)]*\)/g, ' ')
+    .replace(/\[[^\]]*\]/g, ' ')
+    .replace(/\s*\/.*$/g, ' ')
+    .replace(/\s{2,}/g, ' ')
+    .replace(/^[\s:;|.-]+|[\s:;|.-]+$/g, '')
+    .trim());
+}
+
+/**
+ * Read only the extreme-right TOTAL column from OCR word geometry.
+ * Outlet/branch quantities between the product name and TOTAL are never used.
+ */
+export function parseOrderSummaryFromOcr(ocrData) {
+  const words = Array.isArray(ocrData?.words) ? ocrData.words : [];
+  if (!words.length) {
+    return { ok: false, error: 'Koordinat teks OCR tidak tersedia. Ambil foto rekap dengan posisi tabel terlihat utuh.', items: [], issues: [] };
+  }
+  const rows = groupOcrWordsIntoRows(words);
+  const headerCandidates = [];
+  rows.forEach((row, rowIndex) => row.forEach((word) => {
+    if (normalizeTotalHeader(word.text) === 'totall' || normalizeTotalHeader(word.text) === 'total') {
+      headerCandidates.push({ word, rowIndex });
+    }
+  }));
+  if (!headerCandidates.length) {
+    return { ok: false, error: 'Judul kolom TOTAL tidak ditemukan. Sistem tidak akan menebak dari kolom outlet.', items: [], issues: [] };
+  }
+  // If the form repeats TOTAL labels, use the one furthest to the right.
+  const totalHeader = headerCandidates.sort((a, b) => b.word.x1 - a.word.x1)[0];
+  const headerRow = rows[totalHeader.rowIndex];
+  const headerY = headerRow.reduce((sum, word) => sum + ((word.y0 + word.y1) / 2), 0) / headerRow.length;
+  const totalCenter = (totalHeader.word.x0 + totalHeader.word.x1) / 2;
+
+  const bodyRows = rows.filter((row, index) => {
+    if (index <= totalHeader.rowIndex) return false;
+    const centerY = row.reduce((sum, word) => sum + ((word.y0 + word.y1) / 2), 0) / row.length;
+    return centerY > headerY + 2;
+  });
+  const numericWords = bodyRows.flatMap((row) => row.filter((word) => /^\d[\d.,]*$/.test(word.text)));
+  const numericColumns = [];
+  for (const word of numericWords) {
+    const center = (word.x0 + word.x1) / 2;
+    if (Math.abs(center - totalCenter) < 70) continue;
+    let cluster = numericColumns.find((item) => Math.abs(item.x - center) < 42);
+    if (!cluster) {
+      cluster = { x: center, rows: new Set() };
+      numericColumns.push(cluster);
+    }
+    cluster.rows.add(word.y0 + ':' + word.y1);
+    cluster.x = ((cluster.x * (cluster.rows.size - 1)) + center) / cluster.rows.size;
+  }
+  const repeatedColumns = numericColumns
+    .filter((column) => column.rows.size >= Math.min(2, bodyRows.length))
+    .sort((a, b) => a.x - b.x);
+  const firstQtyColumnX = repeatedColumns[0]?.x
+    ?? Math.min(...numericWords.map((word) => (word.x0 + word.x1) / 2).filter((x) => x < totalCenter - 70), totalCenter - 80);
+  const nameBoundary = Number.isFinite(firstQtyColumnX) ? firstQtyColumnX - 14 : totalHeader.word.x0 - 100;
+
+  const items = [];
+  const issues = [];
+  for (const row of bodyRows) {
+    const rowText = row.map((word) => word.text).join(' ').replace(/\s+/g, ' ').trim();
+    if (!rowText || /^(?:total|grand total|subtotal|sub total|jumlah|keterangan|catatan)\b/i.test(rowText)) continue;
+
+    const nameWords = row.filter((word) => word.x0 < nameBoundary && !/^\d[\d.,]*$/.test(word.text));
+    const rawName = cleanRekapProductName(nameWords.map((word) => word.text).join(' '));
+    if (!rawName || rawName.length < 2) continue;
+
+    const totalCandidates = row
+      .filter((word) => /^\d[\d.,]*$/.test(word.text))
+      .filter((word) => ((word.x0 + word.x1) / 2) >= totalCenter - 70)
+      .sort((a, b) => Math.abs(b.x1 - totalHeader.word.x1) - Math.abs(a.x1 - totalHeader.word.x1));
+    const totalWord = totalCandidates[0];
+    if (!totalWord) {
+      issues.push({ rawName, qty: 0, sourceLine: rowText, reason: 'Angka pada kolom TOTAL tidak terbaca; cek foto asli.', sourceIndex: items.length + issues.length + 1 });
+      continue;
+    }
+    const parsedQty = parseWholeOrderQuantity(totalWord.text);
+    if (!parsedQty) {
+      issues.push({ rawName, qty: 0, sourceLine: rowText, reason: 'Angka TOTAL tidak dapat dibaca dengan aman.', sourceIndex: items.length + issues.length + 1 });
+      continue;
+    }
+    if (parsedQty.reason) {
+      issues.push({ rawName, qty: 0, sourceLine: rowText, reason: parsedQty.reason, sourceIndex: items.length + issues.length + 1 });
+      continue;
+    }
+    const lowConfidence = [totalWord, ...nameWords].some((word) => Number.isFinite(word.confidence) && word.confidence > 0 && word.confidence < 45);
+    if (lowConfidence) {
+      issues.push({ rawName, qty: parsedQty.value, sourceLine: rowText, reason: 'Sebagian teks memiliki keyakinan OCR rendah; verifikasi manual.', sourceIndex: items.length + issues.length + 1 });
+      continue;
+    }
+    items.push({
+      no: items.length + 1,
+      sourceIndex: items.length + 1,
+      rawName,
+      qty: parsedQty.value,
+      sourceLine: rowText,
+      totalRaw: totalWord.text,
+    });
+  }
+  return {
+    ok: items.length > 0 || issues.length > 0,
+    error: items.length || issues.length ? '' : 'Tidak ada baris barang yang dapat dibaca di bawah kolom TOTAL.',
+    items,
+    issues,
+    totalColumnX: totalCenter,
+  };
+}
+
 export async function extractTextFromImage(file, onProgress) {
   if (onProgress) onProgress('OCR foto...');
   try {
@@ -229,7 +419,8 @@ export async function extractTextFromImage(file, onProgress) {
     const cleaned = cleanOcrText(rawText);
     const lines = cleaned.split(/\n/).map((l) => l.trim()).filter((l) => l && !isLowQualityOcrLine(l));
     const text = lines.join('\n');
-    return { ok: true, text, lines, method: 'preprocessed-image' };
+    const orderSummary = parseOrderSummaryFromOcr(result?.data || {});
+    return { ok: true, text, lines, method: 'preprocessed-image', orderSummary };
   } catch (err) {
     return { ok: false, error: err.message || 'OCR gagal' };
   }
