@@ -92,7 +92,8 @@ html[data-theme] .nav-bar {
   transform: none; bottom: max(8px,env(safe-area-inset-bottom)) !important;
   border: 1px solid var(--ux-line) !important; border-radius: 22px !important;
   background: var(--ux-panel) !important; box-shadow: 0 12px 34px rgba(6,22,38,.18) !important;
-  overflow: hidden;
+  overflow: visible;
+  isolation: isolate;
 }
 html[data-theme] .nav-bar > div { min-height: 68px !important; }
 html[data-theme] .nav-btn,.nav-label { color: var(--ux-muted) !important; }
