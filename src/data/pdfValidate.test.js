@@ -3,6 +3,7 @@ import {
   detectEntityFromText,
   parsePdfLinesToItems,
   validatePdfItems,
+  parseOrderSummaryFromOcr,
 } from './pdfValidate';
 
 describe('PDF chicken fillet supplier suffixes', () => {
@@ -29,5 +30,82 @@ describe('PDF chicken fillet supplier suffixes', () => {
       { status: 'matched', kode: dadaCode, nama: 'Ayam Fillet Dada' },
       { status: 'matched', kode: pahaCode, nama: 'Ayam Fillet Paha' },
     ]);
+  });
+});
+
+
+function ocrWord(text, x0, x1, y, line, confidence = 98) {
+  return {
+    text,
+    confidence,
+    block_num: 1,
+    par_num: 1,
+    line_num: line,
+    bbox: { x0, x1, y0: y, y1: y + 18 },
+  };
+}
+
+describe('photo recap TOTAL-column extraction', () => {
+  it('uses only the extreme-right TOTAL column and strips packaging/supplier details', () => {
+    const words = [
+      ocrWord('NAMA', 20, 75, 20, 1), ocrWord('BARANG', 80, 145, 20, 1),
+      ocrWord('CITO', 300, 345, 20, 1), ocrWord('LIPPO', 440, 495, 20, 1),
+      ocrWord('TOTAL', 700, 760, 20, 1),
+      ocrWord('Ayam', 20, 65, 60, 2), ocrWord('Fillet', 70, 115, 60, 2),
+      ocrWord('dada', 120, 158, 60, 2), ocrWord('(0.5', 165, 195, 60, 2),
+      ocrWord('Kg)', 198, 220, 60, 2), ocrWord('/', 225, 230, 60, 2),
+      ocrWord('CV.', 235, 258, 60, 2), ocrWord('PD3', 260, 282, 60, 2),
+      ocrWord('CHICKEN', 284, 296, 60, 2),
+      ocrWord('12', 310, 330, 60, 2), ocrWord('8', 450, 465, 60, 2),
+      ocrWord('400.00', 700, 755, 60, 2),
+      ocrWord('Saos', 20, 58, 95, 3), ocrWord('Ayam', 62, 105, 95, 3),
+      ocrWord('69', 110, 128, 95, 3), ocrWord('(Frozen)', 132, 190, 95, 3),
+      ocrWord('3', 310, 325, 95, 3), ocrWord('5', 450, 465, 95, 3),
+      ocrWord('20.00', 700, 750, 95, 3),
+    ];
+    const result = parseOrderSummaryFromOcr({ words });
+    expect(result.ok).toBe(true);
+    expect(result.items.map(({ no, rawName, qty }) => ({ no, rawName, qty }))).toEqual([
+      { no: 1, rawName: 'Ayam Fillet dada', qty: 400 },
+      { no: 2, rawName: 'Saos Ayam 69', qty: 20 },
+    ]);
+    expect(result.issues).toEqual([]);
+  });
+
+  it('fails closed when TOTAL is missing instead of guessing a branch quantity', () => {
+    const result = parseOrderSummaryFromOcr({
+      words: [
+        ocrWord('NAMA', 20, 70, 20, 1), ocrWord('CITO', 300, 350, 20, 1),
+        ocrWord('Ayam', 20, 60, 60, 2), ocrWord('Fillet', 65, 110, 60, 2),
+        ocrWord('12', 310, 330, 60, 2),
+      ],
+    });
+    expect(result.ok).toBe(false);
+    expect(result.items).toEqual([]);
+    expect(result.error).toMatch(/TOTAL/i);
+  });
+
+  it('routes non-whole TOTAL quantities to manual review', () => {
+    const result = parseOrderSummaryFromOcr({
+      words: [
+        ocrWord('BARANG', 20, 100, 20, 1), ocrWord('TOTAL', 700, 760, 20, 1),
+        ocrWord('Udang', 20, 65, 60, 2), ocrWord('4.50', 700, 750, 60, 2),
+      ],
+    });
+    expect(result.items).toEqual([]);
+    expect(result.issues).toHaveLength(1);
+    expect(result.issues[0].reason).toMatch(/pecahan/i);
+  });
+});
+
+describe('entity-scoped source master includes raw materials', () => {
+  it('maps CV bahan baku from BBCV master', () => {
+    const result = validatePdfItems('CV', [{ rawName: 'Bonelles Dada', qty: 4 }]);
+    expect(result[0]).toMatchObject({ status: 'matched', kode: 'BBCV-0001' });
+  });
+
+  it('maps PT bahan baku from BBPT master', () => {
+    const result = validatePdfItems('PT', [{ rawName: 'Bebek', qty: 2 }]);
+    expect(result[0]).toMatchObject({ status: 'matched', kode: 'BBPT-0012' });
   });
 });
