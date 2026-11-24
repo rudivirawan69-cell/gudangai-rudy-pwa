@@ -64,16 +64,6 @@ const MORE_TABS = [
 
 const MORE_IDS = new Set(MORE_TABS.map((t) => t.id));
 
-const TAB_ACCENT = {
-  dashboard: 'from-cyan-400 to-cyan-600',
-  stok: 'from-blue-400 to-blue-600',
-  input: 'from-emerald-400 to-emerald-600',
-  ai: 'from-orange-400 to-amber-600',
-  po: 'from-violet-400 to-violet-600',
-  riwayat: 'from-amber-400 to-amber-600',
-  settings: 'from-slate-400 to-slate-600',
-};
-
 const TAB_SUBTITLE = {
   dashboard: 'Ringkasan operasional gudang',
   stok: 'Monitoring stok rak',
