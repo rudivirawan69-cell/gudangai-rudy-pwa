@@ -349,6 +349,7 @@ export function parseOrderSummaryFromOcr(ocrData) {
 
   const items = [];
   const issues = [];
+  let sourceSequence = 0;
   for (const row of bodyRows) {
     const rowText = row.map((word) => word.text).join(' ').replace(/\s+/g, ' ').trim();
     if (!rowText || /^(?:total|grand total|subtotal|sub total|jumlah|keterangan|catatan)\b/i.test(rowText)) continue;
@@ -363,7 +364,7 @@ export function parseOrderSummaryFromOcr(ocrData) {
       .sort((a, b) => Math.abs(a.x1 - totalHeader.word.x1) - Math.abs(b.x1 - totalHeader.word.x1));
     const totalWord = totalCandidates[0];
     if (!totalWord) {
-      issues.push({ rawName, qty: 0, sourceLine: rowText, reason: 'Angka pada kolom TOTAL tidak terbaca; cek foto asli.', sourceIndex: items.length + issues.length + 1 });
+      issues.push({ rawName, qty: 0, sourceLine: rowText, reason: 'Angka pada kolom TOTAL tidak terbaca; cek foto asli.', sourceIndex: ++sourceSequence });
       continue;
     }
     const parsedQty = parseWholeOrderQuantity(totalWord.text);
@@ -380,9 +381,10 @@ export function parseOrderSummaryFromOcr(ocrData) {
       issues.push({ rawName, qty: parsedQty.value, sourceLine: rowText, reason: 'Sebagian teks memiliki keyakinan OCR rendah; verifikasi manual.', sourceIndex: items.length + issues.length + 1 });
       continue;
     }
+    sourceSequence += 1;
     items.push({
       no: items.length + 1,
-      sourceIndex: items.length + 1,
+      sourceIndex: sourceSequence,
       rawName,
       qty: parsedQty.value,
       sourceLine: rowText,
