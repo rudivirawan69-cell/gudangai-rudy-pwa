@@ -2,8 +2,8 @@
 :root { --bottom-nav-height: 68px; }
 html[data-theme="soft_light"] {
   --nav-bg: #ffffff;
-  --nav-active: #148a8a;
-  --nav-idle: #6b8586;
+  --nav-active: #0b7070;
+  --nav-idle: #526c6d;
   --nav-fab-bg: var(--accent-strong);
 }
 html[data-theme="deep_ocean"] {
