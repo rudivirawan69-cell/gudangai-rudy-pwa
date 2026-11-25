@@ -509,7 +509,7 @@ try {
             return srgb ? { r:Math.round(+srgb[1]*255), g:Math.round(+srgb[2]*255), b:Math.round(+srgb[3]*255), a:srgb[4] === undefined ? 1 : +srgb[4] } : null;
           };
           const pageBackground = document.querySelector('.app-bg');
-          const fallback = parse(getComputedStyle(document.documentElement).getPropertyValue('--bg-app')) || parse(pageBackground ? getComputedStyle(pageBackground).backgroundColor : '') || parse(getComputedStyle(document.body).backgroundColor) || {r:247,g:247,b:245,a:1};
+          const fallback = parse(getComputedStyle(document.body).getPropertyValue('--bg-app')) || parse(getComputedStyle(document.documentElement).getPropertyValue('--bg-app')) || parse(pageBackground ? getComputedStyle(pageBackground).backgroundColor : '') || parse(getComputedStyle(document.body).backgroundColor) || {r:247,g:247,b:245,a:1};
           const nodes = [...document.querySelectorAll('h1,h2,h3,h4,p,span,button,a,label,small,strong,b,li,input,textarea,select')];
           return nodes.filter((el) => {
             const text = (el.innerText || el.value || el.getAttribute('aria-label') || '').trim();
