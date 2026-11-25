@@ -156,6 +156,11 @@ function StatusTriple({ status }) {
   );
 }
 
+function formatPeriodDate(value) {
+  const match = String(value || '').trim().match(/^(\\d{4})-(\\d{2})-(\\d{2})$/);
+  return match ? `${match[3]}-${match[2]}-${match[1]}` : String(value || '');
+}
+
 function todayISO() {
   const d = new Date();
   const y = d.getFullYear();
@@ -216,11 +221,13 @@ function StatusPOHubPanel({ mode }) {
   const periodNoPO = confirmPeriod === 'previous'
     ? (data?.previousWeek?.noPO || '')
     : (data?.noPO || '');
-  const unfinishedItems = ((confirmPeriod === 'previous' ? data?.previousWeek?.items : data?.items) || []).filter((it) => {
+  const getUnfinishedItems = (items) => (items || []).filter((it) => {
     if (it.status === 'Selesai') return false;
     const sisa = Math.max(0, (Number(it.qtyPO) || 0) - (Number(it.qtyDatang) || 0));
     return sisa > 0;
   });
+  const unfinishedItems = getUnfinishedItems(confirmPeriod === 'previous' ? data?.previousWeek?.items : data?.items);
+  const previousUnfinishedItems = getUnfinishedItems(data?.previousWeek?.items);
 
   const openItemForm = (it) => {
     const sisa = Math.max(0, (Number(it.qtyPO) || 0) - (Number(it.qtyDatang) || 0));
@@ -293,6 +300,11 @@ function StatusPOHubPanel({ mode }) {
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
             <p className="text-sm font-extrabold text-slate-900">{statusTitle}</p>
+              {data?.success && (
+                <p className="po-operational-context">
+                  {[data.noPO ? `No PO: ${data.noPO}` : '', data.periodStart && data.periodEnd ? `${formatPeriodDate(data.periodStart)} s.d. ${formatPeriodDate(data.periodEnd)}` : ''].filter(Boolean).join(' · ')}
+                </p>
+              )}
             </div>
           <button type="button" onClick={load} className="w-9 h-9 rounded-xl border border-slate-200 bg-white flex items-center justify-center shrink-0" aria-label="Muat ulang">
             <RefreshCw className={`w-4 h-4 text-slate-600 ${loading ? 'animate-spin' : ''}`} />
@@ -329,6 +341,10 @@ function StatusPOHubPanel({ mode }) {
                   <span className="text-slate-400 font-semibold mr-1">#{String(it.itemNo || idx + 1).padStart(2, '0')}</span>
                   {it.nama}
                 </p>
+                {(() => {
+                  const sisa = Math.max(0, (Number(it.qtyPO) || 0) - (Number(it.qtyDatang) || 0));
+                  return <p className="po-operational-context">Qty PO: {it.qtyPO} · Sudah datang: {it.qtyDatang} · Sisa: {sisa}</p>;
+                })()}
                 <StatusTriple status={it.status} />
               </div>
             ))}
@@ -357,11 +373,11 @@ function StatusPOHubPanel({ mode }) {
             <div className="grid grid-cols-1 gap-3">
               <button type="button" onClick={() => { setConfirmPeriod('current'); setSelectedItem(null); setMsg(''); }} className="rounded-2xl border-2 border-cyan-200 bg-cyan-50 px-4 py-4 text-left active:scale-[0.99]">
                 <p className="text-sm font-extrabold text-cyan-900">Konfirmasi PO Minggu Ini</p>
-                
+                <p className="po-operational-context">Belum selesai: {unfinishedItems.length} item</p>
               </button>
               <div className="rounded-2xl border-2 border-slate-200 bg-slate-50 px-4 py-4 text-left opacity-80">
                 <p className="text-sm font-extrabold text-slate-700">Arsip PO Minggu Lalu</p>
-
+                <p className="po-operational-context">Belum selesai: {previousUnfinishedItems.length} item · Arsip</p>
               </div>
             </div>
           )}
@@ -380,6 +396,7 @@ function StatusPOHubPanel({ mode }) {
           </div>
           <div className="po-selected-item">
             <p className="text-sm font-extrabold text-slate-900">{selectedItem.nama}</p>
+            <p className="po-operational-context">Qty PO: {selectedItem.qtyPO} · Sudah datang: {selectedItem.qtyDatang} · Sisa: {selectedItem.sisa}</p>
             </div>
           <label className="block text-xs font-bold text-slate-700">Tanggal kedatangan
             <input type="date" value={formTanggal} onChange={(e) => setFormTanggal(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm font-semibold text-slate-900" />
@@ -445,6 +462,10 @@ function StatusPOHubPanel({ mode }) {
                     <span className="text-slate-400 font-semibold mr-1">#{String(it.itemNo || idx + 1).padStart(2, '0')}</span>
                     {it.nama}
                   </p>
+                  {(() => {
+                    const sisa = Math.max(0, (Number(it.qtyPO) || 0) - (Number(it.qtyDatang) || 0));
+                    return <p className="po-operational-context">Sisa {sisa} · PO {it.qtyPO} · Datang {it.qtyDatang}</p>;
+                  })()}
                   <StatusTriple status={it.status} />
                   </button>
               );
