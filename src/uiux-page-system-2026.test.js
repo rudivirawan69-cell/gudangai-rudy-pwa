@@ -165,6 +165,8 @@ describe('GudangAI Metode C UI contract', () => {
     expect(status).toContain('selectedItem.qtyPO');
     expect(status).toContain('selectedItem.qtyDatang');
     expect(css).toContain('.po-status-panel');
+    expect(css).toContain('.po-operational-context');
+    expect(css).toContain('.po-metric-label');
     expect(css).toContain('.po-status-inline span');
     expect(css).toContain('.po-selected-item');
     expect(css).toContain('.po-entity-choice');
