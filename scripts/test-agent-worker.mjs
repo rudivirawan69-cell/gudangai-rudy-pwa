@@ -244,7 +244,19 @@ async function runLive(message, { env = liveEnv, sheetsResponse } = {}) {
     if (String(url) === `${SUPABASE_URL}/auth/v1/user`) return new Response(JSON.stringify({ id: 'u1' }), { status: 200 });
     if (String(url) === SHEETS_URL) {
       const body = JSON.parse(options.body); sheetCalls.push(body);
-      return sheetsResponse ? sheetsResponse(body) : new Response(JSON.stringify({ success: true, rows: [{ kode: 'X-1', qty: 3 }] }), { status: 200 });
+      const defaultPayload = {
+        success:true,
+        sourceReadAt:'2026-11-25T10:00:00.000Z',
+        count:0,
+        items:[],
+        sheet:body.sheet || 'Barang keluar',
+        data:[],
+        mode:'manifest',
+        spreadsheetTitle:'Test Spreadsheet',
+        sheetCount:0,
+        sheets:[],
+      };
+      return sheetsResponse ? sheetsResponse(body) : new Response(JSON.stringify(defaultPayload), { status:200 });
     }
     throw new Error(`unexpected fetch ${url}`);
   };
@@ -283,7 +295,7 @@ test('data questions trigger live read-only read and include provenance', async 
   assert.equal(sheetCalls[0].action, 'getDashboardData'); assert.equal(sheetCalls[0].client.mode, 'read_only');
   assert.equal(payload.dataSources[0].action, 'getDashboardData'); assert.equal(payload.dataSources[0].ok, true);
   assert.ok(payload.dataSources[0].gatewayReceivedAt);
-  assert.equal(payload.dataSources[0].sourceReadAt, null); assert.match(systemText, /DATA LIVE \(read-only\)/);
+  assert.equal(payload.dataSources[0].sourceReadAt, '2026-11-25T10:00:00.000Z'); assert.match(systemText, /DATA LIVE \(read-only\)/);
   assert.match(systemText, /Pisahkan entitas CV dan PT/);
 });
 
@@ -309,7 +321,7 @@ test('spreadsheet structure questions route to getAgentKnowledge manifest throug
 
 test('exact SKU lookup has priority and preserves normalized code and entity', async () => {
   const { response, sheetCalls, payload } = await runLive('Berapa stock kode CV - 0030', {
-    sheetsResponse: (body) => new Response(JSON.stringify({ success:true, kode:body.kode, entitas:body.entitas, stockAkhir:12 }), { status:200 }),
+    sheetsResponse: (body) => new Response(JSON.stringify({ success:true, sourceReadAt:'2026-11-25T10:00:00.000Z', kode:body.kode, entitas:body.entitas, stockAkhir:12 }), { status:200 }),
   });
   assert.equal(response.status, 200);
   assert.equal(sheetCalls.length, 1);
@@ -347,7 +359,7 @@ test('transaction history rejects a response from the wrong sheet', async () => 
 
 test('exact SKU lookup rejects a mismatched returned entity', async () => {
   const { payload, systemText } = await runLive('Berapa stok PT-0001', {
-    sheetsResponse: () => new Response(JSON.stringify({ success:true, kode:'PT-0001', entitas:'CV', stockAkhir:88 }), { status:200 }),
+    sheetsResponse: () => new Response(JSON.stringify({ success:true, sourceReadAt:'2026-11-25T10:00:00.000Z', kode:'PT-0001', entitas:'CV', stockAkhir:88 }), { status:200 }),
   });
   assert.equal(payload.dataSources[0].ok, false);
   assert.equal(payload.dataSources[0].code, 'SKU_ENTITY_MISMATCH');
