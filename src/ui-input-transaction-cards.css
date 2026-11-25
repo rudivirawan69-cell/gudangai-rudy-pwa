@@ -142,7 +142,8 @@ html[data-theme] .settings-page {
   gap:12px !important;
   align-content:start;
 }
-html[data-theme] .settings-menu-list {
+html[data-theme] .settings-page > * { margin-top:0 !important; }
+html[data-theme] .settings-page .settings-menu-list {
   display:grid !important;
   grid-template-columns:minmax(0,1fr);
   gap:10px !important;
@@ -153,7 +154,7 @@ html[data-theme] .settings-menu-list {
   background:transparent !important;
   box-shadow:none !important;
 }
-html[data-theme] .settings-menu-list .settings-menu-row {
+html[data-theme] .settings-page .settings-menu-list .settings-menu-row {
   min-height:58px;
   padding:11px 13px !important;
   border:1px solid var(--border) !important;
@@ -162,7 +163,7 @@ html[data-theme] .settings-menu-list .settings-menu-row {
   color:var(--text-main) !important;
   box-shadow:var(--shadow-card) !important;
 }
-html[data-theme] .settings-menu-list .settings-menu-row + .settings-menu-row {
+html[data-theme] .settings-page .settings-menu-list .settings-menu-row + .settings-menu-row {
   border-top:1px solid var(--border) !important;
 }
 html[data-theme] .settings-profile-summary,
