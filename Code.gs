@@ -196,6 +196,35 @@ function readConfig_() {
   return config;
 }
 
+// Pure read endpoint: never creates or formats the Config sheet.
+function getConfigReadOnly_() {
+  const sheet = getSS().getSheetByName(CONFIG_SHEET_NAME);
+  if (!sheet) return { success:false, code:"CONFIG_SHEET_NOT_FOUND", error:"Tab Config tidak ditemukan; endpoint read-only tidak akan membuat tab." };
+  return { success:true, config:readConfig_(), activeMonth:getActiveMonth(), title:APP_TITLE };
+}
+
+// Read-only spreadsheet manifest generated from the actual spreadsheet at request time.
+function getAgentKnowledge(params) {
+  const ss = getSS();
+  const sheets = ss.getSheets().map(function(sheet, index) {
+    return {
+      name: sheet.getName(),
+      index: index + 1,
+      lastRow: sheet.getLastRow(),
+      lastColumn: sheet.getLastColumn(),
+      hidden: sheet.isSheetHidden()
+    };
+  });
+  return {
+    success:true,
+    mode:"manifest",
+    spreadsheetTitle:ss.getName(),
+    sheetCount:sheets.length,
+    sheets:sheets,
+    sourceReadAt:new Date().toISOString()
+  };
+}
+
 function setupConfigSheet() {
   const sheet = getConfigSheet_();
   const existing = readConfig_();
@@ -411,7 +440,8 @@ function doPost(e) {
       case "logDailySnapshot": return jsonResponse(logDailySnapshot());
       case "clearMasterCache": return jsonResponse(clearMasterCache());
       case "maintenanceCleanup": return jsonResponse(maintenanceCleanup(true));
-      case "getConfig": return jsonResponse({ success: true, config: readConfig_(), activeMonth: getActiveMonth(), title: APP_TITLE });
+      case "getConfig": return jsonResponse(getConfigReadOnly_());
+      case "getAgentKnowledge": return jsonResponse(getAgentKnowledge(body));
       case "diagnoseStockFormulas": return jsonResponse(diagnoseStockFormulaPatterns_());
       case "setupConfig": return jsonResponse(setupConfigSheet());
       case "setActivePeriod": return jsonResponse(setActivePeriod(body.period || body.periode || body.activePeriod));
