@@ -156,11 +156,6 @@ function StatusTriple({ status }) {
   );
 }
 
-function formatPeriodDate(value) {
-  const match = String(value || '').trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  return match ? `${match[3]}-${match[2]}-${match[1]}` : String(value || '');
-}
-
 function todayISO() {
   const d = new Date();
   const y = d.getFullYear();
@@ -216,9 +211,6 @@ function StatusPOHubPanel({ mode }) {
   const statusSummary = mode === 'previous'
     ? (data?.previousWeek?.summary || {})
     : (data?.summary || {});
-  const statusNoPO = mode === 'previous'
-    ? (data?.previousWeek?.noPO || '')
-    : (data?.noPO || '');
   const statusTitle = mode === 'current' ? 'Status PO Minggu Ini' : mode === 'previous' ? 'Status PO Minggu Lalu' : 'Konfirmasi PO';
 
   const periodNoPO = confirmPeriod === 'previous'
@@ -447,7 +439,6 @@ function StatusPOHubPanel({ mode }) {
         {!loading && unfinishedItems.length > 0 && (
           <div className="space-y-2">
             {unfinishedItems.map((it, idx) => {
-              const sisa = Math.max(0, (Number(it.qtyPO) || 0) - (Number(it.qtyDatang) || 0));
               return (
                 <button key={`u-${it.id || idx}`} type="button" onClick={() => openItemForm(it)} className="w-full text-left rounded-xl border border-slate-200 bg-white px-3 py-3 active:bg-slate-50">
                   <p className="text-[13px] font-bold text-slate-800">
