@@ -339,7 +339,7 @@ test('Apps Script manifest action exists and returns dynamic sheet metadata', ()
   const routeStart = codeGs.indexOf('function doPost(e)');
   const routeEnd = codeGs.indexOf('function doGet(e)');
   const handlerStart = codeGs.indexOf('function getAgentKnowledge(params)');
-  const handlerEnd = codeGs.indexOf('function getStockByCode(');
+  const handlerEnd = codeGs.indexOf('function setupConfigSheet()', handlerStart);
   assert.ok(routeStart >= 0 && routeEnd > routeStart);
   assert.ok(handlerStart >= 0 && handlerEnd > handlerStart);
   assert.match(codeGs.slice(routeStart, routeEnd), /case "getAgentKnowledge": return jsonResponse\(getAgentKnowledge\(body\)\)/);
