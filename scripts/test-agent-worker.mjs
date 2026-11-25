@@ -394,8 +394,8 @@ test('Apps Script read dispatcher stamps sourceReadAt without changing action pa
   const routeEnd = codeGs.indexOf('function doGet(e)', routeStart);
   assert.ok(helperStart >= 0 && helperEnd > helperStart && routeEnd > routeStart);
   assert.match(codeGs.slice(helperStart, helperEnd), /sourceReadAt/);
-  assert.match(codeGs.slice(routeStart, routeEnd), /withSourceReadAt_\\(getStockByCode\\(/);
-  assert.match(codeGs.slice(routeStart, routeEnd), /withSourceReadAt_\\(getSyncMetrics\\(\\)\\)/);
+  assert.ok(codeGs.slice(routeStart, routeEnd).includes('withSourceReadAt_(getStockByCode('));
+  assert.ok(codeGs.slice(routeStart, routeEnd).includes('withSourceReadAt_(getSyncMetrics())'));
 });
 
 test('Apps Script transaction history returns requested sheet identity and source timestamp', () => {
