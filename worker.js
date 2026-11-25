@@ -223,15 +223,15 @@ function json(data, status=200, origin='') {
   return new Response(JSON.stringify(data), { status, headers });
 }
 function extractExactStockCode(message) {
-  const match = String(message || '').match(/\\b((?:BB(?:CV|PT)?|CV|PT|WK|MM)\\s*-\\s*\\d{3,4})\\b/i);
-  return match ? match[1].replace(/\\s+/g, '').toUpperCase() : '';
+  const match = String(message || '').match(/\b((?:BB(?:CV|PT)?|CV|PT|WK|MM)\s*-\s*\d{3,4})\b/i);
+  return match ? match[1].replace(/\s+/g, '').toUpperCase() : '';
 }
 function resolveTransactionSheet(message) {
   const text = String(message || '').toLowerCase();
   const found = [];
-  if (/\\bbarang\\s+masuk\\b/.test(text)) found.push('Barang masuk');
-  if (/\\bbarang\\s+keluar\\b/.test(text)) found.push('Barang keluar');
-  if (/\\bbarang\\s+rusak(?:\\s*\\/\\s*lo)?\\b/.test(text)) found.push('Barang Rusak');
+  if (/\bbarang\s+masuk\b/.test(text)) found.push('Barang masuk');
+  if (/\bbarang\s+keluar\b/.test(text)) found.push('Barang keluar');
+  if (/\bbarang\s+rusak(?:\s*\/\s*lo)?\b/.test(text)) found.push('Barang Rusak');
   return found.length === 1 ? found[0] : '';
 }
 export function detectLiveActions(message) {
