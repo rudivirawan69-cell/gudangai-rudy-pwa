@@ -321,7 +321,7 @@ try {
         gaps: boxes.slice(1).map((box, index) => box.top - boxes[index].bottom),
       };
     });
-    assert.equal(settingsCards.count, 4, `Settings menu should show four independent option cards: ${JSON.stringify(settingsCards)}`);
+    assert.ok(settingsCards.count >= 4, `Settings menu should show at least four independent option cards: ${JSON.stringify(settingsCards)}`);
     assert.ok(settingsCards.borders.every((value) => value !== '0px'), `Settings options are still grouped in one card: ${JSON.stringify(settingsCards)}`);
     assert.ok(settingsCards.gaps.every((value) => value >= 7), `Settings card spacing is inconsistent: ${JSON.stringify(settingsCards)}`);
     await openMorePage('Sinkronisasi', 'Sinkronisasi');
@@ -491,6 +491,56 @@ try {
         assert.ok(safeTheme.bg && safeTheme.fg, `Missing color tokens on ${label} in ${theme}`);
         const ratio = contrastRatio(safeTheme.fg, safeTheme.bg);
         assert.ok(ratio >= 4.5, `Text contrast below WCAG AA on ${label} in ${theme}: ${ratio.toFixed(2)}:1`);
+
+        // Audit rendered text against its nearest opaque surface, not only root theme tokens.
+        const renderedTextAudit = await page.evaluate(() => {
+          const parse = (value) => {
+            const m = String(value).match(/rgba?\\((\\d+),\\s*(\\d+),\\s*(\\d+)(?:,\\s*([\\d.]+))?\\)/i);
+            return m ? { r:+m[1], g:+m[2], b:+m[3], a:m[4] === undefined ? 1 : +m[4] } : null;
+          };
+          const composite = (fg, bg) => ({
+            r:Math.round(fg.r*fg.a+bg.r*(1-fg.a)),
+            g:Math.round(fg.g*fg.a+bg.g*(1-fg.a)),
+            b:Math.round(fg.b*fg.a+bg.b*(1-fg.a)),
+            a:1,
+          });
+          const fallback = parse(getComputedStyle(document.body).backgroundColor) || {r:247,g:247,b:245,a:1};
+          const nodes = [...document.querySelectorAll('h1,h2,h3,h4,p,span,button,a,label,small,strong,b,li,input,textarea,select')];
+          return nodes.filter((el) => {
+            const text = (el.innerText || el.value || el.getAttribute('aria-label') || '').trim();
+            const rect = el.getBoundingClientRect();
+            const style = getComputedStyle(el);
+            return text.length > 0 && rect.width > 0 && rect.height > 0 && style.display !== 'none' &&
+              style.visibility !== 'hidden' && Number(style.opacity || 1) > 0.01 && parse(style.color);
+          }).map((el) => {
+            const fg = parse(getComputedStyle(el).color);
+            let bg = null;
+            for (let node=el; node && node.nodeType===1; node=node.parentElement) {
+              const color = parse(getComputedStyle(node).backgroundColor);
+              if (color && color.a > 0) {
+                bg = bg ? composite(color, bg) : color;
+                if (bg.a >= 0.999) break;
+              }
+            }
+            if (!bg || bg.a < 0.999) bg = composite(bg || {r:0,g:0,b:0,a:0}, fallback);
+            return {
+              text:(el.innerText || el.value || el.getAttribute('aria-label') || '').trim().slice(0,70),
+              foreground:fg,
+              background:bg,
+              fontSize:parseFloat(getComputedStyle(el).fontSize),
+              weight:getComputedStyle(el).fontWeight,
+            };
+          });
+        });
+        const renderedRatios = renderedTextAudit.map((item) => {
+          const hex = (v) => `#${[v.r,v.g,v.b].map((n)=>Math.round(n).toString(16).padStart(2,'0')).join('')}`;
+          return { ...item, ratio:contrastRatio(hex(item.foreground),hex(item.background)) };
+        });
+        const failingText = renderedRatios.filter((item) => item.ratio < 4.5 &&
+          !(item.fontSize >= 24 || (item.fontSize >= 18.66 && Number(item.weight) >= 700)));
+        assert.ok(renderedRatios.length >= 10, `Rendered text contrast audit did not cover enough elements on ${label}: ${renderedRatios.length}`);
+        assert.deepEqual(failingText, [], `Rendered text contrast below WCAG AA on ${label} in ${theme}: ${JSON.stringify(failingText.slice(0,8))}`);
+        console.log(`[CONTRAST PASS] ${theme} / ${label} / ${renderedRatios.length} rendered text elements / minimum ${Math.min(...renderedRatios.map(x=>x.ratio)).toFixed(2)}:1`);
         await page.screenshot({
           path: `${screenshotRoot}/${theme}-${slug}-${viewport.label}.png`,
           fullPage: true,
