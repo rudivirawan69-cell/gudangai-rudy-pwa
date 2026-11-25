@@ -392,6 +392,12 @@ function jsonResponse(obj) {
 // ============================================================
 // 3. ENTRY POINT: doPost / doGet
 // ============================================================
+function withSourceReadAt_(result) {
+  if (!result || typeof result !== "object" || Array.isArray(result) || result.success !== true) return result;
+  if (!result.sourceReadAt) result.sourceReadAt = new Date().toISOString();
+  return result;
+}
+
 function doPost(e) {
   const t0 = Date.now();
   try {
@@ -419,22 +425,22 @@ function doPost(e) {
       case "syncBatch":
       case "bulkSync": return jsonResponse(bulkTransaction(Object.assign({}, body, { _syncMode: true })));
       case "getTransactionStatus": return jsonResponse(getTransactionStatus(body));
-      case "bootstrap": return jsonResponse(getPwaBootstrap(body));
+      case "bootstrap": return jsonResponse(withSourceReadAt_(getPwaBootstrap(body)));
       case "addTransaction": return jsonResponse(addTransaction(body));
       case "addTransactionBatch": return jsonResponse(bulkTransaction(Object.assign({}, body, { transactions: body.transactions || body.items || body.rows })));
       case "bulkTransaction": return jsonResponse(bulkTransaction(body));
       case "reconcileBatch": return jsonResponse(reconcileBatch_(body));
       case "getStock":
-      case "getStockByCode": return jsonResponse(getStockByCode(body.kode || body.kodeBarang, body.entitas));
+      case "getStockByCode": return jsonResponse(withSourceReadAt_(getStockByCode(body.kode || body.kodeBarang, body.entitas)));
       case "getAllStock":
-      case "getStockAll": return jsonResponse(getAllStock(body.entitas || body.entity || "ALL"));
-      case "getLowStock": return jsonResponse(getLowStock());
-      case "getStockoutRisk": return jsonResponse(getStockoutRisk(body));
-      case "getLastUpdate": return jsonResponse({ success: true, timestamp: getLastUpdateTimestamp() });
-      case "getTransactionHistory": return jsonResponse(getTransactionHistory(body));
-      case "searchByName": return jsonResponse(searchByName(body.query || body.q || body.nama));
+      case "getStockAll": return jsonResponse(withSourceReadAt_(getAllStock(body.entitas || body.entity || "ALL")));
+      case "getLowStock": return jsonResponse(withSourceReadAt_(getLowStock()));
+      case "getStockoutRisk": return jsonResponse(withSourceReadAt_(getStockoutRisk(body)));
+      case "getLastUpdate": return jsonResponse(withSourceReadAt_({ success: true, timestamp: getLastUpdateTimestamp() }));
+      case "getTransactionHistory": return jsonResponse(withSourceReadAt_(getTransactionHistory(body)));
+      case "searchByName": return jsonResponse(withSourceReadAt_(searchByName(body.query || body.q || body.nama)));
       case "getDashboard":
-      case "getDashboardData": return jsonResponse(getDashboardData());
+      case "getDashboardData": return jsonResponse(withSourceReadAt_(getDashboardData()));
       case "getDashboardLegacy": return jsonResponse(getDashboard());
       case "refreshDashboard": return jsonResponse(refreshDashboard(body.force === true || body.force === "true"));
       case "syncDivision":
@@ -446,7 +452,7 @@ function doPost(e) {
       case "submitPO":
       case "sendPO": return jsonResponse(writePurchaseOrder_(body));
       case "runPOAnalysis":
-      case "getPOAnalysis": return jsonResponse(analyzePORecommendations_());
+      case "getPOAnalysis": return jsonResponse(withSourceReadAt_(analyzePORecommendations_()));
       case "logDailySnapshot": return jsonResponse(logDailySnapshot());
       case "clearMasterCache": return jsonResponse(clearMasterCache());
       case "maintenanceCleanup": return jsonResponse(maintenanceCleanup(true));
@@ -459,12 +465,12 @@ function doPost(e) {
       case "status": return jsonResponse({ success: true, status: "OK", version: BACKEND_VERSION, requestId: body.requestId, title: APP_TITLE, spreadsheet: getSS().getName(), activeMonth: getActiveMonth(), serverTime: new Date().toISOString() });
       case "ping": return jsonResponse(getHealthStatus_(body));
       case "healthCheck": return jsonResponse(getHealthStatus_(body));
-      case "getStockDelta": return jsonResponse(getStockDelta(body));
-      case "getStatusPO": return jsonResponse(getStatusPO(body));
+      case "getStockDelta": return jsonResponse(withSourceReadAt_(getStockDelta(body)));
+      case "getStatusPO": return jsonResponse(withSourceReadAt_(getStatusPO(body)));
       case "recordPOArrival": return jsonResponse(recordPOArrival(body));
       case "getPORequestStatus": return jsonResponse(getPORequestStatus(body));
       case "refreshDashboardPO": return jsonResponse(refreshDashboardPOSection_());
-      case "getSyncMetrics": return jsonResponse(getSyncMetrics());
+      case "getSyncMetrics": return jsonResponse(withSourceReadAt_({ success:true, metrics:getSyncMetrics() }));
       default: return jsonResponse({ success: false, error: "Action tidak dikenali: " + action });
     }
   } catch (err) {
