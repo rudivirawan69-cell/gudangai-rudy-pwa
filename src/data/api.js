@@ -713,7 +713,16 @@ export async function updatePendingItemStates(ids, status, details = {}) {
   const wanted = new Set((ids || []).map(String));
   if (!wanted.size) return { success: true, updated: 0 };
   const now = new Date().toISOString();
-  const queue = getPendingQueue().map((entry) => ({ ...entry, updatedAt: now, items: (entry.items || []).map((item) => wanted.has(String(item.clientItemId)) ? { ...item, queueStatus: status, queueUpdatedAt: now, ...details } : item) }));
+  const queue = getPendingQueue().map((entry) => {
+    const hasTarget = (entry.items || []).some((item) => wanted.has(String(item.clientItemId)));
+    return {
+      ...entry,
+      ...(hasTarget ? { status, updatedAt: now } : {}),
+      items: (entry.items || []).map((item) => wanted.has(String(item.clientItemId))
+        ? { ...item, queueStatus: status, queueUpdatedAt: now, ...details }
+        : item),
+    };
+  });
   await commitQueueLocal(queue);
   return { success: true, updated: wanted.size };
 }
@@ -822,6 +831,7 @@ export async function syncPendingQueue() {
     }
 
     const confirmedIds = new Set();
+    const confirmedHistory = new Map();
     let requests = 0;
     for (const group of groups.values()) {
       const items = Array.from(group.itemsById.values()).filter((item) => !conflictingIds.has(String(item.clientItemId)));
@@ -831,13 +841,33 @@ export async function syncPendingQueue() {
       const res = await submitItems(group.type, group.entity, items, group.tanggal, { fromQueue: true });
       requests += Math.ceil(needsWrite.length / BATCH_CHUNK_SIZE);
       for (const result of res.results || []) {
-        if (result.clientItemId && (result.success === true || result.skipped === true)) confirmedIds.add(result.clientItemId);
+        if (result.clientItemId && (result.success === true || result.skipped === true)) {
+          confirmedIds.add(result.clientItemId);
+          const item = items.find((candidate) => String(candidate.clientItemId) === String(result.clientItemId));
+          if (item) confirmedHistory.set(String(result.clientItemId), { item, type: group.type, entity: group.entity, tanggal: group.tanggal, readBack: result.readBack || null });
+        }
       }
     }
 
     const remaining = [];
     let synced = 0, failed = 0;
     const appliedAfterSync = getAppliedMap();
+    // History must be durably written before any confirmed outbox item is removed.
+    for (const entry of queue) {
+      for (const item of entry.items || []) {
+        const id = String(item.clientItemId || '');
+        if (!id || (!confirmedIds.has(id) && !appliedAfterSync[id])) continue;
+        const metadata = confirmedHistory.get(id) || { item, type: entry.type, entity: entry.entity, tanggal: entry.tanggal };
+        saveToHistory({
+          type: metadata.type, entity: metadata.entity, tanggal: metadata.tanggal,
+          kode: metadata.item.kode, nama: metadata.item.nama, qty: metadata.item.qty,
+          keterangan: metadata.item.keterangan || '', source: 'queue-sync-confirmed',
+          clientItemId: id, transactionId: 'TX-' + id, status: 'success',
+          readBack: metadata.readBack || null,
+          items: [{ kode: metadata.item.kode, nama: metadata.item.nama, qty: metadata.item.qty, satuan: metadata.item.satuan || '' }],
+        });
+      }
+    }
     for (const entry of queue) {
       const remainingItems = entry.items.filter((item) => !confirmedIds.has(item.clientItemId) && !appliedAfterSync[item.clientItemId]);
       synced += entry.items.length - remainingItems.length;
