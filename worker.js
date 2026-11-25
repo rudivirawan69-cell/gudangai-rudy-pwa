@@ -468,7 +468,7 @@ async function handleAgent(request, env, origin) {
   const context = body?.context && typeof body.context==='object' ? body.context : {};
   const history = normalizeHistory(body?.history, message);
   const live = await gatherLiveData(env, message);
-  const ENUM_RE = /daftar\s+(tab|sheet)|berapa\s+(jumlah\s+)?(tab|sheet)|ada\s+berapa\s+(tab|sheet)|sebutkan\s+(semua\s+)?(tab|sheet)|struktur\s+(sheet|spreadsheet|tab)|nama\s+(sheet|tab)|tab\s+(apa saja|aktif|yang ada)|sheet\s+(apa saja|yang ada|aktif)|peta\s+(sheet|tab)|list\s+(sheet|tab)/i;
+  const ENUM_RE = /daftar\s+(?:semua\s+)?(tab|sheet)|berapa\s+(jumlah\s+)?(tab|sheet)|ada\s+berapa\s+(tab|sheet)|sebutkan\s+(semua\s+)?(tab|sheet)|struktur\s+(sheet|spreadsheet|tab)|nama\s+(sheet|tab)|tab\s+(apa saja|aktif|yang ada)|sheet\s+(apa saja|yang ada|aktif)|peta\s+(sheet|tab)|list\s+(sheet|tab)/i;
   if (ENUM_RE.test(message)) {
     const manifest = live.results.find((result) => result.action === 'getAgentKnowledge');
     if (manifest?.ok && manifest.data?.mode === 'manifest' && Array.isArray(manifest.data.sheets) &&
