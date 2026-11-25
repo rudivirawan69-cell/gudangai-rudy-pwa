@@ -585,7 +585,7 @@ async function submitItems(action, entity, items, tanggal, options = {}) {
         results: [...confirmedResults, ...list.map((it) => ({ success: false, queued: false, queueStored: false, clientItemId: it.clientItemId, code: err.code, error: msg }))],
       };
     }
-    const queuedIds = options.fromQueue ? [] : enqueue(action, entity, list, { tanggal });
+    const queuedIds = options.fromQueue ? [] : await enqueue(action, entity, list, { tanggal });
     const queuedSet = new Set(queuedIds);
     const msg = err?.message || 'Backend write belum terverifikasi';
     return {
