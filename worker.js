@@ -6,6 +6,9 @@ const MAX_MESSAGE_LENGTH = 4000;
 const MAX_HISTORY_ITEMS = 8;
 const LIVE_DATA_CHAR_BUDGET = 3500;
 const MAX_LIVE_ACTIONS = 2;
+const STOCK_ENTITY_BY_PREFIX = Object.freeze({
+  CV:'CV', BBCV:'CV', PT:'PT', WK:'PT', MM:'PT', BBPT:'PT',
+});
 const READ_ONLY_ACTIONS = new Set([
   'ping','status','getConfig','getDashboard','getDashboardData',
   'getAllStock','getStockAll','getStockByCode','searchByName',
@@ -248,6 +251,10 @@ function json(data, status=200, origin='') {
   }
   return new Response(JSON.stringify(data), { status, headers });
 }
+function resolveStockEntity(code) {
+  const prefix = String(code || '').split('-')[0].toUpperCase();
+  return STOCK_ENTITY_BY_PREFIX[prefix] || '';
+}
 function extractExactStockCode(message) {
   const match = String(message || '').match(/\b((?:BB(?:CV|PT)?|CV|PT|WK|MM)\s*-\s*\d{3,4})\b/i);
   return match ? match[1].replace(/\s+/g, '').toUpperCase() : '';
@@ -317,13 +324,13 @@ async function gatherLiveData(env, message) {
   const transactionSheet = resolveTransactionSheet(text);
   const results = await Promise.all(actions.map(async (action) => {
     const params = {};
+    const expectedEntity = action === 'getStockByCode' ? resolveStockEntity(exactCode) : '';
     if (action === 'getStockByCode') {
       if (!exactCode) return { action, ok:false, code:'EXACT_CODE_REQUIRED', error:'Kode barang exact tidak berhasil diekstrak; tidak dilakukan pencarian perkiraan.' };
-      const prefix = exactCode.split('-')[0];
-      const entity = ['CV','BBCV'].includes(prefix) ? 'CV' : (['PT','WK','MM','BBPT'].includes(prefix) ? 'PT' : '');
+      if (!expectedEntity) return { action, ok:false, code:'UNSUPPORTED_STOCK_PREFIX', error:'Prefix kode barang tidak termasuk keluarga kode CV/PT yang didukung; tidak dilakukan pencarian perkiraan.' };
       params.kode = exactCode;
       params.kodeBarang = exactCode;
-      if (entity) params.entitas = entity;
+      params.entitas = expectedEntity;
     }
     if (action === 'searchByName' && query) { params.q=query; params.query=query; params.nama=query; params.name=query; }
     if (action === 'getAllStock') params.entitas = 'ALL';
@@ -336,8 +343,6 @@ async function gatherLiveData(env, message) {
       params.limit = 100;
     }
     const raw = await callSheetsRead(env, action, params);
-    const prefix = exactCode ? exactCode.split('-')[0] : '';
-    const expectedEntity = ['CV','BBCV'].includes(prefix) ? 'CV' : (['PT','WK','MM','BBPT'].includes(prefix) ? 'PT' : '');
     const validation = validateLivePayload(action, raw, { exactCode, entity:expectedEntity, transactionSheet });
     const ok = validation.ok;
     const { source, action: _a, gatewayReceivedAt, sourceReadAt, ...data } = raw || {};
