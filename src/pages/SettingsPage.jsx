@@ -277,7 +277,7 @@ export default function SettingsPage({ onNavigate }) {
                 <span className={`text-[10px] font-bold leading-tight text-center ${active ? 'text-blue-800' : 'text-slate-600'}`}>
                   {t.short}
                 </span>
-                
+
               </button>
             );
           })}
