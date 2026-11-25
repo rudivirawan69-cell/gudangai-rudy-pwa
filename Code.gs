@@ -2080,12 +2080,12 @@ function getStockoutRisk(params) {
 
 function getTransactionHistory(params) {
   const sheetName = params.sheet || "Barang keluar";
-  if (!(sheetName in SHEET_CONFIG)) return { success: false, error: "Sheet tidak valid" };
+  if (!(sheetName in SHEET_CONFIG)) return { success: false, code:"INVALID_TRANSACTION_SHEET", error: "Sheet tidak valid" };
   const config = SHEET_CONFIG[sheetName];
   const sheet = getSS().getSheetByName(sheetName);
-  if (!sheet) return { success: false, error: "Sheet tidak ditemukan" };
+  if (!sheet) return { success: false, code:"TRANSACTION_SHEET_NOT_FOUND", error: "Sheet tidak ditemukan" };
   const last = getRealLastDataRow(sheet, config);
-  if (last < config.headerRow + 1) return { success: true, count: 0, data: [] };
+  if (last < config.headerRow + 1) return { success: true, sheet:sheetName, count: 0, data: [], sourceReadAt:new Date().toISOString() };
   const numRows = last - config.headerRow;
   const data = sheet.getRange(config.headerRow + 1, 1, numRows, sheet.getLastColumn()).getValues();
   const limit = params.limit ? Math.min(Number(params.limit), data.length) : data.length;
@@ -2095,7 +2095,7 @@ function getTransactionHistory(params) {
     const nonceMatch = note.match(/GUDANGAI_NONCE=([^;|]+)/);
     return { row: last - index, tanggal: row[1], kode: row[2], nama: row[3], satuan: row[4], qty: row[5], keterangan: row[6], transactionId: txMatch ? txMatch[1] : null, nonce: nonceMatch ? nonceMatch[1] : (txMatch ? txMatch[1] : null) };
   });
-  return { success: true, count: result.length, data: result };
+  return { success: true, sheet:sheetName, count: result.length, data: result, sourceReadAt:new Date().toISOString() };
 }
 
 function searchByName(q) {
