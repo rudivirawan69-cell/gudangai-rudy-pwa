@@ -636,7 +636,7 @@ export default function InputPage({ onNavigate }) {
     let handedOff = false;
     let stagedIds = [];
     try {
-      const queueType = txType === 'masuk' ? 'masuk' : txType === 'rusak' ? 'rusak' : 'keluar';
+      const queueType = txType === 'masuk' ? 'barangMasuk' : txType === 'rusak' ? 'barangRusak' : 'barangKeluar';
       stagedIds = await stagePendingTransaction({ type: queueType, entity, tanggal, items });
       handoffTimer = setTimeout(() => {
         if (submittingRef.current) { handedOff = true; setStatusBanner('Pengiriman masih berjalan. Proses dilanjutkan dan dapat dipantau di Sinkronisasi.'); onNavigate?.('sync'); }
