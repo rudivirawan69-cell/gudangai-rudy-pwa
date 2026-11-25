@@ -23,7 +23,7 @@ const LIVE_INTENTS = [
   // pencarian nama barang dengan query "analisis".
   { action: 'getAllStock', pattern: /analisis stok|analisa stok|ringkasan stok|data stok gudang|kondisi stok|stok gudang/i },
   { action: 'getLowStock', pattern: /stok (menipis|kritis|rendah|habis)|low ?stock|di bawah minimum|hampir habis|kritis/i },
-  { action: 'searchByName', pattern: /\b(cari|temukan|lookup)\s+(barang|item|kode)\b|nama barang|fillet|kode (cv|pt|wk)-?|\b(stok|stock|sisa)\s+[a-z][\w\s-]{2,}/i },
+  { action: 'searchByName', pattern: /\b(cari|temukan|lookup)\s+(barang|item|kode)\b|nama barang|fillet|kode (cv|pt|wk)-?|\b(stok|stock|sisa)\s+(?!(?:menipis|kritis|rendah|habis|kosong|di\s+bawah)\b)[a-z][\w\s-]{2,}/i },
   { action: 'getAllStock', pattern: /semua stok|stok (cv|pt|semua|master|lengkap)|daftar (stok|barang)|inventory/i },
   { action: 'getStatusPO', pattern: /\bpo\b|purchase order|status po|pembelian/i },
   { action: 'getTransactionHistory', pattern: /riwayat|histori|history|transaksi (terakhir|hari ini|kemarin)|barang (masuk|keluar|rusak)/i },
@@ -270,6 +270,12 @@ function resolveTransactionSheet(message) {
   if (/\bbarang\s+rusak(?:\s*\/\s*lo)?\b/.test(text)) found.push('Barang Rusak');
   return found.length === 1 ? found[0] : '';
 }
+function isValidSourceReadAt(value) {
+  if (typeof value !== 'string') return false;
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) && new Date(timestamp).toISOString() === value;
+}
+
 function validateLivePayload(action, raw, expected = {}) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw) || raw.success !== true) {
     return { ok:false, code:raw?.code || 'LIVE_DATA_UNVERIFIED', error:raw?.error || 'Respons sumber tidak memiliki success=true.' };
@@ -287,8 +293,7 @@ function validateLivePayload(action, raw, expected = {}) {
   }
   if (action === 'getAgentKnowledge') {
     if (raw.mode !== 'manifest' || !String(raw.spreadsheetTitle || '').trim() || !Array.isArray(raw.sheets) ||
-        !Number.isInteger(Number(raw.sheetCount)) || Number(raw.sheetCount) !== raw.sheets.length ||
-        !raw.sourceReadAt || !Number.isFinite(Date.parse(raw.sourceReadAt))) {
+        !Number.isInteger(Number(raw.sheetCount)) || Number(raw.sheetCount) !== raw.sheets.length) {
       return { ok:false, code:'MANIFEST_SCHEMA_INVALID', error:'Manifest spreadsheet tidak lengkap atau tidak valid.' };
     }
     const names = raw.sheets.map((item) => String(item?.name || '').trim());
@@ -299,8 +304,11 @@ function validateLivePayload(action, raw, expected = {}) {
       return { ok:false, code:'STOCK_SCHEMA_INVALID', error:'Struktur daftar stok tidak valid.' };
     }
   }
-  if (!raw.sourceReadAt || !Number.isFinite(Date.parse(raw.sourceReadAt))) {
+  if (!raw.sourceReadAt) {
     return { ok:false, code:'SOURCE_TIMESTAMP_MISSING', error:'Sumber tidak memberikan waktu baca yang dapat diverifikasi.' };
+  }
+  if (!isValidSourceReadAt(raw.sourceReadAt)) {
+    return { ok:false, code:'SOURCE_TIMESTAMP_INVALID', error:'Waktu baca sumber bukan timestamp ISO UTC kanonis yang valid.' };
   }
   return { ok:true };
 }
@@ -358,7 +366,7 @@ async function gatherLiveData(env, message) {
       action, ok, code: ok?undefined:validation.code,
       error: ok?undefined:validation.error,
       source: source||'Apps Script read-only gateway',
-      sourceReadAt: sourceReadAt || null,
+      sourceReadAt: validation.ok ? sourceReadAt : null,
       gatewayReceivedAt: gatewayReceivedAt || null,
       data: ok?data:undefined,
       query: query||undefined,
