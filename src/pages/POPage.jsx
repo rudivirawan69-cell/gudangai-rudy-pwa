@@ -92,9 +92,7 @@ const PO_DRAFT_KEY = 'gudangai_po_draft_v1';
 
 function persistPODraft(draft) {
   if (!draft) return;
-  try { localStorage.setItem(PO_DRAFT_KEY, JSON.stringify(draft)); } catch (_) {
-    // Draft persistence is best-effort and must not block PO editing.
-  }
+  try { localStorage.setItem(PO_DRAFT_KEY, JSON.stringify(draft)); } catch (_) {}
 }
 
 function loadPODraft() {
@@ -156,7 +154,6 @@ function ItemCard({ item, onUpdate, onRemove, editable }) {
             <span className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded shrink-0 ${item.entity === 'CV' ? 'bg-blue-100 text-blue-700' : 'bg-violet-100 text-violet-700'}`}>{item.entity}</span>
             <p className="text-[13px] font-bold text-slate-900 leading-tight truncate">{item.nama}</p>
           </div>
-          
         </div>
         {editable && (
           <button type="button" onClick={() => onRemove(item)} className="p-1 rounded-lg text-slate-400 hover:text-red-500 shrink-0" aria-label="Hapus"><Trash2 className="w-3.5 h-3.5" /></button>
@@ -174,7 +171,6 @@ function ItemCard({ item, onUpdate, onRemove, editable }) {
         )}
         <div className="flex-1" />
         <label className="flex items-center gap-1 shrink-0">
-          
           <input type="date" value={item.tglKedatangan || defaultTglISO()} onChange={(e) => onUpdate && onUpdate(item, { tglKedatangan: e.target.value })} disabled={!editable} className="text-[11px] font-semibold text-slate-800 border border-slate-200 rounded-lg px-1.5 py-1 bg-white max-w-[8.5rem]" />
         </label>
       </div>
@@ -206,19 +202,14 @@ export default function POPage({ onNavigate }) {
   const [poSaveMessage, setPoSaveMessage] = useState(() => (initialDraft.csGenerated || initialDraft.prodGenerated) ? 'Draft PO dipulihkan dari perangkat.' : '');
   const poDraftSnapshotRef = useRef(null);
   useEffect(() => {
-    const draft = {
-      version: 1, savedAt: Date.now(), hub, tab, csItems, prodItems, csGenerated, prodGenerated,
-    };
+    const draft = { version: 1, savedAt: Date.now(), hub, tab, csItems, prodItems, csGenerated, prodGenerated };
     poDraftSnapshotRef.current = draft;
     const timer = setTimeout(() => persistPODraft(draft), 200);
     return () => clearTimeout(timer);
   }, [hub, tab, csItems, prodItems, csGenerated, prodGenerated]);
-
   useEffect(() => {
     const flushDraft = () => persistPODraft(poDraftSnapshotRef.current);
-    const onVisibilityChange = () => {
-      if (document.visibilityState === 'hidden') flushDraft();
-    };
+    const onVisibilityChange = () => { if (document.visibilityState === 'hidden') flushDraft(); };
     window.addEventListener('pagehide', flushDraft);
     document.addEventListener('visibilitychange', onVisibilityChange);
     return () => {
@@ -302,7 +293,7 @@ export default function POPage({ onNavigate }) {
     <div className="pb-28 animate-fade-in po-page">
       <div className="flex items-start justify-between gap-2 mb-3">
         <div className="min-w-0">
-          <h2 className="text-[22px] leading-7 font-extrabold text-slate-900">Purchase order</h2>
+          <h2 className="text-[22px] leading-7 font-extrabold text-slate-900">Purchase Order</h2>
         </div>
         {hub && (
           <button type="button" onClick={() => setHub(null)} className="text-[10px] font-bold px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 shadow-sm shrink-0 flex items-center gap-1">
@@ -349,25 +340,29 @@ export default function POPage({ onNavigate }) {
             <>
               {loading ? <div className={gapClass}>{[...Array(5)].map((_, i) => <div key={i} className="skeleton h-14 rounded-xl" />)}</div>
               : activeList.length === 0 ? <div className="text-center py-12"><CheckCircle className="w-12 h-12 text-emerald-400 mx-auto mb-3" /><p className="text-slate-600 text-sm">{tab === 'cs' ? 'Stok CS aman!' : 'Tidak ada item produksi kritis'}</p></div>
-              : <div className={`${gapClass} mb-2`}>{activeList.map((item) => <ItemCard key={`${item.entity}-${item.kode}`} item={{ ...item, qty: item.kurang, tglKedatangan: defaultTglISO() }} editable={false} />)}</div>}
-              {activeList.length > 0 && !loading && (
-                <button type="button" onClick={generate} className="w-full py-3 rounded-xl bg-cyan-700 text-white text-sm font-extrabold shadow-md">Generate keranjang PO</button>
+              : <div className={`${gapClass} mb-2`}>{activeList.map((item) => <ItemCard key={`${item.entity}-${item.kode}`} item={{ ...item, qty: item.kurang, tglKedatangan: defaultTglISO() }} onUpdate={() => {}} onRemove={() => {}} editable={false} />)}</div>}
+              {!loading && activeList.length > 0 && (
+                <button type="button" onClick={generate} className="w-full py-3 rounded-xl bg-cyan-700 text-white text-sm font-extrabold shadow-sm">Generate PO</button>
               )}
             </>
           ) : (
             <>
-              <div className={`${gapClass} mb-2`}>{editList.map((item) => <ItemCard key={`${item.entity}-${item.kode}`} item={item} editable onUpdate={onUpdateItem} onRemove={onRemoveItem} />)}</div>
-              {poSaveMessage && <p className={`text-[11px] text-center mb-2 font-semibold ${poSaveMessage.startsWith('Tersimpan') ? 'text-emerald-700' : 'text-amber-700'}`}>{poSaveMessage}</p>}
-              <div className="grid grid-cols-2 gap-2">
-                <button type="button" onClick={copyPO} className="py-3 rounded-xl border border-slate-200 bg-white text-sm font-bold text-slate-700">{copied ? 'Tersalin' : 'Salin teks'}</button>
-                <button type="button" onClick={copySheetOnly} disabled={savingPO} className="py-3 rounded-xl bg-[#0f8c91] text-white text-sm font-extrabold disabled:opacity-50">{savingPO ? 'Menyimpan…' : (poSaved ? 'Tersimpan' : 'Simpan ke Sheet')}</button>
+              <div className={`${gapClass} mb-3`}>{editList.map((item) => <ItemCard key={`${item.entity}-${item.kode}`} item={item} onUpdate={onUpdateItem} onRemove={onRemoveItem} editable />)}</div>
+              <div className="flex flex-col gap-2">
+                <button type="button" onClick={copySheetOnly} disabled={savingPO} className="w-full py-3 rounded-xl bg-emerald-600 text-white text-sm font-extrabold disabled:opacity-60">{savingPO ? 'Mengirim…' : 'Kirim ke Spreadsheet'}</button>
+                <button type="button" onClick={copyPO} className="w-full py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-bold text-slate-700">{copied ? 'Tersalin' : 'Salin teks PO'}</button>
+                <button type="button" onClick={() => { if (tab === 'cs') { setCsGenerated(false); setCsItems([]); } else { setProdGenerated(false); setProdItems([]); } setPoSaved(false); setPoSaveMessage(''); }} className="w-full py-2 rounded-xl text-xs font-semibold text-slate-500">Reset generator</button>
               </div>
+              {poSaveMessage && <p className={`mt-2 text-xs font-semibold ${poSaved ? 'text-emerald-600' : 'text-slate-600'}`}>{poSaveMessage}</p>}
             </>
           )}
         </>
       )}
       {(hub === 'current' || hub === 'previous' || hub === 'confirm') && (
-        <StatusPOHubPanel mode={hub} />
+        <StatusPOHubPanel mode={hub} onNavigate={onNavigate} />
+      )}
+      {!hub && (
+        <p className="text-center text-[11px] text-slate-400 py-6">Pilih kartu di atas untuk mulai.</p>
       )}
     </div>
   );
