@@ -7,7 +7,6 @@ export const EXTRA_LIVE_INTENTS = [
   { action: 'getStockoutRisk', pattern: /3\s*(hari|day)|tiga hari|stok.{0,30}(habis|kosong)|habis.{0,20}(hari|tanggal)|prediksi.{0,30}stok|stockout|day.?s? of cover|berapa hari.{0,20}(stok|stock)/i },
   { action: 'getStockDelta', pattern: /perubahan (stok|terakhir)|yang (baru|berubah) (saja|hari ini)|delta|sinkronisasi|apa yang berubah/i },
   { action: 'getSyncMetrics', pattern: /metrik (sync|sinkronisasi)|performa (sync|koneksi)|seberapa sering (error|gagal)|kesehatan (sync|sistem)/i },
-  { action: 'getLastUpdate', pattern: /update terakhir|terakhir diperbarui|kapan.{0,20}(update|sinkronisasi)/i },
   { action: 'getPOAnalysis', pattern: /analisis po|rekomendasi (po|pembelian)|apa yang (harus|perlu) (di)?(pesan|beli)/i },
   { action: 'getConfig', pattern: /periode aktif|bulan (aktif|berjalan)|konfigurasi|timezone|versi backend/i },
   { action: 'getAgentKnowledge', pattern: /daftar tab|daftar sheet|berapa\s+(?:jumlah\s+)?(?:tab|sheet)\b|ada\s+berapa\s+(?:tab|sheet)\b|sebutkan\s+(?:semua\s+)?(?:tab|sheet)\b|struktur (sheet|spreadsheet|tab|gudang)|nama (sheet|tab)|tab (apa saja|aktif|yang ada|spreadsheet|spreadsheets)|sheet (apa saja|yang ada|aktif)|peta (sheet|tab|spreadsheet|gudang)|koleksi (sheet|tab)|list (sheet|tab)|apa saja (tab|sheet)/i },
@@ -17,6 +16,7 @@ export const STRUCTURE_KNOWLEDGE = `PETA PENGETAHUAN GUDANGAI RUDY — SNAPSHOT 
 
 1. SUMBER DAN STATUS KEPERCAYAAN
 - Spreadsheet yang dibaca Apps Script adalah sumber kebenaran operasional. Jawaban live hanya boleh memakai DATA LIVE dari action yang tervalidasi; sebut action, sourceReadAt jika diberikan sumber, dan gatewayReceivedAt secara terpisah. Jangan menyebut waktu gateway sebagai waktu baca spreadsheet.
+- sourceReadAt adalah waktu data dibaca; lastStockUpdateAt adalah waktu perubahan stok terakhir yang berhasil dicatat, bila tersedia. Nilai null atau tidak ada berarti waktu perubahan stok belum dapat dipastikan—jangan menggantinya dengan sourceReadAt atau menyimpulkan stok tidak pernah berubah.
 - Code.gs di repository adalah snapshot; versi production bisa berbeda. Jangan mengklaim sudah membaca kode ter-deploy atau seluruh isi spreadsheet kecuali ada hasil live yang membuktikannya.
 - Jangan menghardcode total item, saldo, status, nama sheet, formula, atau baseline historis sebagai kondisi saat ini. Jumlah item master bersifat dinamis dari Stock CV + Stock PT. Ikuti hasil live dan jelaskan jika sumber gagal, kosong, terpotong, atau tidak cocok.
 
@@ -88,6 +88,8 @@ export const AGENT_SKILL_RULES = [
   '14. Jika getAgentKnowledge gagal/tidak mengembalikan manifest tervalidasi, sebut kode error dan jangan menebak struktur sheet. Jangan menyebut action yang tidak ada di allowlist (mis. getAllSheetNames).',
   '15. Jangan pernah mengklaim seluruh skill sudah dikuasai sepenuhnya. Jelaskan kemampuan yang terdaftar, sumber data/tool yang benar-benar tersedia, hasil pengujian yang sudah lulus, dan keterbatasan yang belum diverifikasi. Bedakan fitur tersedia, fitur teruji, fitur terbatas, dan fitur belum tersedia.',
   '16. Setiap angka operasional harus berasal dari field angka pada payload live tervalidasi atau perhitungan deterministik yang rumus dan inputnya disebutkan. Jangan mengisi angka kosong dengan perkiraan, angka historis, contoh, atau asumsi. Jika angka tidak ada, jawab tidak tersedia.',
+  '17. Gunakan sourceReadAt hanya jika sumber memberikan timestamp ISO UTC yang tervalidasi. gatewayReceivedAt adalah waktu gateway menerima respons, bukan waktu baca sumber. Jika validasi provenance gagal, perlakukan hasil itu sebagai data yang belum terverifikasi dan jangan kutip isinya sebagai fakta.',
+  '18. Untuk pertanyaan waktu perubahan stok, gunakan getLastUpdate dan laporkan lastStockUpdateAt hanya jika sumber menyediakannya. Nilai null/tidak ada berarti waktu perubahan belum dapat dipastikan; jangan substitusi sourceReadAt atau klaim data tidak pernah berubah.',
 ].join('\n');
 
 export function buildSystemPrompt(context, liveBlock) {

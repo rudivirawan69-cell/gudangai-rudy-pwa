@@ -284,8 +284,12 @@ test('general stock analysis routes to inventory dataset, not fuzzy name search'
   assert.deepEqual(detectLiveActions('Analisis Stok'), ['getAllStock']);
   assert.deepEqual(detectLiveActions('Tolong analisa stok gudang'), ['getAllStock']);
   assert.deepEqual(detectLiveActions('Ringkasan stok'), ['getAllStock']);
+  assert.deepEqual(detectLiveActions('Buat ringkasan stok gudang'), ['getAllStock']);
   assert.deepEqual(detectLiveActions('Data stok gudang'), ['getAllStock']);
+  assert.deepEqual(detectLiveActions('Kapan stok terakhir berubah?'), ['getLastUpdate']);
+  assert.deepEqual(detectLiveActions('Kapan data stok diperbarui?'), ['getLastUpdate']);
   assert.deepEqual(detectLiveActions('Cari stok Ayam Fillet'), ['searchByName']);
+  assert.deepEqual(detectLiveActions('Stok menipis'), ['getLowStock']);
 });
 
 test('detectLiveActions maps read-only intents without parameters and caps at two', () => {
@@ -313,6 +317,22 @@ test('general stock analysis fetches the complete live stock dataset with proven
   assert.match(systemText, /CV-0001/);
 });
 
+test('stock-change timestamp questions use getLastUpdate and preserve unknown semantics', async () => {
+  const { response, payload, sheetCalls, systemText } = await runLive('Kapan stok terakhir berubah?', {
+    sheetsResponse: () => new Response(JSON.stringify({
+      success:true,
+      sourceReadAt:'2026-11-25T10:00:00.000Z',
+      lastStockUpdateAt:null,
+    }), { status:200 }),
+  });
+  assert.equal(response.status, 200);
+  assert.equal(sheetCalls.length, 1);
+  assert.equal(sheetCalls[0].action, 'getLastUpdate');
+  assert.equal(payload.dataSources[0].ok, true);
+  assert.match(systemText, /lastStockUpdateAt":null/);
+  assert.match(systemText, /waktu perubahan belum dapat dipastikan/);
+});
+
 test('data questions trigger live read-only read and include provenance', async () => {
   const { response, payload, sheetCalls, systemText } = await runLive('Tolong ringkasan dashboard hari ini');
   assert.equal(response.status, 200); assert.equal(sheetCalls.length, 1);
@@ -321,6 +341,24 @@ test('data questions trigger live read-only read and include provenance', async 
   assert.ok(payload.dataSources[0].gatewayReceivedAt);
   assert.equal(payload.dataSources[0].sourceReadAt, '2026-11-25T10:00:00.000Z'); assert.match(systemText, /DATA LIVE \(read-only\)/);
   assert.match(systemText, /Pisahkan entitas CV dan PT/);
+});
+
+test('agent rejects malformed or impossible source timestamps and withholds unverified data', async () => {
+  for (const sourceReadAt of ['2026-02-30T10:00:00.000Z', '11/25/2026']) {
+    const { payload, systemText } = await runLive('Tolong ringkasan dashboard hari ini', {
+      sheetsResponse: () => new Response(JSON.stringify({
+        success:true,
+        dashboardTotal:987654,
+        sourceReadAt,
+      }), { status:200 }),
+    });
+    assert.equal(payload.dataSources[0].ok, false);
+    assert.equal(payload.dataSources[0].code, 'SOURCE_TIMESTAMP_INVALID');
+    assert.equal(payload.dataSources[0].sourceReadAt, null);
+    assert.ok(payload.dataSources[0].gatewayReceivedAt);
+    assert.doesNotMatch(systemText, /987654/);
+    assert.match(systemText, /SOURCE_TIMESTAMP_INVALID/);
+  }
 });
 
 test('spreadsheet structure questions route to getAgentKnowledge manifest through read-only gateway', async () => {
