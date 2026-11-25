@@ -352,7 +352,7 @@ export default function SettingsPage({ onNavigate }) {
           {connMessage && <p className={`text-xs ${connStatus === 'ok' ? 'text-emerald-600' : connStatus === 'fail' ? 'text-red-600' : 'text-slate-500'}`}>{connMessage}</p>}
           {pendingCount > 0 && (
             <button type="button" onClick={() => onNavigate?.('sync')} className="w-full py-2 rounded-xl border border-amber-200 bg-amber-50 text-amber-800 text-xs font-semibold">
-              Antrian sinkron: {pendingCount} item
+              Sinkronisasi tertunda: {pendingCount} item
             </button>
           )}
         </div>
