@@ -152,15 +152,28 @@ function readQueueLocal() {
     return { revision: _queueRevision, queue: Array.isArray(raw) ? raw : [] };
   } catch (_) { return { revision: 0, queue: [] }; }
 }
-function commitQueueLocal(queue) {
+async function commitQueueLocal(queue) {
   const safeQueue = Array.isArray(queue) ? queue : [];
   const next = Math.max(_queueRevision + 1, Date.now());
-  _queueRevision = next;
+
+  // IndexedDB commit + read-back is the durability gate. If it fails, do not
+  // acknowledge this queue mutation or allow the caller to clear its cart.
+  await persistQueueBackup(safeQueue, next);
+
   try {
     localStorage.setItem(QUEUE_KEY, JSON.stringify(safeQueue));
     localStorage.setItem(QUEUE_KEY + '_rev', String(next));
-  } catch (_) {}
-  void persistQueueBackup(safeQueue, next);
+    const verified = readQueueLocal();
+    if (verified.revision !== next || JSON.stringify(verified.queue) !== JSON.stringify(safeQueue)) {
+      throw new Error('Verifikasi localStorage antrean gagal.');
+    }
+  } catch (error) {
+    // IndexedDB already contains the committed snapshot. Leave it recoverable;
+    // caller must keep the original input visible until a later hydration.
+    throw new Error('Cadangan IndexedDB tersimpan, tetapi cache antrean perangkat gagal diverifikasi: ' + (error?.message || 'storage error'));
+  }
+
+  _queueRevision = next;
   try {
     window.dispatchEvent(new CustomEvent('gudangai-queue-changed', {
       detail: { count: safeQueue.reduce((sum, entry) => sum + (entry.items || []).length, 0), revision: next }
@@ -374,7 +387,7 @@ function ensureClientItemId(it) {
   if (it.clientItemId) return it;
   return { ...it, clientItemId: 'CI-' + (crypto.randomUUID ? crypto.randomUUID() : Date.now() + '-' + Math.random().toString(36).slice(2, 9)) };
 }
-function enqueue(type, entity, items, meta = {}) {
+async function enqueue(type, entity, items, meta = {}) {
   if (!items?.length) return [];
   const queue = getPendingQueue();
   const normalized = items.map((item) => ({
@@ -383,10 +396,23 @@ function enqueue(type, entity, items, meta = {}) {
     nama: normalizeTransactionText(item.nama),
     keterangan: normalizeTransactionText(item.keterangan),
   }));
-  queue.push({ id: 'Q-' + Date.now(), type, entity, items: normalized, tanggal: normalizeTanggal(meta.tanggal), createdAt: new Date().toISOString() });
-  commitQueueLocal(queue);
+  const existingIds = new Set(queue.flatMap((entry) => (entry.items || []).map((item) => String(item.clientItemId || ''))));
+  const freshItems = normalized.filter((item) => !existingIds.has(String(item.clientItemId)));
+  if (!freshItems.length) return normalized.map((item) => String(item.clientItemId));
+  const transactionId = String(meta.transactionId || '').trim() || 'TX-RUDY-' + (crypto.randomUUID ? crypto.randomUUID() : Date.now());
+  queue.push({
+    id: 'Q-' + transactionId,
+    transactionId,
+    status: meta.status || 'PENDING_VERIFY',
+    type, entity,
+    items: freshItems,
+    tanggal: normalizeTanggal(meta.tanggal),
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  });
+  await commitQueueLocal(queue);
   const stored = getPendingQueue();
-  const storedIds = new Set(stored.flatMap((entry) => (entry.items || []).map((item) => item.clientItemId).filter(Boolean)));
+  const storedIds = new Set(stored.flatMap((entry) => (entry.items || []).map((item) => String(item.clientItemId || ''))));
   return normalized.map((item) => String(item.clientItemId)).filter((id) => storedIds.has(id));
 }
 async function submitOneItem(sheetOrAction, entity, it, tanggal) {
@@ -538,7 +564,7 @@ async function submitItems(action, entity, items, tanggal, options = {}) {
   }
 
   if (!navigator.onLine || !getApiUrl()) {
-    const queuedIds = options.fromQueue ? [] : enqueue(action, entity, list, { tanggal });
+    const queuedIds = options.fromQueue ? [] : await enqueue(action, entity, list, { tanggal });
     const queuedSet = new Set(queuedIds);
     return {
       success: false, queued: queuedIds.length > 0, count: alreadyApplied.length, queuedCount: queuedIds.length,
@@ -559,7 +585,7 @@ async function submitItems(action, entity, items, tanggal, options = {}) {
         results: [...confirmedResults, ...list.map((it) => ({ success: false, queued: false, queueStored: false, clientItemId: it.clientItemId, code: err.code, error: msg }))],
       };
     }
-    const queuedIds = options.fromQueue ? [] : enqueue(action, entity, list, { tanggal });
+    const queuedIds = options.fromQueue ? [] : await enqueue(action, entity, list, { tanggal });
     const queuedSet = new Set(queuedIds);
     const msg = err?.message || 'Backend write belum terverifikasi';
     return {
@@ -593,7 +619,7 @@ async function submitItems(action, entity, items, tanggal, options = {}) {
       }
       const queueItems = chunk.filter(it => failedIds.has(it.clientItemId) || !knownIds.has(it.clientItemId));
       if (queueItems.length) {
-        const queuedIds = options.fromQueue ? [] : enqueue(action, entity, queueItems, { tanggal });
+        const queuedIds = options.fromQueue ? [] : await enqueue(action, entity, queueItems, { tanggal });
         const queuedSet = new Set(queuedIds);
         for (const id of queuedIds) {
           const result = allResults.find((r) => r.clientItemId === id);
@@ -626,7 +652,7 @@ async function submitItems(action, entity, items, tanggal, options = {}) {
         clientItemId: item.clientItemId, transactionId: check.transactionId || 'TX-' + item.clientItemId,
         readBack: check.readBack,
       })));
-      const queuedIds = options.fromQueue ? [] : enqueue(action, entity, unresolved, { tanggal });
+      const queuedIds = options.fromQueue ? [] : await enqueue(action, entity, unresolved, { tanggal });
       totalQueued += queuedIds.length;
       allResults.push(...unresolved.map(it => ({
         success: false, queued: queuedIds.includes(it.clientItemId), queueStored: queuedIds.includes(it.clientItemId),
@@ -708,13 +734,14 @@ export async function verifyPendingItem(item) {
     return { success: false, status: 'UNKNOWN', code: 'READBACK_FAILED', clientItemId: item.clientItemId, sheet, error: err?.message || 'Gagal membaca status transaksi.' };
   }
 }
-export function removePendingByClientIds(ids) {
-  const set = new Set(ids || []);
-  const q = getPendingQueue().map((e) => ({ ...e, items: (e.items || []).filter((it) => !set.has(it.clientItemId)) })).filter((e) => e.items.length);
-  commitQueueLocal(q);
+export async function removePendingByClientIds(ids) {
+  const set = new Set((ids || []).map(String));
+  const q = getPendingQueue().map((e) => ({ ...e, items: (e.items || []).filter((it) => !set.has(String(it.clientItemId))) })).filter((e) => e.items.length);
+  await commitQueueLocal(q);
+  return { success: true, remaining: q.reduce((n, entry) => n + entry.items.length, 0) };
 }
-export function clearPendingQueue() { commitQueueLocal([]); }
-export function clearSyncedQueue() { commitQueueLocal([]); }
+export async function clearPendingQueue() { await commitQueueLocal([]); return { success: true }; }
+export async function clearSyncedQueue() { await commitQueueLocal([]); return { success: true }; }
 export async function syncPendingQueue() {
   const url = getApiUrl();
   if (!url || !navigator.onLine) return { synced: 0, failed: 0, skipped: true };
@@ -778,7 +805,7 @@ export async function syncPendingQueue() {
         remaining.push({ ...entry, items: remainingItems });
       }
     }
-    commitQueueLocal(remaining);
+    await commitQueueLocal(remaining);
     return { synced, failed, groups: groups.size, requests, conflicts: conflictingIds.size };
   } finally {
     _syncLock = false;

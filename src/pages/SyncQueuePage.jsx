@@ -110,12 +110,16 @@ export default function SyncQueuePage({ onBack }) {
 
   const total = rows.length;
 
-  const handleRemove = (clientItemId) => {
-    if (!clientItemId) return;
-    removePendingByClientIds([clientItemId]);
-    setRows((prev) => prev.filter((r) => r.clientItemId !== clientItemId));
-    setResult(null);
-    setError(null);
+  const handleRemove = async (clientItemId) => {
+    if (!clientItemId || syncing) return;
+    try {
+      await removePendingByClientIds([clientItemId]);
+      setRows((prev) => prev.filter((r) => r.clientItemId !== clientItemId));
+      setResult(null);
+      setError(null);
+    } catch (err) {
+      setError(err?.message || 'Antrean belum dapat diubah secara aman.');
+    }
   };
 
   const handleMarkSuccess = async (row) => {
@@ -145,7 +149,13 @@ export default function SyncQueuePage({ onBack }) {
       readBack: verification.readBack || null,
       items: [{ kode: row.kode, nama: row.nama, qty: row.qty, satuan: row.satuan || '' }],
     });
-    removePendingByClientIds([row.clientItemId]);
+    try {
+      await removePendingByClientIds([row.clientItemId]);
+    } catch (err) {
+      setSyncing(false);
+      setError(err?.message || 'Riwayat tersimpan, tetapi antrean belum dapat diperbarui. Jangan kirim ulang.');
+      return;
+    }
     setRows((prev) => prev.filter((r) => r.clientItemId !== row.clientItemId));
     setSyncing(false);
     setResult({ synced: 1, failed: 0, message: `${row.nama || row.kode} terverifikasi dari server · masuk Riwayat` });
