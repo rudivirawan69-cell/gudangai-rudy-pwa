@@ -81,6 +81,12 @@ try {
     localStorage.setItem('gudangai_api_secret', 'ci-mock-secret');
     localStorage.setItem('gudangai_input_draft_v1', JSON.stringify(inputDraft));
     localStorage.setItem('gudangai_po_draft_v1', JSON.stringify(poDraft));
+    localStorage.setItem('gudangai_history', JSON.stringify([{
+      id: 'CI-HISTORY-001', transactionId: 'CI-HISTORY-001', type: 'masuk', entity: 'CV',
+      savedAt: '2026-11-26T02:00:00.000Z', status: 'success', syncStatus: 'success',
+      items: [{ kode: 'CV-0001', nama: 'Ayam Fillet Dada', qty: 2, satuan: 'Pack' }],
+      keterangan: 'CI note must not appear on the card detail',
+    }]));
   }, {
     inputDraft: {
       version: 1, entity: 'CV', txType: 'masuk', tanggal: '01/11/2026',
@@ -281,6 +287,32 @@ try {
         throw new Error(`Page marker not visible: ${label} at ${viewport.width}px; expected "${marker}". Body: ${bodyText}. Cause: ${error.message}`);
       }
       const boundaryErrors = await page.getByText('Halaman gagal dimuat', { exact: false }).count();
+      if (label === 'Stok') {
+        const stockCards = await page.evaluate(() => {
+          const list = document.querySelector('.sk-item-list');
+          const card = document.querySelector('.sk-item-card');
+          if (!list || !card) return null;
+          const outer = getComputedStyle(list);
+          const tile = getComputedStyle(card);
+          return {
+            outerBackground: outer.backgroundColor, outerBorder: outer.borderTopWidth,
+            outerShadow: outer.boxShadow, outerPadding: outer.padding,
+            gap: parseFloat(outer.rowGap || outer.gap),
+            cardBorder: tile.borderTopWidth, cardRadius: tile.borderTopLeftRadius,
+            cardBackground: tile.backgroundColor, cardWidth: card.getBoundingClientRect().width,
+            listWidth: list.getBoundingClientRect().width,
+          };
+        });
+        assert.ok(stockCards, 'Stock item cards must render independently.');
+        assert.equal(stockCards.outerBackground, 'rgba(0, 0, 0, 0)', 'Stock list must not be a long enclosing surface.');
+        assert.equal(stockCards.outerBorder, '0px', 'Stock list wrapper must have no border.');
+        assert.equal(stockCards.outerShadow, 'none', 'Stock list wrapper must have no shadow.');
+        assert.equal(stockCards.outerPadding, '0px', 'Stock list wrapper must not inset the item cards.');
+        assert.ok(stockCards.gap >= 8, `Stock cards need visible separation: ${JSON.stringify(stockCards)}`);
+        assert.ok(parseFloat(stockCards.cardBorder) > 0 && parseFloat(stockCards.cardRadius) >= 12, `Each stock item must be an independent rounded card: ${JSON.stringify(stockCards)}`);
+        assert.ok(Math.abs(stockCards.cardWidth - stockCards.listWidth) <= 1, `Stock card width should align with list width: ${JSON.stringify(stockCards)}`);
+      }
+
       assert.equal(boundaryErrors, 0, `Error boundary shown on ${label}`);
       if (label === 'Input') {
         const inputAudit = await page.evaluate(() => {
@@ -313,6 +345,45 @@ try {
     // Hidden destinations are reached through the actual 5th navigation item.
     await openMorePage('Riwayat', 'Transaksi');
     await assertNoHorizontalOverflow('Riwayat', viewport);
+    const historyCards = await page.evaluate(() => {
+      const pageRoot = document.querySelector('.rw-page');
+      const filters = document.querySelector('.rw-filters');
+      const day = document.querySelector('.rw-day');
+      const row = document.querySelector('.rw-row');
+      const table = document.querySelector('.rw-audit-table-wrap');
+      const style = (node) => node ? getComputedStyle(node) : null;
+      return {
+        filters: style(filters) && { background: style(filters).backgroundColor, border: style(filters).borderTopWidth, shadow: style(filters).boxShadow },
+        day: style(day) && { background: style(day).backgroundColor, border: style(day).borderTopWidth, shadow: style(day).boxShadow, display: style(day).display },
+        row: style(row) && { border: style(row).borderTopWidth, radius: style(row).borderTopLeftRadius, background: style(row).backgroundColor, shadow: style(row).boxShadow },
+        tableDisplay: style(table)?.display,
+        noteText: pageRoot?.innerText.includes('CI note must not appear on the card detail') || false,
+        helperText: pageRoot?.innerText.includes('Filter atau buka Antrean Sinkronisasi') || false,
+        auditHint: pageRoot?.innerText.includes('buka detail') || false,
+        placeholder: document.querySelector('.rw-search input')?.placeholder || '',
+      };
+    });
+    assert.ok(historyCards, 'History visual audit must return data.');
+    assert.equal(historyCards.filters.background, 'rgba(0, 0, 0, 0)', 'History filter wrapper must not become one enclosing card.');
+    assert.equal(historyCards.filters.border, '0px', 'History filter wrapper must not have a border.');
+    assert.equal(historyCards.filters.shadow, 'none', 'History filter wrapper must not have a shadow.');
+    assert.equal(historyCards.day.background, 'rgba(0, 0, 0, 0)', 'Date groups must be neutral wrappers, not cards.');
+    assert.equal(historyCards.day.border, '0px', 'Date groups must not have a border surface.');
+    assert.equal(historyCards.day.shadow, 'none', 'Date groups must not have a shadow surface.');
+    assert.ok(parseFloat(historyCards.row.border) > 0 && parseFloat(historyCards.row.radius) >= 12, `History transactions must be independent cards: ${JSON.stringify(historyCards)}`);
+    assert.equal(historyCards.noteText, false, 'Nonfunctional transaction note text must not be rendered in the history UI.');
+    assert.equal(historyCards.helperText, false, 'Redundant banner helper text must be removed.');
+    assert.equal(historyCards.auditHint, false, 'Redundant open-detail helper text must be removed.');
+    assert.ok(!historyCards.placeholder.toLowerCase().includes('keterangan'), 'History search placeholder should not mention notes.');
+    if (viewport.width >= 900) {
+      assert.equal(historyCards.day.display, 'none', 'Desktop must not render both table and card history layouts.');
+      assert.equal(historyCards.tableDisplay, 'block', 'Desktop audit table should be the sole history layout.');
+    } else {
+      assert.notEqual(historyCards.day.display, 'none', 'Mobile history cards must stay visible.');
+      assert.equal(historyCards.tableDisplay, 'none', 'Mobile must use cards, not the duplicate desktop table.');
+      await page.locator('.rw-row-head').first().click();
+      assert.equal(await page.getByText('CI note must not appear on the card detail', { exact: true }).count(), 0, 'Opening a history card must not reveal the removed note.');
+    }
     await openMorePage('Pengaturan', 'Mode Tampilan');
     await assertNoHorizontalOverflow('Pengaturan', viewport);
     const settingsCards = await page.evaluate(() => {

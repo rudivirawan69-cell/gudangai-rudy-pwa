@@ -345,3 +345,28 @@ html[data-theme] .app-content .sk-page .sk-entity-block .sk-seg button.on {
   .sk-page .sk-entity-block .sk-seg { gap:8px !important; }
   .sk-page .sk-entity-block .sk-seg button { min-height:48px; font-size:12px; }
 }
+
+
+/* 2026-11-26 — independent cards: remove long parent surfaces and keep each SKU tile isolated. */
+html[data-theme] .app-content .sk-page .sk-filter-block,
+html[data-theme] .app-content .sk-page .sk-entity-block,
+html[data-theme] .app-content .sk-page .sk-item-list {
+  background:transparent !important; border:0 !important; border-radius:0 !important;
+  box-shadow:none !important; padding:0 !important; margin-inline:0 !important;
+}
+html[data-theme] .app-content .sk-page .sk-entity-block { margin-bottom:12px !important; }
+html[data-theme] .app-content .sk-page .sk-filter-block:not(.sk-entity-block) { margin:8px 0 !important; }
+html[data-theme] .app-content .sk-page .sk-item-list {
+  display:grid !important; grid-template-columns:minmax(0,1fr) !important;
+  gap:10px !important; padding-bottom:0 !important;
+}
+html[data-theme] .app-content .sk-page .sk-item.sk-item-card {
+  display:block !important; width:100% !important; min-width:0 !important;
+  margin:0 !important; border:1px solid var(--border) !important;
+  border-left-width:4px !important; border-radius:15px !important;
+  background:var(--bg-elevated) !important; box-shadow:var(--shadow-card, var(--shadow-1)) !important;
+}
+html[data-theme] .app-content .sk-page .sk-item.sk-item-card.sk-card-kritis { border-left-color:var(--stok-kritis) !important; }
+html[data-theme] .app-content .sk-page .sk-item.sk-item-card.sk-card-waspada { border-left-color:var(--stok-waspada) !important; }
+html[data-theme] .app-content .sk-page .sk-item.sk-item-card.sk-card-aman { border-left-color:var(--stok-aman) !important; }
+html[data-theme] .app-content .sk-page .sk-list-head h2 { font-size:16px !important; line-height:22px !important; font-weight:800 !important; letter-spacing:-.02em !important; }
