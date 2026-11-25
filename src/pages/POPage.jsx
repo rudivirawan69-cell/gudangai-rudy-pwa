@@ -156,7 +156,7 @@ function ItemCard({ item, onUpdate, onRemove, editable }) {
             <span className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded shrink-0 ${item.entity === 'CV' ? 'bg-blue-100 text-blue-700' : 'bg-violet-100 text-violet-700'}`}>{item.entity}</span>
             <p className="text-[13px] font-bold text-slate-900 leading-tight truncate">{item.nama}</p>
           </div>
-          <p className="text-[10px] text-slate-500 tabular-nums">{item.kode} · {item.size || '—'} · {item.satuan || 'Pack'}</p>
+          
         </div>
         {editable && (
           <button type="button" onClick={() => onRemove(item)} className="p-1 rounded-lg text-slate-400 hover:text-red-500 shrink-0" aria-label="Hapus"><Trash2 className="w-3.5 h-3.5" /></button>
@@ -174,7 +174,7 @@ function ItemCard({ item, onUpdate, onRemove, editable }) {
         )}
         <div className="flex-1" />
         <label className="flex items-center gap-1 shrink-0">
-          <span className="text-[9px] font-bold text-slate-500 uppercase">Tgl</span>
+          
           <input type="date" value={item.tglKedatangan || defaultTglISO()} onChange={(e) => onUpdate && onUpdate(item, { tglKedatangan: e.target.value })} disabled={!editable} className="text-[11px] font-semibold text-slate-800 border border-slate-200 rounded-lg px-1.5 py-1 bg-white max-w-[8.5rem]" />
         </label>
       </div>
@@ -340,9 +340,9 @@ export default function POPage({ onNavigate }) {
           </div>
           <section className={`po-recommendation-panel po-recommendation-${tab} mb-3`}>
             <div className="po-recommendation-heading"><ShoppingCart className="po-recommendation-icon" aria-hidden="true" /><p className="text-sm font-bold">{tab === 'cs' ? 'Rekomendasi PO · CS' : 'Rekomendasi PO · Produksi'}</p></div>
-            <div className="po-recommendation-metrics">
-              <div><span className="po-metric-label">Item kritis</span><strong>{loading ? '…' : activeList.length}</strong></div>
-              <div><span className="po-metric-label">Total kurang</span><strong>{loading ? '…' : totalKurang.toLocaleString('id-ID')}</strong></div>
+            <div className="po-recommendation-metrics" aria-label="Ringkasan rekomendasi PO">
+              <strong aria-label="Jumlah item kritis">{loading ? '…' : activeList.length}</strong>
+              <strong aria-label="Total kekurangan">{loading ? '…' : totalKurang.toLocaleString('id-ID')}</strong>
             </div>
           </section>
           {!generated ? (
