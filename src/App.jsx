@@ -58,8 +58,8 @@ const MAIN_TABS = [
 const MORE_TABS = [
   { id: 'ai', label: 'Agent Rubee AI', icon: BrainCircuit, chip: 'bg-orange-500/25' },
   { id: 'riwayat', label: 'Riwayat', icon: Clock, chip: 'bg-amber-500/25' },
-  { id: 'sync', label: 'Antrean', icon: RefreshCw, chip: 'bg-teal-500/25' },
-  { id: 'settings', label: 'Atur', icon: Settings, chip: 'bg-slate-500/25' },
+  { id: 'sync', label: 'Sinkronisasi', icon: RefreshCw, chip: 'bg-teal-500/25' },
+  { id: 'settings', label: 'Pengaturan', icon: Settings, chip: 'bg-slate-500/25' },
 ];
 
 const MORE_IDS = new Set(MORE_TABS.map((t) => t.id));
