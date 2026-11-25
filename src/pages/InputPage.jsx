@@ -757,7 +757,7 @@ export default function InputPage() {
           <span className="text-[11px] font-semibold text-slate-700">Tempel</span>
         </button>
       </div>
-      
+
       <input ref={filePdfRef} type="file" accept="application/pdf" className="hidden" onChange={onPdfPick} />
       <input ref={fileImgRef} type="file" accept="image/*" className="hidden" onChange={onImgPick} />
 
@@ -767,7 +767,7 @@ export default function InputPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-base font-extrabold text-slate-900">Input Foto</p>
-                
+
               </div>
               <button type="button" onClick={() => setShowPhotoSource(false)} className="p-2 rounded-xl bg-slate-100 text-slate-600">
                 <X className="w-5 h-5" />
