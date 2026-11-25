@@ -57,23 +57,12 @@ const MAIN_TABS = [
 
 const MORE_TABS = [
   { id: 'ai', label: 'Agent Rubee AI', icon: BrainCircuit, chip: 'bg-orange-500/25' },
-  { id: 'riwayat', label: 'Riwayat Transaksi', icon: Clock, chip: 'bg-amber-500/25' },
-  { id: 'sync', label: 'Antrean sinkronisasi', icon: RefreshCw, chip: 'bg-teal-500/25' },
-  { id: 'settings', label: 'Pengaturan', icon: Settings, chip: 'bg-slate-500/25' },
+  { id: 'riwayat', label: 'Riwayat', icon: Clock, chip: 'bg-amber-500/25' },
+  { id: 'sync', label: 'Antrean', icon: RefreshCw, chip: 'bg-teal-500/25' },
+  { id: 'settings', label: 'Atur', icon: Settings, chip: 'bg-slate-500/25' },
 ];
 
 const MORE_IDS = new Set(MORE_TABS.map((t) => t.id));
-
-const TAB_SUBTITLE = {
-  dashboard: 'Ringkasan operasional gudang',
-  stok: 'Monitoring stok rak',
-  input: 'Penerimaan dan pengeluaran',
-  po: 'Purchase order',
-  ai: 'Agent Rubee Intelligence · Worker AI',
-  riwayat: 'Log audit transaksi',
-  settings: 'Pengaturan sistem',
-  sync: 'Antrean sinkronisasi',
-};
 
 function ConnBanner({ hasUrl, status, message }) {
   if (!hasUrl || status !== 'error') return null;
@@ -98,7 +87,7 @@ function MoreSheet({ open, onClose, onNavigate, activeId, pendingCount }) {
               <span className={`more-row-icon ${t.chip}`}><Icon className="w-5 h-5" strokeWidth={2.25} /></span>
               <span className="min-w-0 flex-1">
                 <span className="block text-sm font-bold text-[var(--text-main,#0f172a)]">{t.label}</span>
-                <span className="block text-[11px] text-[var(--text-muted,#475569)]">{TAB_SUBTITLE[t.id]}</span>
+                
               </span>
               {t.id === 'sync' && pendingCount > 0 && <span className="more-row-badge">{pendingCount}</span>}
             </button>
