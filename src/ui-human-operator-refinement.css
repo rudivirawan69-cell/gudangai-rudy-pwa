@@ -688,3 +688,26 @@ html[data-theme] .po-status-panel .section-card {
 html[data-theme] .po-status-panel :is(.rounded-xl.bg-slate-50,.rounded-xl.bg-amber-50,.rounded-xl.bg-emerald-50) {
   box-shadow: none !important;
 }
+
+
+/* Restore concise operational context without adding nested card surfaces. */
+html[data-theme] .po-page .po-operational-context {
+  margin-top: 4px;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.35;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+html[data-theme] .po-page .po-recommendation-metrics > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+html[data-theme] .po-page .po-metric-label {
+  color: var(--text-muted);
+  font-size: 10px;
+  line-height: 1.25;
+  font-weight: 700;
+}
