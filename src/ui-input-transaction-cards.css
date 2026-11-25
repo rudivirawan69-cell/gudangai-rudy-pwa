@@ -93,3 +93,110 @@ html[data-theme="graphite_titanium"] {
   .input-tx-selected { font-size: 7px; }
 }
 @media (prefers-reduced-motion: reduce) { .input-tx-btn { transition: none; } }
+
+
+/* 2026-11-25 — independent Input control cards + unified card spacing across pages. */
+html[data-theme] .input-control-card {
+  display:grid !important;
+  grid-template-columns:minmax(0,1.6fr) minmax(0,.8fr) minmax(0,.8fr) 48px !important;
+  align-items:stretch !important;
+  gap:10px !important;
+  width:100%;
+  padding:0 !important;
+  border:0 !important;
+  border-radius:0 !important;
+  background:transparent !important;
+  box-shadow:none !important;
+}
+html[data-theme] .input-date-control { grid-column:1; min-width:0; }
+html[data-theme] .input-entity-control { display:contents !important; }
+html[data-theme] .input-date-field,
+html[data-theme] .input-entity-btn,
+html[data-theme] .input-notification-btn {
+  width:100%;
+  min-width:0;
+  min-height:52px !important;
+  border:1px solid var(--border) !important;
+  border-radius:14px !important;
+  background:var(--bg-elevated) !important;
+  color:var(--text-main) !important;
+  box-shadow:var(--shadow-card) !important;
+}
+html[data-theme] .input-entity-btn { padding-inline:6px; }
+html[data-theme] .input-entity-btn.is-active {
+  border-color:var(--accent-strong) !important;
+  background:var(--accent-soft) !important;
+  color:var(--text-main) !important;
+  box-shadow:0 0 0 1px var(--accent-strong),var(--shadow-card) !important;
+}
+html[data-theme] .input-notification-btn { justify-self:stretch; }
+html[data-theme] .input-tx-segmented,
+html[data-theme] .input-source-methods { gap:12px !important; }
+html[data-theme] .input-tx-btn,
+html[data-theme] .input-source-methods > .input-method-card {
+  border-radius:15px !important;
+  box-shadow:var(--shadow-card) !important;
+}
+html[data-theme] .settings-page {
+  display:grid !important;
+  gap:12px !important;
+  align-content:start;
+}
+html[data-theme] .settings-menu-list {
+  display:grid !important;
+  grid-template-columns:minmax(0,1fr);
+  gap:10px !important;
+  min-width:0;
+  overflow:visible !important;
+  border:0 !important;
+  border-radius:0 !important;
+  background:transparent !important;
+  box-shadow:none !important;
+}
+html[data-theme] .settings-menu-list .settings-menu-row {
+  min-height:58px;
+  padding:11px 13px !important;
+  border:1px solid var(--border) !important;
+  border-radius:15px !important;
+  background:var(--bg-elevated) !important;
+  color:var(--text-main) !important;
+  box-shadow:var(--shadow-card) !important;
+}
+html[data-theme] .settings-menu-list .settings-menu-row + .settings-menu-row {
+  border-top:1px solid var(--border) !important;
+}
+html[data-theme] .settings-profile-summary,
+html[data-theme] .settings-auth-card,
+html[data-theme] .settings-theme-card,
+html[data-theme] .settings-profile-editor,
+html[data-theme] .settings-page > .section-card,
+html[data-theme] .settings-page > .info-box {
+  border:1px solid var(--border) !important;
+  border-radius:15px !important;
+  box-shadow:var(--shadow-card) !important;
+}
+html[data-theme] .more-sheet {
+  display:grid;
+  gap:9px !important;
+}
+html[data-theme] .more-row {
+  min-height:58px;
+  padding:11px 13px !important;
+  border:1px solid var(--border) !important;
+  border-radius:15px !important;
+  background:var(--bg-elevated) !important;
+  color:var(--text-main) !important;
+  box-shadow:var(--shadow-card) !important;
+}
+html[data-theme] .more-row + .more-row { border-top:1px solid var(--border) !important; }
+html[data-theme] .more-row.is-active {
+  border-color:var(--accent-strong) !important;
+  background:var(--accent-soft) !important;
+}
+@media(max-width:380px) {
+  html[data-theme] .input-control-card { gap:7px !important; grid-template-columns:minmax(0,1.6fr) minmax(0,.8fr) minmax(0,.8fr) 44px !important; }
+  html[data-theme] .input-tx-segmented,
+  html[data-theme] .input-source-methods { gap:8px !important; }
+  html[data-theme] .settings-page { gap:10px !important; }
+  html[data-theme] .settings-menu-list { gap:8px !important; }
+}
