@@ -978,3 +978,11 @@ html[data-theme="graphite_titanium"] .input-tx-btn.tx-rusak.is-active { backgrou
   .input-tx-btn,.input-tx-icon { transition:none!important; }
   .input-tx-btn:active,.input-tx-btn.is-active .input-tx-icon { transform:none!important; }
 }
+
+
+/* Accessibility fix: all Input-page primary controls meet the 44px touch target. */
+.input-page .input-entity-btn,
+.input-page .input-notification-btn {
+  min-height: 44px;
+  box-sizing: border-box;
+}
