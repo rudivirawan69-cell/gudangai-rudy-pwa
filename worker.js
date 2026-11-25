@@ -148,12 +148,20 @@ async function handleSyncAll(request, env, origin) {
   const results = await Promise.all(actions.map(async ({ key, action, params }) => {
     try {
       const raw = await callSheetsRead(env, action, params);
-      const ok = raw?.success === true;
-      const { source, action: _action, gatewayReceivedAt: _gatewayReceivedAt, sourceReadAt: _sourceReadAt, ...data } = raw || {};
-      return { key, ok, data:ok ? data : null, error:ok ? null : raw?.error, code:ok ? null : raw?.code };
-    } catch (error) {
-      return { key, ok:false, data:null, error:String(error?.message || error), code:'SYNC_FETCH_FAILED' };
-    }
+    const prefix = exactCode ? exactCode.split('-')[0] : '';
+    const expectedEntity = ['CV','BBCV'].includes(prefix) ? 'CV' : (['PT','WK','MM','BBPT'].includes(prefix) ? 'PT' : '');
+    const validation = validateLivePayload(action, raw, { exactCode, entity:expectedEntity, transactionSheet });
+    const ok = validation.ok;
+    const { source, action: _a, gatewayReceivedAt, sourceReadAt, ...data } = raw || {};
+    return {
+      action, ok, code: ok?undefined:validation.code,
+      error: ok?undefined:validation.error,
+      source: source||'Apps Script read-only gateway',
+      sourceReadAt: sourceReadAt || null,
+      gatewayReceivedAt: gatewayReceivedAt || null,
+      data: ok?data:undefined,
+      query: query||undefined,
+    };
   }));
   const data = {};
   const errors = {};
@@ -233,6 +241,37 @@ function resolveTransactionSheet(message) {
   if (/\bbarang\s+keluar\b/.test(text)) found.push('Barang keluar');
   if (/\bbarang\s+rusak(?:\s*\/\s*lo)?\b/.test(text)) found.push('Barang Rusak');
   return found.length === 1 ? found[0] : '';
+}
+function validateLivePayload(action, raw, expected = {}) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw) || raw.success !== true) {
+    return { ok:false, code:raw?.code || 'LIVE_DATA_UNVERIFIED', error:raw?.error || 'Respons sumber tidak memiliki success=true.' };
+  }
+  if (action === 'getStockByCode') {
+    const code = String(raw.kode || raw.kodeBarang || '').replace(/\s+/g,'').toUpperCase();
+    const entity = String(raw.entitas || '').trim().toUpperCase();
+    if (!expected.exactCode || code !== expected.exactCode) return { ok:false, code:'SKU_IDENTITY_MISMATCH', error:'Kode sumber tidak sama dengan kode yang diminta.' };
+    if (expected.entity && entity !== expected.entity) return { ok:false, code:'SKU_ENTITY_MISMATCH', error:'Entitas sumber tidak sama dengan entitas kode yang diminta.' };
+    if (raw.stockAkhir == null || raw.stockAkhir === '' || !Number.isFinite(Number(raw.stockAkhir))) return { ok:false, code:'SKU_STOCK_VALUE_INVALID', error:'Saldo stok sumber tidak tersedia atau bukan angka yang valid.' };
+  }
+  if (action === 'getTransactionHistory') {
+    if (raw.sheet !== expected.transactionSheet) return { ok:false, code:'TRANSACTION_SOURCE_MISMATCH', error:'Nama sheet pada hasil tidak sama dengan sheet yang diminta.' };
+    if (!Array.isArray(raw.data) || !Number.isInteger(Number(raw.count)) || Number(raw.count) !== raw.data.length) return { ok:false, code:'TRANSACTION_SCHEMA_INVALID', error:'Struktur riwayat transaksi tidak valid.' };
+  }
+  if (action === 'getAgentKnowledge') {
+    if (raw.mode !== 'manifest' || !String(raw.spreadsheetTitle || '').trim() || !Array.isArray(raw.sheets) ||
+        !Number.isInteger(Number(raw.sheetCount)) || Number(raw.sheetCount) !== raw.sheets.length ||
+        !raw.sourceReadAt || !Number.isFinite(Date.parse(raw.sourceReadAt))) {
+      return { ok:false, code:'MANIFEST_SCHEMA_INVALID', error:'Manifest spreadsheet tidak lengkap atau tidak valid.' };
+    }
+    const names = raw.sheets.map((item) => String(item?.name || '').trim());
+    if (names.some((name) => !name) || new Set(names).size !== names.length) return { ok:false, code:'MANIFEST_NAMES_INVALID', error:'Nama tab kosong atau duplikat pada manifest.' };
+  }
+  if (action === 'getAllStock' || action === 'getLowStock') {
+    if (!Array.isArray(raw.items) || !Number.isInteger(Number(raw.count)) || Number(raw.count) !== raw.items.length) {
+      return { ok:false, code:'STOCK_SCHEMA_INVALID', error:'Struktur daftar stok tidak valid.' };
+    }
+  }
+  return { ok:true };
 }
 export function detectLiveActions(message) {
   const text = String(message||'');
