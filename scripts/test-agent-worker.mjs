@@ -387,6 +387,17 @@ test('Apps Script manifest action exists and returns dynamic sheet metadata', ()
   assert.doesNotMatch(handler, /insertSheet\(|setValue\(|setValues\(/);
 });
 
+test('Apps Script read dispatcher stamps sourceReadAt without changing action payload shape', () => {
+  const helperStart = codeGs.indexOf('function withSourceReadAt_(result)');
+  const helperEnd = codeGs.indexOf('function doPost(e)', helperStart);
+  const routeStart = helperEnd;
+  const routeEnd = codeGs.indexOf('function doGet(e)', routeStart);
+  assert.ok(helperStart >= 0 && helperEnd > helperStart && routeEnd > routeStart);
+  assert.match(codeGs.slice(helperStart, helperEnd), /sourceReadAt/);
+  assert.match(codeGs.slice(routeStart, routeEnd), /withSourceReadAt_\\(getStockByCode\\(/);
+  assert.match(codeGs.slice(routeStart, routeEnd), /withSourceReadAt_\\(getSyncMetrics\\(\\)\\)/);
+});
+
 test('Apps Script transaction history returns requested sheet identity and source timestamp', () => {
   const start = codeGs.indexOf('function getTransactionHistory(params)');
   const end = codeGs.indexOf('function searchByName(', start);
