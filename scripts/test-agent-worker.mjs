@@ -393,7 +393,7 @@ test('Apps Script transaction history returns requested sheet identity and sourc
   assert.ok(start >= 0 && end > start);
   const handler = codeGs.slice(start, end);
   assert.match(handler, /sheet:sheetName/);
-  assert.match(handler, /sourceReadAt:new Date\\(\\)\\.toISOString\\(\\)/);
+  assert.ok(handler.includes('sourceReadAt:new Date().toISOString()'));
   assert.match(handler, /count: result.length, data: result/);
 });
 
