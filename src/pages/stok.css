@@ -309,7 +309,7 @@
 
 
 /* 2026-11-25 — independent stock selector cards; no shared long container. */
-.sk-page .sk-entity-block {
+html[data-theme] .app-content .sk-page .sk-entity-block {
   margin:0 0 12px !important;
   padding:0 !important;
   border:0 !important;
@@ -317,7 +317,7 @@
   background:transparent !important;
   box-shadow:none !important;
 }
-.sk-page .sk-entity-block .sk-seg {
+html[data-theme] .app-content .sk-page .sk-entity-block .sk-seg {
   display:grid !important;
   grid-template-columns:repeat(3,minmax(0,1fr)) !important;
   gap:10px !important;
@@ -325,7 +325,7 @@
   border:0 !important;
   background:transparent !important;
 }
-.sk-page .sk-entity-block .sk-seg button {
+html[data-theme] .app-content .sk-page .sk-entity-block .sk-seg button {
   min-width:0;
   min-height:52px;
   padding:8px 6px;
@@ -335,7 +335,7 @@
   color:var(--text-main) !important;
   box-shadow:var(--shadow-card) !important;
 }
-.sk-page .sk-entity-block .sk-seg button.on {
+html[data-theme] .app-content .sk-page .sk-entity-block .sk-seg button.on {
   border-color:var(--accent-strong) !important;
   background:var(--accent-soft) !important;
   color:var(--text-main) !important;
