@@ -307,6 +307,11 @@ function validateLivePayload(action, raw, expected = {}) {
 export function detectLiveActions(message) {
   const text = String(message||'');
   if (extractExactStockCode(text)) return ['getStockByCode'];
+  // A direct stock-analysis request is a single inventory intent. Do not also
+  // trigger the generic "ringkasan" dashboard intent or fuzzy item search.
+  if (/\b(?:analisis|analisa|ringkasan|data|kondisi)\s+stok\b|\bstok\s+gudang\b/i.test(text)) {
+    return ['getAllStock'];
+  }
   const matched = [];
   for (const intent of LIVE_INTENTS) {
     if (intent.pattern.test(text) && READ_ONLY_ACTIONS.has(intent.action)) matched.push(intent.action);
