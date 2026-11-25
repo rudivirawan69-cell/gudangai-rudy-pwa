@@ -280,7 +280,7 @@ test('data questions trigger live read-only read and include provenance', async 
   assert.equal(response.status, 200); assert.equal(sheetCalls.length, 1);
   assert.equal(sheetCalls[0].action, 'getDashboardData'); assert.equal(sheetCalls[0].client.mode, 'read_only');
   assert.equal(payload.dataSources[0].action, 'getDashboardData'); assert.equal(payload.dataSources[0].ok, true);
-  assert.ok(payload.dataSources[0].readAt); assert.match(systemText, /DATA LIVE \(read-only\)/);
+  assert.ok(payload.dataSources[0].gatewayReceivedAt);\n  assert.equal(payload.dataSources[0].sourceReadAt, null); assert.match(systemText, /DATA LIVE \(read-only\)/);
   assert.match(systemText, /Pisahkan entitas CV dan PT/);
 });
 
@@ -295,6 +295,69 @@ test('spreadsheet structure questions route to getAgentKnowledge manifest throug
   assert.equal(payload.dataSources[0].ok, true);
   assert.match(systemText, /getAgentKnowledge/);
   assert.match(systemText, /manifest/);
+});
+
+test('exact SKU lookup has priority and preserves normalized code and entity', async () => {
+  const { response, sheetCalls, payload } = await runLive('Berapa stock kode CV - 0030', {
+    sheetsResponse: (body) => new Response(JSON.stringify({ success:true, kode:body.kode, entitas:body.entitas, stockAkhir:12 }), { status:200 }),
+  });
+  assert.equal(response.status, 200);
+  assert.equal(sheetCalls.length, 1);
+  assert.equal(sheetCalls[0].action, 'getStockByCode');
+  assert.equal(sheetCalls[0].kode, 'CV-0030');
+  assert.equal(sheetCalls[0].kodeBarang, 'CV-0030');
+  assert.equal(sheetCalls[0].entitas, 'CV');
+  assert.equal(payload.dataSources[0].ok, true);
+});
+
+test('Barang Masuk history request selects Barang masuk source sheet', async () => {
+  const { sheetCalls } = await runLive('Jelaskan detail baris terakhir Barang Masuk');
+  assert.equal(sheetCalls.length, 1);
+  assert.equal(sheetCalls[0].action, 'getTransactionHistory');
+  assert.equal(sheetCalls[0].sheet, 'Barang masuk');
+});
+
+test('ambiguous transaction history does not guess a sheet', async () => {
+  const { sheetCalls, payload, systemText } = await runLive('Bandingkan riwayat Barang Masuk dan Barang Keluar');
+  assert.equal(sheetCalls.length, 0);
+  assert.equal(payload.dataSources[0].ok, false);
+  assert.equal(payload.dataSources[0].code, 'TRANSACTION_TYPE_REQUIRED');
+  assert.match(systemText, /Jenis transaksi belum jelas/);
+});
+
+test('malformed success envelope is fail-closed and never presented as live data', async () => {
+  const { payload, systemText } = await runLive('Tampilkan daftar stok', {
+    sheetsResponse: () => new Response(JSON.stringify({ rows:[{ kode:'CV-0030', stockAkhir:999 }] }), { status:200 }),
+  });
+  assert.equal(payload.dataSources[0].ok, false);
+  assert.equal(payload.dataSources[0].code, 'LIVE_DATA_UNVERIFIED');
+  assert.match(systemText, /Respons sumber tidak memiliki success=true/);
+  assert.doesNotMatch(systemText, /999/);
+});
+
+test('Apps Script manifest action exists and returns dynamic sheet metadata', () => {
+  const routeStart = codeGs.indexOf('function doPost(e)');
+  const routeEnd = codeGs.indexOf('function doGet(e)');
+  const handlerStart = codeGs.indexOf('function getAgentKnowledge(params)');
+  const handlerEnd = codeGs.indexOf('function getStockByCode(');
+  assert.ok(routeStart >= 0 && routeEnd > routeStart);
+  assert.ok(handlerStart >= 0 && handlerEnd > handlerStart);
+  assert.match(codeGs.slice(routeStart, routeEnd), /case "getAgentKnowledge": return jsonResponse\\(getAgentKnowledge\\(body\\)\\)/);
+  const handler = codeGs.slice(handlerStart, handlerEnd);
+  assert.match(handler, /getSheets\\(\\)/);
+  assert.match(handler, /sheetCount:sheets.length/);
+  assert.match(handler, /sourceReadAt:new Date\\(\\)\\.toISOString\\(\\)/);
+  assert.doesNotMatch(handler, /insertSheet\\(|setValue\\(|setValues\\(/);
+});
+
+test('getConfig read-only handler never creates missing Config tab', () => {
+  const start = codeGs.indexOf('function getConfigReadOnly_()');
+  const end = codeGs.indexOf('function getAgentKnowledge(params)', start);
+  assert.ok(start >= 0 && end > start);
+  const handler = codeGs.slice(start, end);
+  assert.match(handler, /getSheetByName\\(CONFIG_SHEET_NAME\\)/);
+  assert.match(handler, /CONFIG_SHEET_NOT_FOUND/);
+  assert.doesNotMatch(handler, /insertSheet\\(|setValue\\(|setValues\\(/);
 });
 
 test('three-day stockout questions request the dedicated 30-day read-only forecast', async () => {
