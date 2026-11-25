@@ -467,7 +467,8 @@ async function handleAgent(request, env, origin) {
   if (message.length > MAX_MESSAGE_LENGTH) return json({ success:false, code:'MESSAGE_TOO_LONG', error:'Pertanyaan terlalu panjang.' }, 413, origin);
   const context = body?.context && typeof body.context==='object' ? body.context : {};
   const history = normalizeHistory(body?.history, message);
-  // Only explicit enumeration requests qualify; mentions of sheet names or structure do not.\n  const ENUM_RE = /^\s*(?:(?:(?:tolong|mohon|bisa)\s+)?(?:tampilkan|sebutkan|daftarkan|daftar|list)\s+(?:(?:daftar|semua|seluruh|nama)\s+)*(?:tab|sheet)\b|(?:berapa\s+(?:jumlah|banyak)|ada\s+berapa)\s+(?:jumlah\s+)?(?:tab|sheet)\b|apa\s+saja\s+(?:nama\s+)?(?:tab|sheet)\b)/i;
+  // Only explicit enumeration requests qualify; mentions of sheet names or structure do not.
+  const ENUM_RE = /^\s*(?:(?:(?:tolong|mohon|bisa)\s+)?(?:tampilkan|sebutkan|daftarkan|daftar|list)\s+(?:(?:daftar|semua|seluruh|nama)\s+)*(?:tab|sheet)\b|(?:berapa\s+(?:jumlah|banyak)|ada\s+berapa)\s+(?:jumlah\s+)?(?:tab|sheet)\b|apa\s+saja\s+(?:nama\s+)?(?:tab|sheet)\b)/i;
   if (ENUM_RE.test(message)) {
     const manifest = live.results.find((result) => result.action === 'getAgentKnowledge');
     if (manifest?.ok && manifest.data?.mode === 'manifest' && Array.isArray(manifest.data.sheets) &&
