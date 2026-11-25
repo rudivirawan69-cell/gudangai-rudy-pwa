@@ -618,6 +618,7 @@ export default function InputPage() {
       return;
     }
     if (submittingRef.current || !cart.length) return;
+    const uiSubmitStartedAt = Date.now();
     submittingRef.current = true;
     setSubmitting(true);
     const zeroItems = cart.filter((c) => !(Number(c.qty) > 0));
@@ -658,7 +659,7 @@ export default function InputPage() {
     } catch (err) {
       setStatusBanner(err.message || 'Gagal kirim');
     } finally {
-      console.info('[GudangAI timing]', JSON.stringify({ event: 'client', phase: 'spinner mati', at: new Date().toISOString() }));
+      console.info('[GudangAI timing]', JSON.stringify({ event: 'client', phase: 'spinner mati', ms: Date.now() - uiSubmitStartedAt }));
       setSubmitting(false); submittingRef.current = false; setSubmitProgress(null);
     }
   };
