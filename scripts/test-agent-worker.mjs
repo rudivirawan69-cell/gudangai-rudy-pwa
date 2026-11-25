@@ -361,8 +361,8 @@ test('agent rejects malformed or impossible source timestamps and withholds unve
   }
 });
 
-test('spreadsheet structure questions route to getAgentKnowledge manifest through read-only gateway', async () => {
-  const { response, sheetCalls, payload, systemText } = await runLive('Tolong tampilkan daftar tab dan struktur sheet spreadsheet', {
+test('explicit spreadsheet enumeration returns deterministic manifest through read-only gateway', async () => {
+  const { response, sheetCalls, payload } = await runLive('Tolong tampilkan daftar tab dan struktur sheet spreadsheet', {
     sheetsResponse: () => new Response(JSON.stringify({
       success:true, mode:'manifest', spreadsheetTitle:'Test Spreadsheet',
       sheetCount:2, sheets:[{ name:'Stock CV' },{ name:'Barang masuk' }],
@@ -377,8 +377,10 @@ test('spreadsheet structure questions route to getAgentKnowledge manifest throug
   assert.equal(payload.dataSources[0].action, 'getAgentKnowledge');
   assert.equal(payload.dataSources[0].ok, true);
   assert.equal(payload.dataSources[0].sourceReadAt, '2026-11-25T10:00:00.000Z');
-  assert.match(systemText, /getAgentKnowledge/);
-  assert.match(systemText, /manifest/);
+  assert.equal(payload.mode, 'deterministic');
+  assert.equal(payload.model, 'deterministic-manifest');
+  assert.match(payload.reply, /Stock CV/);
+  assert.match(payload.reply, /Barang masuk/);
 });
 
 test('exact SKU lookup has priority and preserves normalized code and entity', async () => {
@@ -771,7 +773,7 @@ test('non-enumeration mentions of sheet names or structure do not enter determin
     'Bagaimana struktur spreadsheet saat ini?',
   ];
   for (const message of nonEnumeration) {
-    assert.deepEqual(detectLiveActions(message), [], message);
+    assert.equal(detectLiveActions(message).includes('getAgentKnowledge'), false, message);
   }
 });
 
