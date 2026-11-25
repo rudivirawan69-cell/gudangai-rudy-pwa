@@ -142,3 +142,63 @@
  .rw-chips button{min-height:34px;padding-inline:9px}
 }
 @media(prefers-reduced-motion:reduce){.rw-row{transition:none}}
+
+
+/* 2026-11-26 — standalone transaction cards, neutral date wrappers, unified page title. */
+html[data-theme] .app-content .rw-page .rw-head {
+  display:flex !important; flex-direction:column !important; align-items:stretch !important;
+  gap:9px !important; margin:2px 0 12px !important;
+}
+html[data-theme] .app-content .rw-page .rw-title-row {
+  display:flex; align-items:center; justify-content:space-between; gap:8px; min-width:0;
+}
+html[data-theme] .app-content .rw-page .rw-title-row h1 {
+  margin:0 !important; font-size:22px !important; line-height:28px !important;
+  font-weight:800 !important; letter-spacing:-.02em !important; color:var(--text-main) !important;
+}
+html[data-theme] .app-content .rw-page .rw-count-badge {
+  flex:0 0 auto; padding:4px 9px; border:1px solid var(--border); border-radius:999px;
+  background:var(--bg-elevated); color:var(--text-muted); font-size:11px; line-height:16px; font-weight:750;
+}
+html[data-theme] .app-content .rw-page .rw-head-actions {
+  display:flex !important; width:100% !important; justify-content:flex-start !important;
+  flex-wrap:wrap !important; gap:7px !important;
+}
+html[data-theme] .app-content .rw-page .rw-filters {
+  display:grid !important; grid-template-columns:minmax(0,1fr) !important;
+  gap:8px !important; margin:0 0 10px !important;
+  background:transparent !important; border:0 !important; box-shadow:none !important; padding:0 !important;
+}
+html[data-theme] .app-content .rw-page .rw-filter-group {
+  width:100%; margin:0 !important; padding:10px 11px !important;
+  border:1px solid var(--border) !important; border-radius:14px !important;
+  background:var(--bg-elevated) !important; box-shadow:var(--shadow-card, var(--shadow-1)) !important;
+}
+html[data-theme] .app-content .rw-page .rw-day {
+  display:block; width:100%; margin:12px 0 0 !important; padding:0 !important;
+  border:0 !important; border-radius:0 !important; background:transparent !important;
+  box-shadow:none !important; overflow:visible !important;
+}
+html[data-theme] .app-content .rw-page .rw-day-head { margin:0 2px 7px !important; }
+html[data-theme] .app-content .rw-page .rw-row {
+  display:block; width:100%; margin:0 0 10px !important; overflow:hidden;
+  border:1px solid var(--border) !important; border-radius:15px !important;
+  background:var(--bg-elevated) !important; box-shadow:var(--shadow-card, var(--shadow-1)) !important;
+}
+html[data-theme] .app-content .rw-page .rw-row-head { min-width:0; width:100%; }
+html[data-theme] .app-content .rw-page .rw-detail { background:transparent !important; border-top:1px solid var(--border) !important; }
+html[data-theme] .app-content .rw-page .rw-detail ul { margin:9px 0 4px !important; }
+html[data-theme] .app-content .rw-page .rw-ket { display:none !important; }
+html[data-theme] .app-content .rw-page .rw-audit-open small { display:none !important; }
+html[data-theme] .app-content .rw-page .rw-banner small { display:none !important; }
+html[data-theme] .app-content .rw-page .rw-empty p { display:none !important; }
+@media (min-width:900px) {
+  html[data-theme] .app-content .rw-page .rw-day { display:none !important; }
+  html[data-theme] .app-content .rw-page .rw-audit-table-wrap { display:block !important; }
+}
+@media (max-width:430px) {
+  html[data-theme] .app-content .rw-page .rw-title-row h1 { font-size:22px !important; }
+  html[data-theme] .app-content .rw-page .rw-head-actions { flex-wrap:wrap !important; }
+  html[data-theme] .app-content .rw-page .rw-btn-queue,
+  html[data-theme] .app-content .rw-page .rw-btn-ghost { min-height:40px !important; font-size:12px !important; }
+}
