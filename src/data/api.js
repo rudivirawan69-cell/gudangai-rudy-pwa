@@ -24,6 +24,7 @@ const DEFAULT_API_URL = 'https://script.google.com/macros/s/AKfycbxVpw0_waeCautJ
 // Keep the proven V6.6.5 write authentication fallback. Existing localStorage secret still takes precedence.
 const DEFAULT_API_SECRET = 'adadd47759234a7f94acb230c0cc7ff479c4e4f79a674714';
 let _syncLock = false;
+const _activeSendIds = new Set();
 let _queueRevision = 0;
 let _batchSupported = null;
 let _dashboardLiveSnapshot = null;
@@ -698,9 +699,14 @@ export async function stagePendingTransaction({ type, entity, tanggal, items }) 
   const now = new Date().toISOString();
   queue.push({ id: 'Q-SEND-' + (crypto.randomUUID ? crypto.randomUUID() : Date.now()), transactionId: 'TX-BATCH-' + (crypto.randomUUID ? crypto.randomUUID() : Date.now()), status: 'PROCESSING', type, entity: String(entity || '').toUpperCase(), items: validItems, tanggal: normalizeTanggal(tanggal), createdAt: now, updatedAt: now, processingStartedAt: now });
   await commitQueueLocal(queue);
+  validItems.forEach((item) => _activeSendIds.add(String(item.clientItemId)));
   const stagedIds = new Set(getPendingQueue().flatMap((entry) => (entry.items || []).map((item) => String(item.clientItemId || ''))));
   if (validItems.some((item) => !stagedIds.has(String(item.clientItemId)))) throw new Error('Verifikasi antrean gagal. Permintaan ke server dibatalkan.');
   return validItems.map((item) => item.clientItemId);
+}
+
+export function finishPendingTransaction(ids) {
+  (ids || []).forEach((id) => _activeSendIds.delete(String(id)));
 }
 
 export async function updatePendingItemStates(ids, status, details = {}) {
@@ -778,6 +784,7 @@ export async function syncPendingQueue() {
     const rawQueue = getPendingQueue();
     const nowMs = Date.now();
     const queue = rawQueue.map((entry) => {
+      if ((entry.items || []).some((item) => _activeSendIds.has(String(item.clientItemId)))) return entry;
       if (entry.status !== 'PROCESSING') return entry;
       const started = Date.parse(entry.processingStartedAt || entry.updatedAt || entry.createdAt || '');
       return Number.isFinite(started) && nowMs - started < 120000
