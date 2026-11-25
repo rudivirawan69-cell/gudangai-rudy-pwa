@@ -187,7 +187,7 @@ describe('GudangAI Metode C UI contract', () => {
     expect(app).toContain("label: 'Atur'");
     expect(dashboard).not.toContain('po-shortcut-subtitle');
     expect(dashboard).not.toContain('Angka = persentase dari total');
-    expect(dashboard).not.toContain('Outlet terlayani');
+    expect(dashboard).not.toContain('Outlet terlayani');\n    expect(dashboard).not.toContain('MASTER</span>');\n    expect(dashboard).not.toContain('JARINGAN</span>');\n    expect(dashboard).not.toContain('SKU aktif · Dashboard Live');\n    expect(dashboard).not.toContain('po-shortcut-count">Buka');
     expect(stock).toContain('<h1>Stok Barang</h1>');
     expect(stock).not.toContain('sk-section-label">Divisi');
     expect(stock).not.toContain('sk-section-label">Kondisi stok');
