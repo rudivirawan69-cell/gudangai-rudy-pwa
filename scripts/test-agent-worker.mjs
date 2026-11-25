@@ -295,6 +295,22 @@ test('detectLiveActions maps read-only intents without parameters and caps at tw
   assert.deepEqual(detectLiveActions('Apa saja skill yang kamu kuasai?'), []);
 });
 
+test('general stock analysis fetches the complete live stock dataset with provenance', async () => {
+  const { response, payload, sheetCalls, systemText } = await runLive('Analisis Stok', {
+    sheetsResponse: (body) => new Response(JSON.stringify({
+      success:true, count:1, items:[{ kode:'CV-0001', nama:'Contoh', stockAkhir:12 }],
+      sourceReadAt:'2026-11-25T10:00:00.000Z',
+    }), { status:200 }),
+  });
+  assert.equal(response.status, 200);
+  assert.equal(sheetCalls.length, 1);
+  assert.equal(sheetCalls[0].action, 'getAllStock');
+  assert.equal(sheetCalls[0].entitas, 'ALL');
+  assert.equal(payload.dataSources[0].ok, true);
+  assert.equal(payload.dataSources[0].sourceReadAt, '2026-11-25T10:00:00.000Z');
+  assert.match(systemText, /CV-0001/);
+});
+
 test('data questions trigger live read-only read and include provenance', async () => {
   const { response, payload, sheetCalls, systemText } = await runLive('Tolong ringkasan dashboard hari ini');
   assert.equal(response.status, 200); assert.equal(sheetCalls.length, 1);
