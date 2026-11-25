@@ -498,7 +498,7 @@ try {
             const raw = String(value).trim();
             const rgb = raw.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)/i);
             if (rgb) return { r:+rgb[1], g:+rgb[2], b:+rgb[3], a:rgb[4] === undefined ? 1 : +rgb[4] };
-            const srgb = raw.match(/color\\(srgb\\s+([\\d.]+)\\s+([\\d.]+)\\s+([\\d.]+)(?:\\s*\\/\\s*([\\d.]+))?\\)/i);
+            const srgb = raw.match(/color\(srgb\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)(?:\s*\/\s*([\d.]+))?\)/i);
             return srgb ? { r:Math.round(+srgb[1]*255), g:Math.round(+srgb[2]*255), b:Math.round(+srgb[3]*255), a:srgb[4] === undefined ? 1 : +srgb[4] } : null;
           };
           const fallback = parse(getComputedStyle(document.body).backgroundColor) || {r:247,g:247,b:245,a:1};
