@@ -19,8 +19,11 @@ const READ_ONLY_ACTIONS = new Set([
 const LIVE_INTENTS = [
   ...EXTRA_LIVE_INTENTS.filter((intent) => intent.action === 'getStockoutRisk'),
   { action: 'getDashboardData', pattern: /dashboard|ringkasan|rangkuman|kondisi gudang|overview/i },
+  // Perintah analisis stok umum harus mengambil dataset, bukan diperlakukan sebagai
+  // pencarian nama barang dengan query "analisis".
+  { action: 'getAllStock', pattern: /analisis stok|analisa stok|ringkasan stok|data stok gudang|kondisi stok|stok gudang/i },
   { action: 'getLowStock', pattern: /stok (menipis|kritis|rendah|habis)|low ?stock|di bawah minimum|hampir habis|kritis/i },
-  { action: 'searchByName', pattern: /\b(stok|stock|sisa)\b|stock akhir|stok akhir|berapa.*(stok|stock|sisa)|sisa (stok|barang)|cari (barang|item|kode)|nama barang|fillet|kode (cv|pt|wk)-?/i },
+  { action: 'searchByName', pattern: /\b(cari|temukan|lookup)\s+(barang|item|kode)\b|nama barang|fillet|kode (cv|pt|wk)-?|\b(stok|stock|sisa)\s+[a-z][\w\s-]{2,}/i },
   { action: 'getAllStock', pattern: /semua stok|stok (cv|pt|semua|master|lengkap)|daftar (stok|barang)|inventory/i },
   { action: 'getStatusPO', pattern: /\bpo\b|purchase order|status po|pembelian/i },
   { action: 'getTransactionHistory', pattern: /riwayat|histori|history|transaksi (terakhir|hari ini|kemarin)|barang (masuk|keluar|rusak)/i },
