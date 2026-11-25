@@ -68,7 +68,6 @@ const Baris = memo(function Baris({ t, buka, onToggle, onRetry, onCopy, ringkas 
               </li>
             ))}
           </ul>
-          {t.keterangan ? <p className="rw-ket">{t.keterangan}</p> : null}
           <div className="rw-actions">
             <button type="button" onClick={() => onCopy(t)}>
               Salin
@@ -236,12 +235,9 @@ export default function RiwayatPage({ onNavigate }) {
   return (
     <div className="rw-page">
       <header className="rw-head">
-        <div>
-
+        <div className="rw-title-row">
           <h1>Riwayat Transaksi</h1>
-          <p className="rw-sub">
-            {fmtCount(totalValid)} transaksi{anomali > 0 ? ` · ${fmtCount(anomali)} invalid` : ""}
-          </p>
+          <span className="rw-count-badge">{fmtCount(totalValid)} transaksi</span>
         </div>
         <div className="rw-head-actions">
           {nAntrean > 0 && (
@@ -271,7 +267,7 @@ export default function RiwayatPage({ onNavigate }) {
               {cntStatus.gagal > 0 && cntStatus.antrian > 0 ? " · " : ""}
               {cntStatus.antrian > 0 ? `${cntStatus.antrian} antrian` : ""}
             </b>
-            <small>Filter atau buka Antrean Sinkronisasi</small>
+            
           </div>
           <div className="rw-banner-btns">
             {cntStatus.gagal > 0 && (
@@ -341,7 +337,7 @@ export default function RiwayatPage({ onNavigate }) {
         <input
           type="search"
           aria-label="Cari transaksi"
-          placeholder="Cari kode, nama, atau keterangan…"
+          placeholder="Cari kode atau nama barang…"
           value={q}
           onChange={(e) => setQ(e.target.value)}
           autoComplete="off"
@@ -366,7 +362,7 @@ export default function RiwayatPage({ onNavigate }) {
       {totalValid === 0 && (
         <div className="rw-empty">
           <b>{adaFilter ? "Tidak ada hasil" : "Belum ada riwayat"}</b>
-          <p>{adaFilter ? "Ubah filter atau reset." : "Transaksi berhasil akan muncul di sini."}</p>
+          
           {adaFilter ? (
             <button type="button" className="rw-primary" onClick={resetFilter}>Reset filter</button>
           ) : (
@@ -389,7 +385,7 @@ export default function RiwayatPage({ onNavigate }) {
                   <td>
                     <button type="button" className="rw-audit-open" aria-expanded={openId === t.id} onClick={() => setOpenId((prev) => prev === t.id ? null : t.id)}>
                       {TIPE_LABEL[t.tipe] || t.tipe || "Transaksi"} · {judul(t)}
-                      <small>{t.jumlahItem} item · buka detail</small>
+                      
                     </button>
                   </td>
                   <td>{t.entitas || "—"}</td>
@@ -401,8 +397,7 @@ export default function RiwayatPage({ onNavigate }) {
                     <td colSpan={6}>
                       <div className="rw-detail">
                         <ul>{(t.items || EMPTY).map((item, index) => <li key={index}><span>{item.nama || item.kode}{item.kode && item.nama ? <em> · {item.kode}</em> : null}</span><b>{fmt(item.qty)} {item.satuan || ""}</b></li>)}</ul>
-                        {t.keterangan ? <p className="rw-ket">{t.keterangan}</p> : null}
-                        <div className="rw-actions"><button type="button" onClick={() => salin(t)}>Salin ringkasan</button></div>
+                                      <div className="rw-actions"><button type="button" onClick={() => salin(t)}>Salin ringkasan</button></div>
                       </div>
                     </td>
                   </tr>
