@@ -540,7 +540,6 @@ async function submitItems(action, entity, items, tanggal, options = {}) {
   if (!navigator.onLine || !getApiUrl()) {
     const queuedIds = options.fromQueue ? [] : enqueue(action, entity, list, { tanggal });
     const queuedSet = new Set(queuedIds);
-    const msg = list.length + ' item masuk Antrian Sinkronisasi (offline)';
     return {
       success: false, queued: queuedIds.length > 0, count: alreadyApplied.length, queuedCount: queuedIds.length,
       failed: list.length - queuedIds.length, total: originalList.length, clientElapsedMs: Date.now() - clientStartedAt,
