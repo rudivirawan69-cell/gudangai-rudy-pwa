@@ -342,12 +342,12 @@ test('Apps Script manifest action exists and returns dynamic sheet metadata', ()
   const handlerEnd = codeGs.indexOf('function getStockByCode(');
   assert.ok(routeStart >= 0 && routeEnd > routeStart);
   assert.ok(handlerStart >= 0 && handlerEnd > handlerStart);
-  assert.match(codeGs.slice(routeStart, routeEnd), /case "getAgentKnowledge": return jsonResponse\\(getAgentKnowledge\\(body\\)\\)/);
+  assert.match(codeGs.slice(routeStart, routeEnd), /case "getAgentKnowledge": return jsonResponse\(getAgentKnowledge\(body\)\)/);
   const handler = codeGs.slice(handlerStart, handlerEnd);
-  assert.match(handler, /getSheets\\(\\)/);
+  assert.match(handler, /getSheets\(\)/);
   assert.match(handler, /sheetCount:sheets.length/);
-  assert.match(handler, /sourceReadAt:new Date\\(\\)\\.toISOString\\(\\)/);
-  assert.doesNotMatch(handler, /insertSheet\\(|setValue\\(|setValues\\(/);
+  assert.match(handler, /sourceReadAt:new Date\(\)\.toISOString\(\)/);
+  assert.doesNotMatch(handler, /insertSheet\(|setValue\(|setValues\(/);
 });
 
 test('getConfig read-only handler never creates missing Config tab', () => {
@@ -355,9 +355,9 @@ test('getConfig read-only handler never creates missing Config tab', () => {
   const end = codeGs.indexOf('function getAgentKnowledge(params)', start);
   assert.ok(start >= 0 && end > start);
   const handler = codeGs.slice(start, end);
-  assert.match(handler, /getSheetByName\\(CONFIG_SHEET_NAME\\)/);
+  assert.match(handler, /getSheetByName\(CONFIG_SHEET_NAME\)/);
   assert.match(handler, /CONFIG_SHEET_NOT_FOUND/);
-  assert.doesNotMatch(handler, /insertSheet\\(|setValue\\(|setValues\\(/);
+  assert.doesNotMatch(handler, /insertSheet\(|setValue\(|setValues\(/);
 });
 
 test('three-day stockout questions request the dedicated 30-day read-only forecast', async () => {
