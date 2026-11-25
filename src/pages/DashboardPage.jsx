@@ -676,7 +676,7 @@ function POQuickActions({ onNavigate, onSelect, activeView, currentCount = 0, pr
             <span className={`po-shortcut-icon po-shortcut-icon-${id}`}><Icon className="h-5 w-5" aria-hidden="true" /></span>
             <span className="po-shortcut-copy">
               <span className="po-shortcut-title">{title}</span>
-              
+
             </span>
             <span className="po-shortcut-footer">
               {count !== null ? <span className="po-shortcut-count tabular-nums">{count} item</span> : <span className="po-shortcut-count">Buka</span>}
