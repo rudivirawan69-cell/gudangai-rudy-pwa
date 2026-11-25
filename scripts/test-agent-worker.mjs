@@ -798,7 +798,7 @@ test('sheet enumeration returns deterministic complete manifest without calling 
   const sheetNames = Array.from({ length: 18 }, (_, i) => `Sheet ${i + 1}`);
   let aiCalled = false;
   globalThis.fetch = async (url) => {
-    if (String(url) === \`\${SUPABASE_URL}/auth/v1/user\`) return new Response(JSON.stringify({ id: 'manifest-user' }), { status: 200 });
+    if (String(url) === `${SUPABASE_URL}/auth/v1/user`) return new Response(JSON.stringify({ id: 'manifest-user' }), { status: 200 });
     assert.equal(String(url), 'https://sheets.example/exec');
     return new Response(JSON.stringify({
       success: true, mode: 'manifest', spreadsheetTitle: 'Spreadsheet Test',
@@ -828,7 +828,7 @@ test('sheet enumeration returns deterministic complete manifest without calling 
 test('sync-all returns 502 and success false when every read action fails', async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (url) => {
-    if (String(url) === \`\${SUPABASE_URL}/auth/v1/user\`) return new Response(JSON.stringify({ id: 'sync-user' }), { status: 200 });
+    if (String(url) === `${SUPABASE_URL}/auth/v1/user`) return new Response(JSON.stringify({ id: 'sync-user' }), { status: 200 });
     return new Response(JSON.stringify({ success: false, code: 'SOURCE_DOWN', error: 'unavailable' }), { status: 503 });
   };
   try {
