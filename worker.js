@@ -327,7 +327,7 @@ export function detectLiveActions(message) {
   }
   const matched = [];
   for (const intent of LIVE_INTENTS) {
-    if (intent.pattern.test(text) && READ_ONLY_ACTIONS.has(intent.action)) matched.push(intent.action);
+    if (intent.pattern.test(text) && READ_ONLY_ACTIONS.has(intent.action) && !matched.includes(intent.action)) matched.push(intent.action);
     if (matched.length >= MAX_LIVE_ACTIONS) break;
   }
   return matched;
@@ -467,6 +467,7 @@ async function handleAgent(request, env, origin) {
   if (message.length > MAX_MESSAGE_LENGTH) return json({ success:false, code:'MESSAGE_TOO_LONG', error:'Pertanyaan terlalu panjang.' }, 413, origin);
   const context = body?.context && typeof body.context==='object' ? body.context : {};
   const history = normalizeHistory(body?.history, message);
+  const live = await gatherLiveData(env, message);
   // Only explicit enumeration requests qualify; mentions of sheet names or structure do not.
   const ENUM_RE = /^\s*(?:(?:(?:tolong|mohon|bisa)\s+)?(?:tampilkan|sebutkan|daftarkan|daftar|list)\s+(?:(?:daftar|semua|seluruh|nama)\s+)*(?:tab|sheet)\b|(?:berapa\s+(?:jumlah|banyak)|ada\s+berapa)\s+(?:jumlah\s+)?(?:tab|sheet)\b|apa\s+saja\s+(?:nama\s+)?(?:tab|sheet)\b)/i;
   if (ENUM_RE.test(message)) {
