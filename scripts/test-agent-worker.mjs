@@ -631,3 +631,30 @@ test('PO endpoints reject incomplete date ranges after authentication', async ()
     assert.equal((await response.json()).code, 'INVALID_PO_PERIOD');
   });
 });
+
+test('PO endpoint fails closed for missing success envelope, failed source, and malformed items', async () => {
+  const originalFetch = globalThis.fetch;
+  const invalidPayloads = [
+    { payload: { items: [] }, expected: 'LIVE_DATA_UNVERIFIED' },
+    { payload: { success: false, error: 'source failed' }, expected: 'LIVE_DATA_UNVERIFIED' },
+    { payload: { success: true }, expected: 'PO_SCHEMA_INVALID' },
+  ];
+  try {
+    for (const fixture of invalidPayloads) {
+      globalThis.fetch = async (url) => {
+        if (String(url) === `${SUPABASE_URL}/auth/v1/user`) {
+          return new Response(JSON.stringify({ id: 'po-user' }), { status: 200 });
+        }
+        return new Response(JSON.stringify(fixture.payload), {
+          status: 200, headers: { 'content-type': 'application/json' },
+        });
+      };
+      const response = await worker.fetch(makeRequest('/api/getStatusPO?periode=minggu-ini'), liveEnv);
+      const payload = await response.json();
+      assert.equal(response.status, 502);
+      assert.equal(payload.success, false);
+      assert.equal(payload.code, fixture.expected);
+      assert.equal(payload.permissions, 'read_only');
+    }
+  } finally { globalThis.fetch = originalFetch; }
+});
