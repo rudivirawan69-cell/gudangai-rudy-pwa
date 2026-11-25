@@ -201,3 +201,14 @@ html[data-theme] .more-row.is-active {
   html[data-theme] .settings-page { gap:10px !important; }
   html[data-theme] .settings-menu-list { gap:8px !important; }
 }
+
+
+/* Final-order dark-theme navigation label contrast (loaded after nav layout). */
+html[data-theme="deep_ocean"] .app-shell .nav-bar button.nav-btn span.nav-label,
+html[data-theme="deep_ocean"] .app-shell .nav-bar button.nav-fab span.nav-label { color:#CBD5E1 !important; opacity:1 !important; }
+html[data-theme="deep_ocean"] .app-shell .nav-bar button.nav-btn.is-active span.nav-label,
+html[data-theme="deep_ocean"] .app-shell .nav-bar button.nav-fab span.nav-label { color:#67E8F9 !important; }
+html[data-theme="graphite_titanium"] .app-shell .nav-bar button.nav-btn span.nav-label,
+html[data-theme="graphite_titanium"] .app-shell .nav-bar button.nav-fab span.nav-label { color:#D1D5DB !important; opacity:1 !important; }
+html[data-theme="graphite_titanium"] .app-shell .nav-bar button.nav-btn.is-active span.nav-label,
+html[data-theme="graphite_titanium"] .app-shell .nav-bar button.nav-fab span.nav-label { color:#FCD34D !important; }
