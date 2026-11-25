@@ -27,7 +27,6 @@ function formatConnLabel(data) {
   return v ? `Terhubung · ${v}` : 'Terhubung';
 }
 
-/** Kompres foto ke dataURL JPEG (max edge 512px) agar localStorage tidak membengkak. */
 function compressImageFile(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -223,7 +222,6 @@ export default function SettingsPage({ onNavigate }) {
           <p className="text-base font-extrabold text-slate-900 truncate">{user?.name || 'Rudi'}</p>
           <p className="text-[11px] text-slate-600 font-medium">{user?.email || 'Mode lokal · AI nonaktif'}</p>
         </div>
-        <span className="status-pill status-pill-neutral shrink-0">{isSupabaseSession ? 'Supabase' : 'Lokal'}</span>
       </div>
 
       <div className="settings-auth-card rounded-2xl border border-cyan-200/80 bg-cyan-50/80 overflow-hidden">
@@ -277,14 +275,10 @@ export default function SettingsPage({ onNavigate }) {
                 <span className={`text-[10px] font-bold leading-tight text-center ${active ? 'text-blue-800' : 'text-slate-600'}`}>
                   {t.short}
                 </span>
-                <span className="text-[8px] leading-tight text-center opacity-70">{t.description}</span>
               </button>
             );
           })}
         </div>
-        <p className="text-[10px] text-slate-400 leading-relaxed">
-          Arctic Professional · Deep Ocean · Graphite Titanium — tersimpan di perangkat.
-        </p>
       </div>
 
       <div className="settings-menu-list">
@@ -292,7 +286,7 @@ export default function SettingsPage({ onNavigate }) {
         <MenuRow icon={Link2} iconBg="bg-cyan-50 text-cyan-700" title="Koneksi Google Sheets" subtitle={connSubtitle}
           onClick={() => setPanel(panel === 'koneksi' ? null : 'koneksi')}
           right={connStatus === 'ok' ? <CheckCircle2 className="w-5 h-5 text-emerald-500" /> : connStatus === 'fail' ? <XCircle className="w-5 h-5 text-red-500" /> : <ChevronRight className="w-4 h-4 text-slate-300" />} />
-        <MenuRow icon={KeyRound} iconBg="bg-amber-50 text-amber-700" title="PIN Perangkat (Lokal)" subtitle="Tidak digunakan untuk autentikasi server atau AI" onClick={() => setPanel(panel === 'pin' ? null : 'pin')} />
+        <MenuRow icon={KeyRound} iconBg="bg-amber-50 text-amber-700" title="PIN Perangkat" onClick={() => setPanel(panel === 'pin' ? null : 'pin')} />
         <MenuRow icon={SettingsIcon} iconBg="bg-slate-100 text-slate-600" title="Tentang Aplikasi" subtitle="GudangAI · Backend V6.6.5+BULK-STABLE" onClick={() => setPanel(panel === 'about' ? null : 'about')} />
       </div>
 
@@ -391,8 +385,8 @@ export default function SettingsPage({ onNavigate }) {
           <div className="bg-white rounded-2xl p-5 w-full max-w-sm space-y-3 shadow-xl">
             <p className="font-semibold text-slate-800">Keluar dari aplikasi?</p>
             <p className="text-xs text-slate-500">Anda perlu masuk kembali dengan metode autentikasi yang aktif.</p>
-            <div className="flex gap-2">
-              <button type="button" onClick={() => setShowLogout(false)} className="flex-1 py-2.5 rounded-xl bg-slate-100 text-slate-700 text-sm font-semibold">Batal</button>
+            <div className="flex gap-2 pt-1">
+              <button type="button" onClick={() => setShowLogout(false)} className="flex-1 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold text-slate-700">Batal</button>
               <button type="button" onClick={() => { setShowLogout(false); logout(); }} className="flex-1 py-2.5 rounded-xl bg-red-600 text-white text-sm font-semibold">Keluar</button>
             </div>
           </div>
