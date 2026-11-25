@@ -263,6 +263,9 @@ function validateLivePayload(action, raw, expected = {}) {
       return { ok:false, code:'STOCK_SCHEMA_INVALID', error:'Struktur daftar stok tidak valid.' };
     }
   }
+  if (!raw.sourceReadAt || !Number.isFinite(Date.parse(raw.sourceReadAt))) {
+    return { ok:false, code:'SOURCE_TIMESTAMP_MISSING', error:'Sumber tidak memberikan waktu baca yang dapat diverifikasi.' };
+  }
   return { ok:true };
 }
 export function detectLiveActions(message) {
