@@ -253,7 +253,7 @@ export default function StokPage() {
       </section>
 
       <section className="sk-filter-block" aria-label="Pilih divisi">
-        
+
         <div className="sk-div-chips" role="group" aria-label="Filter divisi">
         <button type="button" className={!divFilter ? "on" : ""} onClick={() => setDivFilter(null)}>
           Semua
@@ -268,7 +268,7 @@ export default function StokPage() {
 
       <section className="sk-filter-block" aria-label="Filter kondisi stok">
         <div className="sk-status-row">
-          
+
           <div className="sk-chips" role="group" aria-label="Filter status">
             {["semua", "kritis", "waspada", "aman"].map((s) => (
               <button key={s} type="button" className={`${filter === s ? "on" : ""}${s !== "semua" ? ` sk-c-${s}` : ""}`} onClick={() => setFilter(s)}>
@@ -291,7 +291,7 @@ export default function StokPage() {
         <div className="sk-banner">
           <div>
             <b>{restokItems.length} item perlu restok</b>
-            
+
           </div>
           <button type="button" className="sk-share-outline" onClick={bagikan}>Bagikan</button>
         </div>
@@ -319,7 +319,7 @@ export default function StokPage() {
       {kosong && !error && (
         <div className="sk-empty">
           <b>Belum ada data stok</b>
-          
+
           <button type="button" className="sk-primary" onClick={segarkan}>Muat ulang</button>
         </div>
       )}
@@ -327,7 +327,7 @@ export default function StokPage() {
       {!kosong && divisi.length === 0 && !loading && (
         <div className="sk-empty">
           <b>Tidak ada item cocok</b>
-          
+
         </div>
       )}
 
