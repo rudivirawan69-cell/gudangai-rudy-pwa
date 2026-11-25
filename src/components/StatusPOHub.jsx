@@ -141,20 +141,17 @@ function normalizeStatusPO(raw) {
 }
 
 function StatusTriple({ status }) {
-  const s = String(status || 'Menunggu');
-  const isBelum = s === 'Menunggu' || s.toLowerCase().includes('belum');
-  const isSebagian = s === 'Sebagian';
-  const isDatang = s === 'Selesai' || s.toLowerCase().includes('datang');
-  const box = (active, label, activeCls, idleCls) => (
-    <div className={`rounded-lg px-1.5 py-1.5 text-center border ${active ? activeCls : idleCls}`}>
-      <p className={`text-[9px] font-bold uppercase leading-tight ${active ? '' : 'opacity-50'}`}>{label}</p>
-    </div>
-  );
+  const value = String(status || 'Menunggu');
+  const active = value === 'Selesai' || value.toLowerCase().includes('datang')
+    ? 'Datang'
+    : value === 'Sebagian'
+      ? 'Sebagian'
+      : 'Belum';
   return (
-    <div className="grid grid-cols-3 gap-1.5 mt-1.5">
-      {box(isBelum, 'Belum', 'bg-slate-100 border-slate-300 text-slate-800', 'bg-white border-slate-100 text-slate-400')}
-      {box(isSebagian, 'Sebagian', 'bg-amber-50 border-amber-300 text-amber-800', 'bg-white border-slate-100 text-slate-400')}
-      {box(isDatang, 'Datang', 'bg-emerald-50 border-emerald-300 text-emerald-800', 'bg-white border-slate-100 text-slate-400')}
+    <div className="po-status-inline" aria-label={`Status: ${active}`}>
+      {['Belum', 'Sebagian', 'Datang'].map((label) => (
+        <span key={label} className={active === label ? 'is-active' : ''}>{label}</span>
+      ))}
     </div>
   );
 }
@@ -300,21 +297,11 @@ function StatusPOHubPanel({ mode }) {
 
   if (isStatusMode) {
     return (
-      <div className="card section-card rounded-2xl p-4 space-y-3">
+      <div className="po-status-panel space-y-3">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
             <p className="text-sm font-extrabold text-slate-900">{statusTitle}</p>
-            <p className="text-[11px] text-slate-500 mt-0.5">
-              {statusNoPO ? `No PO: ${statusNoPO}` : (mode === 'previous' ? (data?.previousWeek?.weekKey || 'Arsip PO minggu lalu') : (data?.weekKey || 'Data dari Spreadsheet utama'))}
-            </p>
-            <p className="text-[10px] font-semibold text-cyan-700 mt-0.5">
-              Periode: {mode === 'previous'
-                ? (data?.previousWeek?.periodStart && data?.previousWeek?.periodEnd ? `${formatPeriodDate(data.previousWeek.periodStart)} s.d. ${formatPeriodDate(data.previousWeek.periodEnd)}` : 'Periode sebelumnya')
-                : (data?.periodStart && data?.periodEnd ? `${formatPeriodDate(data.periodStart)} s.d. ${formatPeriodDate(data.periodEnd)}` : 'Tanggal PO belum terbaca')}
-              {mode === 'current' && data?.periodStatus ? ` · ${data.periodStatus}` : ''}
-              {mode === 'previous' ? ' · TERTUNDA / ARSIP' : ''}
-            </p>
-          </div>
+            </div>
           <button type="button" onClick={load} className="w-9 h-9 rounded-xl border border-slate-200 bg-white flex items-center justify-center shrink-0" aria-label="Muat ulang">
             <RefreshCw className={`w-4 h-4 text-slate-600 ${loading ? 'animate-spin' : ''}`} />
           </button>
@@ -362,12 +349,11 @@ function StatusPOHubPanel({ mode }) {
   if (isConfirmMode) {
     if (!confirmPeriod) {
       return (
-        <div className="card section-card rounded-2xl p-4 space-y-3">
+        <div className="po-status-panel space-y-3">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
               <p className="text-sm font-extrabold text-slate-900">Konfirmasi PO</p>
-              <p className="text-[11px] text-slate-500 mt-0.5">Pilih periode yang akan dikonfirmasi</p>
-            </div>
+              </div>
             <button type="button" onClick={load} className="w-9 h-9 rounded-xl border border-slate-200 bg-white flex items-center justify-center shrink-0" aria-label="Muat ulang">
               <RefreshCw className={`w-4 h-4 text-slate-600 ${loading ? 'animate-spin' : ''}`} />
             </button>
@@ -398,41 +384,24 @@ function StatusPOHubPanel({ mode }) {
 
     if (selectedItem) {
       return (
-        <div className="card section-card rounded-2xl p-4 space-y-3">
+        <div className="po-status-panel space-y-3">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
               <p className="text-sm font-extrabold text-slate-900">Edit kedatangan</p>
-              <p className="text-[11px] text-slate-500 mt-0.5">
-                {confirmPeriod === 'previous' ? 'PO Minggu Lalu' : 'PO Minggu Ini'}
-                {periodNoPO ? ` · ${periodNoPO}` : ''}
-              </p>
-            </div>
+              </div>
             <button type="button" onClick={() => { setSelectedItem(null); setMsg(''); }} className="text-[10px] font-bold px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600">Kembali</button>
           </div>
-          <div className="rounded-xl bg-slate-50 border border-slate-100 p-3">
+          <div className="po-selected-item">
             <p className="text-sm font-extrabold text-slate-900">{selectedItem.nama}</p>
-            <p className="text-[11px] text-slate-500 mt-1">
-              Qty PO: {selectedItem.qtyPO} · Sudah datang: {selectedItem.qtyDatang} · Sisa: {selectedItem.sisa}
-            </p>
-          </div>
+            </div>
           <label className="block text-xs font-bold text-slate-700">Tanggal kedatangan
             <input type="date" value={formTanggal} onChange={(e) => setFormTanggal(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm font-semibold text-slate-900" />
           </label>
           <label className="block text-xs font-bold text-slate-700">Qty kedatangan (boleh diedit)
             <input type="number" min="1" max={selectedItem.sisa} step="any" value={formQty} onChange={(e) => setFormQty(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm font-semibold text-slate-900" />
           </label>
-          <p className="text-[11px] text-slate-500">Maksimal sisa {selectedItem.sisa}. Item yang qty-nya terpenuhi akan hilang dari daftar konfirmasi.</p>
-          <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 space-y-2">
-            <p className="text-xs font-extrabold text-amber-900">Pilih entitas (wajib)</p>
-            <p className="text-[11px] text-amber-800">
-              {selectedItem.cv > 0 && selectedItem.pt > 0
-                ? `Item ini ada di CV (${selectedItem.cv}) dan PT (${selectedItem.pt}). Pilih ke mana stok masuk.`
-                : selectedItem.cv > 0
-                  ? `Default CV (PO CV: ${selectedItem.cv})`
-                  : selectedItem.pt > 0
-                    ? `Default PT (PO PT: ${selectedItem.pt})`
-                    : 'Pilih CV atau PT sesuai master stok.'}
-            </p>
+          <div className="po-entity-choice space-y-2">
+            <p className="text-xs font-extrabold text-slate-900">Entitas</p>
             <div className="grid grid-cols-2 gap-2">
               {['CV', 'PT'].map((e) => (
                 <button
@@ -460,16 +429,13 @@ function StatusPOHubPanel({ mode }) {
     }
 
     return (
-      <div className="card section-card rounded-2xl p-4 space-y-3">
+      <div className="po-status-panel space-y-3">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
             <p className="text-sm font-extrabold text-slate-900">
               {confirmPeriod === 'previous' ? 'Konfirmasi PO Minggu Lalu' : 'Konfirmasi PO Minggu Ini'}
             </p>
-            <p className="text-[11px] text-slate-500 mt-0.5">
-              {periodNoPO ? `No PO: ${periodNoPO}` : 'Hanya item yang belum datang'}
-            </p>
-          </div>
+            </div>
           <div className="flex items-center gap-1.5 shrink-0">
             <button type="button" onClick={() => { setConfirmPeriod(null); setSelectedItem(null); setMsg(''); }} className="text-[10px] font-bold px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600">Ganti periode</button>
             <button type="button" onClick={load} className="w-9 h-9 rounded-xl border border-slate-200 bg-white flex items-center justify-center" aria-label="Muat ulang">
@@ -485,7 +451,6 @@ function StatusPOHubPanel({ mode }) {
         )}
         {!loading && unfinishedItems.length > 0 && (
           <div className="space-y-2">
-            <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">Keranjang belum datang · {unfinishedItems.length} item</p>
             {unfinishedItems.map((it, idx) => {
               const sisa = Math.max(0, (Number(it.qtyPO) || 0) - (Number(it.qtyDatang) || 0));
               return (
@@ -494,10 +459,8 @@ function StatusPOHubPanel({ mode }) {
                     <span className="text-slate-400 font-semibold mr-1">#{String(it.itemNo || idx + 1).padStart(2, '0')}</span>
                     {it.nama}
                   </p>
-                  <p className="text-[11px] text-slate-500 mt-0.5">Sisa {sisa} · PO {it.qtyPO} · Datang {it.qtyDatang}</p>
                   <StatusTriple status={it.status} />
-                  <p className="text-[10px] font-bold text-cyan-700 mt-2">Ketuk untuk edit qty & kirim →</p>
-                </button>
+                  </button>
               );
             })}
           </div>
