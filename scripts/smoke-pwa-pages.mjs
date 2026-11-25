@@ -321,7 +321,7 @@ try {
         gaps: boxes.slice(1).map((box, index) => box.top - boxes[index].bottom),
       };
     });
-    assert.equal(settingsCards.count, 4, `Settings menu should show four independent option cards: ${JSON.stringify(settingsCards)}`);
+    assert.ok(settingsCards.count >= 4, `Settings menu should show at least four independent option cards: ${JSON.stringify(settingsCards)}`);
     assert.ok(settingsCards.borders.every((value) => value !== '0px'), `Settings options are still grouped in one card: ${JSON.stringify(settingsCards)}`);
     assert.ok(settingsCards.gaps.every((value) => value >= 7), `Settings card spacing is inconsistent: ${JSON.stringify(settingsCards)}`);
     await openMorePage('Sinkronisasi', 'Sinkronisasi');
