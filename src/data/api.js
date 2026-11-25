@@ -684,6 +684,33 @@ export async function submitBarangMasuk({ entity, tanggal, items }) { return sub
 export async function submitBarangKeluar({ entity, tanggal, items }) { return submitItems('barangKeluar', entity, items, tanggal); }
 export async function submitBarangRusak({ entity, tanggal, items }) { return submitItems('barangRusak', entity, items, tanggal); }
 export function getPendingQueue() { return readQueueLocal().queue; }
+
+/** Persist a complete send intent before the first backend request. */
+export async function stagePendingTransaction({ type, entity, tanggal, items }) {
+  const validItems = (items || []).map((item) => ({
+    ...ensureClientItemId(item), kode: normalizeItemCode(item.kode || item.kodeBarang),
+    nama: normalizeTransactionText(item.nama), keterangan: normalizeTransactionText(item.keterangan),
+  }));
+  if (!validItems.length || validItems.some((item) => !item.clientItemId || !item.kode || !(Number(item.qty) > 0))) throw new Error('Transaksi tidak valid; antrean tidak dibuat.');
+  const queue = getPendingQueue();
+  const existing = new Set(queue.flatMap((entry) => (entry.items || []).map((item) => String(item.clientItemId || ''))));
+  if (validItems.some((item) => existing.has(String(item.clientItemId)))) throw new Error('Ada ID item yang sudah berada di antrean. Periksa Sinkronisasi sebelum mengirim ulang.');
+  const now = new Date().toISOString();
+  queue.push({ id: 'Q-SEND-' + (crypto.randomUUID ? crypto.randomUUID() : Date.now()), transactionId: 'TX-BATCH-' + (crypto.randomUUID ? crypto.randomUUID() : Date.now()), status: 'PROCESSING', type, entity: String(entity || '').toUpperCase(), items: validItems, tanggal: normalizeTanggal(tanggal), createdAt: now, updatedAt: now, processingStartedAt: now });
+  await commitQueueLocal(queue);
+  const stagedIds = new Set(getPendingQueue().flatMap((entry) => (entry.items || []).map((item) => String(item.clientItemId || ''))));
+  if (validItems.some((item) => !stagedIds.has(String(item.clientItemId)))) throw new Error('Verifikasi antrean gagal. Permintaan ke server dibatalkan.');
+  return validItems.map((item) => item.clientItemId);
+}
+
+export async function updatePendingItemStates(ids, status, details = {}) {
+  const wanted = new Set((ids || []).map(String));
+  if (!wanted.size) return { success: true, updated: 0 };
+  const now = new Date().toISOString();
+  const queue = getPendingQueue().map((entry) => ({ ...entry, updatedAt: now, items: (entry.items || []).map((item) => wanted.has(String(item.clientItemId)) ? { ...item, queueStatus: status, queueUpdatedAt: now, ...details } : item) }));
+  await commitQueueLocal(queue);
+  return { success: true, updated: wanted.size };
+}
 function queueItemIdentity(item) {
   const clientItemId = String(item?.clientItemId || '').trim();
   if (!clientItemId) return { transactionId: '', nonce: '' };
@@ -748,17 +775,24 @@ export async function syncPendingQueue() {
   if (_syncLock) return { synced: 0, failed: 0, skipped: true, reason: 'sync-in-progress' };
   _syncLock = true;
   try {
-    const queue = getPendingQueue().map((entry) => ({
-      ...entry,
-      items: (entry.items || []).map(ensureClientItemId),
-    }));
+    const rawQueue = getPendingQueue();
+    const nowMs = Date.now();
+    const queue = rawQueue.map((entry) => {
+      if (entry.status !== 'PROCESSING') return entry;
+      const started = Date.parse(entry.processingStartedAt || entry.updatedAt || entry.createdAt || '');
+      return Number.isFinite(started) && nowMs - started < 120000
+        ? entry
+        : { ...entry, status: 'PENDING_VERIFY', recoveredAt: new Date(nowMs).toISOString() };
+    });
+    if (queue.some((entry, index) => entry !== rawQueue[index])) await commitQueueLocal(queue);
+    const processQueue = queue.filter((entry) => entry.status !== 'PROCESSING');
     const groups = new Map();
     const conflictingIds = new Set();
     const identitySignatures = new Map();
 
     // Combine outbox entries that target the same transaction sheet/entity/date.
     // A clientItemId reused with a different operation, entity, date, or payload is held.
-    for (const entry of queue) {
+    for (const entry of processQueue) {
       const type = entry.type || 'masuk';
       const entity = String(entry.entity || '').toUpperCase();
       const tanggal = normalizeTanggal(entry.tanggal);
@@ -853,7 +887,15 @@ export function saveToHistory(entry) {
   const next = dedupeKey
     ? [historyEntry, ...list.filter((item) => String(item.clientItemId || item.transactionId || '') !== dedupeKey)]
     : [historyEntry, ...list];
-  try { localStorage.setItem(HISTORY_KEY, JSON.stringify(next.slice(0, 200))); } catch (_) {}
+  try {
+    const serialized = JSON.stringify(next.slice(0, 200));
+    localStorage.setItem(HISTORY_KEY, serialized);
+    const verified = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+    const persisted = verified.find((item) => String(item.id || '') === String(historyEntry.id));
+    if (!persisted || JSON.stringify(persisted) !== JSON.stringify(historyEntry)) throw new Error('Verifikasi penyimpanan Riwayat gagal.');
+  } catch (error) {
+    throw new Error('Riwayat belum tersimpan; item tetap harus dipertahankan di antrean. ' + (error?.message || 'Storage error'));
+  }
   try { window.dispatchEvent(new CustomEvent('gudangai-history-changed', { detail: { transactionId, clientItemId } })); } catch (_) {}
   return historyEntry;
 }
