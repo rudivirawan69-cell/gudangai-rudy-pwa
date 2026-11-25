@@ -280,7 +280,8 @@ test('data questions trigger live read-only read and include provenance', async 
   assert.equal(response.status, 200); assert.equal(sheetCalls.length, 1);
   assert.equal(sheetCalls[0].action, 'getDashboardData'); assert.equal(sheetCalls[0].client.mode, 'read_only');
   assert.equal(payload.dataSources[0].action, 'getDashboardData'); assert.equal(payload.dataSources[0].ok, true);
-  assert.ok(payload.dataSources[0].gatewayReceivedAt);\n  assert.equal(payload.dataSources[0].sourceReadAt, null); assert.match(systemText, /DATA LIVE \(read-only\)/);
+  assert.ok(payload.dataSources[0].gatewayReceivedAt);
+  assert.equal(payload.dataSources[0].sourceReadAt, null); assert.match(systemText, /DATA LIVE \(read-only\)/);
   assert.match(systemText, /Pisahkan entitas CV dan PT/);
 });
 
