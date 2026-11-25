@@ -516,6 +516,8 @@ try {
             if (!bg) bg = fallback;
             return {
               text:(el.innerText || el.value || el.getAttribute('aria-label') || '').trim().slice(0,70),
+              selector:el.tagName.toLowerCase() + (typeof el.className === 'string' && el.className ? '.' + el.className.trim().replace(/\s+/g,'.') : ''),
+              ancestorSurfaces:[...function*(){for(let node=el;node&&node.nodeType===1;node=node.parentElement){const s=getComputedStyle(node);yield {tag:node.tagName.toLowerCase(),className:typeof node.className==='string'?node.className:'',background:s.backgroundColor,color:s.color};}}()].slice(0,4),
               foreground:fg,
               background:bg,
               fontSize:parseFloat(getComputedStyle(el).fontSize),
