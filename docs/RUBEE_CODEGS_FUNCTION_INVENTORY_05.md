@@ -1,0 +1,427 @@
+# Code.gs — Complete Top-level Function Inventory 05
+
+Audit date: 2026-11-25
+Source: main / Code.gs
+Static source inventory; line numbers refer to audited snapshot. Not a deployed-runtime assertion.
+
+## Scope: 171 top-level function declarations
+
+Direct side-effect classification is syntactic and conservative. Helper functions can inherit effects through calls, so a function labelled as logic/helper is not automatically pure. Every call chain still needs review.
+
+## Dispatcher action → primary handler
+- validateTransaction → validateTransactionRequest_
+- validateImportedItems → validateImportedItems_
+- getRequestStatus → getRequestStatus_
+- syncTransaction → syncTransaction
+- syncBatch / bulkSync → bulkTransaction
+- getTransactionStatus → getTransactionStatus
+- bootstrap → getPwaBootstrap
+- addTransaction → addTransaction
+- addTransactionBatch / bulkTransaction → bulkTransaction
+- reconcileBatch → reconcileBatch_
+- getStock / getStockByCode → getStockByCode
+- getAllStock / getStockAll → getAllStock
+- getLowStock → getLowStock
+- getStockoutRisk → getStockoutRisk
+- getLastUpdate → getLastUpdateTimestamp
+- getTransactionHistory → getTransactionHistory
+- searchByName → searchByName
+- getDashboard / getDashboardData → getDashboardData
+- getDashboardLegacy → getDashboard
+- refreshDashboard → refreshDashboard
+- syncDivision / syncDivisionStock → syncDivisionStock
+- writePO / writePORecommendations / generatePO → writePORecommendations
+- writePurchaseOrder / submitPO / sendPO → writePurchaseOrder_
+- runPOAnalysis / getPOAnalysis → analyzePORecommendations_
+- logDailySnapshot → logDailySnapshot
+- clearMasterCache → clearMasterCache
+- maintenanceCleanup → maintenanceCleanup
+- getConfig → readConfig_ (via getConfigSheet_)
+- diagnoseStockFormulas → diagnoseStockFormulaPatterns_
+- setupConfig → setupConfigSheet
+- setActivePeriod → setActivePeriod
+- setupNewPeriod → setupNewPeriod
+- status → getSS/getActiveMonth
+- ping / healthCheck → getHealthStatus_
+- getStockDelta → getStockDelta
+- getStatusPO → getStatusPO
+- recordPOArrival → recordPOArrival
+- getPORequestStatus → getPORequestStatus
+- refreshDashboardPO → refreshDashboardPOSection_
+- getSyncMetrics → getSyncMetrics
+
+## Direct source-level capability groups
+### Trigger/properties (21)
+- getSpreadsheetId
+- doPost
+- doGet
+- updateLastUpdateTimestamp
+- rolloverPOWeekIfNeeded_
+- getPreviousPOStatus_
+- claimEmailQueuePayload_
+- installQueueTrigger
+- markDataDirty_
+- clearDataDirty_
+- isDataDirty_
+- maintenanceCleanup
+- setupEnvironment
+- resetApiSecret
+- setSyncVersions_
+- getCachedSyncVersions_
+- getSyncMetrics
+- recordSyncMetric_
+- getConnectionCircuitState_
+- noteConnectionFailure_
+- noteConnectionSuccess_
+### Logic/helper (no direct I/O detected) (74)
+- getSS
+- getActiveMonthFromName_
+- parseActivePeriod_
+- setupNewPeriod
+- getActiveMonth
+- parseTransactionDate_
+- normalizeTransactionDateKey_
+- validateTransactionDate
+- jsonResponse
+- normalizeIdentity_
+- normalizeIncomingRequest_
+- mapIdempotencyRow_
+- identityMarker_
+- appendIdentityMarker_
+- reconcileBatch_
+- identityPayloadMatches_
+- validateImportedItems_
+- getTransactionStatus
+- buildStableStockSnapshot_
+- getPwaBootstrap
+- syncTransaction
+- normalizeEntityGroup_
+- validateTransactionRequest_
+- resolveKodeFromNama
+- isRowEmpty
+- shouldRetryWrite_
+- isDuplicate
+- isDuplicateTransaction
+- lookupMasterDataCached
+- getMasterMap
+- clearMasterCache
+- clampStockToZero_
+- wrapFormulaNonNegative_
+- enforceNonNegativeStock_
+- getLowStock
+- searchByName
+- shortId_
+- redactSensitiveString_
+- sendErrorEmail
+- applyBahanBakuStockSource_
+- removeChartByTitle_
+- getLastUpdateTimestamp
+- classifyDashboardStock_
+- nowWIB_
+- getDashboardData
+- getDashboard
+- toNumber_
+- percent_
+- normalizeDivision_
+- normalizeDateKey_
+- getPOStatus_
+- refreshAllData
+- clearDashboardCharts_
+- getPOTableConstants_
+- generatePORecommendations
+- normalizePOItem_
+- normalizePOItems_
+- poPayloadDigest_
+- rangesIntersect_
+- analyzePORecommendations_
+- getWeekKey_
+- emailQueueWriteApproved_
+- emailQueueClaimKey_
+- onEdit
+- generateRandomSecret
+- testAddTransaction
+- testConnection
+- sha256Short_
+- computeDeterministicVersions_
+- formatPOPeriodDate_
+- getPOPeriodBounds_
+- normalizePONameKey_
+- getPORequestStatus
+- getCurrentSyncVersions_
+### Spreadsheet mutation, Sheet access (31)
+- getConfigSheet_
+- setupConfigSheet
+- setActivePeriod
+- getIdempotencyLedgerSheet_
+- appendIdempotencyRecord_
+- updateIdempotencyRecord_
+- bulkTransaction
+- findSafeEmptyRowAdaptively
+- ensureOperationalHeaderLayout_
+- styleOperationalHeader_
+- applyTableBodyStyle_
+- formatConfigSheet_
+- writeAuditLogSecure
+- maybeArchiveAuditLog
+- syncDivisionStockLightweight_
+- syncDivisionStock
+- logDailySnapshot
+- stampVisibleUpdateTimestamp_
+- diagnoseDashboard
+- renderDivisionBarChart_
+- refreshDashboard
+- writePORecommendations
+- writePONumberRow5_
+- writePurchaseOrder_
+- updatePODateRow4
+- clearPOTableData
+- ensurePOHeader
+- formatPOTable_
+- dashboardClearPOArea_
+- renderPOStatusBlock_
+- renderPODonutChart_
+### Sheet access (39)
+- readConfig_
+- buildLedgerIndex_
+- findIdempotencyRecord_
+- readBackTransactionByIdentity_
+- readBackByRecord_
+- getRequestStatus_
+- getRealLastDataRow
+- verifyRowStillEmptyPath2
+- isHoldReferenceAlreadyRealized_
+- validateHoldReference_
+- rebuildAndCacheMasterMap
+- diagnoseStockFormulaPatterns_
+- isProtectedCell_
+- getStockByCode
+- getAllStock
+- getStockoutRisk
+- getTransactionHistory
+- formatSystemLogSheet_
+- formatDailySnapshotsSheet_
+- formatIdempotencyLedgerSheet_
+- formatOperationalSheets_
+- getHeaderIndex
+- getBahanBakuStockMap_
+- readDivisionSheetUpdateTimestamp_
+- readDashboardLiveSummary_
+- getVolumeSummaryThisWeek_
+- getTodayActivity_
+- getSevenDayTrend_
+- getPOOverwriteGuard_
+- poSheetMatchesItems_
+- findPODataEndRow
+- inspectPORangeProtection_
+- getSizeMapFromDivisiCS
+- getHealthStatus_
+- getStockDelta
+- getPOInfoFromHeader_
+- recordPOArrival
+- getStatusPO
+- refreshDashboardPOSection_
+### Spreadsheet mutation, Email, Sheet access (1)
+- addTransaction
+### Email, Trigger/properties (1)
+- sendErrorEmailWithCooldown
+### Spreadsheet mutation (1)
+- ensurePORowsCapacity_
+### Email, Sheet access (1)
+- sendDailyStockReport
+### Email (2)
+- weeklyPOAutomation
+- processEmailQueue
+
+## Full function index (source order)
+- L159 getSpreadsheetId — Trigger/properties
+- L173 getSS — no direct I/O detected
+- L180 getConfigSheet_ — Spreadsheet mutation; Sheet access
+- L185 readConfig_ — Sheet access
+- L198 setupConfigSheet — Spreadsheet mutation; Sheet access
+- L229 getActiveMonthFromName_ — no direct I/O detected
+- L241 parseActivePeriod_ — no direct I/O detected
+- L252 setActivePeriod — Spreadsheet mutation; Sheet access
+- L269 setupNewPeriod — no direct I/O detected
+- L279 getActiveMonth — no direct I/O detected
+- L288 parseTransactionDate_ — no direct I/O detected
+- L329 normalizeTransactionDateKey_ — no direct I/O detected
+- L335 validateTransactionDate — no direct I/O detected
+- L347 jsonResponse — no direct I/O detected
+- L356 doPost — Trigger/properties
+- L435 doGet — Trigger/properties
+- L488 normalizeIdentity_ — no direct I/O detected
+- L499 normalizeIncomingRequest_ — no direct I/O detected
+- L528 getIdempotencyLedgerSheet_ — Spreadsheet mutation; Sheet access
+- L555 buildLedgerIndex_ — Sheet access
+- L573 mapIdempotencyRow_ — no direct I/O detected
+- L585 findIdempotencyRecord_ — Sheet access
+- L601 appendIdempotencyRecord_ — Spreadsheet mutation; Sheet access
+- L614 updateIdempotencyRecord_ — Spreadsheet mutation; Sheet access
+- L630 identityMarker_ — no direct I/O detected
+- L637 appendIdentityMarker_ — no direct I/O detected
+- L644 readBackTransactionByIdentity_ — Sheet access
+- L685 readBackByRecord_ — Sheet access
+- L700 reconcileBatch_ — no direct I/O detected
+- L724 identityPayloadMatches_ — no direct I/O detected
+- L731 validateImportedItems_ — no direct I/O detected
+- L779 getRequestStatus_ — Sheet access
+- L800 getTransactionStatus — no direct I/O detected
+- L828 buildStableStockSnapshot_ — no direct I/O detected
+- L859 getPwaBootstrap — no direct I/O detected
+- L907 syncTransaction — no direct I/O detected
+- L925 addTransaction — Spreadsheet mutation; Email; Sheet access
+- L1087 bulkTransaction — Spreadsheet mutation; Sheet access
+- L1435 normalizeEntityGroup_ — no direct I/O detected
+- L1450 validateTransactionRequest_ — no direct I/O detected
+- L1485 resolveKodeFromNama — no direct I/O detected
+- L1526 getRealLastDataRow — Sheet access
+- L1539 findSafeEmptyRowAdaptively — Spreadsheet mutation; Sheet access
+- L1566 isRowEmpty — no direct I/O detected
+- L1570 shouldRetryWrite_ — no direct I/O detected
+- L1574 verifyRowStillEmptyPath2 — Sheet access
+- L1586 isHoldReferenceAlreadyRealized_ — Sheet access
+- L1605 validateHoldReference_ — Sheet access
+- L1624 isDuplicate — no direct I/O detected
+- L1642 isDuplicateTransaction — no direct I/O detected
+- L1661 lookupMasterDataCached — no direct I/O detected
+- L1665 getMasterMap — no direct I/O detected
+- L1674 rebuildAndCacheMasterMap — Sheet access
+- L1717 clearMasterCache — no direct I/O detected
+- L1729 clampStockToZero_ — no direct I/O detected
+- L1739 diagnoseStockFormulaPatterns_ — Sheet access
+- L1770 isProtectedCell_ — Sheet access
+- L1783 wrapFormulaNonNegative_ — no direct I/O detected
+- L1796 enforceNonNegativeStock_ — no direct I/O detected
+- L1822 getStockByCode — Sheet access
+- L1884 getAllStock — Sheet access
+- L1958 getLowStock — no direct I/O detected
+- L1970 getStockoutRisk — Sheet access
+- L2040 getTransactionHistory — Sheet access
+- L2060 searchByName — no direct I/O detected
+- L2076 ensureOperationalHeaderLayout_ — Spreadsheet mutation; Sheet access
+- L2093 styleOperationalHeader_ — Spreadsheet mutation; Sheet access
+- L2118 applyTableBodyStyle_ — Spreadsheet mutation; Sheet access
+- L2129 formatConfigSheet_ — Spreadsheet mutation; Sheet access
+- L2144 formatSystemLogSheet_ — Sheet access
+- L2161 formatDailySnapshotsSheet_ — Sheet access
+- L2179 formatIdempotencyLedgerSheet_ — Sheet access
+- L2196 formatOperationalSheets_ — Sheet access
+- L2206 shortId_ — no direct I/O detected
+- L2213 writeAuditLogSecure — Spreadsheet mutation; Sheet access
+- L2233 maybeArchiveAuditLog — Spreadsheet mutation; Sheet access
+- L2251 redactSensitiveString_ — no direct I/O detected
+- L2260 sendErrorEmailWithCooldown — Email; Trigger/properties
+- L2288 sendErrorEmail — no direct I/O detected
+- L2293 getHeaderIndex — Sheet access
+- L2323 getBahanBakuStockMap_ — Sheet access
+- L2383 applyBahanBakuStockSource_ — no direct I/O detected
+- L2393 syncDivisionStockLightweight_ — Spreadsheet mutation; Sheet access
+- L2463 removeChartByTitle_ — no direct I/O detected
+- L2483 syncDivisionStock — Spreadsheet mutation; Sheet access
+- L2589 logDailySnapshot — Spreadsheet mutation; Sheet access
+- L2619 updateLastUpdateTimestamp — Trigger/properties
+- L2638 stampVisibleUpdateTimestamp_ — Spreadsheet mutation; Sheet access
+- L2687 readDivisionSheetUpdateTimestamp_ — Sheet access
+- L2700 getLastUpdateTimestamp — no direct I/O detected
+- L2704 classifyDashboardStock_ — no direct I/O detected
+- L2712 nowWIB_ — no direct I/O detected
+- L2716 readDashboardLiveSummary_ — Sheet access
+- L2761 getDashboardData — no direct I/O detected
+- L2810 getDashboard — no direct I/O detected
+- L2811 toNumber_ — no direct I/O detected
+- L2843 percent_ — no direct I/O detected
+- L2844 normalizeDivision_ — no direct I/O detected
+- L2845 getVolumeSummaryThisWeek_ — Sheet access
+- L2866 getTodayActivity_ — Sheet access
+- L2887 normalizeDateKey_ — no direct I/O detected
+- L2895 getSevenDayTrend_ — Sheet access
+- L2908 getPOStatus_ — no direct I/O detected
+- L2938 diagnoseDashboard — Spreadsheet mutation; Sheet access
+- L2967 refreshAllData — no direct I/O detected
+- L2975 clearDashboardCharts_ — no direct I/O detected
+- L2989 renderDivisionBarChart_ — Spreadsheet mutation; Sheet access
+- L3017 refreshDashboard — Spreadsheet mutation; Sheet access
+- L3090 getPOTableConstants_ — no direct I/O detected
+- L3093 generatePORecommendations — no direct I/O detected
+- L3117 getPOOverwriteGuard_ — Sheet access
+- L3191 writePORecommendations — Spreadsheet mutation; Sheet access
+- L3238 normalizePOItem_ — no direct I/O detected
+- L3258 normalizePOItems_ — no direct I/O detected
+- L3265 poPayloadDigest_ — no direct I/O detected
+- L3273 poSheetMatchesItems_ — Sheet access
+- L3300 writePONumberRow5_ — Spreadsheet mutation; Sheet access
+- L3313 writePurchaseOrder_ — Spreadsheet mutation; Sheet access
+- L3415 updatePODateRow4 — Spreadsheet mutation; Sheet access
+- L3427 clearPOTableData — Spreadsheet mutation; Sheet access
+- L3432 ensurePORowsCapacity_ — Spreadsheet mutation
+- L3437 findPODataEndRow — Sheet access
+- L3448 ensurePOHeader — Spreadsheet mutation; Sheet access
+- L3458 inspectPORangeProtection_ — Sheet access
+- L3475 rangesIntersect_ — no direct I/O detected
+- L3481 analyzePORecommendations_ — no direct I/O detected
+- L3492 formatPOTable_ — Spreadsheet mutation; Sheet access
+- L3513 getSizeMapFromDivisiCS — Sheet access
+- L3544 sendDailyStockReport — Email; Sheet access
+- L3601 getWeekKey_ — no direct I/O detected
+- L3610 rolloverPOWeekIfNeeded_ — Trigger/properties
+- L3645 getPreviousPOStatus_ — Trigger/properties
+- L3652 weeklyPOAutomation — Email
+- L3678 emailQueueWriteApproved_ — no direct I/O detected
+- L3682 emailQueueClaimKey_ — no direct I/O detected
+- L3692 claimEmailQueuePayload_ — Trigger/properties
+- L3710 processEmailQueue — Email
+- L3749 installQueueTrigger — Trigger/properties
+- L3766 onEdit — no direct I/O detected
+- L3795 markDataDirty_ — Trigger/properties
+- L3800 clearDataDirty_ — Trigger/properties
+- L3804 isDataDirty_ — Trigger/properties
+- L3808 maintenanceCleanup — Trigger/properties
+- L3840 setupEnvironment — Trigger/properties
+- L3898 generateRandomSecret — no direct I/O detected
+- L3902 resetApiSecret — Trigger/properties
+- L3914 testAddTransaction — no direct I/O detected
+- L3928 testConnection — no direct I/O detected
+- L3945 sha256Short_ — no direct I/O detected
+- L3950 setSyncVersions_ — Trigger/properties
+- L3959 getCachedSyncVersions_ — Trigger/properties
+- L3964 getHealthStatus_ — Sheet access
+- L3979 computeDeterministicVersions_ — no direct I/O detected
+- L3986 getStockDelta — Sheet access
+- L4019 formatPOPeriodDate_ — no direct I/O detected
+- L4024 getPOPeriodBounds_ — no direct I/O detected
+- L4045 getPOInfoFromHeader_ — Sheet access
+- L4087 normalizePONameKey_ — no direct I/O detected
+- L4091 getPORequestStatus — no direct I/O detected
+- L4104 recordPOArrival — Sheet access
+- L4176 getStatusPO — Sheet access
+- L4301 dashboardClearPOArea_ — Spreadsheet mutation; Sheet access
+- L4309 renderPOStatusBlock_ — Spreadsheet mutation; Sheet access
+- L4335 renderPODonutChart_ — Spreadsheet mutation; Sheet access
+- L4348 refreshDashboardPOSection_ — Sheet access
+- L4382 getCurrentSyncVersions_ — no direct I/O detected
+- L4390 getSyncMetrics — Trigger/properties
+- L4396 recordSyncMetric_ — Trigger/properties
+- L4406 getConnectionCircuitState_ — Trigger/properties
+- L4414 noteConnectionFailure_ — Trigger/properties
+- L4418 noteConnectionSuccess_ — Trigger/properties
+
+## Important indirect side effects found
+- getConfig → readConfig_ → getConfigSheet_ → insertSheet when Config is absent.
+- getPwaBootstrap → setSyncVersions_ → Script Properties writes. This is not a spreadsheet-cell write, but is still a side effect within a nominal read/bootstrap path.
+- getStockDelta → getCurrentSyncVersions_ → setSyncVersions_ can update Script Properties.
+- getRequestStatus_ → getIdempotencyLedgerSheet_ may create/format Idempotency Ledger if missing; this needs a separate action purity check if exposed through any gateway.
+- addTransaction and bulkTransaction write operational transaction sheets and idempotency ledger; these are write paths and must never be included in the agent read-only allowlist.
+- writePORecommendations, writePurchaseOrder_, recordPOArrival, syncDivisionStock, logDailySnapshot, refreshDashboard, maintenanceCleanup, setupConfigSheet, setActivePeriod and setupNewPeriod have write/admin side effects.
+- setupEnvironment and resetApiSecret modify Script Properties and/or triggers; never expose as general agent actions.
+
+## Scheduled/trigger functions identified
+- setupEnvironment installs triggers for sendDailyStockReport, weeklyPOAutomation, logDailySnapshot, refreshAllData and onEdit.
+- installQueueTrigger manages processEmailQueue trigger.
+- weeklyPOAutomation can generate/write PO recommendations and refresh dashboard; it is an operational write automation.
+- onEdit can update cache/dirty flags, lightweight division stock, timestamps and PO dashboard state.
+
+## Next verification needed
+1. Review transitive call graph of each READ_ONLY_ACTIONS member, not only direct method calls.
+2. Add Apps Script mock tests to prove read-only endpoints do not call Spreadsheet mutation APIs, send email, change triggers, or alter Script Properties except explicitly documented version telemetry.
+3. Compare this snapshot with deployed Apps Script version and Script Properties using owner-authorized deployment metadata.
+4. Confirm spreadsheet tab/column/formula mappings against an authorized live read-only manifest.
