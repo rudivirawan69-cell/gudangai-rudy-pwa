@@ -28,6 +28,19 @@
     "SUPABASE_PUBLISHABLE_KEY": "sb_publishable_nrVxMRbrQihkzwFmWEs7QA_PlVFDWOz",
     "ALLOWED_ORIGINS": "https://gudangai-rudy-pwa-69.rudivirawan69.workers.dev,https://gudangai-rudy-pwa-live.vercel.app",
     "CACHE_VERSI": "2"
+  },
+  "previews": {
+    "vars": {
+      "GUDANGAI_SHEETS_API_URL": "https://preview-disabled.invalid/",
+      "AI_MODEL": "@cf/meta/llama-3.1-8b-instruct-fast",
+      "ANTHROPIC_FALLBACK_ENABLED": "false",
+      "SUPABASE_PUBLISHABLE_KEY": "preview-disabled",
+      "ALLOWED_ORIGINS": "",
+      "CACHE_VERSI": "preview"
+    },
+    "ai": {
+      "binding": "AI"
+    }
   }
   // Setelah membuat KV namespace di dashboard Cloudflare, tambahkan:
   // "kv_namespaces": [
