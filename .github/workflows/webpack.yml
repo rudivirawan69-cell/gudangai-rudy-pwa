@@ -6,6 +6,12 @@ on:
   pull_request:
     branches: ["main"]
   workflow_dispatch:
+    inputs:
+      deploy:
+        description: "Set true only when an explicitly approved production deployment is intended"
+        required: true
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -41,7 +47,7 @@ jobs:
   deploy:
     name: Deploy canonical Cloudflare Worker
     needs: verify
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.deploy == true
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     environment: production
