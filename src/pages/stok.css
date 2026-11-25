@@ -355,3 +355,9 @@ html[data-theme] .sk-page .sk-item-status.sk-waspada { color: var(--stok-waspada
 html[data-theme] .sk-page .t-kritis,
 html[data-theme] .sk-page .sk-item-status.sk-kritis { color: var(--stok-kritis) !important; }
 html[data-theme] .sk-page .sk-item-qty small { color: var(--text-main) !important; }
+
+
+/* Theme-aware muted text contrast for stock metadata and counters. */
+html[data-theme="soft_light"] .sk-page :is(.sk-list-head span,.sk-div-title p,.sk-item-kode,.sk-item-qty small,.sk-empty) { color:#475569 !important; }
+html[data-theme="deep_ocean"] .sk-page :is(.sk-list-head span,.sk-div-title p,.sk-item-kode,.sk-item-qty small,.sk-empty) { color:#CBD5E1 !important; }
+html[data-theme="graphite_titanium"] .sk-page :is(.sk-list-head span,.sk-div-title p,.sk-item-kode,.sk-item-qty small,.sk-empty) { color:#CBD5E1 !important; }
