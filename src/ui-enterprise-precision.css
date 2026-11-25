@@ -44,12 +44,12 @@ html[data-theme="soft_light"] {
   --accent: #247ba8;
   --accent-strong: #195f87;
   --accent-soft: rgb(36 123 168 / 12%);
-  --success: #16a36a;
-  --warning: #e6a23c;
-  --danger: #dc4545;
-  --stok-aman: #16a36a;
-  --stok-waspada: #e6a23c;
-  --stok-kritis: #dc4545;
+  --success: #087443;
+  --warning: #854d0e;
+  --danger: #b42332;
+  --stok-aman: #087443;
+  --stok-waspada: #854d0e;
+  --stok-kritis: #b42332;
   --po-datang: #16a36a;
   --po-sebagian: #e6a23c;
   --po-belum: #94a3b8;

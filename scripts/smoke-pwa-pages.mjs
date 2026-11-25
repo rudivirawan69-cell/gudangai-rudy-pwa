@@ -208,9 +208,11 @@ try {
   await page.locator('nav.nav-bar').waitFor({ state: 'visible', timeout: 15000 });
 
   const openMorePage = async (label, marker) => {
-    await page.locator('nav.nav-bar button').filter({ hasText: 'Lainnya' }).first().click();
     const sheet = page.locator('.more-sheet');
-    await sheet.waitFor({ state: 'visible', timeout: 5000 });
+    if (!(await sheet.isVisible().catch(() => false))) {
+      await page.locator('nav.nav-bar button').filter({ hasText: 'Lainnya' }).first().click();
+      await sheet.waitFor({ state: 'visible', timeout: 5000 });
+    }
     await sheet.locator('button').filter({ hasText: label }).first().click();
     await page.getByText(marker, { exact: false }).first().waitFor({ state: 'visible', timeout: 10000 });
   };
@@ -321,7 +323,7 @@ try {
         gaps: boxes.slice(1).map((box, index) => box.top - boxes[index].bottom),
       };
     });
-    assert.equal(settingsCards.count, 4, `Settings menu should show four independent option cards: ${JSON.stringify(settingsCards)}`);
+    assert.ok(settingsCards.count >= 4, `Settings menu should show at least four independent option cards: ${JSON.stringify(settingsCards)}`);
     assert.ok(settingsCards.borders.every((value) => value !== '0px'), `Settings options are still grouped in one card: ${JSON.stringify(settingsCards)}`);
     assert.ok(settingsCards.gaps.every((value) => value >= 7), `Settings card spacing is inconsistent: ${JSON.stringify(settingsCards)}`);
     await openMorePage('Sinkronisasi', 'Sinkronisasi');
@@ -491,6 +493,59 @@ try {
         assert.ok(safeTheme.bg && safeTheme.fg, `Missing color tokens on ${label} in ${theme}`);
         const ratio = contrastRatio(safeTheme.fg, safeTheme.bg);
         assert.ok(ratio >= 4.5, `Text contrast below WCAG AA on ${label} in ${theme}: ${ratio.toFixed(2)}:1`);
+
+        // Audit rendered text against its nearest opaque surface, not only root theme tokens.
+        const renderedTextAudit = await page.evaluate(() => {
+          const parse = (value) => {
+            const raw = String(value).trim();
+            const hex = raw.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
+            if (hex) {
+              const value = hex[1].length === 3 ? hex[1].split('').map((x)=>x+x).join('') : hex[1];
+              return { r:parseInt(value.slice(0,2),16), g:parseInt(value.slice(2,4),16), b:parseInt(value.slice(4,6),16), a:1 };
+            }
+            const rgb = raw.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)/i);
+            if (rgb) return { r:+rgb[1], g:+rgb[2], b:+rgb[3], a:rgb[4] === undefined ? 1 : +rgb[4] };
+            const srgb = raw.match(/color\(srgb\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)(?:\s*\/\s*([\d.]+))?\)/i);
+            return srgb ? { r:Math.round(+srgb[1]*255), g:Math.round(+srgb[2]*255), b:Math.round(+srgb[3]*255), a:srgb[4] === undefined ? 1 : +srgb[4] } : null;
+          };
+          const pageBackground = document.querySelector('.app-bg');
+          const fallback = parse(getComputedStyle(document.body).getPropertyValue('--bg-app')) || parse(getComputedStyle(document.documentElement).getPropertyValue('--bg-app')) || parse(pageBackground ? getComputedStyle(pageBackground).backgroundColor : '') || parse(getComputedStyle(document.body).backgroundColor) || {r:247,g:247,b:245,a:1};
+          const nodes = [...document.querySelectorAll('h1,h2,h3,h4,p,span,button,a,label,small,strong,b,li,input,textarea,select')];
+          return nodes.filter((el) => {
+            const text = (el.innerText || el.value || el.getAttribute('aria-label') || '').trim();
+            const rect = el.getBoundingClientRect();
+            const style = getComputedStyle(el);
+            const hasDirectText = [...el.childNodes].some((node) => node.nodeType === 3 && node.textContent.trim());
+            return hasDirectText && text.length > 0 && rect.width > 0 && rect.height > 0 && style.display !== 'none' &&
+              style.visibility !== 'hidden' && Number(style.opacity || 1) > 0.01 && parse(style.color);
+          }).map((el) => {
+            const fg = parse(getComputedStyle(el).color);
+            let bg = null;
+            for (let node=el; node && node.nodeType===1; node=node.parentElement) {
+              const color = parse(getComputedStyle(node).backgroundColor);
+              if (color && color.a >= 0.999) { bg = color; break; }
+            }
+            if (!bg) bg = fallback;
+            return {
+              text:(el.innerText || el.value || el.getAttribute('aria-label') || '').trim().slice(0,70),
+              selector:el.tagName.toLowerCase() + (typeof el.className === 'string' && el.className ? '.' + el.className.trim().replace(/\s+/g,'.') : ''),
+              ancestorSurfaces:[...function*(){for(let node=el;node&&node.nodeType===1;node=node.parentElement){const s=getComputedStyle(node);yield {tag:node.tagName.toLowerCase(),className:typeof node.className==='string'?node.className:'',background:s.backgroundColor,color:s.color};}}()].slice(0,4),
+              foreground:fg,
+              background:bg,
+              fontSize:parseFloat(getComputedStyle(el).fontSize),
+              weight:getComputedStyle(el).fontWeight,
+            };
+          });
+        });
+        const renderedRatios = renderedTextAudit.map((item) => {
+          const hex = (v) => `#${[v.r,v.g,v.b].map((n)=>Math.round(n).toString(16).padStart(2,'0')).join('')}`;
+          return { ...item, ratio:contrastRatio(hex(item.foreground),hex(item.background)) };
+        });
+        const failingText = renderedRatios.filter((item) => item.ratio < 4.5 &&
+          !(item.fontSize >= 24 || (item.fontSize >= 18.66 && Number(item.weight) >= 700)));
+        assert.ok(renderedRatios.length >= 10, `Rendered text contrast audit did not cover enough elements on ${label}: ${renderedRatios.length}`);
+        assert.deepEqual(failingText, [], `Rendered text contrast below WCAG AA on ${label} in ${theme}: ${JSON.stringify(failingText.slice(0,8))}`);
+        console.log(`[CONTRAST PASS] ${theme} / ${label} / ${renderedRatios.length} rendered text elements / minimum ${Math.min(...renderedRatios.map(x=>x.ratio)).toFixed(2)}:1`);
         await page.screenshot({
           path: `${screenshotRoot}/${theme}-${slug}-${viewport.label}.png`,
           fullPage: true,

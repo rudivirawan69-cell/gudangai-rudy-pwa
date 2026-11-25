@@ -17,7 +17,7 @@ html[data-theme="soft_light"] {
   --bg-elevated: #ffffff;
   --bg-muted: #f5f7f6;
   --text-main: #202d32;
-  --text-muted: #68777b;
+  --text-muted: #475569;
   --border: #dfe7e4;
   --accent: #167b70;
   --accent-strong: #11665e;
@@ -711,3 +711,14 @@ html[data-theme] .po-page .po-metric-label {
   line-height: 1.25;
   font-weight: 700;
 }
+
+
+/* Dark-theme navigation labels: preserve clear active/inactive hierarchy. */
+html[data-theme="deep_ocean"] .nav-btn .nav-label,
+html[data-theme="deep_ocean"] .nav-fab .nav-label { color:#CBD5E1 !important; opacity:1 !important; }
+html[data-theme="deep_ocean"] .nav-btn.is-active .nav-label,
+html[data-theme="deep_ocean"] .nav-fab .nav-label { color:#67E8F9 !important; }
+html[data-theme="graphite_titanium"] .nav-btn .nav-label,
+html[data-theme="graphite_titanium"] .nav-fab .nav-label { color:#D1D5DB !important; opacity:1 !important; }
+html[data-theme="graphite_titanium"] .nav-btn.is-active .nav-label,
+html[data-theme="graphite_titanium"] .nav-fab .nav-label { color:#FCD34D !important; }

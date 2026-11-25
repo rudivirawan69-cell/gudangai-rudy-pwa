@@ -338,8 +338,8 @@ html[data-theme] [data-ui-page="dashboard"] .dashboard-status-kritis {
   border-color:rgba(244,63,94,.4) !important;
   background:color-mix(in srgb,#E11D48 13%,var(--bg-elevated)) !important;
 }
-html[data-theme] [data-ui-page="dashboard"] .dashboard-status-kritis > p:first-child { color:#FCA5A5 !important; }
-html[data-theme] [data-ui-page="dashboard"] .dashboard-status-kritis > p:nth-child(2) { color:#F87171 !important; }
+html[data-theme] [data-ui-page="dashboard"] .dashboard-status-kritis > p:first-child,
+html[data-theme] [data-ui-page="dashboard"] .dashboard-status-kritis > p:nth-child(2) { color:var(--stok-kritis) !important; }
 html[data-theme] [data-ui-page="dashboard"] .dashboard-status-aman > p:first-child { color:var(--success) !important; }
 html[data-theme] [data-ui-page="dashboard"] .dashboard-status-waspada > p:first-child { color:var(--warning) !important; }
 html[data-theme] [data-ui-page="dashboard"] .dashboard-chart-wrap .text-cyan-700 { color:var(--accent) !important; }
@@ -474,6 +474,10 @@ html[data-theme="deep_ocean"] [data-ui-page="dashboard"] .dashboard-stock-entity
 }
 html[data-theme] [data-ui-page="dashboard"] .dashboard-stock-entity .text-slate-500 {
   color: var(--text-muted) !important;
+  opacity: 1 !important;
+}
+html[data-theme="soft_light"] [data-ui-page="dashboard"] .dashboard-stock-entity .text-slate-500 {
+  color: #475569 !important;
 }
 
 
