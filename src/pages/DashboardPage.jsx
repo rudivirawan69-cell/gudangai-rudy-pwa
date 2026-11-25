@@ -527,7 +527,7 @@ function Movement7Days({ history }) {
       <div className="flex items-center justify-between mb-2.5">
         <div>
           <p className="text-sm font-extrabold text-slate-900">Analisis</p>
-          <p className="text-[11px] text-slate-500">Pergerakan barang 7 hari terakhir</p>
+
         </div>
         <span className="text-[10px] font-bold text-cyan-700 bg-cyan-50 border border-cyan-100 rounded-full px-2 py-1">7 HARI</span>
       </div>
@@ -569,11 +569,11 @@ function StockComparison({ cv, pt }) {
       <div className="flex items-start justify-between mb-3">
         <div>
           <p className="text-sm font-extrabold text-slate-900">Perbandingan Stok</p>
-          <p className="text-[11px] text-slate-500">Komposisi stok berdasarkan entitas</p>
+
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-[9px] font-semibold text-slate-500">
             <span><i className="inline-block w-2 h-2 rounded-full bg-cyan-500 mr-1" />CV</span>
             <span><i className="inline-block w-2 h-2 rounded-full bg-orange-400 mr-1" />PT</span>
-            <span className="text-slate-400">Angka = persentase dari total</span>
+
           </div>
         </div>
         <Package className="w-4 h-4 text-cyan-600 shrink-0 mt-0.5" />
@@ -608,16 +608,16 @@ function DashboardTotals({ totalItem, loading }) {
   return (
     <div className="grid grid-cols-2 gap-3">
       <div className="dashboard-total-card border-cyan-100">
-        <div className="flex items-start justify-between gap-2"><span className="dashboard-icon-badge dashboard-icon-cyan"><Package className="w-4 h-4" /></span><span className="text-[9px] font-extrabold text-slate-400">MASTER</span></div>
+        <div className="flex items-start justify-between gap-2"><span className="dashboard-icon-badge dashboard-icon-cyan"><Package className="w-4 h-4" /></span></div>
         <p className="text-[10px] font-bold uppercase tracking-wider text-cyan-700 mt-2">Total Item</p>
         <p className="text-2xl font-extrabold text-slate-900 tabular-nums mt-1" aria-live="polite">{itemCount == null ? (loading ? 'Memuat…' : '—') : itemCount.toLocaleString('id-ID')}</p>
-        <p className="text-[10px] text-slate-500 mt-0.5">{itemCount == null ? (loading ? 'Mengambil ringkasan Dashboard Live' : 'Ringkasan resmi belum diterima') : 'SKU aktif · Dashboard Live'}</p>
+        
       </div>
       <div className="dashboard-total-card border-orange-100">
-        <div className="flex items-start justify-between gap-2"><span className="dashboard-icon-badge dashboard-icon-orange"><Users className="w-4 h-4" /></span><span className="text-[9px] font-extrabold text-slate-400">JARINGAN</span></div>
+        <div className="flex items-start justify-between gap-2"><span className="dashboard-icon-badge dashboard-icon-orange"><Users className="w-4 h-4" /></span></div>
         <p className="text-[10px] font-bold uppercase tracking-wider text-orange-700 mt-2">Total Outlet</p>
         <p className="text-2xl font-extrabold text-slate-900 tabular-nums mt-1">45</p>
-        <p className="text-[10px] text-slate-500 mt-0.5">Outlet terlayani</p>
+
       </div>
     </div>
   );
@@ -656,14 +656,14 @@ function DashboardStatusSummary({ data, loading }) {
 
 function POQuickActions({ onNavigate, onSelect, activeView, currentCount = 0, previousCount = 0, confirmCount = 0 }) {
   const actions = [
-    { id: 'generate', title: 'PO', subtitle: 'Generate dan simpan PO', Icon: FilePlus2, count: null, action: () => onNavigate?.('po') },
-    { id: 'current', title: 'Status PO Minggu Ini', subtitle: 'Periode berjalan', Icon: CalendarDays, count: currentCount, action: () => onSelect?.('current') },
-    { id: 'previous', title: 'Status PO Minggu Lalu', subtitle: 'Periode sebelumnya', Icon: CalendarClock, count: previousCount, action: () => onSelect?.('previous') },
-    { id: 'confirm', title: 'Konfirmasi PO', subtitle: 'Kedatangan yang perlu dicatat', Icon: ClipboardCheck, count: confirmCount, action: () => onSelect?.('confirm') },
+    { id: 'generate', title: 'PO', Icon: FilePlus2, count: null, action: () => onNavigate?.('po') },
+    { id: 'current', title: 'Status PO Minggu Ini', Icon: CalendarDays, count: currentCount, action: () => onSelect?.('current') },
+    { id: 'previous', title: 'Status PO Minggu Lalu', Icon: CalendarClock, count: previousCount, action: () => onSelect?.('previous') },
+    { id: 'confirm', title: 'Konfirmasi PO', Icon: ClipboardCheck, count: confirmCount, action: () => onSelect?.('confirm') },
   ];
   return (
     <div className="po-shortcuts-grid grid grid-cols-2 sm:grid-cols-4 gap-2" aria-label="Akses cepat PO">
-      {actions.map(({ id, title, subtitle, Icon, count, action }) => {
+      {actions.map(({ id, title, Icon, count, action }) => {
         const selected = id !== 'generate' && activeView === id;
         return (
           <button
@@ -676,10 +676,10 @@ function POQuickActions({ onNavigate, onSelect, activeView, currentCount = 0, pr
             <span className={`po-shortcut-icon po-shortcut-icon-${id}`}><Icon className="h-5 w-5" aria-hidden="true" /></span>
             <span className="po-shortcut-copy">
               <span className="po-shortcut-title">{title}</span>
-              <span className="po-shortcut-subtitle">{subtitle}</span>
+
             </span>
             <span className="po-shortcut-footer">
-              {count !== null ? <span className="po-shortcut-count tabular-nums">{count} item</span> : <span className="po-shortcut-count">Buka</span>}
+              {count !== null ? <span className="po-shortcut-count tabular-nums">{count} item</span> : null}
               <ArrowUpRight className="h-4 w-4 shrink-0" aria-hidden="true" />
             </span>
           </button>

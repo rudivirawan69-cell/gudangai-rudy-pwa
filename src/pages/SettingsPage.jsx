@@ -277,7 +277,7 @@ export default function SettingsPage({ onNavigate }) {
                 <span className={`text-[10px] font-bold leading-tight text-center ${active ? 'text-blue-800' : 'text-slate-600'}`}>
                   {t.short}
                 </span>
-                <span className="text-[8px] leading-tight text-center opacity-70">{t.description}</span>
+
               </button>
             );
           })}
@@ -288,12 +288,12 @@ export default function SettingsPage({ onNavigate }) {
       </div>
 
       <div className="settings-menu-list">
-        <MenuRow icon={User} iconBg="bg-blue-50 text-blue-600" title="Profil Saya" subtitle="Nama & foto tampilan" onClick={() => setPanel(panel === 'profile' ? null : 'profile')} />
+        <MenuRow icon={User} iconBg="bg-blue-50 text-blue-600" title="Profil Saya"  onClick={() => setPanel(panel === 'profile' ? null : 'profile')} />
         <MenuRow icon={Link2} iconBg="bg-cyan-50 text-cyan-700" title="Koneksi Google Sheets" subtitle={connSubtitle}
           onClick={() => setPanel(panel === 'koneksi' ? null : 'koneksi')}
           right={connStatus === 'ok' ? <CheckCircle2 className="w-5 h-5 text-emerald-500" /> : connStatus === 'fail' ? <XCircle className="w-5 h-5 text-red-500" /> : <ChevronRight className="w-4 h-4 text-slate-300" />} />
-        <MenuRow icon={KeyRound} iconBg="bg-amber-50 text-amber-700" title="PIN Perangkat (Lokal)" subtitle="Tidak digunakan untuk autentikasi server atau AI" onClick={() => setPanel(panel === 'pin' ? null : 'pin')} />
-        <MenuRow icon={SettingsIcon} iconBg="bg-slate-100 text-slate-600" title="Tentang Aplikasi" subtitle="GudangAI · Backend V6.6.5+BULK-STABLE" onClick={() => setPanel(panel === 'about' ? null : 'about')} />
+        <MenuRow icon={KeyRound} iconBg="bg-amber-50 text-amber-700" title="PIN Perangkat (Lokal)"  onClick={() => setPanel(panel === 'pin' ? null : 'pin')} />
+        <MenuRow icon={SettingsIcon} iconBg="bg-slate-100 text-slate-600" title="Tentang Aplikasi"  onClick={() => setPanel(panel === 'about' ? null : 'about')} />
       </div>
 
       {panel === 'profile' && (
@@ -383,7 +383,7 @@ export default function SettingsPage({ onNavigate }) {
       )}
 
       <div className="settings-menu-list settings-menu-logout">
-        <MenuRow icon={LogOut} iconBg="bg-red-50 text-red-600" title="Keluar" subtitle="Masuk kembali dengan metode autentikasi yang aktif" onClick={() => setShowLogout(true)} danger />
+        <MenuRow icon={LogOut} iconBg="bg-red-50 text-red-600" title="Keluar"  onClick={() => setShowLogout(true)} danger />
       </div>
 
       {showLogout && (

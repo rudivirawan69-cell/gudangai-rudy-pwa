@@ -237,11 +237,10 @@ export default function RiwayatPage({ onNavigate }) {
     <div className="rw-page">
       <header className="rw-head">
         <div>
-          <small>Aktivitas persediaan</small>
+
           <h1>Riwayat Transaksi</h1>
           <p className="rw-sub">
-            {fmtCount(totalValid)} transaksi{adaFilter ? " ditemukan" : " tersimpan di perangkat"}
-            {anomali > 0 ? ` · ${fmtCount(anomali)} entri tidak valid disembunyikan` : ""}
+            {fmtCount(totalValid)} transaksi{anomali > 0 ? ` · ${fmtCount(anomali)} invalid` : ""}
           </p>
         </div>
         <div className="rw-head-actions">

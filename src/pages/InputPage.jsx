@@ -757,9 +757,7 @@ export default function InputPage() {
           <span className="text-[11px] font-semibold text-slate-700">Tempel</span>
         </button>
       </div>
-      <p className="-mt-2 px-1 text-[10px] leading-relaxed text-slate-500" id="input-methods-note">
-        Metode input otomatis terkunci selama proses baca, validasi, atau pemindaian berlangsung.
-      </p>
+
       <input ref={filePdfRef} type="file" accept="application/pdf" className="hidden" onChange={onPdfPick} />
       <input ref={fileImgRef} type="file" accept="image/*" className="hidden" onChange={onImgPick} />
 
@@ -769,7 +767,7 @@ export default function InputPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-base font-extrabold text-slate-900">Input Foto</p>
-                <p className="text-xs text-slate-500">Pilih sumber foto untuk membaca daftar barang.</p>
+
               </div>
               <button type="button" onClick={() => setShowPhotoSource(false)} className="p-2 rounded-xl bg-slate-100 text-slate-600">
                 <X className="w-5 h-5" />

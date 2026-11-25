@@ -118,7 +118,7 @@ describe('GudangAI Metode C UI contract', () => {
     expect(dashboard).not.toContain('Status PO · Purchase Order');
     expect(dashboard).toContain('Status per Divisi');
     expect(dashboard).toContain('Status PO</span>');
-    expect(stock).toContain('<h1>Stok barang</h1>');
+    expect(stock).toContain('<h1>Stok Barang</h1>');
     expect(stock).not.toContain('sk-head-subtitle');
     expect(po).toContain('Purchase order</h2>');
     expect(po).not.toContain("'Generate, pantau, dan konfirmasi PO'");
@@ -149,13 +149,26 @@ describe('GudangAI Metode C UI contract', () => {
     expect(po).not.toContain('>Kedatangan:');
     expect(po).not.toContain('item.kode} · {item.size');
     expect(po).not.toContain('>Tgl</span>');
+    expect(po).toContain('aria-label="Tanggal kedatangan PO"');
+    expect(po).toContain('Item kritis');
+    expect(po).toContain('Total kurang');
+    expect(po).toContain('po-recommendation-metrics"');
+    expect(status).toContain('Belum selesai:');
+    expect(status).toContain('Sisa {sisa} · PO {it.qtyPO}');
+    expect(status).toContain('Qty PO: {it.qtyPO}');
+    expect(status).toContain('Sudah datang: {it.qtyDatang}');
+    expect(status).toContain('selectedItem.qtyPO');
+    expect(status).toContain('selectedItem.qtyDatang');
+    expect(css).toContain('.po-operational-context');
+    expect(css).toContain('.po-metric-label');
     expect(status).not.toContain('className="card section-card rounded-2xl p-4 space-y-3"');
     expect(status).toContain('po-status-inline');
     expect(status).not.toContain('Ketuk untuk edit qty');
     expect(status).not.toContain('Hanya untuk melihat status.');
     expect(status).not.toContain('Pilih periode yang akan dikonfirmasi');
     expect(status).not.toContain('Periode berjalan · Belum selesai:');
-    expect(status).not.toContain('Sisa {sisa} · PO {it.qtyPO}');
+    expect(status).toContain('Qty PO: {it.qtyPO}');
+    expect(status).toContain('Sudah datang: {it.qtyDatang}');
     expect(css).toContain('.po-status-panel');
     expect(css).toContain('.po-status-inline span');
     expect(css).toContain('.po-selected-item');
@@ -170,6 +183,35 @@ describe('GudangAI Metode C UI contract', () => {
     }
     expect(css).toContain('--po-cs-bg:');
     expect(css).toContain('--po-prod-bg:');
+  });
+
+  it('keeps page labels concise and removes redundant copy', () => {
+    const app = readFileSync(appPath, 'utf8');
+    const dashboard = readFileSync(resolve(process.cwd(), 'src/pages/DashboardPage.jsx'), 'utf8');
+    const stock = readFileSync(stockPagePath, 'utf8');
+    const input = readFileSync(resolve(process.cwd(), 'src/pages/InputPage.jsx'), 'utf8');
+    const history = readFileSync(resolve(process.cwd(), 'src/pages/RiwayatPage.jsx'), 'utf8');
+    const settings = readFileSync(resolve(process.cwd(), 'src/pages/SettingsPage.jsx'), 'utf8');
+
+    expect(app).not.toContain('TAB_SUBTITLE');
+    expect(app).not.toContain('Ringkasan operasional gudang');
+    expect(app).toContain("label: 'Riwayat'");
+    expect(app).toContain("label: 'Antrean'");
+    expect(app).toContain("label: 'Atur'");
+    expect(dashboard).not.toContain('po-shortcut-subtitle');
+    expect(dashboard).not.toContain('Angka = persentase dari total');
+    expect(dashboard).not.toContain('Outlet terlayani');
+    expect(dashboard).not.toContain('MASTER</span>');
+    expect(dashboard).not.toContain('JARINGAN</span>');
+    expect(dashboard).not.toContain('SKU aktif · Dashboard Live');
+    expect(dashboard).not.toContain('po-shortcut-count">Buka');
+    expect(stock).toContain('<h1>Stok Barang</h1>');
+    expect(stock).not.toContain('sk-section-label">Divisi');
+    expect(stock).not.toContain('sk-section-label">Kondisi stok');
+    expect(input).not.toContain('input-methods-note');
+    expect(input).not.toContain('Metode input otomatis terkunci');
+    expect(history).not.toContain('<small>Aktivitas persediaan</small>');
+    expect(settings).not.toContain('t.description');
   });
 
 });
