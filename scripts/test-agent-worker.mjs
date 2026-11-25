@@ -283,6 +283,8 @@ test('saved operator memory is bounded and treated as untrusted reference data',
 test('general stock analysis routes to inventory dataset, not fuzzy name search', () => {
   assert.deepEqual(detectLiveActions('Analisis Stok'), ['getAllStock']);
   assert.deepEqual(detectLiveActions('Tolong analisa stok gudang'), ['getAllStock']);
+  assert.deepEqual(detectLiveActions('Ringkasan stok'), ['getAllStock']);
+  assert.deepEqual(detectLiveActions('Data stok gudang'), ['getAllStock']);
   assert.deepEqual(detectLiveActions('Cari stok Ayam Fillet'), ['searchByName']);
 });
 
