@@ -124,7 +124,13 @@ async function postJson(payload, { retries = RETRY_COUNT, timeoutMs = REQUEST_TI
   const body = JSON.stringify({ schemaVersion: SCHEMA_VERSION, secret: getApiSecret() || undefined, client: { app: 'gudangai-rudy-pwa', deviceId: deviceId() }, ...payload });
   const isBatchWrite = payload?.action === 'bulkTransaction';
   const fetchStartedAt = Date.now();
-  const res = await fetchWithRetry(url, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body, redirect: 'follow' }, retries, timeoutMs);
+  let res;
+  try {
+    res = await fetchWithRetry(url, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body, redirect: 'follow' }, retries, timeoutMs);
+  } catch (err) {
+    if (isBatchWrite) console.info('[GudangAI timing]', JSON.stringify({ event: 'client', phase: 'fetch', ms: Date.now() - fetchStartedAt, outcome: 'ambiguous-error', batchId: payload?.batchId || null }));
+    throw err;
+  }
   const fetchMs = Date.now() - fetchStartedAt;
   const responseStartedAt = Date.now();
   const text = await res.text();
@@ -535,7 +541,6 @@ async function submitItems(action, entity, items, tanggal, options = {}) {
     const queuedIds = options.fromQueue ? [] : enqueue(action, entity, list, { tanggal });
     const queuedSet = new Set(queuedIds);
     const msg = list.length + ' item masuk Antrian Sinkronisasi (offline)';
-    pushNotification({ type: 'warning', title: 'Koneksi terputus', body: msg + '. Tidak ada item yang dibuang.' });
     return {
       success: false, queued: queuedIds.length > 0, count: alreadyApplied.length, queuedCount: queuedIds.length,
       failed: list.length - queuedIds.length, total: originalList.length, clientElapsedMs: Date.now() - clientStartedAt,
@@ -558,7 +563,6 @@ async function submitItems(action, entity, items, tanggal, options = {}) {
     const queuedIds = options.fromQueue ? [] : enqueue(action, entity, list, { tanggal });
     const queuedSet = new Set(queuedIds);
     const msg = err?.message || 'Backend write belum terverifikasi';
-    pushNotification({ type: 'error', title: 'Write ditahan', body: msg });
     return {
       success: false, count: alreadyApplied.length, failed: list.length - queuedIds.length, queuedCount: queuedIds.length,
       total: originalList.length, clientElapsedMs: Date.now() - clientStartedAt,
@@ -630,8 +634,6 @@ async function submitItems(action, entity, items, tanggal, options = {}) {
         uncertain: true, clientItemId: it.clientItemId, error: msg,
       })));
       emitProgress(originalList.length, originalList.length, { successCount: totalSuccess, failCount: totalFail, queuedCount: totalQueued });
-      if (unresolved.length) {
-      }
       break;
     }
   }
