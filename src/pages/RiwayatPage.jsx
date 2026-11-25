@@ -16,7 +16,7 @@ import {
 
 const TIPE_LABEL = { masuk: "Masuk", keluar: "Keluar", rusak: "Rusak" };
 const ARAH = { masuk: "↓", keluar: "↑", rusak: "!" };
-const STATUS_LABEL = { terkirim: "Terkirim", antrian: "Antrean", gagal: "Gagal", lokal: "Lokal" };
+const STATUS_LABEL = { terkirim: "Terkirim", antrian: "Antrian", gagal: "Gagal", lokal: "Lokal" };
 const ENT = ["semua", "CV", "PT", "Bahan Baku"];
 const TIPE_FILTERS = [
   { id: "semua", label: "Semua" },
@@ -149,202 +149,108 @@ export default function RiwayatPage({ onNavigate }) {
     if (toastTimer.current) clearTimeout(toastTimer.current);
   }, []);
 
-  const semua = useMemo(() => gabung(local, EMPTY), [local]);
+  const showToast = useCallback((msg) => {
+    setToast(msg);
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToast(""), 2200);
+  }, []);
 
-  const katalog = useMemo(() => ringkasKatalog(semua), [semua]);
-  const cntStatus = katalog.status;
-  const cntTipe = katalog.tipe;
-  const anomaliTotal = katalog.anomali;
-
-  const tersaring = useMemo(
-    () => filterTx(semua, { tipe, entitas, status, q: qDeferred }),
-    [semua, tipe, entitas, status, qDeferred]
+  const data = useMemo(() => gabung(local, EMPTY), [local]);
+  const filtered = useMemo(
+    () => filterTx(data, { tipe, entitas, status, q: qDeferred }),
+    [data, tipe, entitas, status, qDeferred]
   );
-
-  const { hari, anomali: listAnomali } = useMemo(() => kelompokkan(tersaring), [tersaring]);
-  const anomali = listAnomali.length || anomaliTotal;
-
-  const totalValid = useMemo(
-    () => hari.reduce((a, h) => a + h.items.length, 0),
-    [hari]
-  );
+  const groups = useMemo(() => kelompokkan(filtered), [filtered]);
+  const stats = useMemo(() => ringkasKatalog(data), [data]);
 
   const tampil = useMemo(() => {
     let sisa = limit;
     const out = [];
-    for (let i = 0; i < hari.length && sisa > 0; i++) {
-      const h = hari[i];
-      if (sisa >= h.items.length) {
-        out.push(h);
-        sisa -= h.items.length;
+    for (const g of groups) {
+      if (sisa <= 0) break;
+      if (g.items.length <= sisa) {
+        out.push(g);
+        sisa -= g.items.length;
       } else {
-        out.push({ ...h, items: h.items.slice(0, sisa) });
+        out.push({ ...g, items: g.items.slice(0, sisa) });
         sisa = 0;
       }
     }
     return out;
-  }, [hari, limit]);
+  }, [groups, limit]);
 
-  const nAntrean = queueCount || cntStatus.antrian || 0;
-  const adaFilter = tipe !== "semua" || entitas !== "semua" || status !== "semua" || q.trim() !== "";
+  const totalFiltered = filtered.length;
+  const sisaItem = Math.max(0, totalFiltered - limit);
+  const adaFilter = tipe !== "semua" || entitas !== "semua" || status !== "semua" || qDeferred.trim() !== "";
 
-  const info = useCallback((t) => {
-    setToast(t);
-    if (toastTimer.current) clearTimeout(toastTimer.current);
-    toastTimer.current = setTimeout(() => setToast(""), 2000);
+  const onToggle = useCallback((id) => {
+    setOpenId((cur) => (cur === id ? null : id));
   }, []);
 
-  const salin = useCallback(
-    async (t) => {
-      try {
-        await navigator.clipboard.writeText(ringkasanTeks(t));
-        info("Disalin");
-      } catch {
-        info("Gagal menyalin");
-      }
-    },
-    [info]
-  );
+  const onCopy = useCallback(async (t) => {
+    const teks = ringkasanTeks(t);
+    try {
+      await navigator.clipboard.writeText(teks);
+      showToast("Disalin");
+    } catch {
+      showToast("Gagal salin");
+    }
+  }, [showToast]);
 
-  const onToggle = useCallback((e) => {
-    const id = e.currentTarget?.dataset?.id;
-    if (!id) return;
-    setOpenId((prev) => (prev === id ? null : id));
-  }, []);
-
-  const ekspor = useCallback(() => {
-    const csv = keCSV(tersaring);
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `riwayat-gudangai-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-    info("CSV diunduh");
-  }, [tersaring, info]);
-
-  const resetFilter = useCallback(() => {
-    setTipe("semua");
-    setEntitas("semua");
-    setStatus("semua");
-    setQ("");
-  }, []);
-
-  const more = useCallback(() => setLimit((n) => n + BATCH), []);
+  const onExport = useCallback(() => {
+    try {
+      const csv = keCSV(filtered);
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `riwayat-${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+      showToast("CSV diunduh");
+    } catch {
+      showToast("Gagal unduh");
+    }
+  }, [filtered, showToast]);
 
   return (
     <div className="rw-page">
       <header className="rw-head">
         <div>
-          <small>Aktivitas persediaan</small>
           <h1>Riwayat Transaksi</h1>
-          <p className="rw-sub">
-            {fmtCount(totalValid)} transaksi{adaFilter ? " ditemukan" : " tersimpan di perangkat"}
-            {anomali > 0 ? ` · ${fmtCount(anomali)} entri tidak valid disembunyikan` : ""}
-          </p>
         </div>
         <div className="rw-head-actions">
-          {nAntrean > 0 && (
-            <button type="button" className="rw-btn-queue" onClick={onOpenQueue}>
-              Antrean {nAntrean}
-            </button>
-          )}
+          <button type="button" className="rw-btn-ghost" onClick={onRefresh} aria-label="Muat ulang">
+            ↻
+          </button>
+          <button type="button" className="rw-btn-ghost" onClick={onExport} aria-label="Unduh CSV">
+            CSV
+          </button>
           <button
             type="button"
-            className="rw-btn-ghost"
+            className={`rw-btn-ghost${ringkas ? " is-on" : ""}`}
             onClick={() => setRingkas((v) => !v)}
             aria-pressed={ringkas}
           >
-            {ringkas ? "Nyaman" : "Ringkas"}
-          </button>
-          <button type="button" className="rw-btn-ghost" onClick={onRefresh} aria-label="Muat ulang">
-            ⟳
+            {ringkas ? "Padat" : "Longgar"}
           </button>
         </div>
       </header>
 
-      {(cntStatus.gagal > 0 || cntStatus.antrian > 0) && status === "semua" && (
-        <div className="rw-banner">
-          <div>
-            <b>
-              {cntStatus.gagal > 0 ? `${cntStatus.gagal} gagal` : ""}
-              {cntStatus.gagal > 0 && cntStatus.antrian > 0 ? " · " : ""}
-              {cntStatus.antrian > 0 ? `${cntStatus.antrian} antrian` : ""}
-            </b>
-            <small>Filter atau buka Antrean Sinkronisasi</small>
-          </div>
-          <div className="rw-banner-btns">
-            {cntStatus.gagal > 0 && (
-              <button type="button" onClick={() => setStatus("gagal")}>
-                Lihat gagal
-              </button>
-            )}
-            {nAntrean > 0 && (
-              <button type="button" className="rw-primary" onClick={onOpenQueue}>
-                Antrean
-              </button>
-            )}
-          </div>
-        </div>
+      {queueCount > 0 && (
+        <button type="button" className="rw-queue-banner" onClick={onOpenQueue}>
+          <b>{queueCount} antrian sinkronisasi</b>
+          <span>Buka</span>
+        </button>
       )}
-
-      <div className="rw-filters">
-        <section className="rw-filter-group" aria-label="Filter jenis transaksi">
-          <h2>Jenis transaksi</h2>
-          <div className="rw-chips" role="group" aria-label="Jenis transaksi">
-            {TIPE_FILTERS.map((x) => (
-              <button
-                key={x.id}
-                type="button"
-                className={tipe === x.id ? "on" : ""}
-                onClick={() => setTipe(x.id)}
-              >
-                {x.label}
-                {x.id !== "semua" && cntTipe[x.id] != null ? <em>{fmtCount(cntTipe[x.id])}</em> : null}
-              </button>
-            ))}
-          </div>
-        </section>
-        <section className="rw-filter-group" aria-label="Filter entitas">
-          <h2>Entitas</h2>
-          <div className="rw-chips" role="group" aria-label="Entitas">
-            {ENT.map((e) => (
-              <button
-                key={e}
-                type="button"
-                className={entitas === e ? "on" : ""}
-                onClick={() => setEntitas(e)}
-              >
-                {e === "semua" ? "Semua entitas" : e}
-              </button>
-            ))}
-          </div>
-        </section>
-        <section className="rw-filter-group" aria-label="Filter status pengiriman">
-          <h2>Status pengiriman</h2>
-          <div className="rw-chips" role="group" aria-label="Status pengiriman">
-            {STATUS_FILTERS.map((s) => (
-              <button
-                key={s}
-                type="button"
-                className={status === s ? "on" : ""}
-                onClick={() => setStatus(s)}
-              >
-                {s === "semua" ? "Semua status" : STATUS_LABEL[s] || s}
-              </button>
-            ))}
-          </div>
-        </section>
-      </div>
 
       <div className="rw-search">
         <input
           type="search"
-          aria-label="Cari transaksi"
-          placeholder="Cari kode, nama, atau keterangan…"
+          placeholder="Cari nama, kode, atau keterangan"
           value={q}
           onChange={(e) => setQ(e.target.value)}
+          aria-label="Cari transaksi"
           autoComplete="off"
           spellCheck={false}
         />
@@ -353,93 +259,84 @@ export default function RiwayatPage({ onNavigate }) {
             ✕
           </button>
         )}
-        <button type="button" className="rw-btn-export" onClick={ekspor} title="Ekspor CSV">
-          CSV
-        </button>
       </div>
 
-      {anomali > 0 && (
-        <div className="rw-alert rw-soft">
-          {anomali} entri tidak valid disembunyikan (qty 0 / tanpa item). Tidak dihapus dari perangkat.
+      <section className="rw-filters" aria-label="Filter riwayat">
+        <div>
+          <div className="rw-chips" role="group" aria-label="Jenis transaksi">
+            {TIPE_FILTERS.map((f) => (
+              <button
+                key={f.id}
+                type="button"
+                className={tipe === f.id ? "on" : ""}
+                onClick={() => setTipe(f.id)}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
         </div>
-      )}
+        <div>
+          <div className="rw-chips" role="group" aria-label="Entitas">
+            {ENT.map((e) => (
+              <button
+                key={e}
+                type="button"
+                className={entitas === e ? "on" : ""}
+                onClick={() => setEntitas(e)}
+              >
+                {e === "semua" ? "Semua" : e}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div>
+          <div className="rw-chips" role="group" aria-label="Status pengiriman">
+            {STATUS_FILTERS.map((s) => (
+              <button
+                key={s}
+                type="button"
+                className={status === s ? "on" : ""}
+                onClick={() => setStatus(s)}
+              >
+                {s === "semua" ? "Semua" : STATUS_LABEL[s] || s}
+              </button>
+            ))}
+          </div>
+        </div>
+      </section>
 
-      {totalValid === 0 && (
+      <div className="rw-list-meta">
+        <span>{fmtCount(totalFiltered)} transaksi</span>
+      </div>
+
+      {totalFiltered === 0 && (
         <div className="rw-empty">
           <b>{adaFilter ? "Tidak ada hasil" : "Belum ada riwayat"}</b>
-          <p>{adaFilter ? "Ubah filter atau reset." : "Transaksi berhasil akan muncul di sini."}</p>
-          {adaFilter ? (
-            <button type="button" className="rw-primary" onClick={resetFilter}>Reset filter</button>
-          ) : (
-            <button type="button" className="rw-primary" onClick={() => onNavigate?.("input")}>Buat input baru</button>
-          )}
         </div>
       )}
 
-      <div className="rw-audit-table-wrap" aria-label="Tabel audit riwayat transaksi">
-        <table className="rw-audit-table">
-          <thead>
-            <tr><th>Tanggal</th><th>Waktu</th><th>Jenis / item</th><th>Entitas</th><th>Jumlah</th><th>Status</th></tr>
-          </thead>
-          <tbody>
-            {tersaring.slice(0, limit).map((t) => (
-              <Fragment key={t.id}>
-                <tr key={t.id}>
-                  <td>{t.hariKey === "tanpa-tanggal" ? "—" : t.hariKey}</td>
-                  <td>{t.jamLabel || "—"}</td>
-                  <td>
-                    <button type="button" className="rw-audit-open" aria-expanded={openId === t.id} onClick={() => setOpenId((prev) => prev === t.id ? null : t.id)}>
-                      {TIPE_LABEL[t.tipe] || t.tipe || "Transaksi"} · {judul(t)}
-                      <small>{t.jumlahItem} item · buka detail</small>
-                    </button>
-                  </td>
-                  <td>{t.entitas || "—"}</td>
-                  <td className="rw-audit-qty">{fmt(t.totalQty)}</td>
-                  <td><span className={`rw-pill rw-s-${t.status}`}>{STATUS_LABEL[t.status] || t.status}</span></td>
-                </tr>
-                {openId === t.id && (
-                  <tr key={`${t.id}-detail`} className="rw-audit-detail">
-                    <td colSpan={6}>
-                      <div className="rw-detail">
-                        <ul>{(t.items || EMPTY).map((item, index) => <li key={index}><span>{item.nama || item.kode}{item.kode && item.nama ? <em> · {item.kode}</em> : null}</span><b>{fmt(item.qty)} {item.satuan || ""}</b></li>)}</ul>
-                        {t.keterangan ? <p className="rw-ket">{t.keterangan}</p> : null}
-                        <div className="rw-actions"><button type="button" onClick={() => salin(t)}>Salin ringkasan</button></div>
-                      </div>
-                    </td>
-                  </tr>
-                )}
-              </Fragment>
+      <div className="rw-list" aria-label="Daftar transaksi">
+        {tampil.map((g) => (
+          <Fragment key={g.key}>
+            <div className="rw-day-label">{g.label}</div>
+            {g.items.map((t) => (
+              <Baris
+                key={t.id}
+                t={t}
+                buka={openId === t.id}
+                onToggle={() => onToggle(t.id)}
+                onCopy={onCopy}
+                ringkas={ringkas}
+              />
             ))}
-          </tbody>
-        </table>
+          </Fragment>
+        ))}
       </div>
 
-      {tampil.map((h) => (
-        <section key={h.key} className="rw-day">
-          <header className="rw-day-head">
-            <h2>{h.label}</h2>
-            <span>
-              {h.items.length} tx · ↓{h.ringkas?.masuk || 0} ↑{h.ringkas?.keluar || 0}
-              {(h.ringkas?.rusak || 0) > 0 ? ` !${h.ringkas.rusak}` : ""}
-            </span>
-          </header>
-          {h.items.map((t) => (
-            <Baris
-              key={t.id}
-              t={t}
-              buka={openId === t.id}
-              onToggle={onToggle}
-              onRetry={undefined}
-              onCopy={salin}
-              ringkas={ringkas}
-            />
-          ))}
-        </section>
-      ))}
-
-      {totalValid > limit && (
-        <button type="button" className="rw-more" onClick={more}>
-          Tampilkan lebih banyak ({totalValid - limit} tersisa)
+      {sisaItem > 0 && (
+        <button type="button" className="rw-more" onClick={() => setLimit((n) => n + BATCH)}>
+          Tampilkan lebih banyak ({sisaItem} tersisa)
         </button>
       )}
 
