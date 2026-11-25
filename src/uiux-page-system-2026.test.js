@@ -172,4 +172,29 @@ describe('GudangAI Metode C UI contract', () => {
     expect(css).toContain('--po-prod-bg:');
   });
 
+  it('keeps page labels concise and removes redundant copy', () => {
+    const app = readFileSync(appPath, 'utf8');
+    const dashboard = readFileSync(resolve(process.cwd(), 'src/pages/DashboardPage.jsx'), 'utf8');
+    const stock = readFileSync(stockPagePath, 'utf8');
+    const input = readFileSync(resolve(process.cwd(), 'src/pages/InputPage.jsx'), 'utf8');
+    const history = readFileSync(resolve(process.cwd(), 'src/pages/RiwayatPage.jsx'), 'utf8');
+    const settings = readFileSync(resolve(process.cwd(), 'src/pages/SettingsPage.jsx'), 'utf8');
+
+    expect(app).not.toContain('TAB_SUBTITLE');
+    expect(app).not.toContain('Ringkasan operasional gudang');
+    expect(app).toContain("label: 'Riwayat'");
+    expect(app).toContain("label: 'Antrean'");
+    expect(app).toContain("label: 'Atur'");
+    expect(dashboard).not.toContain('po-shortcut-subtitle');
+    expect(dashboard).not.toContain('Angka = persentase dari total');
+    expect(dashboard).not.toContain('Outlet terlayani');
+    expect(stock).toContain('<h1>Stok Barang</h1>');
+    expect(stock).not.toContain('sk-section-label">Divisi');
+    expect(stock).not.toContain('sk-section-label">Kondisi stok');
+    expect(input).not.toContain('input-methods-note');
+    expect(input).not.toContain('Metode input otomatis terkunci');
+    expect(history).not.toContain('<small>Aktivitas persediaan</small>');
+    expect(settings).not.toContain('t.description');
+  });
+
 });
