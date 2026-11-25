@@ -237,7 +237,7 @@ export default function RiwayatPage({ onNavigate }) {
     <div className="rw-page">
       <header className="rw-head">
         <div>
-          
+
           <h1>Riwayat Transaksi</h1>
           <p className="rw-sub">
             {fmtCount(totalValid)} transaksi{adaFilter ? " ditemukan" : " tersimpan di perangkat"}
