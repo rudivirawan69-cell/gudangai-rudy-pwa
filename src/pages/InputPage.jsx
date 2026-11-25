@@ -657,7 +657,10 @@ export default function InputPage() {
       if (confirmedItems.length > 0) window.dispatchEvent(new Event('gudangai-stock-refresh'));
     } catch (err) {
       setStatusBanner(err.message || 'Gagal kirim');
-    } finally { setSubmitting(false); submittingRef.current = false; setSubmitProgress(null); }
+    } finally {
+      console.info('[GudangAI timing]', JSON.stringify({ event: 'client', phase: 'spinner mati', at: new Date().toISOString() }));
+      setSubmitting(false); submittingRef.current = false; setSubmitProgress(null);
+    }
   };
 
   const openNotif = () => { setNotifs(getNotifications()); markNotificationsRead(); setUnread(0); setShowNotif((v) => !v); };
