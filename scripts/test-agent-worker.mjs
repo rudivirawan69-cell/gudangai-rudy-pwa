@@ -762,6 +762,37 @@ test('manifest is rendered completely beyond live-data truncation budget', () =>
   assert.doesNotMatch(block, /dipotong/);
 });
 
+test('non-enumeration mentions of sheet names or structure do not enter deterministic enumeration', () => {
+  const nonEnumeration = [
+    'Nama sheet ini sudah benar?',
+    'Jelaskan struktur sheet spreadsheet utama',
+    'Tab aktif tidak muncul setelah sinkronisasi',
+    'Kenapa nama tab Stock CV berubah?',
+    'Bagaimana struktur spreadsheet saat ini?',
+  ];
+  for (const message of nonEnumeration) {
+    assert.deepEqual(detectLiveActions(message), [], message);
+  }
+});
+
+test('duplicate sheet names are rejected and never returned in deterministic manifest output', async () => {
+  const { response, payload, sheetCalls, systemText } = await runLive('Daftar semua tab spreadsheet', {
+    sheetsResponse: () => new Response(JSON.stringify({
+      success:true, mode:'manifest', spreadsheetTitle:'Spreadsheet Test',
+      sheetCount:3, sheets:[{ name:'Stock CV' },{ name:'Barang masuk' },{ name:'Stock CV' }],
+      sourceReadAt:'2026-11-26T00:00:00.000Z',
+    }), { status:200 }),
+  });
+  assert.equal(response.status, 200);
+  assert.equal(sheetCalls.length, 1);
+  assert.equal(sheetCalls[0].action, 'getAgentKnowledge');
+  assert.equal(payload.mode, 'hybrid');
+  assert.equal(payload.dataSources[0].ok, false);
+  assert.equal(payload.dataSources[0].code, 'MANIFEST_NAMES_INVALID');
+  assert.doesNotMatch(payload.reply, /^\s*\d+\. Stock CV$/m);
+  assert.match(systemText, /MANIFEST_NAMES_INVALID/);
+});
+
 test('sheet enumeration returns deterministic complete manifest without calling AI', async () => {
   const originalFetch = globalThis.fetch;
   const sheetNames = Array.from({ length: 18 }, (_, i) => `Sheet ${i + 1}`);
