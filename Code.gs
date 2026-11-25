@@ -456,21 +456,21 @@ function doPost(e) {
       case "logDailySnapshot": return jsonResponse(logDailySnapshot());
       case "clearMasterCache": return jsonResponse(clearMasterCache());
       case "maintenanceCleanup": return jsonResponse(maintenanceCleanup(true));
-      case "getConfig": return jsonResponse(getConfigReadOnly_());
+      case "getConfig": return jsonResponse(withSourceReadAt_(getConfigReadOnly_()));
       case "getAgentKnowledge": return jsonResponse(getAgentKnowledge(body));
       case "diagnoseStockFormulas": return jsonResponse(diagnoseStockFormulaPatterns_());
       case "setupConfig": return jsonResponse(setupConfigSheet());
       case "setActivePeriod": return jsonResponse(setActivePeriod(body.period || body.periode || body.activePeriod));
       case "setupNewPeriod": return jsonResponse(setupNewPeriod(body.period || body.periode || body.activePeriod));
-      case "status": return jsonResponse({ success: true, status: "OK", version: BACKEND_VERSION, requestId: body.requestId, title: APP_TITLE, spreadsheet: getSS().getName(), activeMonth: getActiveMonth(), serverTime: new Date().toISOString() });
-      case "ping": return jsonResponse(getHealthStatus_(body));
-      case "healthCheck": return jsonResponse(getHealthStatus_(body));
+      case "status": return jsonResponse(withSourceReadAt_({ success: true, status: "OK", version: BACKEND_VERSION, requestId: body.requestId, title: APP_TITLE, spreadsheet: getSS().getName(), activeMonth: getActiveMonth(), serverTime: new Date().toISOString() }));
+      case "ping": return jsonResponse(withSourceReadAt_(getHealthStatus_(body)));
+      case "healthCheck": return jsonResponse(withSourceReadAt_(getHealthStatus_(body)));
       case "getStockDelta": return jsonResponse(withSourceReadAt_(getStockDelta(body)));
       case "getStatusPO": return jsonResponse(withSourceReadAt_(getStatusPO(body)));
       case "recordPOArrival": return jsonResponse(recordPOArrival(body));
       case "getPORequestStatus": return jsonResponse(getPORequestStatus(body));
       case "refreshDashboardPO": return jsonResponse(refreshDashboardPOSection_());
-      case "getSyncMetrics": return jsonResponse(withSourceReadAt_({ success:true, metrics:getSyncMetrics() }));
+      case "getSyncMetrics": return jsonResponse(withSourceReadAt_(getSyncMetrics()));
       default: return jsonResponse({ success: false, error: "Action tidak dikenali: " + action });
     }
   } catch (err) {
