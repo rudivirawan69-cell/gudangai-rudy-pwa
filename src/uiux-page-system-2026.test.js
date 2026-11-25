@@ -137,6 +137,7 @@ describe('GudangAI Metode C UI contract', () => {
   it('keeps PO recommendation cards flat, caption-light, and theme-aware', () => {
     const po = readFileSync(resolve(process.cwd(), 'src/pages/POPage.jsx'), 'utf8');
     const css = readFileSync(resolve(process.cwd(), 'src/ui-human-operator-refinement.css'), 'utf8');
+    const status = readFileSync(resolve(process.cwd(), 'src/components/StatusPOHub.jsx'), 'utf8');
     expect(po).toContain('po-recommendation-panel');
     expect(po).toContain('po-generator-tab-cs');
     expect(po).toContain('po-generator-tab-produksi');
@@ -146,6 +147,19 @@ describe('GudangAI Metode C UI contract', () => {
     expect(po).not.toContain('Cold Storage</p>');
     expect(po).not.toContain('Prioritas dapur');
     expect(po).not.toContain('>Kedatangan:');
+    expect(po).not.toContain('item.kode} · {item.size');
+    expect(po).not.toContain('>Tgl</span>');
+    expect(status).not.toContain('className="card section-card rounded-2xl p-4 space-y-3"');
+    expect(status).toContain('po-status-inline');
+    expect(status).not.toContain('Ketuk untuk edit qty');
+    expect(status).not.toContain('Hanya untuk melihat status.');
+    expect(status).not.toContain('Pilih periode yang akan dikonfirmasi');
+    expect(status).not.toContain('Periode berjalan · Belum selesai:');
+    expect(status).not.toContain('Sisa {sisa} · PO {it.qtyPO}');
+    expect(css).toContain('.po-status-panel');
+    expect(css).toContain('.po-status-inline span');
+    expect(css).toContain('.po-selected-item');
+    expect(css).toContain('.po-entity-choice');
     expect(css).toContain('.po-recommendation-icon');
     expect(css).toContain('.po-recommendation-metrics > div');
     expect(css).toContain('.po-recommendation-panel :is(.card,.surface,.section-card,.stock-card)');
