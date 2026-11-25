@@ -9,7 +9,7 @@ export const EXTRA_LIVE_INTENTS = [
   { action: 'getSyncMetrics', pattern: /metrik (sync|sinkronisasi)|performa (sync|koneksi)|seberapa sering (error|gagal)|kesehatan (sync|sistem)/i },
   { action: 'getPOAnalysis', pattern: /analisis po|rekomendasi (po|pembelian)|apa yang (harus|perlu) (di)?(pesan|beli)/i },
   { action: 'getConfig', pattern: /periode aktif|bulan (aktif|berjalan)|konfigurasi|timezone|versi backend/i },
-  { action: 'getAgentKnowledge', pattern: /daftar tab|daftar sheet|berapa\s+(?:jumlah\s+)?(?:tab|sheet)\b|ada\s+berapa\s+(?:tab|sheet)\b|sebutkan\s+(?:semua\s+)?(?:tab|sheet)\b|struktur (sheet|spreadsheet|tab|gudang)|nama (sheet|tab)|tab (apa saja|aktif|yang ada|spreadsheet|spreadsheets)|sheet (apa saja|yang ada|aktif)|peta (sheet|tab|spreadsheet|gudang)|koleksi (sheet|tab)|list (sheet|tab)|apa saja (tab|sheet)/i },
+  { action: 'getAgentKnowledge', pattern: /^\s*(?:(?:(?:tolong|mohon|bisa)\s+)?(?:tampilkan|sebutkan|daftarkan|daftar|list)\s+(?:(?:daftar|semua|seluruh|nama)\s+)*(?:tab|sheet)\b|(?:berapa\s+(?:jumlah|banyak)|ada\s+berapa)\s+(?:jumlah\s+)?(?:tab|sheet)\b|apa\s+saja\s+(?:nama\s+)?(?:tab|sheet)\b)/i },
 ];
 
 export const STRUCTURE_KNOWLEDGE = `PETA PENGETAHUAN GUDANGAI RUDY — SNAPSHOT REPOSITORY (WAJIB DIVERIFIKASI LIVE)

@@ -195,11 +195,13 @@ async function handleSyncAll(request, env, origin) {
     if (result.ok) data[result.key] = result.data;
     else errors[result.key] = { error:result.error || 'Unknown error', code:result.code || 'UNKNOWN' };
   }
+  const okCount = Object.keys(data).length;
+  const allFailed = okCount === 0;
   return json({
-    success:true, readAt, data, summary:buildSyncSummary(data),
+    success:!allFailed, readAt, data, summary:buildSyncSummary(data),
     errors:Object.keys(errors).length ? errors : undefined,
     actor:auth.userId, permissions:'read_only', version:Number(env.CACHE_VERSI || 2),
-  }, 200, origin);
+  }, allFailed ? 502 : 200, origin);
 }
 function buildSyncSummary(data) {
   const summary = { totalItem:null, stokAman:null, stokWaspada:null, stokKritis:null, poMenunggu:null, poSebagian:null, poSelesai:null, divisi:{}, lastUpdate:null };
@@ -325,7 +327,7 @@ export function detectLiveActions(message) {
   }
   const matched = [];
   for (const intent of LIVE_INTENTS) {
-    if (intent.pattern.test(text) && READ_ONLY_ACTIONS.has(intent.action)) matched.push(intent.action);
+    if (intent.pattern.test(text) && READ_ONLY_ACTIONS.has(intent.action) && !matched.includes(intent.action)) matched.push(intent.action);
     if (matched.length >= MAX_LIVE_ACTIONS) break;
   }
   return matched;
@@ -380,9 +382,15 @@ async function gatherLiveData(env, message) {
 function truncate(text, limit) { return text.length > limit ? `${text.slice(0,limit)} …[dipotong]` : text; }
 export function liveDataBlock(live) {
   if (!live?.results?.length) return 'DATA LIVE: tidak ada untuk pertanyaan ini. Jawab hanya dari konteks operator dan jangan mengklaim membaca spreadsheet.';
-  const parts = live.results.map((item) => item.ok
-    ? `[${item.action} | waktu baca sumber: ${item.sourceReadAt || 'tidak diberikan sumber'} | diterima gateway: ${item.gatewayReceivedAt || 'tidak tercatat'} | ${item.source}]\n${truncate(JSON.stringify(item.data), LIVE_DATA_CHAR_BUDGET)}`
-    : `[${item.action} | GAGAL ${item.code||'UNKNOWN'}] Data belum terkonfirmasi: ${item.error||'-'}`);
+  const parts = live.results.map((item) => {
+    if (!item.ok) return `[${item.action} | GAGAL ${item.code||'UNKNOWN'}] Data belum terkonfirmasi: ${item.error||'-'}`;
+    // Manifest tervalidasi harus lengkap; budget hanya berlaku untuk payload live lainnya.
+    if (item.action === 'getAgentKnowledge' && item.data?.mode === 'manifest' && Array.isArray(item.data.sheets)) {
+      const names = item.data.sheets.map((sheet, index) => `${index + 1}. ${String(sheet?.name || '').trim()}`);
+      return `[getAgentKnowledge | mode: manifest | title: ${item.data.spreadsheetTitle || '-'} | total: ${item.data.sheetCount ?? names.length} | waktu baca sumber: ${item.sourceReadAt || 'tidak diberikan sumber'}]\nDAFTAR SHEET (LENGKAP):\n${names.join('\n')}`;
+    }
+    return `[${item.action} | waktu baca sumber: ${item.sourceReadAt || 'tidak diberikan sumber'} | diterima gateway: ${item.gatewayReceivedAt || 'tidak tercatat'} | ${item.source}]\n${truncate(JSON.stringify(item.data), LIVE_DATA_CHAR_BUDGET)}`;
+  });
   return `DATA LIVE (read-only):\n${parts.join('\n\n')}`;
 }
 function systemPrompt(context={}, liveBlock='') {
@@ -432,7 +440,16 @@ async function verifySupabaseAccessToken(request, env) {
   const anonKey = String(env.SUPABASE_ANON_KEY||env.SUPABASE_PUBLISHABLE_KEY||'').trim();
   if (!supabaseUrl||!anonKey) return { ok:false, status:503, code:'AUTH_NOT_CONFIGURED', error:'Verifikasi sesi Supabase belum dikonfigurasi pada Worker.' };
   try {
-    const response = await fetch(`${supabaseUrl}/auth/v1/user`, { method:'GET', headers:{ apikey:anonKey, Authorization:`Bearer ${match[1]}` } });
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 8000);
+    let response;
+    try {
+      response = await fetch(`${supabaseUrl}/auth/v1/user`, {
+        method:'GET', headers:{ apikey:anonKey, Authorization:`Bearer ${match[1]}` }, signal:controller.signal,
+      });
+    } finally {
+      clearTimeout(timer);
+    }
     if (!response.ok) return { ok:false, status:401, code:'INVALID_SESSION', error:'Sesi login tidak valid atau sudah berakhir. Silakan login kembali.' };
     const user = await response.json().catch(()=>null);
     if (!user?.id) return { ok:false, status:401, code:'INVALID_SESSION', error:'Supabase tidak mengembalikan identitas pengguna yang valid.' };
@@ -451,6 +468,20 @@ async function handleAgent(request, env, origin) {
   const context = body?.context && typeof body.context==='object' ? body.context : {};
   const history = normalizeHistory(body?.history, message);
   const live = await gatherLiveData(env, message);
+  // Only explicit enumeration requests qualify; mentions of sheet names or structure do not.
+  const ENUM_RE = /^\s*(?:(?:(?:tolong|mohon|bisa)\s+)?(?:tampilkan|sebutkan|daftarkan|daftar|list)\s+(?:(?:daftar|semua|seluruh|nama)\s+)*(?:tab|sheet)\b|(?:berapa\s+(?:jumlah|banyak)|ada\s+berapa)\s+(?:jumlah\s+)?(?:tab|sheet)\b|apa\s+saja\s+(?:nama\s+)?(?:tab|sheet)\b)/i;
+  if (ENUM_RE.test(message)) {
+    const manifest = live.results.find((result) => result.action === 'getAgentKnowledge');
+    if (manifest?.ok && manifest.data?.mode === 'manifest' && Array.isArray(manifest.data.sheets) &&
+        Number(manifest.data.sheetCount) === manifest.data.sheets.length) {
+      const names = manifest.data.sheets.map((sheet) => String(sheet?.name || '').trim()).filter(Boolean);
+      const reply = `Dari manifest tervalidasi (getAgentKnowledge, mode manifest) — total ${manifest.data.sheetCount} tab:\n`
+        + names.map((name, index) => `${index + 1}. ${name}`).join('\n')
+        + (manifest.sourceReadAt ? `\n\nsourceReadAt: ${manifest.sourceReadAt}` : '');
+      return json({ success:true, reply, model:'deterministic-manifest', provider:'manifest', mode:'deterministic',
+        dataSources:[{ action:'getAgentKnowledge', ok:true, sourceReadAt:manifest.sourceReadAt }] }, 200, origin);
+    }
+  }
   const system = systemPrompt(context, liveDataBlock(live));
   const dataSources = live.results.map(({action,ok,sourceReadAt,gatewayReceivedAt,code})=>({action,ok,sourceReadAt,gatewayReceivedAt,...(code?{code}:{})}));
   const messages = [{ role:'system', content:system }, ...history, { role:'user', content:message }];

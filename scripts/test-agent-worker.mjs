@@ -361,8 +361,8 @@ test('agent rejects malformed or impossible source timestamps and withholds unve
   }
 });
 
-test('spreadsheet structure questions route to getAgentKnowledge manifest through read-only gateway', async () => {
-  const { response, sheetCalls, payload, systemText } = await runLive('Tolong tampilkan daftar tab dan struktur sheet spreadsheet', {
+test('explicit spreadsheet enumeration returns deterministic manifest through read-only gateway', async () => {
+  const { response, sheetCalls, payload } = await runLive('Tolong tampilkan daftar tab dan struktur sheet spreadsheet', {
     sheetsResponse: () => new Response(JSON.stringify({
       success:true, mode:'manifest', spreadsheetTitle:'Test Spreadsheet',
       sheetCount:2, sheets:[{ name:'Stock CV' },{ name:'Barang masuk' }],
@@ -377,8 +377,10 @@ test('spreadsheet structure questions route to getAgentKnowledge manifest throug
   assert.equal(payload.dataSources[0].action, 'getAgentKnowledge');
   assert.equal(payload.dataSources[0].ok, true);
   assert.equal(payload.dataSources[0].sourceReadAt, '2026-11-25T10:00:00.000Z');
-  assert.match(systemText, /getAgentKnowledge/);
-  assert.match(systemText, /manifest/);
+  assert.equal(payload.mode, 'deterministic');
+  assert.equal(payload.model, 'deterministic-manifest');
+  assert.match(payload.reply, /Stock CV/);
+  assert.match(payload.reply, /Barang masuk/);
 });
 
 test('exact SKU lookup has priority and preserves normalized code and entity', async () => {
@@ -747,5 +749,99 @@ test('PO endpoint fails closed for missing success envelope, failed source, and 
       assert.equal(payload.code, fixture.expected);
       assert.equal(payload.permissions, 'read_only');
     }
+  } finally { globalThis.fetch = originalFetch; }
+});
+
+
+test('manifest is rendered completely beyond live-data truncation budget', () => {
+  const sheets = Array.from({ length: 18 }, (_, i) => ({ name: `Sheet ${i + 1}` }));
+  const block = liveDataBlock({ results: [{
+    action: 'getAgentKnowledge', ok: true, sourceReadAt: '2026-11-26T00:00:00.000Z',
+    data: { mode: 'manifest', spreadsheetTitle: 'Test', sheetCount: 18, sheets },
+  }] });
+  assert.match(block, /DAFTAR SHEET \(LENGKAP\)/);
+  assert.match(block, /18\. Sheet 18/);
+  assert.doesNotMatch(block, /dipotong/);
+});
+
+test('non-enumeration mentions of sheet names or structure do not enter deterministic enumeration', () => {
+  const nonEnumeration = [
+    'Nama sheet ini sudah benar?',
+    'Jelaskan struktur sheet spreadsheet utama',
+    'Tab aktif terlihat berwarna biru',
+    'Kenapa nama tab Stock CV berubah?',
+    'Bagaimana struktur spreadsheet saat ini?',
+  ];
+  for (const message of nonEnumeration) {
+    assert.equal(detectLiveActions(message).includes('getAgentKnowledge'), false, message);
+  }
+});
+
+test('duplicate sheet names are rejected and never returned in deterministic manifest output', async () => {
+  const { response, payload, sheetCalls, systemText } = await runLive('Daftar semua tab spreadsheet', {
+    sheetsResponse: () => new Response(JSON.stringify({
+      success:true, mode:'manifest', spreadsheetTitle:'Spreadsheet Test',
+      sheetCount:3, sheets:[{ name:'Stock CV' },{ name:'Barang masuk' },{ name:'Stock CV' }],
+      sourceReadAt:'2026-11-26T00:00:00.000Z',
+    }), { status:200 }),
+  });
+  assert.equal(response.status, 200);
+  assert.equal(sheetCalls.length, 1);
+  assert.equal(sheetCalls[0].action, 'getAgentKnowledge');
+  assert.equal(payload.mode, 'hybrid');
+  assert.equal(payload.dataSources[0].ok, false);
+  assert.equal(payload.dataSources[0].code, 'MANIFEST_NAMES_INVALID');
+  assert.doesNotMatch(payload.reply, /^\s*\d+\. Stock CV$/m);
+  assert.match(systemText, /MANIFEST_NAMES_INVALID/);
+});
+
+test('sheet enumeration returns deterministic complete manifest without calling AI', async () => {
+  const originalFetch = globalThis.fetch;
+  const sheetNames = Array.from({ length: 18 }, (_, i) => `Sheet ${i + 1}`);
+  let aiCalled = false;
+  globalThis.fetch = async (url) => {
+    if (String(url) === `${SUPABASE_URL}/auth/v1/user`) return new Response(JSON.stringify({ id: 'manifest-user' }), { status: 200 });
+    assert.equal(String(url), 'https://sheets.example/exec');
+    return new Response(JSON.stringify({
+      success: true, mode: 'manifest', spreadsheetTitle: 'Spreadsheet Test',
+      sheetCount: sheetNames.length, sheets: sheetNames.map((name) => ({ name })),
+      sourceReadAt: '2026-11-26T00:00:00.000Z',
+    }), { status: 200 });
+  };
+  try {
+    const response = await worker.fetch(makeRequest('/api/agent', {
+      method: 'POST', body: { message: 'Daftar semua tab spreadsheet' },
+    }), {
+      ...validEnv, GUDANGAI_SHEETS_API_URL: 'https://sheets.example/exec',
+      GUDANGAI_SHEETS_API_SECRET: 'server-secret',
+      AI: { run: async () => { aiCalled = true; return { response: 'incorrect model output' }; } },
+    });
+    const payload = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(payload.mode, 'deterministic');
+    assert.equal(payload.model, 'deterministic-manifest');
+    assert.equal(aiCalled, false);
+    assert.equal((payload.reply.match(/^\d+\. Sheet \d+$/gm) || []).length, 18);
+    assert.match(payload.reply, /total 18 tab/);
+    assert.match(payload.reply, /sourceReadAt: 2026-11-26T00:00:00\.000Z/);
+  } finally { globalThis.fetch = originalFetch; }
+});
+
+test('sync-all returns 502 and success false when every read action fails', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    if (String(url) === `${SUPABASE_URL}/auth/v1/user`) return new Response(JSON.stringify({ id: 'sync-user' }), { status: 200 });
+    return new Response(JSON.stringify({ success: false, code: 'SOURCE_DOWN', error: 'unavailable' }), { status: 503 });
+  };
+  try {
+    const response = await worker.fetch(makeRequest('/api/sync-all'), {
+      ...validEnv, GUDANGAI_SHEETS_API_URL: 'https://sheets.example/exec',
+      GUDANGAI_SHEETS_API_SECRET: 'server-secret',
+    });
+    const payload = await response.json();
+    assert.equal(response.status, 502);
+    assert.equal(payload.success, false);
+    assert.equal(Object.keys(payload.errors).length, 9);
+    assert.equal(Object.keys(payload.data).length, 0);
   } finally { globalThis.fetch = originalFetch; }
 });
