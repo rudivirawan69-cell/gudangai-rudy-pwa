@@ -148,7 +148,7 @@ describe('GudangAI Metode C UI contract', () => {
     expect(po).not.toContain('Prioritas dapur');
     expect(po).not.toContain('>Kedatangan:');
     expect(po).not.toContain('item.kode} · {item.size');
-    expect(po).not.toContain('>Tgl</span>');
+    expect(po).not.toContain('>Tgl</span>');\n    expect(po).toContain('aria-label="Tanggal kedatangan PO"');\n    expect(po).toContain('Item kritis');\n    expect(po).toContain('Total kurang');\n    expect(po).toContain('po-recommendation-metrics"');
     expect(status).not.toContain('className="card section-card rounded-2xl p-4 space-y-3"');
     expect(status).toContain('po-status-inline');
     expect(status).not.toContain('Ketuk untuk edit qty');
