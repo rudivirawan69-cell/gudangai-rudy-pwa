@@ -986,3 +986,7 @@ html[data-theme="graphite_titanium"] .input-tx-btn.tx-rusak.is-active { backgrou
   min-height: 44px !important;
   box-sizing: border-box;
 }
+
+
+/* Contrast correction: the raised Input action label must remain readable on the light nav surface. */
+html[data-theme] .nav-fab .nav-label { color: var(--brand-teal-dark, #087b80) !important; opacity: 1 !important; }
