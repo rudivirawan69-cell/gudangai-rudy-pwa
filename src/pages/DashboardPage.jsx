@@ -679,7 +679,7 @@ function POQuickActions({ onNavigate, onSelect, activeView, currentCount = 0, pr
 
             </span>
             <span className="po-shortcut-footer">
-              {count !== null ? <span className="po-shortcut-count tabular-nums">{count} item</span> : }
+              {count !== null ? <span className="po-shortcut-count tabular-nums">{count} item</span> : null}
               <ArrowUpRight className="h-4 w-4 shrink-0" aria-hidden="true" />
             </span>
           </button>
