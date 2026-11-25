@@ -148,20 +148,12 @@ async function handleSyncAll(request, env, origin) {
   const results = await Promise.all(actions.map(async ({ key, action, params }) => {
     try {
       const raw = await callSheetsRead(env, action, params);
-    const prefix = exactCode ? exactCode.split('-')[0] : '';
-    const expectedEntity = ['CV','BBCV'].includes(prefix) ? 'CV' : (['PT','WK','MM','BBPT'].includes(prefix) ? 'PT' : '');
-    const validation = validateLivePayload(action, raw, { exactCode, entity:expectedEntity, transactionSheet });
-    const ok = validation.ok;
-    const { source, action: _a, gatewayReceivedAt, sourceReadAt, ...data } = raw || {};
-    return {
-      action, ok, code: ok?undefined:validation.code,
-      error: ok?undefined:validation.error,
-      source: source||'Apps Script read-only gateway',
-      sourceReadAt: sourceReadAt || null,
-      gatewayReceivedAt: gatewayReceivedAt || null,
-      data: ok?data:undefined,
-      query: query||undefined,
-    };
+      const ok = raw?.success === true;
+      const { source, action: _action, gatewayReceivedAt: _gatewayReceivedAt, sourceReadAt: _sourceReadAt, ...data } = raw || {};
+      return { key, ok, data:ok ? data : null, error:ok ? null : raw?.error, code:ok ? null : (raw?.code || 'LIVE_DATA_UNVERIFIED') };
+    } catch (error) {
+      return { key, ok:false, data:null, error:String(error?.message || error), code:'SYNC_FETCH_FAILED' };
+    }
   }));
   const data = {};
   const errors = {};
@@ -315,15 +307,14 @@ async function gatherLiveData(env, message) {
       params.limit = 100;
     }
     const raw = await callSheetsRead(env, action, params);
-    const ok = raw?.success === true;
+    const prefix = exactCode ? exactCode.split('-')[0] : '';
+    const expectedEntity = ['CV','BBCV'].includes(prefix) ? 'CV' : (['PT','WK','MM','BBPT'].includes(prefix) ? 'PT' : '');
+    const validation = validateLivePayload(action, raw, { exactCode, entity:expectedEntity, transactionSheet });
+    const ok = validation.ok;
     const { source, action: _a, gatewayReceivedAt, sourceReadAt, ...data } = raw || {};
-    if (ok && action === 'getStockByCode') {
-      const returnedCode = String(raw.kode || raw.kodeBarang || '').replace(/\s+/g,'').toUpperCase();
-      if (returnedCode !== exactCode) return { action, ok:false, code:'SKU_IDENTITY_MISMATCH', error:'Kode yang dikembalikan sumber tidak sama dengan kode yang diminta; angka stok tidak ditampilkan.' };
-    }
     return {
-      action, ok, code: ok?undefined:(raw?.code || 'LIVE_DATA_UNVERIFIED'),
-      error: ok?undefined:(raw?.error || 'Respons sumber tidak memiliki success=true.'),
+      action, ok, code: ok?undefined:validation.code,
+      error: ok?undefined:validation.error,
       source: source||'Apps Script read-only gateway',
       sourceReadAt: sourceReadAt || null,
       gatewayReceivedAt: gatewayReceivedAt || null,
