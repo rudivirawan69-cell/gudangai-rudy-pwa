@@ -280,6 +280,12 @@ test('saved operator memory is bounded and treated as untrusted reference data',
   assert.match(prompt, /bukan sumber data operasional terkini/);
 });
 
+test('general stock analysis routes to inventory dataset, not fuzzy name search', () => {
+  assert.deepEqual(detectLiveActions('Analisis Stok'), ['getAllStock']);
+  assert.deepEqual(detectLiveActions('Tolong analisa stok gudang'), ['getAllStock']);
+  assert.deepEqual(detectLiveActions('Cari stok Ayam Fillet'), ['searchByName']);
+});
+
 test('detectLiveActions maps read-only intents without parameters and caps at two', () => {
   assert.deepEqual(detectLiveActions('ringkasan dashboard dan stok menipis'), ['getDashboardData', 'getLowStock']);
   assert.deepEqual(detectLiveActions('status PO dan riwayat barang masuk'), ['getStatusPO', 'getTransactionHistory']);
