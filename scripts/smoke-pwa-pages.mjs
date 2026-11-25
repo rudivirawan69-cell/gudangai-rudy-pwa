@@ -495,15 +495,9 @@ try {
         // Audit rendered text against its nearest opaque surface, not only root theme tokens.
         const renderedTextAudit = await page.evaluate(() => {
           const parse = (value) => {
-            const m = String(value).match(/rgba?\\((\\d+),\\s*(\\d+),\\s*(\\d+)(?:,\\s*([\\d.]+))?\\)/i);
+            const m = String(value).match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)/i);
             return m ? { r:+m[1], g:+m[2], b:+m[3], a:m[4] === undefined ? 1 : +m[4] } : null;
           };
-          const composite = (fg, bg) => ({
-            r:Math.round(fg.r*fg.a+bg.r*(1-fg.a)),
-            g:Math.round(fg.g*fg.a+bg.g*(1-fg.a)),
-            b:Math.round(fg.b*fg.a+bg.b*(1-fg.a)),
-            a:1,
-          });
           const fallback = parse(getComputedStyle(document.body).backgroundColor) || {r:247,g:247,b:245,a:1};
           const nodes = [...document.querySelectorAll('h1,h2,h3,h4,p,span,button,a,label,small,strong,b,li,input,textarea,select')];
           return nodes.filter((el) => {
@@ -517,12 +511,9 @@ try {
             let bg = null;
             for (let node=el; node && node.nodeType===1; node=node.parentElement) {
               const color = parse(getComputedStyle(node).backgroundColor);
-              if (color && color.a > 0) {
-                bg = bg ? composite(color, bg) : color;
-                if (bg.a >= 0.999) break;
-              }
+              if (color && color.a >= 0.999) { bg = color; break; }
             }
-            if (!bg || bg.a < 0.999) bg = composite(bg || {r:0,g:0,b:0,a:0}, fallback);
+            if (!bg) bg = fallback;
             return {
               text:(el.innerText || el.value || el.getAttribute('aria-label') || '').trim().slice(0,70),
               foreground:fg,
