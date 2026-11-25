@@ -1403,12 +1403,6 @@ function bulkTransaction(body) {
     if (lock.hasLock()) lock.releaseLock();
   }
 
-  timing.end = Date.now() - t0;
-  console.log("GUDANGAI_TX_TIMING " + JSON.stringify({
-    batchId: batchId, items: prepared.length, lock: timing.lock,
-    read: timing.read, write: timing.write, flush: timing.flush,
-    end: timing.end, successCount: successCount, failCount: failCount
-  }));
   var response = {
     success: failCount === 0 && successCount === prepared.length,
     status: failCount === 0 ? "COMMITTED" : (writeTouched ? "PARTIAL_FAILURE_REVIEW_REQUIRED" : "FAILED"),
@@ -1430,6 +1424,12 @@ function bulkTransaction(body) {
       batchId: batchId, total: prepared.length, successCount: successCount, failCount: failCount, execMs: response.execMs
     }, response.success ? "" : "Jangan ulangi batch sebelum review.", batchId);
   } catch (logErr) {}
+  timing.end = Date.now() - t0;
+  console.log("GUDANGAI_TX_TIMING " + JSON.stringify({
+    batchId: batchId, items: prepared.length, lock: timing.lock,
+    read: timing.read, write: timing.write, flush: timing.flush,
+    end: timing.end, successCount: successCount, failCount: failCount
+  }));
   return response;
 }
 
