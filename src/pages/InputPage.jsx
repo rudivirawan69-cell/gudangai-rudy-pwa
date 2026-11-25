@@ -11,7 +11,7 @@ import {
 } from '../data/pdfValidate';
 import {
   submitBarangMasuk, submitBarangKeluar, submitBarangRusak, fetchStock,
-  saveToHistory, stagePendingTransaction, updatePendingItemStates, removePendingByClientIds,
+  saveToHistory, stagePendingTransaction, updatePendingItemStates, removePendingByClientIds, finishPendingTransaction,
   pushNotification, getNotifications, markNotificationsRead, unreadNotificationCount,
 } from '../data/api';
 import { searchMaster } from '../data/master';
@@ -673,6 +673,7 @@ export default function InputPage({ onNavigate }) {
       setStatusBanner(err.message || 'Gagal kirim. Item dipertahankan untuk pemeriksaan.');
     } finally {
       if (handoffTimer) clearTimeout(handoffTimer);
+      if (stagedIds.length) finishPendingTransaction(stagedIds);
       console.info('[GudangAI timing]', JSON.stringify({ event: 'client', phase: 'spinner mati', ms: Date.now() - uiSubmitStartedAt }));
       setSubmitting(false); submittingRef.current = false; setSubmitProgress(null);
     }
