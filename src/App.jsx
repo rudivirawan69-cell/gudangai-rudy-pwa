@@ -87,7 +87,7 @@ function MoreSheet({ open, onClose, onNavigate, activeId, pendingCount }) {
               <span className={`more-row-icon ${t.chip}`}><Icon className="w-5 h-5" strokeWidth={2.25} /></span>
               <span className="min-w-0 flex-1">
                 <span className="block text-sm font-bold text-[var(--text-main,#0f172a)]">{t.label}</span>
-                
+
               </span>
               {t.id === 'sync' && pendingCount > 0 && <span className="more-row-badge">{pendingCount}</span>}
             </button>
