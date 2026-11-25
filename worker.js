@@ -148,8 +148,8 @@ async function handleSyncAll(request, env, origin) {
   const results = await Promise.all(actions.map(async ({ key, action, params }) => {
     try {
       const raw = await callSheetsRead(env, action, params);
-      const ok = raw?.success !== false;
-      const { source, action: _action, readAt: _readAt, ...data } = raw || {};
+      const ok = raw?.success === true;
+      const { source, action: _action, gatewayReceivedAt: _gatewayReceivedAt, sourceReadAt: _sourceReadAt, ...data } = raw || {};
       return { key, ok, data:ok ? data : null, error:ok ? null : raw?.error, code:ok ? null : raw?.code };
     } catch (error) {
       return { key, ok:false, data:null, error:String(error?.message || error), code:'SYNC_FETCH_FAILED' };
@@ -203,7 +203,7 @@ async function callSheetsRead(env, action, params = {}) {
     const text = await response.text();
     let payload; try { payload = JSON.parse(text); } catch { return { success:false, code:'SHEETS_NON_JSON', error:'Respons bukan JSON.' }; }
     if (!response.ok) return { success:false, code:'SHEETS_HTTP_ERROR', error:`Apps Script HTTP ${response.status}`, detail:payload };
-    return { ...payload, source:'Apps Script read-only gateway', action, readAt:new Date().toISOString() };
+    return { ...payload, source:'Apps Script read-only gateway', action, gatewayReceivedAt:new Date().toISOString() };
   } catch (error) {
     return { success:false, code:'SHEETS_READ_FAILED', error: error?.name==='AbortError' ? 'Timeout spreadsheet.' : String(error?.message||error) };
   } finally { clearTimeout(timer); }
@@ -222,8 +222,21 @@ function json(data, status=200, origin='') {
   }
   return new Response(JSON.stringify(data), { status, headers });
 }
+function extractExactStockCode(message) {
+  const match = String(message || '').match(/\\b((?:BB(?:CV|PT)?|CV|PT|WK|MM)\\s*-\\s*\\d{3,4})\\b/i);
+  return match ? match[1].replace(/\\s+/g, '').toUpperCase() : '';
+}
+function resolveTransactionSheet(message) {
+  const text = String(message || '').toLowerCase();
+  const found = [];
+  if (/\\bbarang\\s+masuk\\b/.test(text)) found.push('Barang masuk');
+  if (/\\bbarang\\s+keluar\\b/.test(text)) found.push('Barang keluar');
+  if (/\\bbarang\\s+rusak(?:\\s*\\/\\s*lo)?\\b/.test(text)) found.push('Barang Rusak');
+  return found.length === 1 ? found[0] : '';
+}
 export function detectLiveActions(message) {
   const text = String(message||'');
+  if (extractExactStockCode(text)) return ['getStockByCode'];
   const matched = [];
   for (const intent of LIVE_INTENTS) {
     if (intent.pattern.test(text) && READ_ONLY_ACTIONS.has(intent.action)) matched.push(intent.action);
@@ -236,21 +249,48 @@ function extractStockQuery(message) {
   return String(message||'').replace(stop,' ').replace(/[^\w\s\-./]/gu,' ').replace(/\s+/g,' ').trim().slice(0,80);
 }
 async function gatherLiveData(env, message) {
-  const actions = detectLiveActions(message).slice();
-  if (!actions.length && /\b(stok|stock|sisa|fillet|barang)\b/i.test(String(message||''))) actions.push('getAllStock');
-  const query = extractStockQuery(message);
+  const text = String(message || '');
+  const exactCode = extractExactStockCode(text);
+  const actions = detectLiveActions(text).slice();
+  if (!actions.length && !exactCode && /\\b(stok|stock|sisa|fillet|barang)\\b/i.test(text)) actions.push('getAllStock');
+  const query = exactCode ? '' : extractStockQuery(text);
+  const transactionSheet = resolveTransactionSheet(text);
   const results = await Promise.all(actions.map(async (action) => {
     const params = {};
+    if (action === 'getStockByCode') {
+      if (!exactCode) return { action, ok:false, code:'EXACT_CODE_REQUIRED', error:'Kode barang exact tidak berhasil diekstrak; tidak dilakukan pencarian perkiraan.' };
+      const prefix = exactCode.split('-')[0];
+      const entity = ['CV','BBCV'].includes(prefix) ? 'CV' : (['PT','WK','MM','BBPT'].includes(prefix) ? 'PT' : '');
+      params.kode = exactCode;
+      params.kodeBarang = exactCode;
+      if (entity) params.entitas = entity;
+    }
     if (action === 'searchByName' && query) { params.q=query; params.query=query; params.nama=query; params.name=query; }
     if (action === 'getAllStock') params.entitas = 'ALL';
     if (action === 'getStockoutRisk') { params.windowDays = 30; params.thresholdDays = 3; }
     if (action === 'getStockDelta') params.sinceTimestamp = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     if (action === 'getAgentKnowledge') params.mode = 'manifest';
-    if (action === 'getTransactionHistory') { params.sheet = 'Barang keluar'; params.limit = 100; }
+    if (action === 'getTransactionHistory') {
+      if (!transactionSheet) return { action, ok:false, code:'TRANSACTION_TYPE_REQUIRED', error:'Jenis transaksi belum jelas. Tentukan Barang masuk, Barang keluar, atau Barang Rusak/LO.' };
+      params.sheet = transactionSheet;
+      params.limit = 100;
+    }
     const raw = await callSheetsRead(env, action, params);
-    const ok = raw?.success !== false;
-    const { source, action: _a, readAt, ...data } = raw || {};
-    return { action, ok, code: ok?undefined:raw?.code, error: ok?undefined:raw?.error, source: source||'Apps Script read-only gateway', readAt: readAt||new Date().toISOString(), data: ok?data:undefined, query: query||undefined };
+    const ok = raw?.success === true;
+    const { source, action: _a, gatewayReceivedAt, sourceReadAt, ...data } = raw || {};
+    if (ok && action === 'getStockByCode') {
+      const returnedCode = String(raw.kode || raw.kodeBarang || '').replace(/\\s+/g,'').toUpperCase();
+      if (returnedCode !== exactCode) return { action, ok:false, code:'SKU_IDENTITY_MISMATCH', error:'Kode yang dikembalikan sumber tidak sama dengan kode yang diminta; angka stok tidak ditampilkan.' };
+    }
+    return {
+      action, ok, code: ok?undefined:(raw?.code || 'LIVE_DATA_UNVERIFIED'),
+      error: ok?undefined:(raw?.error || 'Respons sumber tidak memiliki success=true.'),
+      source: source||'Apps Script read-only gateway',
+      sourceReadAt: sourceReadAt || null,
+      gatewayReceivedAt: gatewayReceivedAt || null,
+      data: ok?data:undefined,
+      query: query||undefined,
+    };
   }));
   return { results };
 }
@@ -258,7 +298,7 @@ function truncate(text, limit) { return text.length > limit ? `${text.slice(0,li
 export function liveDataBlock(live) {
   if (!live?.results?.length) return 'DATA LIVE: tidak ada untuk pertanyaan ini. Jawab hanya dari konteks operator dan jangan mengklaim membaca spreadsheet.';
   const parts = live.results.map((item) => item.ok
-    ? `[${item.action} | dibaca ${item.readAt} | ${item.source}]\n${truncate(JSON.stringify(item.data), LIVE_DATA_CHAR_BUDGET)}`
+    ? `[${item.action} | waktu baca sumber: ${item.sourceReadAt || 'tidak diberikan sumber'} | diterima gateway: ${item.gatewayReceivedAt || 'tidak tercatat'} | ${item.source}]\n${truncate(JSON.stringify(item.data), LIVE_DATA_CHAR_BUDGET)}`
     : `[${item.action} | GAGAL ${item.code||'UNKNOWN'}] Data belum terkonfirmasi: ${item.error||'-'}`);
   return `DATA LIVE (read-only):\n${parts.join('\n\n')}`;
 }
@@ -329,7 +369,7 @@ async function handleAgent(request, env, origin) {
   const history = normalizeHistory(body?.history, message);
   const live = await gatherLiveData(env, message);
   const system = systemPrompt(context, liveDataBlock(live));
-  const dataSources = live.results.map(({action,ok,readAt,code})=>({action,ok,readAt,...(code?{code}:{})}));
+  const dataSources = live.results.map(({action,ok,sourceReadAt,gatewayReceivedAt,code})=>({action,ok,sourceReadAt,gatewayReceivedAt,...(code?{code}:{})}));
   const messages = [{ role:'system', content:system }, ...history, { role:'user', content:message }];
   try {
     if (env.NINE_ROUTER_API_KEY && env.NINE_ROUTER_MODEL) {
@@ -359,7 +399,7 @@ async function handleReadOnlyData(request, env, origin) {
   if (!READ_ONLY_ACTIONS.has(action)) return json({ success:false, code:'READ_ACTION_NOT_ALLOWED', error:'Action tidak diizinkan.' }, 400, origin);
   const params = { ...body }; delete params.action; delete params.secret; delete params.authorization;
   const result = await callSheetsRead(env, action, params);
-  return json({ ...result, actor:auth.userId, permissions:'read_only' }, result.success===false ? 502 : 200, origin);
+  return json({ ...result, actor:auth.userId, permissions:'read_only' }, result.success===true ? 200 : 502, origin);
 }
 export default {
   async fetch(request, env) {
