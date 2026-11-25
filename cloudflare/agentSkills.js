@@ -10,13 +10,13 @@ export const EXTRA_LIVE_INTENTS = [
   { action: 'getLastUpdate', pattern: /update terakhir|terakhir diperbarui|kapan.{0,20}(update|sinkronisasi)/i },
   { action: 'getPOAnalysis', pattern: /analisis po|rekomendasi (po|pembelian)|apa yang (harus|perlu) (di)?(pesan|beli)/i },
   { action: 'getConfig', pattern: /periode aktif|bulan (aktif|berjalan)|konfigurasi|timezone|versi backend/i },
-  { action: 'getAgentKnowledge', pattern: /daftar tab|daftar sheet|struktur (sheet|spreadsheet|tab|gudang)|nama (sheet|tab)|tab (apa saja|aktif|yang ada|spreadsheet)|sheet (apa saja|yang ada|aktif)|isi code\.gs|code\.gs|peta (sheet|tab|spreadsheet|gudang)|koleksi (sheet|tab)|list (sheet|tab)|apa saja (tab|sheet|isi)/i },
+  { action: 'getAgentKnowledge', pattern: /daftar tab|daftar sheet|berapa\s+(?:jumlah\s+)?(?:tab|sheet)\b|ada\s+berapa\s+(?:tab|sheet)\b|sebutkan\s+(?:semua\s+)?(?:tab|sheet)\b|struktur (sheet|spreadsheet|tab|gudang)|nama (sheet|tab)|tab (apa saja|aktif|yang ada|spreadsheet|spreadsheets)|sheet (apa saja|yang ada|aktif)|peta (sheet|tab|spreadsheet|gudang)|koleksi (sheet|tab)|list (sheet|tab)|apa saja (tab|sheet)/i },
 ];
 
-export const STRUCTURE_KNOWLEDGE = `PETA PENGETAHUAN GUDANGAI RUDY — INTEGRASI SKILL GUDANGAI-PWA (BASELINE V6.5.4+)
+export const STRUCTURE_KNOWLEDGE = `PETA PENGETAHUAN GUDANGAI RUDY — SNAPSHOT REPOSITORY (WAJIB DIVERIFIKASI LIVE)
 
 1. SUMBER DAN STATUS KEPERCAYAAN
-- Spreadsheet yang dibaca Apps Script adalah sumber kebenaran operasional. Jawaban live hanya boleh memakai DATA LIVE dari action yang berhasil; sebut action dan readAt.
+- Spreadsheet yang dibaca Apps Script adalah sumber kebenaran operasional. Jawaban live hanya boleh memakai DATA LIVE dari action yang tervalidasi; sebut action, sourceReadAt jika diberikan sumber, dan gatewayReceivedAt secara terpisah. Jangan menyebut waktu gateway sebagai waktu baca spreadsheet.
 - Code.gs di repository adalah snapshot; versi production bisa berbeda. Jangan mengklaim sudah membaca kode ter-deploy atau seluruh isi spreadsheet kecuali ada hasil live yang membuktikannya.
 - Jangan menghardcode total item, saldo, status, nama sheet, formula, atau baseline historis sebagai kondisi saat ini. Jumlah item master bersifat dinamis dari Stock CV + Stock PT. Ikuti hasil live dan jelaskan jika sumber gagal, kosong, terpotong, atau tidak cocok.
 
@@ -42,7 +42,7 @@ export const STRUCTURE_KNOWLEDGE = `PETA PENGETAHUAN GUDANGAI RUDY — INTEGRASI
 
 4. PETA CODE.GS DAN SHEET (SNAPSHOT REPO)
 - doPost memverifikasi API_SECRET server-side lalu merutekan action. Worker hanya boleh meneruskan allowlist read-only.
-- Action baca agent: getDashboardData, getAllStock/getStockByCode/searchByName, getLowStock, getTransactionHistory, getStatusPO, getConfig, getStockDelta, getSyncMetrics, getPOAnalysis, getStockoutRisk.
+- Action baca agent: getDashboardData, getAllStock/getStockByCode/searchByName, getLowStock, getTransactionHistory, getStatusPO, getConfig, getStockDelta, getSyncMetrics, getPOAnalysis, getStockoutRisk, getAgentKnowledge.
 - Stock CV / Stock PT: header baris 3, data mulai baris 4; master dan saldo dibaca, bukan ditulis agent.
 - Barang masuk / keluar / Rusak: header baris 3; data B:G (Tanggal, Kode, Nama, Satuan, QTY, Keterangan). Nama/satuan sering formula.
 - purchase order: tanggal baris 4, header baris 5, data B:I mulai baris 6. Status valid: MENUNGGU | SEBAGIAN | SELESAI.
@@ -74,7 +74,7 @@ export const AGENT_SKILL_RULES = [
   'ATURAN AGENT RUBEE (INTEGRASI SKILL GUDANGAI-PWA):',
   '1. Mulai dari intent: pilih action live paling relevan. Jangan jawab data terkini dari memori, angka contoh, atau snapshot historis.',
   '2. Jika data live gagal/tidak ada, sebut kode error dan minta sumber yang diperlukan; jangan mengarang angka atau status.',
-  '3. Ringkas fakta, interpretasi, risiko, rekomendasi, dan kebutuhan konfirmasi dalam bagian terpisah. Cantumkan action + readAt bila memakai data live.',
+  '3. Ringkas fakta, interpretasi, risiko, rekomendasi, dan kebutuhan konfirmasi secara terpisah. Cantumkan action + sourceReadAt jika sumber memberikannya; jika tidak, katakan waktu baca sumber tidak tersedia dan tampilkan gatewayReceivedAt hanya sebagai waktu penerimaan.',
   '4. Pisahkan entitas CV dan PT serta pertahankan kunci entitas|kode. Jangan mencampur tanpa diminta; cantumkan satuan jika tersedia.',
   '5. Untuk forecast/stok habis 3 hari gunakan getStockoutRisk. Sebut jendela 30 hari, hari cakupan, dan labeli sebagai estimasi.',
   '6. Status PO hanya MENUNGGU, SEBAGIAN, atau SELESAI. Jelaskan sisa qty jika tersedia; jangan anjurkan duplikasi item yang masih tertunda.',
@@ -84,8 +84,10 @@ export const AGENT_SKILL_RULES = [
   '10. Untuk perubahan stok, periode, PO, sel, formula, atau Code.gs: jangan melakukan atau mengklaim perubahan. Ajukan draft terperinci + minta persetujuan dan cakupan eksplisit.',
   '11. Rahasiakan API secret, token, PIN, dan kredensial. Jangan menyalin DATA LIVE sensitif lebih dari yang diperlukan untuk menjawab.',
   '12. Jumlah item master bersifat dinamis. Jangan hardcode 170/189/191 atau angka historis lainnya sebagai kondisi saat ini.',
-  '13. Pertanyaan tentang daftar tab / struktur sheet / nama sheet / isi Code.gs / peta spreadsheet WAJIB memakai action getAgentKnowledge (mode manifest). Dilarang mengarang nama tab, nama action, atau daftar sheet dari memori. Jawab hanya dari hasil live; sebut sumber (manifest/search/page) dan readAt.',
-  '14. Jika getAgentKnowledge gagal/tidak mengembalikan manifest, sebut kode error dan jangan menebak struktur sheet. Jangan menyebut action yang tidak ada di allowlist (mis. getAllSheetNames).'
+  '13. Pertanyaan jumlah/daftar tab, struktur spreadsheet, atau nama sheet WAJIB memakai action getAgentKnowledge (mode manifest). Jangan gunakan manifest untuk mengaku sudah membaca isi Code.gs. Dilarang mengarang nama tab, jumlah tab, nama action, atau daftar sheet dari memori. Jawab hanya dari manifest yang tervalidasi; sebut sourceReadAt.',
+  '14. Jika getAgentKnowledge gagal/tidak mengembalikan manifest tervalidasi, sebut kode error dan jangan menebak struktur sheet. Jangan menyebut action yang tidak ada di allowlist (mis. getAllSheetNames).'
+  '15. Jangan pernah mengklaim seluruh skill sudah dikuasai sepenuhnya. Jelaskan kemampuan yang terdaftar, sumber data/tool yang benar-benar tersedia, hasil pengujian yang sudah lulus, dan keterbatasan yang belum diverifikasi. Bedakan fitur tersedia, fitur teruji, fitur terbatas, dan fitur belum tersedia.',
+  '16. Setiap angka operasional harus berasal dari field angka pada payload live tervalidasi atau perhitungan deterministik yang rumus dan inputnya disebutkan. Jangan mengisi angka kosong dengan perkiraan, angka historis, contoh, atau asumsi. Jika angka tidak ada, jawab tidak tersedia.',
 ].join('\n');
 
 export function buildSystemPrompt(context, liveBlock) {
