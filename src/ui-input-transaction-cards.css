@@ -212,3 +212,14 @@ html[data-theme="graphite_titanium"] .app-shell .nav-bar button.nav-btn span.nav
 html[data-theme="graphite_titanium"] .app-shell .nav-bar button.nav-fab span.nav-label { color:#D1D5DB !important; opacity:1 !important; }
 html[data-theme="graphite_titanium"] .app-shell .nav-bar button.nav-btn.is-active span.nav-label,
 html[data-theme="graphite_titanium"] .app-shell .nav-bar button.nav-fab span.nav-label { color:#FCD34D !important; }
+
+
+/* Apply theme contrast regardless of whether the theme attribute is on html or body. */
+body[data-theme="deep_ocean"] .nav-bar .nav-btn .nav-label,
+body[data-theme="deep_ocean"] .nav-bar .nav-fab .nav-label { color:#CBD5E1 !important; opacity:1 !important; }
+body[data-theme="deep_ocean"] .nav-bar .nav-btn.is-active .nav-label,
+body[data-theme="deep_ocean"] .nav-bar .nav-fab .nav-label { color:#67E8F9 !important; }
+body[data-theme="graphite_titanium"] .nav-bar .nav-btn .nav-label,
+body[data-theme="graphite_titanium"] .nav-bar .nav-fab .nav-label { color:#D1D5DB !important; opacity:1 !important; }
+body[data-theme="graphite_titanium"] .nav-bar .nav-btn.is-active .nav-label,
+body[data-theme="graphite_titanium"] .nav-bar .nav-fab .nav-label { color:#FCD34D !important; }
