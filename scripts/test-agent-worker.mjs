@@ -452,7 +452,7 @@ test('Apps Script forecast is routed by POST and declares read-only output', () 
   const forecastStart = codeGs.indexOf('function getStockoutRisk(params)');
   const forecastEnd = codeGs.indexOf('function getTransactionHistory(params)');
   assert.ok(routeStart >= 0 && routeEnd > routeStart && forecastStart >= 0 && forecastEnd > forecastStart);
-  assert.match(codeGs.slice(routeStart, routeEnd), /case "getStockoutRisk": return jsonResponse\(getStockoutRisk\(body\)\)/);
+  assert.ok(codeGs.slice(routeStart, routeEnd).includes('case "getStockoutRisk": return jsonResponse(withSourceReadAt_(getStockoutRisk(body)))'));
   const forecast = codeGs.slice(forecastStart, forecastEnd);
   assert.match(forecast, /readOnly: true/);
   assert.match(forecast, /Barang keluar/);
