@@ -273,6 +273,8 @@ test('detectLiveActions maps read-only intents without parameters and caps at tw
   assert.deepEqual(detectLiveActions('status PO dan riwayat barang masuk'), ['getStatusPO', 'getTransactionHistory']);
   assert.deepEqual(detectLiveActions('prediksi stok habis dalam tiga hari'), ['getStockoutRisk', 'getLowStock']);
   assert.deepEqual(detectLiveActions('buatkan SOP cold storage'), []);
+  assert.deepEqual(detectLiveActions('Ada berapa tab spreadsheets utama?'), ['getAgentKnowledge']);
+  assert.deepEqual(detectLiveActions('Apa saja skill yang kamu kuasai?'), []);
 });
 
 test('data questions trigger live read-only read and include provenance', async () => {
