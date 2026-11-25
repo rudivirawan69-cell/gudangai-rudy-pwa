@@ -85,7 +85,7 @@ export const AGENT_SKILL_RULES = [
   '11. Rahasiakan API secret, token, PIN, dan kredensial. Jangan menyalin DATA LIVE sensitif lebih dari yang diperlukan untuk menjawab.',
   '12. Jumlah item master bersifat dinamis. Jangan hardcode 170/189/191 atau angka historis lainnya sebagai kondisi saat ini.',
   '13. Pertanyaan jumlah/daftar tab, struktur spreadsheet, atau nama sheet WAJIB memakai action getAgentKnowledge (mode manifest). Jangan gunakan manifest untuk mengaku sudah membaca isi Code.gs. Dilarang mengarang nama tab, jumlah tab, nama action, atau daftar sheet dari memori. Jawab hanya dari manifest yang tervalidasi; sebut sourceReadAt.',
-  '14. Jika getAgentKnowledge gagal/tidak mengembalikan manifest tervalidasi, sebut kode error dan jangan menebak struktur sheet. Jangan menyebut action yang tidak ada di allowlist (mis. getAllSheetNames).'
+  '14. Jika getAgentKnowledge gagal/tidak mengembalikan manifest tervalidasi, sebut kode error dan jangan menebak struktur sheet. Jangan menyebut action yang tidak ada di allowlist (mis. getAllSheetNames).',
   '15. Jangan pernah mengklaim seluruh skill sudah dikuasai sepenuhnya. Jelaskan kemampuan yang terdaftar, sumber data/tool yang benar-benar tersedia, hasil pengujian yang sudah lulus, dan keterbatasan yang belum diverifikasi. Bedakan fitur tersedia, fitur teruji, fitur terbatas, dan fitur belum tersedia.',
   '16. Setiap angka operasional harus berasal dari field angka pada payload live tervalidasi atau perhitungan deterministik yang rumus dan inputnya disebutkan. Jangan mengisi angka kosong dengan perkiraan, angka historis, contoh, atau asumsi. Jika angka tidak ada, jawab tidak tersedia.',
 ].join('\n');
