@@ -200,7 +200,17 @@ function readConfig_() {
 function getConfigReadOnly_() {
   const sheet = getSS().getSheetByName(CONFIG_SHEET_NAME);
   if (!sheet) return { success:false, code:"CONFIG_SHEET_NOT_FOUND", error:"Tab Config tidak ditemukan; endpoint read-only tidak akan membuat tab." };
-  return { success:true, config:readConfig_(), activeMonth:getActiveMonth(), title:APP_TITLE };
+  const config = {};
+  const lastRow = sheet.getLastRow();
+  if (lastRow >= 4) {
+    sheet.getRange(4, 1, lastRow - 3, 2).getValues().forEach(function(row) {
+      const key = String(row[0] || "").trim();
+      if (key) config[key] = row[1];
+    });
+  }
+  const inferred = getActiveMonthFromName_();
+  const activeMonth = inferred.nama !== "UNKNOWN" ? inferred : parseActivePeriod_(config.PERIODE_AKTIF);
+  return { success:true, config:config, activeMonth:activeMonth, title:APP_TITLE };
 }
 
 // Read-only spreadsheet manifest generated from the actual spreadsheet at request time.
