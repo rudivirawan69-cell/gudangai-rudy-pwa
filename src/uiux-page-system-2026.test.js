@@ -149,6 +149,18 @@ describe('GudangAI Metode C UI contract', () => {
     expect(po).not.toContain('>Kedatangan:');
     expect(po).not.toContain('item.kode} · {item.size');
     expect(po).not.toContain('>Tgl</span>');
+    expect(po).toContain('aria-label="Tanggal kedatangan PO"');
+    expect(po).toContain('Item kritis');
+    expect(po).toContain('Total kurang');
+    expect(po).toContain('po-recommendation-metrics"');
+    expect(status).toContain('Belum selesai:');
+    expect(status).toContain('Sisa {sisa} · PO {it.qtyPO}');
+    expect(status).toContain('Qty PO: {it.qtyPO}');
+    expect(status).toContain('Sudah datang: {it.qtyDatang}');
+    expect(status).toContain('selectedItem.qtyPO');
+    expect(status).toContain('selectedItem.qtyDatang');
+    expect(css).toContain('.po-operational-context');
+    expect(css).toContain('.po-metric-label');
     expect(status).not.toContain('className="card section-card rounded-2xl p-4 space-y-3"');
     expect(status).toContain('po-status-inline');
     expect(status).not.toContain('Ketuk untuk edit qty');
