@@ -98,7 +98,11 @@ function normalizeTanggal(raw) {
 }
 async function fetchWithRetry(url, options = {}, retries = RETRY_COUNT, timeoutMs = REQUEST_TIMEOUT_MS) {
   let lastError;
-  for (let attempt = 1; attempt <= retries; attempt++) {
+  // POST is never retried automatically: a timeout/transport error can happen
+  // after Apps Script accepted the write. The caller must reconcile by identity.
+  const isPost = String(options?.method || 'GET').toUpperCase() === 'POST';
+  const maxAttempts = isPost ? 1 : Math.max(1, Number(retries) || 1);
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
@@ -109,7 +113,7 @@ async function fetchWithRetry(url, options = {}, retries = RETRY_COUNT, timeoutM
     } catch (err) {
       clearTimeout(timer);
       lastError = err;
-      if (attempt < retries) await delay(RETRY_BASE_MS * attempt);
+      if (attempt < maxAttempts) await delay(RETRY_BASE_MS * attempt);
     }
   }
   throw lastError;
@@ -118,12 +122,22 @@ async function postJson(payload, { retries = RETRY_COUNT, timeoutMs = REQUEST_TI
   const url = getApiUrl();
   if (!url) throw new Error('URL API belum diatur');
   const body = JSON.stringify({ schemaVersion: SCHEMA_VERSION, secret: getApiSecret() || undefined, client: { app: 'gudangai-rudy-pwa', deviceId: deviceId() }, ...payload });
+  const isBatchWrite = payload?.action === 'bulkTransaction';
+  const fetchStartedAt = Date.now();
   const res = await fetchWithRetry(url, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body, redirect: 'follow' }, retries, timeoutMs);
+  const fetchMs = Date.now() - fetchStartedAt;
+  const responseStartedAt = Date.now();
   const text = await res.text();
+  let parsed;
   if (!text || text.trim().startsWith('<!DOCTYPE') || text.trim().startsWith('<html')) {
     throw new Error('Respons bukan JSON (HTML dari Apps Script). Periksa deploy Web App: Execute as Me, Anyone.');
   }
-  try { return JSON.parse(text); } catch { throw new Error('Respons bukan JSON: ' + text.slice(0, 120)); }
+  try { parsed = JSON.parse(text); } catch { throw new Error('Respons bukan JSON: ' + text.slice(0, 120)); }
+  if (isBatchWrite) {
+    console.info('[GudangAI timing]', JSON.stringify({ event: 'client', phase: 'fetch', ms: fetchMs, batchId: parsed?.batchId || payload?.batchId || null }));
+    console.info('[GudangAI timing]', JSON.stringify({ event: 'client', phase: 'respons', ms: Date.now() - responseStartedAt, batchId: parsed?.batchId || payload?.batchId || null }));
+  }
+  return parsed;
 }
 function readQueueLocal() {
   try {
@@ -617,33 +631,17 @@ async function submitItems(action, entity, items, tanggal, options = {}) {
       })));
       emitProgress(originalList.length, originalList.length, { successCount: totalSuccess, failCount: totalFail, queuedCount: totalQueued });
       if (unresolved.length) {
-        pushNotification({
-          type: 'warning',
-          title: 'Write belum terkonfirmasi',
-          body: confirmed.length + ' item dikonfirmasi sudah tertulis; ' + unresolved.length + ' item diamankan di Antrian Sinkronisasi. Detail backend: ' + msg,
-        });
-      } else {
-        pushNotification({
-          type: 'success',
-          title: 'Write terverifikasi',
-          body: confirmed.length + ' item sudah terbukti tertulis di spreadsheet melalui read-back; tidak dimasukkan ke antrean.',
-        });
       }
       break;
     }
   }
-  if (totalQueued > 0) {
-    pushNotification({ type: 'warning', title: 'Sinkronisasi perlu dilanjutkan', body: totalSuccess + ' sukses · ' + totalQueued + ' masuk antrian · ' + totalFail + ' belum terkonfirmasi. Antrian menyimpan ID unik untuk mencegah duplikasi.' });
-  } else {
-    pushNotification({ type: 'success', title: 'Transaksi selesai', body: totalSuccess + ' item berhasil ditulis tanpa antrian.' });
-  }
-  // Setelah write sukses, minta realTimeSync menarik delta segera (polling cepat 2 menit).
+  // Trigger the realtime delta sync once; InputPage owns the single stock-refresh event
+  // and the single user-facing result notification.
   if (totalSuccess > 0) {
     try {
       if (typeof window !== 'undefined' && typeof window.__gudangai_syncNow === 'function') {
         window.__gudangai_syncNow();
       }
-      window.dispatchEvent(new CustomEvent('gudangai-stock-refresh', { detail: { reason: 'write-success', count: totalSuccess } }));
     } catch (_) { /* non-critical */ }
   }
   return {
