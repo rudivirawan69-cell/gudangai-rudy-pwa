@@ -571,3 +571,120 @@ html[data-theme] .po-page .po-hub-icon {
   box-shadow: none !important;
   filter: none !important;
 }
+
+
+/* PO cards — title-only surfaces, each card is an independent sibling. */
+html[data-theme] .po-page .po-hub-grid,
+html[data-theme] .po-page .grid.grid-cols-2 {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+html[data-theme] .po-page .po-hub-card-btn,
+html[data-theme] .po-page .po-generator-tab,
+html[data-theme] .po-page .po-recommendation-panel,
+html[data-theme] .po-page .stock-card {
+  position: relative;
+  isolation: isolate;
+}
+html[data-theme] .po-page .po-hub-card-btn {
+  min-height: 76px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border) !important;
+  border-radius: 14px !important;
+  background: var(--bg-elevated) !important;
+  box-shadow: none !important;
+}
+html[data-theme] .po-page .po-hub-card-btn > div {
+  margin: 0 !important;
+}
+html[data-theme] .po-page .po-hub-card-btn .hub-title {
+  color: var(--text-main) !important;
+  font-size: 13px;
+  line-height: 1.25;
+  font-weight: 800;
+}
+html[data-theme] .po-page .po-recommendation-metrics {
+  align-items: end;
+}
+html[data-theme] .po-page .po-recommendation-metrics strong {
+  display: block;
+  min-width: 0;
+  color: inherit;
+  font-size: 25px;
+  line-height: 1.15;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+html[data-theme] .po-page .stock-card {
+  margin: 0 !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 14px !important;
+  background: var(--bg-elevated) !important;
+  color: var(--text-main) !important;
+  box-shadow: none !important;
+}
+html[data-theme] .po-page .stock-card > :is(div,section) {
+  background: transparent;
+}
+html[data-theme] .po-status-panel {
+  min-width: 0;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: var(--text-main);
+}
+html[data-theme] .po-status-panel > .grid.grid-cols-3 > div,
+html[data-theme] .po-status-panel > .space-y-2 > button,
+html[data-theme] .po-status-panel > .space-y-2 > div {
+  box-shadow: none !important;
+}
+html[data-theme] .po-status-inline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent !important;
+}
+html[data-theme] .po-status-inline span {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent !important;
+  color: var(--text-muted);
+  box-shadow: none !important;
+  font-size: 10px;
+  line-height: 1.3;
+  font-weight: 700;
+}
+html[data-theme] .po-status-inline span.is-active {
+  color: var(--accent);
+  font-weight: 900;
+}
+html[data-theme] .po-selected-item,
+html[data-theme] .po-entity-choice {
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+html[data-theme] .po-status-panel .card,
+html[data-theme] .po-status-panel .section-card {
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+html[data-theme] .po-status-panel :is(.rounded-xl.bg-slate-50,.rounded-xl.bg-amber-50,.rounded-xl.bg-emerald-50) {
+  box-shadow: none !important;
+}
