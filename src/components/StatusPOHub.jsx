@@ -157,8 +157,10 @@ function StatusTriple({ status }) {
 }
 
 function formatPeriodDate(value) {
-  const match = String(value || '').trim().match(/^(\\d{4})-(\\d{2})-(\\d{2})$/);
-  return match ? `${match[3]}-${match[2]}-${match[1]}` : String(value || '');
+  const parts = String(value || '').trim().split('-');
+  return parts.length === 3 && parts[0].length === 4 && parts[1].length === 2 && parts[2].length === 2
+    ? `${parts[2]}-${parts[1]}-${parts[0]}`
+    : String(value || '');
 }
 
 function todayISO() {
