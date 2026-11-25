@@ -167,7 +167,7 @@ describe('GudangAI Metode C UI contract', () => {
     expect(status).not.toContain('Hanya untuk melihat status.');
     expect(status).not.toContain('Pilih periode yang akan dikonfirmasi');
     expect(status).not.toContain('Periode berjalan · Belum selesai:');
-    expect(status).not.toContain('Sisa {sisa} · PO {it.qtyPO}');
+    expect(status).toContain('Qty PO: {it.qtyPO}');\n    expect(status).toContain('Sudah datang: {it.qtyDatang}');
     expect(css).toContain('.po-status-panel');
     expect(css).toContain('.po-status-inline span');
     expect(css).toContain('.po-selected-item');
