@@ -263,7 +263,7 @@ function AppShell() {
   switch (tab) {
     case 'dashboard': page = <DashboardPage onNavigate={goTab} />; break;
     case 'stok': page = <StokPage />; break;
-    case 'input': page = <InputPage />; break;
+    case 'input': page = <InputPage onNavigate={goTab} />; break;
     case 'po': page = <POPage onNavigate={goTab} />; break;
     case 'ai': page = <AIAssistantPage onNavigate={goTab} />; break;
     case 'riwayat': page = <RiwayatPage onNavigate={goTab} />; break;

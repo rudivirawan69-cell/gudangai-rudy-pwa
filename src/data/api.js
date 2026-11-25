@@ -24,6 +24,7 @@ const DEFAULT_API_URL = 'https://script.google.com/macros/s/AKfycbxVpw0_waeCautJ
 // Keep the proven V6.6.5 write authentication fallback. Existing localStorage secret still takes precedence.
 const DEFAULT_API_SECRET = 'adadd47759234a7f94acb230c0cc7ff479c4e4f79a674714';
 let _syncLock = false;
+const _activeSendIds = new Set();
 let _queueRevision = 0;
 let _batchSupported = null;
 let _dashboardLiveSnapshot = null;
@@ -684,6 +685,47 @@ export async function submitBarangMasuk({ entity, tanggal, items }) { return sub
 export async function submitBarangKeluar({ entity, tanggal, items }) { return submitItems('barangKeluar', entity, items, tanggal); }
 export async function submitBarangRusak({ entity, tanggal, items }) { return submitItems('barangRusak', entity, items, tanggal); }
 export function getPendingQueue() { return readQueueLocal().queue; }
+
+/** Persist a complete send intent before the first backend request. */
+export async function stagePendingTransaction({ type, entity, tanggal, items }) {
+  const validItems = (items || []).map((item) => ({
+    ...ensureClientItemId(item), kode: normalizeItemCode(item.kode || item.kodeBarang),
+    nama: normalizeTransactionText(item.nama), keterangan: normalizeTransactionText(item.keterangan),
+  }));
+  if (!validItems.length || validItems.some((item) => !item.clientItemId || !item.kode || !(Number(item.qty) > 0))) throw new Error('Transaksi tidak valid; antrean tidak dibuat.');
+  const queue = getPendingQueue();
+  const existing = new Set(queue.flatMap((entry) => (entry.items || []).map((item) => String(item.clientItemId || ''))));
+  if (validItems.some((item) => existing.has(String(item.clientItemId)))) throw new Error('Ada ID item yang sudah berada di antrean. Periksa Sinkronisasi sebelum mengirim ulang.');
+  const now = new Date().toISOString();
+  queue.push({ id: 'Q-SEND-' + (crypto.randomUUID ? crypto.randomUUID() : Date.now()), transactionId: 'TX-BATCH-' + (crypto.randomUUID ? crypto.randomUUID() : Date.now()), status: 'PROCESSING', type, entity: String(entity || '').toUpperCase(), items: validItems, tanggal: normalizeTanggal(tanggal), createdAt: now, updatedAt: now, processingStartedAt: now });
+  await commitQueueLocal(queue);
+  validItems.forEach((item) => _activeSendIds.add(String(item.clientItemId)));
+  const stagedIds = new Set(getPendingQueue().flatMap((entry) => (entry.items || []).map((item) => String(item.clientItemId || ''))));
+  if (validItems.some((item) => !stagedIds.has(String(item.clientItemId)))) throw new Error('Verifikasi antrean gagal. Permintaan ke server dibatalkan.');
+  return validItems.map((item) => item.clientItemId);
+}
+
+export function finishPendingTransaction(ids) {
+  (ids || []).forEach((id) => _activeSendIds.delete(String(id)));
+}
+
+export async function updatePendingItemStates(ids, status, details = {}) {
+  const wanted = new Set((ids || []).map(String));
+  if (!wanted.size) return { success: true, updated: 0 };
+  const now = new Date().toISOString();
+  const queue = getPendingQueue().map((entry) => {
+    const hasTarget = (entry.items || []).some((item) => wanted.has(String(item.clientItemId)));
+    return {
+      ...entry,
+      ...(hasTarget ? { status, updatedAt: now } : {}),
+      items: (entry.items || []).map((item) => wanted.has(String(item.clientItemId))
+        ? { ...item, queueStatus: status, queueUpdatedAt: now, ...details }
+        : item),
+    };
+  });
+  await commitQueueLocal(queue);
+  return { success: true, updated: wanted.size };
+}
 function queueItemIdentity(item) {
   const clientItemId = String(item?.clientItemId || '').trim();
   if (!clientItemId) return { transactionId: '', nonce: '' };
@@ -748,17 +790,25 @@ export async function syncPendingQueue() {
   if (_syncLock) return { synced: 0, failed: 0, skipped: true, reason: 'sync-in-progress' };
   _syncLock = true;
   try {
-    const queue = getPendingQueue().map((entry) => ({
-      ...entry,
-      items: (entry.items || []).map(ensureClientItemId),
-    }));
+    const rawQueue = getPendingQueue();
+    const nowMs = Date.now();
+    const queue = rawQueue.map((entry) => {
+      if ((entry.items || []).some((item) => _activeSendIds.has(String(item.clientItemId)))) return entry;
+      if (entry.status !== 'PROCESSING') return entry;
+      const started = Date.parse(entry.processingStartedAt || entry.updatedAt || entry.createdAt || '');
+      return Number.isFinite(started) && nowMs - started < 120000
+        ? entry
+        : { ...entry, status: 'PENDING_VERIFY', recoveredAt: new Date(nowMs).toISOString() };
+    });
+    if (queue.some((entry, index) => entry !== rawQueue[index])) await commitQueueLocal(queue);
+    const processQueue = queue.filter((entry) => entry.status !== 'PROCESSING');
     const groups = new Map();
     const conflictingIds = new Set();
     const identitySignatures = new Map();
 
     // Combine outbox entries that target the same transaction sheet/entity/date.
     // A clientItemId reused with a different operation, entity, date, or payload is held.
-    for (const entry of queue) {
+    for (const entry of processQueue) {
       const type = entry.type || 'masuk';
       const entity = String(entry.entity || '').toUpperCase();
       const tanggal = normalizeTanggal(entry.tanggal);
@@ -781,6 +831,7 @@ export async function syncPendingQueue() {
     }
 
     const confirmedIds = new Set();
+    const confirmedHistory = new Map();
     let requests = 0;
     for (const group of groups.values()) {
       const items = Array.from(group.itemsById.values()).filter((item) => !conflictingIds.has(String(item.clientItemId)));
@@ -790,13 +841,33 @@ export async function syncPendingQueue() {
       const res = await submitItems(group.type, group.entity, items, group.tanggal, { fromQueue: true });
       requests += Math.ceil(needsWrite.length / BATCH_CHUNK_SIZE);
       for (const result of res.results || []) {
-        if (result.clientItemId && (result.success === true || result.skipped === true)) confirmedIds.add(result.clientItemId);
+        if (result.clientItemId && (result.success === true || result.skipped === true)) {
+          confirmedIds.add(result.clientItemId);
+          const item = items.find((candidate) => String(candidate.clientItemId) === String(result.clientItemId));
+          if (item) confirmedHistory.set(String(result.clientItemId), { item, type: group.type, entity: group.entity, tanggal: group.tanggal, readBack: result.readBack || null });
+        }
       }
     }
 
     const remaining = [];
     let synced = 0, failed = 0;
     const appliedAfterSync = getAppliedMap();
+    // History must be durably written before any confirmed outbox item is removed.
+    for (const entry of queue) {
+      for (const item of entry.items || []) {
+        const id = String(item.clientItemId || '');
+        if (!id || (!confirmedIds.has(id) && !appliedAfterSync[id])) continue;
+        const metadata = confirmedHistory.get(id) || { item, type: entry.type, entity: entry.entity, tanggal: entry.tanggal };
+        saveToHistory({
+          type: metadata.type, entity: metadata.entity, tanggal: metadata.tanggal,
+          kode: metadata.item.kode, nama: metadata.item.nama, qty: metadata.item.qty,
+          keterangan: metadata.item.keterangan || '', source: 'queue-sync-confirmed',
+          clientItemId: id, transactionId: 'TX-' + id, status: 'success',
+          readBack: metadata.readBack || null,
+          items: [{ kode: metadata.item.kode, nama: metadata.item.nama, qty: metadata.item.qty, satuan: metadata.item.satuan || '' }],
+        });
+      }
+    }
     for (const entry of queue) {
       const remainingItems = entry.items.filter((item) => !confirmedIds.has(item.clientItemId) && !appliedAfterSync[item.clientItemId]);
       synced += entry.items.length - remainingItems.length;
@@ -853,7 +924,15 @@ export function saveToHistory(entry) {
   const next = dedupeKey
     ? [historyEntry, ...list.filter((item) => String(item.clientItemId || item.transactionId || '') !== dedupeKey)]
     : [historyEntry, ...list];
-  try { localStorage.setItem(HISTORY_KEY, JSON.stringify(next.slice(0, 200))); } catch (_) {}
+  try {
+    const serialized = JSON.stringify(next.slice(0, 200));
+    localStorage.setItem(HISTORY_KEY, serialized);
+    const verified = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+    const persisted = verified.find((item) => String(item.id || '') === String(historyEntry.id));
+    if (!persisted || JSON.stringify(persisted) !== JSON.stringify(historyEntry)) throw new Error('Verifikasi penyimpanan Riwayat gagal.');
+  } catch (error) {
+    throw new Error('Riwayat belum tersimpan; item tetap harus dipertahankan di antrean. ' + (error?.message || 'Storage error'));
+  }
   try { window.dispatchEvent(new CustomEvent('gudangai-history-changed', { detail: { transactionId, clientItemId } })); } catch (_) {}
   return historyEntry;
 }

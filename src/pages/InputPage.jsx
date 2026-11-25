@@ -11,7 +11,7 @@ import {
 } from '../data/pdfValidate';
 import {
   submitBarangMasuk, submitBarangKeluar, submitBarangRusak, fetchStock,
-  saveToHistory,
+  saveToHistory, stagePendingTransaction, updatePendingItemStates, removePendingByClientIds, finishPendingTransaction,
   pushNotification, getNotifications, markNotificationsRead, unreadNotificationCount,
 } from '../data/api';
 import { searchMaster } from '../data/master';
@@ -75,7 +75,7 @@ function loadInputDraft() {
   }
 }
 
-export default function InputPage() {
+export default function InputPage({ onNavigate }) {
   const [initialDraft] = useState(loadInputDraft);
   const [entity, setEntity] = useState(initialDraft.entity || 'CV');
   const [txType, setTxType] = useState(initialDraft.txType || 'keluar');
@@ -632,23 +632,34 @@ export default function InputPage() {
     if (!items.length) {
       setSubmitting(false); submittingRef.current = false; setSubmitProgress(null); return;
     }
+    let handoffTimer = null;
+    let handedOff = false;
+    let stagedIds = [];
     try {
+      const queueType = txType === 'masuk' ? 'barangMasuk' : txType === 'rusak' ? 'barangRusak' : 'barangKeluar';
+      stagedIds = await stagePendingTransaction({ type: queueType, entity, tanggal, items });
+      handoffTimer = setTimeout(() => {
+        if (submittingRef.current) { handedOff = true; setStatusBanner('Pengiriman masih berjalan. Proses dilanjutkan dan dapat dipantau di Sinkronisasi.'); onNavigate?.('sync'); }
+      }, 5000);
       const fn = txType === 'masuk' ? submitBarangMasuk : txType === 'rusak' ? submitBarangRusak : submitBarangKeluar;
       const res = await fn({ entity, tanggal, items });
       const resultMap = new Map((res?.results || []).filter((r) => r?.clientItemId).map((r) => [r.clientItemId, r]));
       const confirmedItems = items.filter((item) => { const r = resultMap.get(item.clientItemId); return r?.success === true || r?.skipped === true; });
-      const queuedItems = items.filter((item) => { const r = resultMap.get(item.clientItemId); return r?.queued === true && r?.queueStored === true && r?.clientItemId; });
+      const queuedItems = items.filter((item) => { const r = resultMap.get(item.clientItemId); return r?.queued === true && r?.queueStored === true; });
       const confirmedIds = new Set(confirmedItems.map((item) => item.clientItemId));
       const queuedIds = new Set(queuedItems.map((item) => item.clientItemId));
+      const knownIds = new Set((res?.results || []).map((r) => r?.clientItemId).filter(Boolean));
       const failedItems = items.filter((item) => !confirmedIds.has(item.clientItemId) && !queuedIds.has(item.clientItemId));
-      if (confirmedItems.length > 0) saveToHistory({
-        type: txType, entity, items: confirmedItems, tanggal, at: Date.now(), status: 'sukses', source: 'backend-confirmed',
-        syncSummary: { total: items.length, success: confirmedItems.length, queued: queuedItems.length, failed: failedItems.length },
-      });
+      for (const item of confirmedItems) saveToHistory({ type: txType, entity, items: [item], kode: item.kode, nama: item.nama, qty: item.qty, tanggal, at: Date.now(), status: 'sukses', source: 'backend-confirmed', clientItemId: item.clientItemId, transactionId: 'TX-' + item.clientItemId });
+      if (confirmedIds.size) await removePendingByClientIds([...confirmedIds]);
+      const deterministicFailed = failedItems.filter((item) => { const r = resultMap.get(item.clientItemId); return knownIds.has(item.clientItemId) && r?.uncertain !== true && !r?.queued; });
+      if (deterministicFailed.length) await removePendingByClientIds(deterministicFailed.map((item) => item.clientItemId));
+      const pendingItems = [...queuedItems, ...failedItems.filter((item) => !deterministicFailed.includes(item))];
+      if (pendingItems.length) await updatePendingItemStates(pendingItems.map((item) => item.clientItemId), 'PENDING_VERIFY');
       const totalPending = failedItems.length + zeroItems.length;
       if (queuedItems.length || failedItems.length || zeroItems.length) {
         pushNotification({ type: failedItems.length ? 'warning' : 'success', title: 'Hasil pengiriman', body: confirmedItems.length + ' terkonfirmasi · ' + queuedItems.length + ' masuk antrean sinkronisasi · ' + totalPending + ' belum terkonfirmasi.' });
-        setStatusBanner(confirmedItems.length + ' terkonfirmasi · ' + queuedItems.length + ' masuk Antrian Sinkronisasi · ' + totalPending + ' belum terkonfirmasi (tetap di keranjang)');
+        setStatusBanner(confirmedItems.length + ' terkonfirmasi · ' + queuedItems.length + ' masuk Antrian Sinkronisasi · ' + totalPending + ' belum terkonfirmasi.');
       } else {
         pushNotification({ type: 'success', title: 'Transaksi selesai', body: confirmedItems.length + ' item terkonfirmasi ditulis backend.' });
         setStatusBanner(confirmedItems.length + ' terkonfirmasi · 0 masuk antrean sinkronisasi · 0 belum terkonfirmasi');
@@ -656,9 +667,13 @@ export default function InputPage() {
       setCart(cart.filter((item) => Number(item.qty) <= 0 || failedItems.some((x) => x.clientItemId === item.clientItemId)));
       if (!failedItems.length && !zeroItems.length) { setAccuracy(null); setPdfReview([]); setReviewSourceLabel('PDF'); }
       if (confirmedItems.length > 0) window.dispatchEvent(new Event('gudangai-stock-refresh'));
+      if (handedOff) window.dispatchEvent(new CustomEvent('gudangai-navigate', { detail: { tab: 'sync' } }));
     } catch (err) {
-      setStatusBanner(err.message || 'Gagal kirim');
+      if (stagedIds.length) { try { await updatePendingItemStates(stagedIds, 'PENDING_VERIFY', { lastError: String(err?.message || 'Unknown send outcome') }); } catch (_) {} }
+      setStatusBanner(err.message || 'Gagal kirim. Item dipertahankan untuk pemeriksaan.');
     } finally {
+      if (handoffTimer) clearTimeout(handoffTimer);
+      if (stagedIds.length) finishPendingTransaction(stagedIds);
       console.info('[GudangAI timing]', JSON.stringify({ event: 'client', phase: 'spinner mati', ms: Date.now() - uiSubmitStartedAt }));
       setSubmitting(false); submittingRef.current = false; setSubmitProgress(null);
     }
