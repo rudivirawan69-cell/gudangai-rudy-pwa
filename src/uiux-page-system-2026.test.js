@@ -118,7 +118,7 @@ describe('GudangAI Metode C UI contract', () => {
     expect(dashboard).not.toContain('Status PO · Purchase Order');
     expect(dashboard).toContain('Status per Divisi');
     expect(dashboard).toContain('Status PO</span>');
-    expect(stock).toContain('<h1>Stok barang</h1>');
+    expect(stock).toContain('<h1>Stok Barang</h1>');
     expect(stock).not.toContain('sk-head-subtitle');
     expect(po).toContain('Purchase order</h2>');
     expect(po).not.toContain("'Generate, pantau, dan konfirmasi PO'");
