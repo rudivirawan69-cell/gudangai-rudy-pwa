@@ -286,7 +286,13 @@ test('data questions trigger live read-only read and include provenance', async 
 });
 
 test('spreadsheet structure questions route to getAgentKnowledge manifest through read-only gateway', async () => {
-  const { response, sheetCalls, payload, systemText } = await runLive('Tolong tampilkan daftar tab dan struktur sheet spreadsheet');
+  const { response, sheetCalls, payload, systemText } = await runLive('Tolong tampilkan daftar tab dan struktur sheet spreadsheet', {
+    sheetsResponse: () => new Response(JSON.stringify({
+      success:true, mode:'manifest', spreadsheetTitle:'Test Spreadsheet',
+      sheetCount:2, sheets:[{ name:'Stock CV' },{ name:'Barang masuk' }],
+      sourceReadAt:'2026-11-25T10:00:00.000Z',
+    }), { status:200 }),
+  });
   assert.equal(response.status, 200);
   assert.equal(sheetCalls.length, 1);
   assert.equal(sheetCalls[0].action, 'getAgentKnowledge');
@@ -294,6 +300,7 @@ test('spreadsheet structure questions route to getAgentKnowledge manifest throug
   assert.equal(sheetCalls[0].client.mode, 'read_only');
   assert.equal(payload.dataSources[0].action, 'getAgentKnowledge');
   assert.equal(payload.dataSources[0].ok, true);
+  assert.equal(payload.dataSources[0].sourceReadAt, '2026-11-25T10:00:00.000Z');
   assert.match(systemText, /getAgentKnowledge/);
   assert.match(systemText, /manifest/);
 });
@@ -311,11 +318,38 @@ test('exact SKU lookup has priority and preserves normalized code and entity', a
   assert.equal(payload.dataSources[0].ok, true);
 });
 
-test('Barang Masuk history request selects Barang masuk source sheet', async () => {
-  const { sheetCalls } = await runLive('Jelaskan detail baris terakhir Barang Masuk');
+test('Barang Masuk history request selects and validates the exact source sheet', async () => {
+  const { sheetCalls, payload } = await runLive('Jelaskan detail baris terakhir Barang Masuk', {
+    sheetsResponse: (body) => new Response(JSON.stringify({
+      success:true, sheet:body.sheet, count:1, data:[{ row:12, kode:'CV-0083', qty:1 }],
+      sourceReadAt:'2026-11-25T10:01:00.000Z',
+    }), { status:200 }),
+  });
   assert.equal(sheetCalls.length, 1);
   assert.equal(sheetCalls[0].action, 'getTransactionHistory');
   assert.equal(sheetCalls[0].sheet, 'Barang masuk');
+  assert.equal(payload.dataSources[0].ok, true);
+  assert.equal(payload.dataSources[0].sourceReadAt, '2026-11-25T10:01:00.000Z');
+});
+
+test('transaction history rejects a response from the wrong sheet', async () => {
+  const { payload, systemText } = await runLive('Jelaskan detail baris terakhir Barang Masuk', {
+    sheetsResponse: () => new Response(JSON.stringify({
+      success:true, sheet:'Barang keluar', count:1, data:[{ kode:'PT-0001', qty:50 }],
+    }), { status:200 }),
+  });
+  assert.equal(payload.dataSources[0].ok, false);
+  assert.equal(payload.dataSources[0].code, 'TRANSACTION_SOURCE_MISMATCH');
+  assert.doesNotMatch(systemText, /PT-0001/);
+});
+
+test('exact SKU lookup rejects a mismatched returned entity', async () => {
+  const { payload, systemText } = await runLive('Berapa stok PT-0001', {
+    sheetsResponse: () => new Response(JSON.stringify({ success:true, kode:'PT-0001', entitas:'CV', stockAkhir:88 }), { status:200 }),
+  });
+  assert.equal(payload.dataSources[0].ok, false);
+  assert.equal(payload.dataSources[0].code, 'SKU_ENTITY_MISMATCH');
+  assert.doesNotMatch(systemText, /stockAkhir.*88/);
 });
 
 test('ambiguous transaction history does not guess a sheet', async () => {
