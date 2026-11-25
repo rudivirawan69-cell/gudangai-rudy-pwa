@@ -618,6 +618,7 @@ export default function InputPage() {
       return;
     }
     if (submittingRef.current || !cart.length) return;
+    const uiSubmitStartedAt = Date.now();
     submittingRef.current = true;
     setSubmitting(true);
     const zeroItems = cart.filter((c) => !(Number(c.qty) > 0));
@@ -657,7 +658,10 @@ export default function InputPage() {
       if (confirmedItems.length > 0) window.dispatchEvent(new Event('gudangai-stock-refresh'));
     } catch (err) {
       setStatusBanner(err.message || 'Gagal kirim');
-    } finally { setSubmitting(false); submittingRef.current = false; setSubmitProgress(null); }
+    } finally {
+      console.info('[GudangAI timing]', JSON.stringify({ event: 'client', phase: 'spinner mati', ms: Date.now() - uiSubmitStartedAt }));
+      setSubmitting(false); submittingRef.current = false; setSubmitProgress(null);
+    }
   };
 
   const openNotif = () => { setNotifs(getNotifications()); markNotificationsRead(); setUnread(0); setShowNotif((v) => !v); };

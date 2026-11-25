@@ -1112,6 +1112,7 @@ function bulkTransaction(body) {
   }
 
   var t0 = Date.now();
+  var timing = { lock: 0, read: 0, write: 0, flush: 0 };
   var sheetName = String(body.sheet || (list[0] && list[0].sheet) || "").trim();
   var entitas = String(body.entitas || body.entity || (list[0] && (list[0].entitas || list[0].entity)) || "").trim().toUpperCase();
   if (!(sheetName in SHEET_CONFIG)) {
@@ -1180,16 +1181,22 @@ function bulkTransaction(body) {
 
   var isKeluar = sheetName === "Barang keluar";
   var lock = LockService.getScriptLock();
+  var lockStartedAt = Date.now();
   if (!lock.tryLock(30000)) {
+    timing.lock = Date.now() - lockStartedAt;
+    console.log("GUDANGAI_TX_TIMING " + JSON.stringify({ batchId: batchId, items: prepared.length, lock: timing.lock, read: 0, write: 0, flush: 0, end: Date.now() - t0, outcome: "LOCK_TIMEOUT" }));
     return { success: false, status: "UNKNOWN", code: "LOCK_TIMEOUT", batchId: batchId, writeOccurred: "unknown", error: "Lock backend tidak tersedia; lakukan read-back sebelum retry." };
   }
+  timing.lock = Date.now() - lockStartedAt;
 
   var results = [];
   var successCount = 0;
   var failCount = 0;
   var writeTouched = false;
   var rowsToWrite = [];
+  var readStartedAt = Date.now();
   var ledgerIdx = buildLedgerIndex_();
+  timing.read += Date.now() - readStartedAt;
   var recs = Object.create(null);
 
   try {
@@ -1321,11 +1328,16 @@ function bulkTransaction(body) {
         fgValues.push([rowsToWrite[r].qty, rowsToWrite[r].ket]);
       }
 
+      var writeStartedAt = Date.now();
       sheet.getRange(startRow, 2, rowsToWrite.length, 2).setValues(bcValues);
       writeTouched = true;
       sheet.getRange(startRow, 6, rowsToWrite.length, 2).setValues(fgValues);
+      timing.write += Date.now() - writeStartedAt;
+      var flushStartedAt = Date.now();
       SpreadsheetApp.flush();
+      timing.flush += Date.now() - flushStartedAt;
 
+      var readBackStartedAt = Date.now();
       for (var v = 0; v < rowsToWrite.length; v++) {
         var rowNum = startRow + v;
         var rw = rowsToWrite[v];
@@ -1377,6 +1389,7 @@ function bulkTransaction(body) {
           break;
         }
       }
+      timing.read += Date.now() - readBackStartedAt;
     }
 
     updateLastUpdateTimestamp();
@@ -1411,6 +1424,12 @@ function bulkTransaction(body) {
       batchId: batchId, total: prepared.length, successCount: successCount, failCount: failCount, execMs: response.execMs
     }, response.success ? "" : "Jangan ulangi batch sebelum review.", batchId);
   } catch (logErr) {}
+  timing.end = Date.now() - t0;
+  console.log("GUDANGAI_TX_TIMING " + JSON.stringify({
+    batchId: batchId, items: prepared.length, lock: timing.lock,
+    read: timing.read, write: timing.write, flush: timing.flush,
+    end: timing.end, successCount: successCount, failCount: failCount
+  }));
   return response;
 }
 
