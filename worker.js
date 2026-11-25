@@ -108,16 +108,42 @@ function resolvePORequestPeriod(url, now = new Date()) {
 async function handleStatusPO(request, env, origin, url) {
   const auth = await verifySupabaseAccessToken(request, env);
   if (!auth.ok) return json({ success:false, code:auth.code, error:auth.error }, auth.status, origin);
+
   const period = resolvePORequestPeriod(url);
   if (period.error) return json({ success:false, code:'INVALID_PO_PERIOD', error:period.error }, 400, origin);
+
   const raw = await callSheetsRead(env, 'getStatusPO');
-  if (raw?.success === false) {
-    return json({ ...raw, actor:auth.userId, permissions:'read_only' }, 502, origin);
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw) || raw.success !== true) {
+    return json({
+      success:false,
+      code:raw?.code || 'LIVE_DATA_UNVERIFIED',
+      error:raw?.error || 'Respons sumber Status PO tidak memiliki success=true.',
+      actor:auth.userId,
+      permissions:'read_only',
+    }, 502, origin);
   }
+  if (!Array.isArray(raw.items)) {
+    return json({
+      success:false,
+      code:'PO_SCHEMA_INVALID',
+      error:'Respons Status PO tidak memiliki daftar items yang valid.',
+      actor:auth.userId,
+      permissions:'read_only',
+    }, 502, origin);
+  }
+
   const data = buildPOPeriodResponse(raw, period);
-  if (data?.success === false) return json(data, 502, origin);
+  if (!data || data.success !== true || !Array.isArray(data.items)) {
+    return json({
+      success:false,
+      code:'PO_SCHEMA_INVALID',
+      error:'Hasil pemrosesan Status PO tidak valid.',
+      actor:auth.userId,
+      permissions:'read_only',
+    }, 502, origin);
+  }
   if (url.pathname === '/api/getPOTerlambat') {
-    const active = [...(data.items || []), ...(data.tertunda?.items || [])];
+    const active = [...data.items, ...(data.tertunda?.items || [])];
     const terlambat = active.filter((item) => item.terlambat);
     return json({
       success:true, status:'OK', tanggalHariIniWIB:parseTanggal(new Date()),
