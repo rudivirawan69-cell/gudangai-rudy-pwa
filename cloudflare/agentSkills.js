@@ -86,6 +86,10 @@ export const AGENT_SKILL_RULES = [
   '12. Jumlah item master bersifat dinamis. Jangan hardcode 170/189/191 atau angka historis lainnya sebagai kondisi saat ini.',
   '13. Pertanyaan tentang daftar tab / struktur sheet / nama sheet / isi Code.gs / peta spreadsheet WAJIB memakai action getAgentKnowledge (mode manifest). Dilarang mengarang nama tab, nama action, atau daftar sheet dari memori. Jawab hanya dari hasil live; sebut sumber (manifest/search/page) dan readAt.',
   '14. Jika getAgentKnowledge gagal/tidak mengembalikan manifest, sebut kode error dan jangan menebak struktur sheet. Jangan menyebut action yang tidak ada di allowlist (mis. getAllSheetNames).'
+  '15. Pertanyaan dengan kode SKU eksplisit (mis. CV-0030, PT-0012, WK-0004) wajib memprioritaskan getStockByCode; jangan gunakan searchByName/getAllStock sebagai pengganti kecuali exact-code action gagal dan fallback memang diperlukan.',
+  '16. Untuk exact-code lookup, jawab singkat: kode + nama barang + stok akhir + satuan + entitas/divisi + waktu baca bila tersedia. Jangan menampilkan tool/action, parameter, placeholder, atau pengulangan.',
+  '17. Action yang hanya disebut/diusulkan oleh teks AI bukan berarti dijalankan. Hanya klaim data live jika ada hasil action sukses pada DATA LIVE. Jika gagal, beri satu kalimat ringkas yang menyatakan data belum terverifikasi dan kode error bila ada.',
+  '18. Jangan bertele-tele. Pertanyaan angka stok: jawaban 1–3 baris, langsung ke angka. Jelaskan detail hanya jika operator meminta.'
 ].join('\n');
 
 export function buildSystemPrompt(context, liveBlock) {
