@@ -97,3 +97,14 @@ body:has(.nav-bar) { padding-bottom: calc(var(--bottom-nav-height) + env(safe-ar
 @media (prefers-reduced-motion: reduce) {
   .nav-btn, .nav-fab, .nav-label, .nav-underline { transition: none; }
 }
+
+
+/* High-contrast navigation labels for dark theme palettes. */
+html[data-theme="deep_ocean"] .nav-bar .nav-btn .nav-label,
+html[data-theme="deep_ocean"] .nav-bar .nav-fab .nav-label { color:#CBD5E1 !important; opacity:1 !important; }
+html[data-theme="deep_ocean"] .nav-bar .nav-btn.is-active .nav-label,
+html[data-theme="deep_ocean"] .nav-bar .nav-fab .nav-label { color:#67E8F9 !important; }
+html[data-theme="graphite_titanium"] .nav-bar .nav-btn .nav-label,
+html[data-theme="graphite_titanium"] .nav-bar .nav-fab .nav-label { color:#D1D5DB !important; opacity:1 !important; }
+html[data-theme="graphite_titanium"] .nav-bar .nav-btn.is-active .nav-label,
+html[data-theme="graphite_titanium"] .nav-bar .nav-fab .nav-label { color:#FCD34D !important; }
