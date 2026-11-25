@@ -752,7 +752,7 @@ test('PO endpoint fails closed for missing success envelope, failed source, and 
 
 
 test('manifest is rendered completely beyond live-data truncation budget', () => {
-  const sheets = Array.from({ length: 18 }, (_, i) => ({ name: \`Sheet \${i + 1}\` }));
+  const sheets = Array.from({ length: 18 }, (_, i) => ({ name: `Sheet ${i + 1}` }));
   const block = liveDataBlock({ results: [{
     action: 'getAgentKnowledge', ok: true, sourceReadAt: '2026-11-26T00:00:00.000Z',
     data: { mode: 'manifest', spreadsheetTitle: 'Test', sheetCount: 18, sheets },
@@ -764,7 +764,7 @@ test('manifest is rendered completely beyond live-data truncation budget', () =>
 
 test('sheet enumeration returns deterministic complete manifest without calling AI', async () => {
   const originalFetch = globalThis.fetch;
-  const sheetNames = Array.from({ length: 18 }, (_, i) => \`Sheet \${i + 1}\`);
+  const sheetNames = Array.from({ length: 18 }, (_, i) => `Sheet ${i + 1}`);
   let aiCalled = false;
   globalThis.fetch = async (url) => {
     if (String(url) === \`\${SUPABASE_URL}/auth/v1/user\`) return new Response(JSON.stringify({ id: 'manifest-user' }), { status: 200 });
@@ -788,9 +788,9 @@ test('sheet enumeration returns deterministic complete manifest without calling 
     assert.equal(payload.mode, 'deterministic');
     assert.equal(payload.model, 'deterministic-manifest');
     assert.equal(aiCalled, false);
-    assert.equal((payload.reply.match(/^\\d+\\. Sheet \\d+$/gm) || []).length, 18);
+    assert.equal((payload.reply.match(/^\d+\. Sheet \d+$/gm) || []).length, 18);
     assert.match(payload.reply, /total 18 tab/);
-    assert.match(payload.reply, /sourceReadAt: 2026-11-26T00:00:00\\.000Z/);
+    assert.match(payload.reply, /sourceReadAt: 2026-11-26T00:00:00\.000Z/);
   } finally { globalThis.fetch = originalFetch; }
 });
 
