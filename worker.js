@@ -6,6 +6,9 @@ const MAX_MESSAGE_LENGTH = 4000;
 const MAX_HISTORY_ITEMS = 8;
 const LIVE_DATA_CHAR_BUDGET = 3500;
 const MAX_LIVE_ACTIONS = 2;
+const STOCK_ENTITY_BY_PREFIX = Object.freeze({
+  CV:'CV', BBCV:'CV', PT:'PT', WK:'PT', MM:'PT', BBPT:'PT',
+});
 const READ_ONLY_ACTIONS = new Set([
   'ping','status','getConfig','getDashboard','getDashboardData',
   'getAllStock','getStockAll','getStockByCode','searchByName',
@@ -108,16 +111,42 @@ function resolvePORequestPeriod(url, now = new Date()) {
 async function handleStatusPO(request, env, origin, url) {
   const auth = await verifySupabaseAccessToken(request, env);
   if (!auth.ok) return json({ success:false, code:auth.code, error:auth.error }, auth.status, origin);
+
   const period = resolvePORequestPeriod(url);
   if (period.error) return json({ success:false, code:'INVALID_PO_PERIOD', error:period.error }, 400, origin);
+
   const raw = await callSheetsRead(env, 'getStatusPO');
-  if (raw?.success === false) {
-    return json({ ...raw, actor:auth.userId, permissions:'read_only' }, 502, origin);
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw) || raw.success !== true) {
+    return json({
+      success:false,
+      code:raw?.code || 'LIVE_DATA_UNVERIFIED',
+      error:raw?.error || 'Respons sumber Status PO tidak memiliki success=true.',
+      actor:auth.userId,
+      permissions:'read_only',
+    }, 502, origin);
   }
+  if (!Array.isArray(raw.items)) {
+    return json({
+      success:false,
+      code:'PO_SCHEMA_INVALID',
+      error:'Respons Status PO tidak memiliki daftar items yang valid.',
+      actor:auth.userId,
+      permissions:'read_only',
+    }, 502, origin);
+  }
+
   const data = buildPOPeriodResponse(raw, period);
-  if (data?.success === false) return json(data, 502, origin);
+  if (!data || data.success !== true || !Array.isArray(data.items)) {
+    return json({
+      success:false,
+      code:'PO_SCHEMA_INVALID',
+      error:'Hasil pemrosesan Status PO tidak valid.',
+      actor:auth.userId,
+      permissions:'read_only',
+    }, 502, origin);
+  }
   if (url.pathname === '/api/getPOTerlambat') {
-    const active = [...(data.items || []), ...(data.tertunda?.items || [])];
+    const active = [...data.items, ...(data.tertunda?.items || [])];
     const terlambat = active.filter((item) => item.terlambat);
     return json({
       success:true, status:'OK', tanggalHariIniWIB:parseTanggal(new Date()),
@@ -148,9 +177,9 @@ async function handleSyncAll(request, env, origin) {
   const results = await Promise.all(actions.map(async ({ key, action, params }) => {
     try {
       const raw = await callSheetsRead(env, action, params);
-      const ok = raw?.success !== false;
-      const { source, action: _action, readAt: _readAt, ...data } = raw || {};
-      return { key, ok, data:ok ? data : null, error:ok ? null : raw?.error, code:ok ? null : raw?.code };
+      const ok = raw?.success === true;
+      const { source, action: _action, gatewayReceivedAt: _gatewayReceivedAt, sourceReadAt: _sourceReadAt, ...data } = raw || {};
+      return { key, ok, data:ok ? data : null, error:ok ? null : raw?.error, code:ok ? null : (raw?.code || 'LIVE_DATA_UNVERIFIED') };
     } catch (error) {
       return { key, ok:false, data:null, error:String(error?.message || error), code:'SYNC_FETCH_FAILED' };
     }
@@ -203,7 +232,7 @@ async function callSheetsRead(env, action, params = {}) {
     const text = await response.text();
     let payload; try { payload = JSON.parse(text); } catch { return { success:false, code:'SHEETS_NON_JSON', error:'Respons bukan JSON.' }; }
     if (!response.ok) return { success:false, code:'SHEETS_HTTP_ERROR', error:`Apps Script HTTP ${response.status}`, detail:payload };
-    return { ...payload, source:'Apps Script read-only gateway', action, readAt:new Date().toISOString() };
+    return { ...payload, source:'Apps Script read-only gateway', action, gatewayReceivedAt:new Date().toISOString() };
   } catch (error) {
     return { success:false, code:'SHEETS_READ_FAILED', error: error?.name==='AbortError' ? 'Timeout spreadsheet.' : String(error?.message||error) };
   } finally { clearTimeout(timer); }
@@ -222,8 +251,59 @@ function json(data, status=200, origin='') {
   }
   return new Response(JSON.stringify(data), { status, headers });
 }
+function resolveStockEntity(code) {
+  const prefix = String(code || '').split('-')[0].toUpperCase();
+  return STOCK_ENTITY_BY_PREFIX[prefix] || '';
+}
+function extractExactStockCode(message) {
+  const match = String(message || '').match(/\b((?:BB(?:CV|PT)?|CV|PT|WK|MM)\s*-\s*\d{3,4})\b/i);
+  return match ? match[1].replace(/\s+/g, '').toUpperCase() : '';
+}
+function resolveTransactionSheet(message) {
+  const text = String(message || '').toLowerCase();
+  const found = [];
+  if (/\bbarang\s+masuk\b/.test(text)) found.push('Barang masuk');
+  if (/\bbarang\s+keluar\b/.test(text)) found.push('Barang keluar');
+  if (/\bbarang\s+rusak(?:\s*\/\s*lo)?\b/.test(text)) found.push('Barang Rusak');
+  return found.length === 1 ? found[0] : '';
+}
+function validateLivePayload(action, raw, expected = {}) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw) || raw.success !== true) {
+    return { ok:false, code:raw?.code || 'LIVE_DATA_UNVERIFIED', error:raw?.error || 'Respons sumber tidak memiliki success=true.' };
+  }
+  if (action === 'getStockByCode') {
+    const code = String(raw.kode || raw.kodeBarang || '').replace(/\s+/g,'').toUpperCase();
+    const entity = String(raw.entitas || '').trim().toUpperCase();
+    if (!expected.exactCode || code !== expected.exactCode) return { ok:false, code:'SKU_IDENTITY_MISMATCH', error:'Kode sumber tidak sama dengan kode yang diminta.' };
+    if (expected.entity && entity !== expected.entity) return { ok:false, code:'SKU_ENTITY_MISMATCH', error:'Entitas sumber tidak sama dengan entitas kode yang diminta.' };
+    if (raw.stockAkhir == null || raw.stockAkhir === '' || !Number.isFinite(Number(raw.stockAkhir))) return { ok:false, code:'SKU_STOCK_VALUE_INVALID', error:'Saldo stok sumber tidak tersedia atau bukan angka yang valid.' };
+  }
+  if (action === 'getTransactionHistory') {
+    if (raw.sheet !== expected.transactionSheet) return { ok:false, code:'TRANSACTION_SOURCE_MISMATCH', error:'Nama sheet pada hasil tidak sama dengan sheet yang diminta.' };
+    if (!Array.isArray(raw.data) || !Number.isInteger(Number(raw.count)) || Number(raw.count) !== raw.data.length) return { ok:false, code:'TRANSACTION_SCHEMA_INVALID', error:'Struktur riwayat transaksi tidak valid.' };
+  }
+  if (action === 'getAgentKnowledge') {
+    if (raw.mode !== 'manifest' || !String(raw.spreadsheetTitle || '').trim() || !Array.isArray(raw.sheets) ||
+        !Number.isInteger(Number(raw.sheetCount)) || Number(raw.sheetCount) !== raw.sheets.length ||
+        !raw.sourceReadAt || !Number.isFinite(Date.parse(raw.sourceReadAt))) {
+      return { ok:false, code:'MANIFEST_SCHEMA_INVALID', error:'Manifest spreadsheet tidak lengkap atau tidak valid.' };
+    }
+    const names = raw.sheets.map((item) => String(item?.name || '').trim());
+    if (names.some((name) => !name) || new Set(names).size !== names.length) return { ok:false, code:'MANIFEST_NAMES_INVALID', error:'Nama tab kosong atau duplikat pada manifest.' };
+  }
+  if (action === 'getAllStock' || action === 'getLowStock') {
+    if (!Array.isArray(raw.items) || !Number.isInteger(Number(raw.count)) || Number(raw.count) !== raw.items.length) {
+      return { ok:false, code:'STOCK_SCHEMA_INVALID', error:'Struktur daftar stok tidak valid.' };
+    }
+  }
+  if (!raw.sourceReadAt || !Number.isFinite(Date.parse(raw.sourceReadAt))) {
+    return { ok:false, code:'SOURCE_TIMESTAMP_MISSING', error:'Sumber tidak memberikan waktu baca yang dapat diverifikasi.' };
+  }
+  return { ok:true };
+}
 export function detectLiveActions(message) {
   const text = String(message||'');
+  if (extractExactStockCode(text)) return ['getStockByCode'];
   const matched = [];
   for (const intent of LIVE_INTENTS) {
     if (intent.pattern.test(text) && READ_ONLY_ACTIONS.has(intent.action)) matched.push(intent.action);
@@ -236,21 +316,45 @@ function extractStockQuery(message) {
   return String(message||'').replace(stop,' ').replace(/[^\w\s\-./]/gu,' ').replace(/\s+/g,' ').trim().slice(0,80);
 }
 async function gatherLiveData(env, message) {
-  const actions = detectLiveActions(message).slice();
-  if (!actions.length && /\b(stok|stock|sisa|fillet|barang)\b/i.test(String(message||''))) actions.push('getAllStock');
-  const query = extractStockQuery(message);
+  const text = String(message || '');
+  const exactCode = extractExactStockCode(text);
+  const actions = detectLiveActions(text).slice();
+  if (!actions.length && !exactCode && /\b(stok|stock|sisa|fillet|barang)\b/i.test(text)) actions.push('getAllStock');
+  const query = exactCode ? '' : extractStockQuery(text);
+  const transactionSheet = resolveTransactionSheet(text);
   const results = await Promise.all(actions.map(async (action) => {
     const params = {};
+    const expectedEntity = action === 'getStockByCode' ? resolveStockEntity(exactCode) : '';
+    if (action === 'getStockByCode') {
+      if (!exactCode) return { action, ok:false, code:'EXACT_CODE_REQUIRED', error:'Kode barang exact tidak berhasil diekstrak; tidak dilakukan pencarian perkiraan.' };
+      if (!expectedEntity) return { action, ok:false, code:'UNSUPPORTED_STOCK_PREFIX', error:'Prefix kode barang tidak termasuk keluarga kode CV/PT yang didukung; tidak dilakukan pencarian perkiraan.' };
+      params.kode = exactCode;
+      params.kodeBarang = exactCode;
+      params.entitas = expectedEntity;
+    }
     if (action === 'searchByName' && query) { params.q=query; params.query=query; params.nama=query; params.name=query; }
     if (action === 'getAllStock') params.entitas = 'ALL';
     if (action === 'getStockoutRisk') { params.windowDays = 30; params.thresholdDays = 3; }
     if (action === 'getStockDelta') params.sinceTimestamp = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     if (action === 'getAgentKnowledge') params.mode = 'manifest';
-    if (action === 'getTransactionHistory') { params.sheet = 'Barang keluar'; params.limit = 100; }
+    if (action === 'getTransactionHistory') {
+      if (!transactionSheet) return { action, ok:false, code:'TRANSACTION_TYPE_REQUIRED', error:'Jenis transaksi belum jelas. Tentukan Barang masuk, Barang keluar, atau Barang Rusak/LO.' };
+      params.sheet = transactionSheet;
+      params.limit = 100;
+    }
     const raw = await callSheetsRead(env, action, params);
-    const ok = raw?.success !== false;
-    const { source, action: _a, readAt, ...data } = raw || {};
-    return { action, ok, code: ok?undefined:raw?.code, error: ok?undefined:raw?.error, source: source||'Apps Script read-only gateway', readAt: readAt||new Date().toISOString(), data: ok?data:undefined, query: query||undefined };
+    const validation = validateLivePayload(action, raw, { exactCode, entity:expectedEntity, transactionSheet });
+    const ok = validation.ok;
+    const { source, action: _a, gatewayReceivedAt, sourceReadAt, ...data } = raw || {};
+    return {
+      action, ok, code: ok?undefined:validation.code,
+      error: ok?undefined:validation.error,
+      source: source||'Apps Script read-only gateway',
+      sourceReadAt: sourceReadAt || null,
+      gatewayReceivedAt: gatewayReceivedAt || null,
+      data: ok?data:undefined,
+      query: query||undefined,
+    };
   }));
   return { results };
 }
@@ -258,7 +362,7 @@ function truncate(text, limit) { return text.length > limit ? `${text.slice(0,li
 export function liveDataBlock(live) {
   if (!live?.results?.length) return 'DATA LIVE: tidak ada untuk pertanyaan ini. Jawab hanya dari konteks operator dan jangan mengklaim membaca spreadsheet.';
   const parts = live.results.map((item) => item.ok
-    ? `[${item.action} | dibaca ${item.readAt} | ${item.source}]\n${truncate(JSON.stringify(item.data), LIVE_DATA_CHAR_BUDGET)}`
+    ? `[${item.action} | waktu baca sumber: ${item.sourceReadAt || 'tidak diberikan sumber'} | diterima gateway: ${item.gatewayReceivedAt || 'tidak tercatat'} | ${item.source}]\n${truncate(JSON.stringify(item.data), LIVE_DATA_CHAR_BUDGET)}`
     : `[${item.action} | GAGAL ${item.code||'UNKNOWN'}] Data belum terkonfirmasi: ${item.error||'-'}`);
   return `DATA LIVE (read-only):\n${parts.join('\n\n')}`;
 }
@@ -329,7 +433,7 @@ async function handleAgent(request, env, origin) {
   const history = normalizeHistory(body?.history, message);
   const live = await gatherLiveData(env, message);
   const system = systemPrompt(context, liveDataBlock(live));
-  const dataSources = live.results.map(({action,ok,readAt,code})=>({action,ok,readAt,...(code?{code}:{})}));
+  const dataSources = live.results.map(({action,ok,sourceReadAt,gatewayReceivedAt,code})=>({action,ok,sourceReadAt,gatewayReceivedAt,...(code?{code}:{})}));
   const messages = [{ role:'system', content:system }, ...history, { role:'user', content:message }];
   try {
     if (env.NINE_ROUTER_API_KEY && env.NINE_ROUTER_MODEL) {
@@ -359,7 +463,7 @@ async function handleReadOnlyData(request, env, origin) {
   if (!READ_ONLY_ACTIONS.has(action)) return json({ success:false, code:'READ_ACTION_NOT_ALLOWED', error:'Action tidak diizinkan.' }, 400, origin);
   const params = { ...body }; delete params.action; delete params.secret; delete params.authorization;
   const result = await callSheetsRead(env, action, params);
-  return json({ ...result, actor:auth.userId, permissions:'read_only' }, result.success===false ? 502 : 200, origin);
+  return json({ ...result, actor:auth.userId, permissions:'read_only' }, result.success===true ? 200 : 502, origin);
 }
 export default {
   async fetch(request, env) {

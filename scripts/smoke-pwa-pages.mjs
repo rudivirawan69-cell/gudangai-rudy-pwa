@@ -208,8 +208,12 @@ try {
   await page.locator('nav.nav-bar').waitFor({ state: 'visible', timeout: 15000 });
 
   const openMorePage = async (label, marker) => {
-    await page.locator('nav.nav-bar button').filter({ hasText: 'Lainnya' }).first().click();
     const sheet = page.locator('.more-sheet');
+    // The previous visual scenario may intentionally leave the More menu open.
+    // Do not click the underlying nav button while the backdrop intercepts it.
+    if (!(await sheet.isVisible().catch(() => false))) {
+      await page.locator('nav.nav-bar button').filter({ hasText: 'Lainnya' }).first().click();
+    }
     await sheet.waitFor({ state: 'visible', timeout: 5000 });
     await sheet.locator('button').filter({ hasText: label }).first().click();
     await page.getByText(marker, { exact: false }).first().waitFor({ state: 'visible', timeout: 10000 });

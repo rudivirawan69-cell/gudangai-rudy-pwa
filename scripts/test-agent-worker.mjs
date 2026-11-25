@@ -244,7 +244,19 @@ async function runLive(message, { env = liveEnv, sheetsResponse } = {}) {
     if (String(url) === `${SUPABASE_URL}/auth/v1/user`) return new Response(JSON.stringify({ id: 'u1' }), { status: 200 });
     if (String(url) === SHEETS_URL) {
       const body = JSON.parse(options.body); sheetCalls.push(body);
-      return sheetsResponse ? sheetsResponse(body) : new Response(JSON.stringify({ success: true, rows: [{ kode: 'X-1', qty: 3 }] }), { status: 200 });
+      const defaultPayload = {
+        success:true,
+        sourceReadAt:'2026-11-25T10:00:00.000Z',
+        count:0,
+        items:[],
+        sheet:body.sheet || 'Barang keluar',
+        data:[],
+        mode:'manifest',
+        spreadsheetTitle:'Test Spreadsheet',
+        sheetCount:0,
+        sheets:[],
+      };
+      return sheetsResponse ? sheetsResponse(body) : new Response(JSON.stringify(defaultPayload), { status:200 });
     }
     throw new Error(`unexpected fetch ${url}`);
   };
@@ -273,6 +285,8 @@ test('detectLiveActions maps read-only intents without parameters and caps at tw
   assert.deepEqual(detectLiveActions('status PO dan riwayat barang masuk'), ['getStatusPO', 'getTransactionHistory']);
   assert.deepEqual(detectLiveActions('prediksi stok habis dalam tiga hari'), ['getStockoutRisk', 'getLowStock']);
   assert.deepEqual(detectLiveActions('buatkan SOP cold storage'), []);
+  assert.deepEqual(detectLiveActions('Ada berapa tab spreadsheets utama?'), ['getAgentKnowledge']);
+  assert.deepEqual(detectLiveActions('Apa saja skill yang kamu kuasai?'), []);
 });
 
 test('data questions trigger live read-only read and include provenance', async () => {
@@ -280,12 +294,19 @@ test('data questions trigger live read-only read and include provenance', async 
   assert.equal(response.status, 200); assert.equal(sheetCalls.length, 1);
   assert.equal(sheetCalls[0].action, 'getDashboardData'); assert.equal(sheetCalls[0].client.mode, 'read_only');
   assert.equal(payload.dataSources[0].action, 'getDashboardData'); assert.equal(payload.dataSources[0].ok, true);
-  assert.ok(payload.dataSources[0].readAt); assert.match(systemText, /DATA LIVE \(read-only\)/);
+  assert.ok(payload.dataSources[0].gatewayReceivedAt);
+  assert.equal(payload.dataSources[0].sourceReadAt, '2026-11-25T10:00:00.000Z'); assert.match(systemText, /DATA LIVE \(read-only\)/);
   assert.match(systemText, /Pisahkan entitas CV dan PT/);
 });
 
 test('spreadsheet structure questions route to getAgentKnowledge manifest through read-only gateway', async () => {
-  const { response, sheetCalls, payload, systemText } = await runLive('Tolong tampilkan daftar tab dan struktur sheet spreadsheet');
+  const { response, sheetCalls, payload, systemText } = await runLive('Tolong tampilkan daftar tab dan struktur sheet spreadsheet', {
+    sheetsResponse: () => new Response(JSON.stringify({
+      success:true, mode:'manifest', spreadsheetTitle:'Test Spreadsheet',
+      sheetCount:2, sheets:[{ name:'Stock CV' },{ name:'Barang masuk' }],
+      sourceReadAt:'2026-11-25T10:00:00.000Z',
+    }), { status:200 }),
+  });
   assert.equal(response.status, 200);
   assert.equal(sheetCalls.length, 1);
   assert.equal(sheetCalls[0].action, 'getAgentKnowledge');
@@ -293,8 +314,156 @@ test('spreadsheet structure questions route to getAgentKnowledge manifest throug
   assert.equal(sheetCalls[0].client.mode, 'read_only');
   assert.equal(payload.dataSources[0].action, 'getAgentKnowledge');
   assert.equal(payload.dataSources[0].ok, true);
+  assert.equal(payload.dataSources[0].sourceReadAt, '2026-11-25T10:00:00.000Z');
   assert.match(systemText, /getAgentKnowledge/);
   assert.match(systemText, /manifest/);
+});
+
+test('exact SKU lookup has priority and preserves normalized code and entity', async () => {
+  const { response, sheetCalls, payload } = await runLive('Berapa stock kode CV - 0030', {
+    sheetsResponse: (body) => new Response(JSON.stringify({ success:true, sourceReadAt:'2026-11-25T10:00:00.000Z', kode:body.kode, entitas:body.entitas, stockAkhir:12 }), { status:200 }),
+  });
+  assert.equal(response.status, 200);
+  assert.equal(sheetCalls.length, 1);
+  assert.equal(sheetCalls[0].action, 'getStockByCode');
+  assert.equal(sheetCalls[0].kode, 'CV-0030');
+  assert.equal(sheetCalls[0].kodeBarang, 'CV-0030');
+  assert.equal(sheetCalls[0].entitas, 'CV');
+  assert.equal(payload.dataSources[0].ok, true);
+});
+
+
+test('exact SKU routing maps every supported prefix to its canonical entity', async () => {
+  const cases = [
+    ['CV-0030', 'CV'], ['BBCV-0030', 'CV'],
+    ['PT-0001', 'PT'], ['WK-0004', 'PT'], ['MM-0001', 'PT'], ['BBPT-0001', 'PT'],
+  ];
+  for (const [code, entity] of cases) {
+    const { sheetCalls, payload } = await runLive(`Berapa stok kode ${code}`, {
+      sheetsResponse: (body) => new Response(JSON.stringify({
+        success:true, kode:body.kode, entitas:body.entitas, stockAkhir:1,
+        sourceReadAt:'2026-11-25T10:00:00.000Z',
+      }), { status:200 }),
+    });
+    assert.equal(sheetCalls.length, 1, `Expected one exact lookup for ${code}`);
+    assert.equal(sheetCalls[0].action, 'getStockByCode');
+    assert.equal(sheetCalls[0].kode, code);
+    assert.equal(sheetCalls[0].entitas, entity);
+    assert.equal(payload.dataSources[0].ok, true);
+  }
+});
+
+test('unsupported bare BB prefix is rejected without fuzzy or server lookup', async () => {
+  const { sheetCalls, payload, systemText } = await runLive('Berapa stok kode BB-0001');
+  assert.equal(sheetCalls.length, 0);
+  assert.equal(payload.dataSources[0].ok, false);
+  assert.equal(payload.dataSources[0].code, 'UNSUPPORTED_STOCK_PREFIX');
+  assert.match(systemText, /Prefix kode barang tidak termasuk keluarga kode CV\/PT/);
+});
+
+test('Barang Masuk history request selects and validates the exact source sheet', async () => {
+  const { sheetCalls, payload } = await runLive('Jelaskan detail baris terakhir Barang Masuk', {
+    sheetsResponse: (body) => new Response(JSON.stringify({
+      success:true, sheet:body.sheet, count:1, data:[{ row:12, kode:'CV-0083', qty:1 }],
+      sourceReadAt:'2026-11-25T10:01:00.000Z',
+    }), { status:200 }),
+  });
+  assert.equal(sheetCalls.length, 1);
+  assert.equal(sheetCalls[0].action, 'getTransactionHistory');
+  assert.equal(sheetCalls[0].sheet, 'Barang masuk');
+  assert.equal(payload.dataSources[0].ok, true);
+  assert.equal(payload.dataSources[0].sourceReadAt, '2026-11-25T10:01:00.000Z');
+});
+
+test('transaction history rejects a response from the wrong sheet', async () => {
+  const { payload, systemText } = await runLive('Jelaskan detail baris terakhir Barang Masuk', {
+    sheetsResponse: () => new Response(JSON.stringify({
+      success:true, sheet:'Barang keluar', count:1, data:[{ kode:'PT-0001', qty:50 }],
+    }), { status:200 }),
+  });
+  assert.equal(payload.dataSources[0].ok, false);
+  assert.equal(payload.dataSources[0].code, 'TRANSACTION_SOURCE_MISMATCH');
+  assert.doesNotMatch(systemText, /PT-0001/);
+});
+
+test('exact SKU lookup rejects a mismatched returned entity', async () => {
+  const { payload, systemText } = await runLive('Berapa stok PT-0001', {
+    sheetsResponse: () => new Response(JSON.stringify({ success:true, sourceReadAt:'2026-11-25T10:00:00.000Z', kode:'PT-0001', entitas:'CV', stockAkhir:88 }), { status:200 }),
+  });
+  assert.equal(payload.dataSources[0].ok, false);
+  assert.equal(payload.dataSources[0].code, 'SKU_ENTITY_MISMATCH');
+  assert.doesNotMatch(systemText, /stockAkhir.*88/);
+});
+
+test('ambiguous transaction history does not guess a sheet', async () => {
+  const { sheetCalls, payload, systemText } = await runLive('Bandingkan riwayat Barang Masuk dan Barang Keluar');
+  assert.equal(sheetCalls.length, 0);
+  assert.equal(payload.dataSources[0].ok, false);
+  assert.equal(payload.dataSources[0].code, 'TRANSACTION_TYPE_REQUIRED');
+  assert.match(systemText, /Jenis transaksi belum jelas/);
+});
+
+test('malformed success envelope is fail-closed and never presented as live data', async () => {
+  const { payload, systemText } = await runLive('Tampilkan daftar stok', {
+    sheetsResponse: () => new Response(JSON.stringify({ rows:[{ kode:'CV-0030', stockAkhir:999 }] }), { status:200 }),
+  });
+  assert.equal(payload.dataSources[0].ok, false);
+  assert.equal(payload.dataSources[0].code, 'LIVE_DATA_UNVERIFIED');
+  assert.match(systemText, /Respons sumber tidak memiliki success=true/);
+  assert.doesNotMatch(systemText, /999/);
+});
+
+test('Apps Script manifest action exists and returns dynamic sheet metadata', () => {
+  const routeStart = codeGs.indexOf('function doPost(e)');
+  const routeEnd = codeGs.indexOf('function doGet(e)');
+  const handlerStart = codeGs.indexOf('function getAgentKnowledge(params)');
+  const handlerEnd = codeGs.indexOf('function setupConfigSheet()', handlerStart);
+  assert.ok(routeStart >= 0 && routeEnd > routeStart);
+  assert.ok(handlerStart >= 0 && handlerEnd > handlerStart);
+  assert.match(codeGs.slice(routeStart, routeEnd), /case "getAgentKnowledge": return jsonResponse\(getAgentKnowledge\(body\)\)/);
+  const handler = codeGs.slice(handlerStart, handlerEnd);
+  assert.match(handler, /getSheets\(\)/);
+  assert.match(handler, /sheetCount:sheets.length/);
+  assert.match(handler, /sourceReadAt:new Date\(\)\.toISOString\(\)/);
+  assert.doesNotMatch(handler, /insertSheet\(|setValue\(|setValues\(/);
+});
+
+test('Apps Script read dispatcher stamps sourceReadAt without changing action payload shape', () => {
+  const helperStart = codeGs.indexOf('function withSourceReadAt_(result)');
+  const helperEnd = codeGs.indexOf('function doPost(e)', helperStart);
+  const routeStart = helperEnd;
+  const routeEnd = codeGs.indexOf('function doGet(e)', routeStart);
+  assert.ok(helperStart >= 0 && helperEnd > helperStart && routeEnd > routeStart);
+  assert.match(codeGs.slice(helperStart, helperEnd), /sourceReadAt/);
+  assert.ok(codeGs.slice(routeStart, routeEnd).includes('withSourceReadAt_(getStockByCode('));
+  assert.ok(codeGs.slice(routeStart, routeEnd).includes('withSourceReadAt_(getSyncMetrics())'));
+});
+
+test('Apps Script transaction history returns requested sheet identity and source timestamp', () => {
+  const start = codeGs.indexOf('function getTransactionHistory(params)');
+  const end = codeGs.indexOf('function searchByName(', start);
+  assert.ok(start >= 0 && end > start);
+  const handler = codeGs.slice(start, end);
+  assert.match(handler, /sheet:sheetName/);
+  assert.ok(handler.includes('sourceReadAt:new Date().toISOString()'));
+  assert.match(handler, /count: result.length, data: result/);
+});
+
+test('Rubee capability policy forbids unsupported claims of full mastery', () => {
+  const prompt = buildSystemPrompt({}, '');
+  assert.match(prompt, /Jangan pernah mengklaim seluruh skill sudah dikuasai sepenuhnya/);
+  assert.match(prompt, /Setiap angka operasional harus berasal dari field angka pada payload live tervalidasi/);
+  assert.match(prompt, /sourceReadAt jika sumber memberikannya/);
+});
+
+test('getConfig read-only handler never creates missing Config tab', () => {
+  const start = codeGs.indexOf('function getConfigReadOnly_()');
+  const end = codeGs.indexOf('function getAgentKnowledge(params)', start);
+  assert.ok(start >= 0 && end > start);
+  const handler = codeGs.slice(start, end);
+  assert.match(handler, /getSheetByName\(CONFIG_SHEET_NAME\)/);
+  assert.match(handler, /CONFIG_SHEET_NOT_FOUND/);
+  assert.doesNotMatch(handler, /insertSheet\(|setValue\(|setValues\(/);
 });
 
 test('three-day stockout questions request the dedicated 30-day read-only forecast', async () => {
@@ -312,7 +481,7 @@ test('Apps Script forecast is routed by POST and declares read-only output', () 
   const forecastStart = codeGs.indexOf('function getStockoutRisk(params)');
   const forecastEnd = codeGs.indexOf('function getTransactionHistory(params)');
   assert.ok(routeStart >= 0 && routeEnd > routeStart && forecastStart >= 0 && forecastEnd > forecastStart);
-  assert.match(codeGs.slice(routeStart, routeEnd), /case "getStockoutRisk": return jsonResponse\(getStockoutRisk\(body\)\)/);
+  assert.ok(codeGs.slice(routeStart, routeEnd).includes('case "getStockoutRisk": return jsonResponse(withSourceReadAt_(getStockoutRisk(body)))'));
   const forecast = codeGs.slice(forecastStart, forecastEnd);
   assert.match(forecast, /readOnly: true/);
   assert.match(forecast, /Barang keluar/);
@@ -490,4 +659,31 @@ test('PO endpoints reject incomplete date ranges after authentication', async ()
     assert.equal(response.status, 400);
     assert.equal((await response.json()).code, 'INVALID_PO_PERIOD');
   });
+});
+
+test('PO endpoint fails closed for missing success envelope, failed source, and malformed items', async () => {
+  const originalFetch = globalThis.fetch;
+  const invalidPayloads = [
+    { payload: { items: [] }, expected: 'LIVE_DATA_UNVERIFIED' },
+    { payload: { success: false, error: 'source failed' }, expected: 'LIVE_DATA_UNVERIFIED' },
+    { payload: { success: true }, expected: 'PO_SCHEMA_INVALID' },
+  ];
+  try {
+    for (const fixture of invalidPayloads) {
+      globalThis.fetch = async (url) => {
+        if (String(url) === `${SUPABASE_URL}/auth/v1/user`) {
+          return new Response(JSON.stringify({ id: 'po-user' }), { status: 200 });
+        }
+        return new Response(JSON.stringify(fixture.payload), {
+          status: 200, headers: { 'content-type': 'application/json' },
+        });
+      };
+      const response = await worker.fetch(makeRequest('/api/getStatusPO?periode=minggu-ini'), liveEnv);
+      const payload = await response.json();
+      assert.equal(response.status, 502);
+      assert.equal(payload.success, false);
+      assert.equal(payload.code, fixture.expected);
+      assert.equal(payload.permissions, 'read_only');
+    }
+  } finally { globalThis.fetch = originalFetch; }
 });

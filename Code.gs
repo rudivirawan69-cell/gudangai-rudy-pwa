@@ -196,6 +196,45 @@ function readConfig_() {
   return config;
 }
 
+// Pure read endpoint: never creates or formats the Config sheet.
+function getConfigReadOnly_() {
+  const sheet = getSS().getSheetByName(CONFIG_SHEET_NAME);
+  if (!sheet) return { success:false, code:"CONFIG_SHEET_NOT_FOUND", error:"Tab Config tidak ditemukan; endpoint read-only tidak akan membuat tab." };
+  const config = {};
+  const lastRow = sheet.getLastRow();
+  if (lastRow >= 4) {
+    sheet.getRange(4, 1, lastRow - 3, 2).getValues().forEach(function(row) {
+      const key = String(row[0] || "").trim();
+      if (key) config[key] = row[1];
+    });
+  }
+  const inferred = getActiveMonthFromName_();
+  const activeMonth = inferred.nama !== "UNKNOWN" ? inferred : parseActivePeriod_(config.PERIODE_AKTIF);
+  return { success:true, config:config, activeMonth:activeMonth, title:APP_TITLE };
+}
+
+// Read-only spreadsheet manifest generated from the actual spreadsheet at request time.
+function getAgentKnowledge(params) {
+  const ss = getSS();
+  const sheets = ss.getSheets().map(function(sheet, index) {
+    return {
+      name: sheet.getName(),
+      index: index + 1,
+      lastRow: sheet.getLastRow(),
+      lastColumn: sheet.getLastColumn(),
+      hidden: sheet.isSheetHidden()
+    };
+  });
+  return {
+    success:true,
+    mode:"manifest",
+    spreadsheetTitle:ss.getName(),
+    sheetCount:sheets.length,
+    sheets:sheets,
+    sourceReadAt:new Date().toISOString()
+  };
+}
+
 function setupConfigSheet() {
   const sheet = getConfigSheet_();
   const existing = readConfig_();
@@ -353,6 +392,12 @@ function jsonResponse(obj) {
 // ============================================================
 // 3. ENTRY POINT: doPost / doGet
 // ============================================================
+function withSourceReadAt_(result) {
+  if (!result || typeof result !== "object" || Array.isArray(result) || result.success !== true) return result;
+  if (!result.sourceReadAt) result.sourceReadAt = new Date().toISOString();
+  return result;
+}
+
 function doPost(e) {
   const t0 = Date.now();
   try {
@@ -380,22 +425,22 @@ function doPost(e) {
       case "syncBatch":
       case "bulkSync": return jsonResponse(bulkTransaction(Object.assign({}, body, { _syncMode: true })));
       case "getTransactionStatus": return jsonResponse(getTransactionStatus(body));
-      case "bootstrap": return jsonResponse(getPwaBootstrap(body));
+      case "bootstrap": return jsonResponse(withSourceReadAt_(getPwaBootstrap(body)));
       case "addTransaction": return jsonResponse(addTransaction(body));
       case "addTransactionBatch": return jsonResponse(bulkTransaction(Object.assign({}, body, { transactions: body.transactions || body.items || body.rows })));
       case "bulkTransaction": return jsonResponse(bulkTransaction(body));
       case "reconcileBatch": return jsonResponse(reconcileBatch_(body));
       case "getStock":
-      case "getStockByCode": return jsonResponse(getStockByCode(body.kode || body.kodeBarang, body.entitas));
+      case "getStockByCode": return jsonResponse(withSourceReadAt_(getStockByCode(body.kode || body.kodeBarang, body.entitas)));
       case "getAllStock":
-      case "getStockAll": return jsonResponse(getAllStock(body.entitas || body.entity || "ALL"));
-      case "getLowStock": return jsonResponse(getLowStock());
-      case "getStockoutRisk": return jsonResponse(getStockoutRisk(body));
-      case "getLastUpdate": return jsonResponse({ success: true, timestamp: getLastUpdateTimestamp() });
-      case "getTransactionHistory": return jsonResponse(getTransactionHistory(body));
-      case "searchByName": return jsonResponse(searchByName(body.query || body.q || body.nama));
+      case "getStockAll": return jsonResponse(withSourceReadAt_(getAllStock(body.entitas || body.entity || "ALL")));
+      case "getLowStock": return jsonResponse(withSourceReadAt_(getLowStock()));
+      case "getStockoutRisk": return jsonResponse(withSourceReadAt_(getStockoutRisk(body)));
+      case "getLastUpdate": return jsonResponse(withSourceReadAt_({ success: true, timestamp: getLastUpdateTimestamp() }));
+      case "getTransactionHistory": return jsonResponse(withSourceReadAt_(getTransactionHistory(body)));
+      case "searchByName": return jsonResponse(withSourceReadAt_(searchByName(body.query || body.q || body.nama)));
       case "getDashboard":
-      case "getDashboardData": return jsonResponse(getDashboardData());
+      case "getDashboardData": return jsonResponse(withSourceReadAt_(getDashboardData()));
       case "getDashboardLegacy": return jsonResponse(getDashboard());
       case "refreshDashboard": return jsonResponse(refreshDashboard(body.force === true || body.force === "true"));
       case "syncDivision":
@@ -407,24 +452,25 @@ function doPost(e) {
       case "submitPO":
       case "sendPO": return jsonResponse(writePurchaseOrder_(body));
       case "runPOAnalysis":
-      case "getPOAnalysis": return jsonResponse(analyzePORecommendations_());
+      case "getPOAnalysis": return jsonResponse(withSourceReadAt_(analyzePORecommendations_()));
       case "logDailySnapshot": return jsonResponse(logDailySnapshot());
       case "clearMasterCache": return jsonResponse(clearMasterCache());
       case "maintenanceCleanup": return jsonResponse(maintenanceCleanup(true));
-      case "getConfig": return jsonResponse({ success: true, config: readConfig_(), activeMonth: getActiveMonth(), title: APP_TITLE });
+      case "getConfig": return jsonResponse(withSourceReadAt_(getConfigReadOnly_()));
+      case "getAgentKnowledge": return jsonResponse(getAgentKnowledge(body));
       case "diagnoseStockFormulas": return jsonResponse(diagnoseStockFormulaPatterns_());
       case "setupConfig": return jsonResponse(setupConfigSheet());
       case "setActivePeriod": return jsonResponse(setActivePeriod(body.period || body.periode || body.activePeriod));
       case "setupNewPeriod": return jsonResponse(setupNewPeriod(body.period || body.periode || body.activePeriod));
-      case "status": return jsonResponse({ success: true, status: "OK", version: BACKEND_VERSION, requestId: body.requestId, title: APP_TITLE, spreadsheet: getSS().getName(), activeMonth: getActiveMonth(), serverTime: new Date().toISOString() });
-      case "ping": return jsonResponse(getHealthStatus_(body));
-      case "healthCheck": return jsonResponse(getHealthStatus_(body));
-      case "getStockDelta": return jsonResponse(getStockDelta(body));
-      case "getStatusPO": return jsonResponse(getStatusPO(body));
+      case "status": return jsonResponse(withSourceReadAt_({ success: true, status: "OK", version: BACKEND_VERSION, requestId: body.requestId, title: APP_TITLE, spreadsheet: getSS().getName(), activeMonth: getActiveMonth(), serverTime: new Date().toISOString() }));
+      case "ping": return jsonResponse(withSourceReadAt_(getHealthStatus_(body)));
+      case "healthCheck": return jsonResponse(withSourceReadAt_(getHealthStatus_(body)));
+      case "getStockDelta": return jsonResponse(withSourceReadAt_(getStockDelta(body)));
+      case "getStatusPO": return jsonResponse(withSourceReadAt_(getStatusPO(body)));
       case "recordPOArrival": return jsonResponse(recordPOArrival(body));
       case "getPORequestStatus": return jsonResponse(getPORequestStatus(body));
       case "refreshDashboardPO": return jsonResponse(refreshDashboardPOSection_());
-      case "getSyncMetrics": return jsonResponse(getSyncMetrics());
+      case "getSyncMetrics": return jsonResponse(withSourceReadAt_(getSyncMetrics()));
       default: return jsonResponse({ success: false, error: "Action tidak dikenali: " + action });
     }
   } catch (err) {
@@ -2040,12 +2086,12 @@ function getStockoutRisk(params) {
 
 function getTransactionHistory(params) {
   const sheetName = params.sheet || "Barang keluar";
-  if (!(sheetName in SHEET_CONFIG)) return { success: false, error: "Sheet tidak valid" };
+  if (!(sheetName in SHEET_CONFIG)) return { success: false, code:"INVALID_TRANSACTION_SHEET", error: "Sheet tidak valid" };
   const config = SHEET_CONFIG[sheetName];
   const sheet = getSS().getSheetByName(sheetName);
-  if (!sheet) return { success: false, error: "Sheet tidak ditemukan" };
+  if (!sheet) return { success: false, code:"TRANSACTION_SHEET_NOT_FOUND", error: "Sheet tidak ditemukan" };
   const last = getRealLastDataRow(sheet, config);
-  if (last < config.headerRow + 1) return { success: true, count: 0, data: [] };
+  if (last < config.headerRow + 1) return { success: true, sheet:sheetName, count: 0, data: [], sourceReadAt:new Date().toISOString() };
   const numRows = last - config.headerRow;
   const data = sheet.getRange(config.headerRow + 1, 1, numRows, sheet.getLastColumn()).getValues();
   const limit = params.limit ? Math.min(Number(params.limit), data.length) : data.length;
@@ -2055,7 +2101,7 @@ function getTransactionHistory(params) {
     const nonceMatch = note.match(/GUDANGAI_NONCE=([^;|]+)/);
     return { row: last - index, tanggal: row[1], kode: row[2], nama: row[3], satuan: row[4], qty: row[5], keterangan: row[6], transactionId: txMatch ? txMatch[1] : null, nonce: nonceMatch ? nonceMatch[1] : (txMatch ? txMatch[1] : null) };
   });
-  return { success: true, count: result.length, data: result };
+  return { success: true, sheet:sheetName, count: result.length, data: result, sourceReadAt:new Date().toISOString() };
 }
 
 function searchByName(q) {
