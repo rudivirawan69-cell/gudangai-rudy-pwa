@@ -252,7 +252,7 @@ async function gatherLiveData(env, message) {
   const text = String(message || '');
   const exactCode = extractExactStockCode(text);
   const actions = detectLiveActions(text).slice();
-  if (!actions.length && !exactCode && /\\b(stok|stock|sisa|fillet|barang)\\b/i.test(text)) actions.push('getAllStock');
+  if (!actions.length && !exactCode && /\b(stok|stock|sisa|fillet|barang)\b/i.test(text)) actions.push('getAllStock');
   const query = exactCode ? '' : extractStockQuery(text);
   const transactionSheet = resolveTransactionSheet(text);
   const results = await Promise.all(actions.map(async (action) => {
@@ -279,7 +279,7 @@ async function gatherLiveData(env, message) {
     const ok = raw?.success === true;
     const { source, action: _a, gatewayReceivedAt, sourceReadAt, ...data } = raw || {};
     if (ok && action === 'getStockByCode') {
-      const returnedCode = String(raw.kode || raw.kodeBarang || '').replace(/\\s+/g,'').toUpperCase();
+      const returnedCode = String(raw.kode || raw.kodeBarang || '').replace(/\s+/g,'').toUpperCase();
       if (returnedCode !== exactCode) return { action, ok:false, code:'SKU_IDENTITY_MISMATCH', error:'Kode yang dikembalikan sumber tidak sama dengan kode yang diminta; angka stok tidak ditampilkan.' };
     }
     return {
