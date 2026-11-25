@@ -286,6 +286,8 @@ test('general stock analysis routes to inventory dataset, not fuzzy name search'
   assert.deepEqual(detectLiveActions('Ringkasan stok'), ['getAllStock']);
   assert.deepEqual(detectLiveActions('Buat ringkasan stok gudang'), ['getAllStock']);
   assert.deepEqual(detectLiveActions('Data stok gudang'), ['getAllStock']);
+  assert.deepEqual(detectLiveActions('Kapan stok terakhir berubah?'), ['getLastUpdate']);
+  assert.deepEqual(detectLiveActions('Kapan data stok diperbarui?'), ['getLastUpdate']);
   assert.deepEqual(detectLiveActions('Cari stok Ayam Fillet'), ['searchByName']);
   assert.deepEqual(detectLiveActions('Stok menipis'), ['getLowStock']);
 });
@@ -313,6 +315,22 @@ test('general stock analysis fetches the complete live stock dataset with proven
   assert.equal(payload.dataSources[0].ok, true);
   assert.equal(payload.dataSources[0].sourceReadAt, '2026-11-25T10:00:00.000Z');
   assert.match(systemText, /CV-0001/);
+});
+
+test('stock-change timestamp questions use getLastUpdate and preserve unknown semantics', async () => {
+  const { response, payload, sheetCalls, systemText } = await runLive('Kapan stok terakhir berubah?', {
+    sheetsResponse: () => new Response(JSON.stringify({
+      success:true,
+      sourceReadAt:'2026-11-25T10:00:00.000Z',
+      lastStockUpdateAt:null,
+    }), { status:200 }),
+  });
+  assert.equal(response.status, 200);
+  assert.equal(sheetCalls.length, 1);
+  assert.equal(sheetCalls[0].action, 'getLastUpdate');
+  assert.equal(payload.dataSources[0].ok, true);
+  assert.match(systemText, /lastStockUpdateAt":null/);
+  assert.match(systemText, /waktu perubahan belum dapat dipastikan/);
 });
 
 test('data questions trigger live read-only read and include provenance', async () => {

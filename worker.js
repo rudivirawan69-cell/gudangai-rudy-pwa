@@ -6,6 +6,7 @@ const MAX_MESSAGE_LENGTH = 4000;
 const MAX_HISTORY_ITEMS = 8;
 const LIVE_DATA_CHAR_BUDGET = 3500;
 const MAX_LIVE_ACTIONS = 2;
+const LAST_UPDATE_INTENT_PATTERN = /update terakhir|terakhir diperbarui|kapan.{0,20}(update|sinkronisasi)|kapan.{0,24}stok.{0,16}(berubah|diperbarui)|stok.{0,20}(terakhir|paling baru).{0,20}(berubah|update|diperbarui)/i;
 const STOCK_ENTITY_BY_PREFIX = Object.freeze({
   CV:'CV', BBCV:'CV', PT:'PT', WK:'PT', MM:'PT', BBPT:'PT',
 });
@@ -22,8 +23,9 @@ const LIVE_INTENTS = [
   // Perintah analisis stok umum harus mengambil dataset, bukan diperlakukan sebagai
   // pencarian nama barang dengan query "analisis".
   { action: 'getAllStock', pattern: /analisis stok|analisa stok|ringkasan stok|data stok gudang|kondisi stok|stok gudang/i },
+  { action: 'getLastUpdate', pattern: LAST_UPDATE_INTENT_PATTERN },
   { action: 'getLowStock', pattern: /stok (menipis|kritis|rendah|habis)|low ?stock|di bawah minimum|hampir habis|kritis/i },
-  { action: 'searchByName', pattern: /\b(cari|temukan|lookup)\s+(barang|item|kode)\b|nama barang|fillet|kode (cv|pt|wk)-?|\b(stok|stock|sisa)\s+(?!(?:menipis|kritis|rendah|habis|kosong|di\s+bawah)\b)[a-z][\w\s-]{2,}/i },
+  { action: 'searchByName', pattern: /\b(cari|temukan|lookup)\s+(barang|item|kode)\b|nama barang|fillet|kode (cv|pt|wk)-?|\b(stok|stock|sisa)\s+(?!(?:menipis|kritis|rendah|habis|kosong|di\s+bawah|terakhir|paling\s+baru|berubah|diperbarui|update)\b)[a-z][\w\s-]{2,}/i },
   { action: 'getAllStock', pattern: /semua stok|stok (cv|pt|semua|master|lengkap)|daftar (stok|barang)|inventory/i },
   { action: 'getStatusPO', pattern: /\bpo\b|purchase order|status po|pembelian/i },
   { action: 'getTransactionHistory', pattern: /riwayat|histori|history|transaksi (terakhir|hari ini|kemarin)|barang (masuk|keluar|rusak)/i },
@@ -315,6 +317,7 @@ function validateLivePayload(action, raw, expected = {}) {
 export function detectLiveActions(message) {
   const text = String(message||'');
   if (extractExactStockCode(text)) return ['getStockByCode'];
+  if (LAST_UPDATE_INTENT_PATTERN.test(text)) return ['getLastUpdate'];
   // A direct stock-analysis request is a single inventory intent. Do not also
   // trigger the generic "ringkasan" dashboard intent or fuzzy item search.
   if (/\b(?:analisis|analisa|ringkasan|data|kondisi)\s+stok\b|\bstok\s+gudang\b/i.test(text)) {
