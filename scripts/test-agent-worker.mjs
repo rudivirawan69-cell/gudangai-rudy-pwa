@@ -332,6 +332,35 @@ test('exact SKU lookup has priority and preserves normalized code and entity', a
   assert.equal(payload.dataSources[0].ok, true);
 });
 
+
+test('exact SKU routing maps every supported prefix to its canonical entity', async () => {
+  const cases = [
+    ['CV-0030', 'CV'], ['BBCV-0030', 'CV'],
+    ['PT-0001', 'PT'], ['WK-0004', 'PT'], ['MM-0001', 'PT'], ['BBPT-0001', 'PT'],
+  ];
+  for (const [code, entity] of cases) {
+    const { sheetCalls, payload } = await runLive(`Berapa stok kode ${code}`, {
+      sheetsResponse: (body) => new Response(JSON.stringify({
+        success:true, kode:body.kode, entitas:body.entitas, stockAkhir:1,
+        sourceReadAt:'2026-11-25T10:00:00.000Z',
+      }), { status:200 }),
+    });
+    assert.equal(sheetCalls.length, 1, `Expected one exact lookup for ${code}`);
+    assert.equal(sheetCalls[0].action, 'getStockByCode');
+    assert.equal(sheetCalls[0].kode, code);
+    assert.equal(sheetCalls[0].entitas, entity);
+    assert.equal(payload.dataSources[0].ok, true);
+  }
+});
+
+test('unsupported bare BB prefix is rejected without fuzzy or server lookup', async () => {
+  const { sheetCalls, payload, systemText } = await runLive('Berapa stok kode BB-0001');
+  assert.equal(sheetCalls.length, 0);
+  assert.equal(payload.dataSources[0].ok, false);
+  assert.equal(payload.dataSources[0].code, 'UNSUPPORTED_STOCK_PREFIX');
+  assert.match(systemText, /Prefix kode barang tidak termasuk keluarga kode CV\/PT/);
+});
+
 test('Barang Masuk history request selects and validates the exact source sheet', async () => {
   const { sheetCalls, payload } = await runLive('Jelaskan detail baris terakhir Barang Masuk', {
     sheetsResponse: (body) => new Response(JSON.stringify({
