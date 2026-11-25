@@ -757,8 +757,8 @@ test('manifest is rendered completely beyond live-data truncation budget', () =>
     action: 'getAgentKnowledge', ok: true, sourceReadAt: '2026-11-26T00:00:00.000Z',
     data: { mode: 'manifest', spreadsheetTitle: 'Test', sheetCount: 18, sheets },
   }] });
-  assert.match(block, /DAFTAR SHEET \\(LENGKAP\\)/);
-  assert.match(block, /18\\. Sheet 18/);
+  assert.match(block, /DAFTAR SHEET \(LENGKAP\)/);
+  assert.match(block, /18\. Sheet 18/);
   assert.doesNotMatch(block, /dipotong/);
 });
 
@@ -766,7 +766,7 @@ test('non-enumeration mentions of sheet names or structure do not enter determin
   const nonEnumeration = [
     'Nama sheet ini sudah benar?',
     'Jelaskan struktur sheet spreadsheet utama',
-    'Tab aktif tidak muncul setelah sinkronisasi',
+    'Tab aktif terlihat berwarna biru',
     'Kenapa nama tab Stock CV berubah?',
     'Bagaimana struktur spreadsheet saat ini?',
   ];
