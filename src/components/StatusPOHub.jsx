@@ -365,16 +365,11 @@ function StatusPOHubPanel({ mode }) {
             <div className="grid grid-cols-1 gap-3">
               <button type="button" onClick={() => { setConfirmPeriod('current'); setSelectedItem(null); setMsg(''); }} className="rounded-2xl border-2 border-cyan-200 bg-cyan-50 px-4 py-4 text-left active:scale-[0.99]">
                 <p className="text-sm font-extrabold text-cyan-900">Konfirmasi PO Minggu Ini</p>
-                <p className="text-[11px] text-cyan-700 mt-1">
-                  Periode berjalan · Belum selesai: {(data?.items || []).filter((it) => it.status !== 'Selesai' && ((Number(it.qtyPO) || 0) - (Number(it.qtyDatang) || 0)) > 0).length} item
-                </p>
+                
               </button>
               <div className="rounded-2xl border-2 border-slate-200 bg-slate-50 px-4 py-4 text-left opacity-80">
                 <p className="text-sm font-extrabold text-slate-700">Arsip PO Minggu Lalu</p>
-                <p className="text-[11px] text-slate-600 mt-1">
-                  Periode sudah ditutup · Belum selesai: {(data?.previousWeek?.items || []).filter((it) => it.status !== 'Selesai' && ((Number(it.qtyPO) || 0) - (Number(it.qtyDatang) || 0)) > 0).length} item
-                </p>
-                <p className="text-[10px] text-slate-500 mt-1">Hanya untuk melihat status. Konfirmasi baru dicatat pada periode PO aktif.</p>
+
               </div>
             </div>
           )}
