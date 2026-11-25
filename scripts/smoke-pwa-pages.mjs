@@ -284,6 +284,11 @@ try {
           const cards = [...document.querySelectorAll('.input-tx-btn')];
           return {
             controlHeights: controls.map((node) => node.getBoundingClientRect().height),
+            controlContainerBorder: getComputedStyle(document.querySelector('.input-control-card')).borderTopWidth,
+            controlBounds: controls.map((node) => {
+              const rect = node.getBoundingClientRect();
+              return { left: rect.left, right: rect.right, width: rect.width };
+            }),
             cardBounds: cards.map((node) => {
               const rect = node.getBoundingClientRect();
               return { width: rect.width, height: rect.height };
@@ -292,6 +297,8 @@ try {
         });
         assert.equal(inputAudit.controlHeights.length, 4, 'Input must show date, CV, PT, and notification controls.');
         assert.ok(inputAudit.controlHeights.every((height) => height >= 44), `Input control touch target below 44px: ${JSON.stringify(inputAudit)}`);
+        assert.equal(inputAudit.controlContainerBorder, '0px', `Input controls still share an outer card: ${JSON.stringify(inputAudit)}`);
+        assert.ok(inputAudit.controlBounds.slice(1).every((box, index) => box.left - inputAudit.controlBounds[index].right >= 6), `Input date, CV, PT and notification controls are not separated: ${JSON.stringify(inputAudit)}`);
         assert.equal(inputAudit.cardBounds.length, 3, 'Input must show Masuk, Keluar, and Rusak cards.');
         assert.ok(inputAudit.cardBounds.every((box) => box.height >= 96), `Input transaction cards are too short: ${JSON.stringify(inputAudit)}`);
         assert.ok(inputAudit.cardBounds.every((box) => Math.abs(box.width - inputAudit.cardBounds[0].width) < 1 && Math.abs(box.height - inputAudit.cardBounds[0].height) < 1), `Input transaction cards are not equal-sized: ${JSON.stringify(inputAudit)}`);
@@ -304,8 +311,21 @@ try {
     await assertNoHorizontalOverflow('Riwayat', viewport);
     await openMorePage('Pengaturan', 'Mode Tampilan');
     await assertNoHorizontalOverflow('Pengaturan', viewport);
-    await openMorePage('Antrean sinkronisasi', 'Antrian Sinkronisasi');
-    await assertNoHorizontalOverflow('Antrian Sinkronisasi', viewport);
+    const settingsCards = await page.evaluate(() => {
+      const rows = [...document.querySelectorAll('.settings-page .settings-menu-list .settings-menu-row')];
+      const boxes = rows.map((node) => node.getBoundingClientRect());
+      return {
+        count: rows.length,
+        borders: rows.map((node) => getComputedStyle(node).borderTopWidth),
+        radii: rows.map((node) => getComputedStyle(node).borderTopLeftRadius),
+        gaps: boxes.slice(1).map((box, index) => box.top - boxes[index].bottom),
+      };
+    });
+    assert.equal(settingsCards.count, 4, `Settings menu should show four independent option cards: ${JSON.stringify(settingsCards)}`);
+    assert.ok(settingsCards.borders.every((value) => value !== '0px'), `Settings options are still grouped in one card: ${JSON.stringify(settingsCards)}`);
+    assert.ok(settingsCards.gaps.every((value) => value >= 7), `Settings card spacing is inconsistent: ${JSON.stringify(settingsCards)}`);
+    await openMorePage('Sinkronisasi', 'Sinkronisasi');
+    await assertNoHorizontalOverflow('Sinkronisasi', viewport);
   }
 
 
@@ -384,7 +404,7 @@ try {
     ['Lainnya', 'Agent Rubee AI', 'more'],
     ['Agent', 'Agent Rubee Intelligence', 'agent'],
     ['Pengaturan', 'Mode Tampilan', 'settings'],
-    ['Antrian Sinkronisasi', 'Antrian Sinkronisasi', 'sync'],
+    ['Sinkronisasi', 'Sinkronisasi', 'sync'],
   ];
   const visualViewports = [
     { width: 360, height: 800, label: '360' },
@@ -420,8 +440,8 @@ try {
         } else if (label === 'Lainnya') {
           await page.locator('nav.nav-bar button').filter({ hasText: 'Lainnya' }).first().click();
           await page.locator('.more-sheet').waitFor({ state: 'visible', timeout: 10000 });
-        } else if (['Riwayat', 'Pengaturan', 'Antrian Sinkronisasi', 'Agent'].includes(label)) {
-          await openMorePage(label === 'Agent' ? 'Agent Rubee AI' : label === 'Antrian Sinkronisasi' ? 'Antrean sinkronisasi' : label, markerText);
+        } else if (['Riwayat', 'Pengaturan', 'Sinkronisasi', 'Agent'].includes(label)) {
+          await openMorePage(label === 'Agent' ? 'Agent Rubee AI' : label === 'Sinkronisasi' ? 'Sinkronisasi' : label, markerText);
         } else {
           await page.locator('nav.nav-bar button').filter({ hasText: label }).first().click();
         }
@@ -493,6 +513,22 @@ try {
       await page.setViewportSize(viewport);
       for (const entity of ['CV', 'PT', 'Bahan Baku']) {
         await page.getByRole('tab', { name: entity, exact: true }).click();
+        const selectorAudit = await page.evaluate(() => {
+          const wrapper = document.querySelector('.sk-entity-block');
+          const buttons = [...document.querySelectorAll('.sk-entity-block .sk-seg button')];
+          const boxes = buttons.map((node) => node.getBoundingClientRect());
+          return {
+            wrapperBorder: getComputedStyle(wrapper).borderTopWidth,
+            wrapperBackground: getComputedStyle(wrapper).backgroundColor,
+            buttonCount: buttons.length,
+            buttonBorders: buttons.map((node) => getComputedStyle(node).borderTopWidth),
+            gaps: boxes.slice(1).map((box, index) => box.left - boxes[index].right),
+          };
+        });
+        assert.equal(selectorAudit.wrapperBorder, '0px', `Stock entity selector still has a shared outer border: ${JSON.stringify(selectorAudit)}`);
+        assert.equal(selectorAudit.buttonCount, 3, 'Stock must expose three separate entity cards.');
+        assert.ok(selectorAudit.buttonBorders.every((value) => value !== '0px'), `Stock entity buttons are not standalone cards: ${JSON.stringify(selectorAudit)}`);
+        assert.ok(selectorAudit.gaps.every((value) => value >= 7), `Stock entity cards do not have stable spacing: ${JSON.stringify(selectorAudit)}`);
         const itemCount = await page.locator('.sk-item-card').count();
         assert.ok(itemCount > 0, `No stock item cards rendered for ${entity} in ${theme} at ${viewport.width}px.`);
         const bounds = await page.evaluate(() => ({
