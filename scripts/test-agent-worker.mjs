@@ -387,6 +387,23 @@ test('Apps Script manifest action exists and returns dynamic sheet metadata', ()
   assert.doesNotMatch(handler, /insertSheet\(|setValue\(|setValues\(/);
 });
 
+test('Apps Script transaction history returns requested sheet identity and source timestamp', () => {
+  const start = codeGs.indexOf('function getTransactionHistory(params)');
+  const end = codeGs.indexOf('function searchByName(', start);
+  assert.ok(start >= 0 && end > start);
+  const handler = codeGs.slice(start, end);
+  assert.match(handler, /sheet:sheetName/);
+  assert.match(handler, /sourceReadAt:new Date\\(\\)\\.toISOString\\(\\)/);
+  assert.match(handler, /count: result.length, data: result/);
+});
+
+test('Rubee capability policy forbids unsupported claims of full mastery', () => {
+  const prompt = buildSystemPrompt({}, '');
+  assert.match(prompt, /Jangan pernah mengklaim seluruh skill sudah dikuasai sepenuhnya/);
+  assert.match(prompt, /Setiap angka operasional harus berasal dari field angka pada payload live tervalidasi/);
+  assert.match(prompt, /sourceReadAt jika sumber memberikannya/);
+});
+
 test('getConfig read-only handler never creates missing Config tab', () => {
   const start = codeGs.indexOf('function getConfigReadOnly_()');
   const end = codeGs.indexOf('function getAgentKnowledge(params)', start);
