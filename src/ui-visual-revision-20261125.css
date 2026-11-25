@@ -1,0 +1,310 @@
+/**
+ * GudangAI RUDY — Visual Revision 2026-11-25
+ * Token tata ruang, tipografi, tinggi seragam, radius.
+ * Tidak mengubah logika; hanya tampilan.
+ */
+
+:root {
+  /* Spacing tokens */
+  --page-pad: 16px;
+  --card-gap: 12px;
+  --section-gap: 20px;
+  --card-pad: 16px;
+  --chip-gap: 8px;
+
+  /* Radius */
+  --radius-card: 16px;
+  --radius-chip: 12px;
+  --radius-btn: 12px;
+
+  /* Interactive min height */
+  --touch-min: 44px;
+
+  /* Typography scale */
+  --fs-page-title: 28px;
+  --fw-page-title: 700;
+  --fs-card-title: 18px;
+  --fw-card-title: 700;
+  --fs-card-name: 14px;
+  --fw-card-name: 600;
+  --fs-num-lg: 32px;
+  --fw-num-lg: 700;
+  --fs-label: 13px;
+  --fw-label: 500;
+  --fs-badge: 12px;
+  --fw-badge: 600;
+
+  /* Chart colors (Masuk = accent/cyan, Keluar = amber) */
+  --chart-masuk: #06b6d4;
+  --chart-keluar: #f59e0b;
+}
+
+/* Page shell */
+.page-content,
+.sk-page,
+.rw-page,
+.input-page,
+.po-page,
+.settings-page,
+.dashboard-page,
+[class*="-page"] {
+  padding-left: var(--page-pad);
+  padding-right: var(--page-pad);
+  padding-bottom: calc(var(--page-pad) + 72px + env(safe-area-inset-bottom, 0px));
+  box-sizing: border-box;
+}
+
+/* Page titles */
+.sk-head h1,
+.rw-head h1,
+.input-page h1,
+.po-page h2,
+.settings-page h1,
+.dashboard-page h1,
+.page-title {
+  font-size: var(--fs-page-title) !important;
+  font-weight: var(--fw-page-title) !important;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+  margin: 0 0 var(--card-gap);
+}
+
+/* Card base */
+.dashboard-total-card,
+.dashboard-status-tile,
+.home-agent-card,
+.sk-item-card,
+.sk-banner,
+.input-tx-btn,
+.input-method-card,
+.po-hub-card-btn,
+.rw-empty,
+.settings-profile-summary,
+.theme-picker-btn,
+.more-row {
+  border-radius: var(--radius-card);
+  padding: var(--card-pad);
+  box-sizing: border-box;
+}
+
+/* Gaps */
+.dashboard-totals-row,
+.grid.grid-cols-2,
+.grid.grid-cols-3,
+.sk-filter-block + .sk-filter-block,
+.input-tx-segmented,
+.input-source-methods,
+.po-hub-grid,
+.rw-filters,
+.settings-menu-list {
+  gap: var(--card-gap) !important;
+}
+
+.sk-page > * + *,
+.rw-page > * + *,
+.input-page > * + *,
+.po-page > section + section {
+  margin-top: var(--section-gap);
+}
+
+/* Typography */
+.dashboard-total-card p:first-of-type,
+.dashboard-status-tile p:first-of-type,
+.hub-title,
+.input-tx-label,
+.sk-item-nama {
+  font-size: var(--fs-card-name);
+  font-weight: var(--fw-card-name);
+}
+
+.dashboard-total-card .text-2xl,
+.dashboard-status-tile .text-xl,
+.sk-item-metric strong {
+  font-size: var(--fs-num-lg) !important;
+  font-weight: var(--fw-num-lg);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+.sk-item-metric-label,
+[class*="metric-label"] {
+  font-size: var(--fs-label);
+  font-weight: var(--fw-label);
+}
+
+.sk-item-status,
+.rw-pill,
+.status-pill {
+  font-size: var(--fs-badge);
+  font-weight: var(--fw-badge);
+}
+
+.sk-item-metric strong small,
+.sk-item-metric small {
+  font-size: 0.72em;
+  font-weight: 500;
+  opacity: 0.85;
+  margin-left: 0.2em;
+}
+
+/* Touch targets */
+.input-tx-btn,
+.input-method-card,
+.input-entity-btn,
+.sk-chips button,
+.sk-div-chips button,
+.sk-seg button,
+.rw-chips button,
+.po-hub-card-btn,
+.theme-picker-btn,
+.more-row,
+button.rw-btn-ghost,
+button.rw-primary {
+  min-height: var(--touch-min);
+}
+
+/* Equal height */
+.dashboard-totals-row,
+.po-hub-grid,
+.input-tx-segmented {
+  display: grid;
+  align-items: stretch;
+}
+.dashboard-totals-row > *,
+.po-hub-grid > *,
+.input-tx-segmented > * {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.po-hub-card-btn {
+  min-height: 124px;
+}
+
+/* Chart legend Masuk = bar color */
+.dashboard-chart-wrap [class*="bg-cyan"],
+.dashboard-chart-wrap .bg-cyan-500 {
+  background-color: var(--chart-masuk) !important;
+}
+.dashboard-chart-wrap .text-cyan-700,
+.dashboard-chart-wrap .text-cyan-600 {
+  color: var(--chart-masuk) !important;
+}
+.dashboard-chart-wrap [class*="bg-orange"],
+.dashboard-chart-wrap .bg-orange-400 {
+  background-color: var(--chart-keluar) !important;
+}
+.dashboard-chart-wrap .text-orange-600,
+.dashboard-chart-wrap .text-orange-700 {
+  color: var(--chart-keluar) !important;
+}
+
+.dashboard-chart-wrap .bg-slate-50\/80,
+.dashboard-chart-wrap .bg-slate-50 {
+  background: transparent !important;
+  border-color: transparent !important;
+}
+
+.dashboard-status-tile {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 88px;
+}
+
+.dashboard-total-card {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 110px;
+}
+
+.home-agent-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: var(--touch-min);
+}
+
+.sk-chips {
+  display: grid !important;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--chip-gap);
+  width: 100%;
+}
+.sk-chips button {
+  width: 100%;
+  justify-content: center;
+}
+.sk-div-chips {
+  display: flex !important;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  gap: var(--chip-gap);
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.sk-div-chips::-webkit-scrollbar { display: none; }
+.sk-div-chips button {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.sk-seg {
+  display: grid !important;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--chip-gap);
+  background: transparent !important;
+  padding: 0 !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+.sk-seg button {
+  min-height: var(--touch-min);
+  border-radius: var(--radius-chip);
+}
+
+.input-source-methods {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: var(--chip-gap);
+}
+.input-method-card {
+  min-height: 72px;
+  justify-content: center;
+}
+
+.theme-picker-btn {
+  min-height: 88px;
+  justify-content: center;
+}
+
+.more-row {
+  min-height: 52px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+}
+
+.hub-title,
+.sk-item-nama,
+.home-agent-title {
+  overflow: visible;
+  text-overflow: unset;
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.tabular-nums,
+[class*="tabular-nums"] {
+  font-variant-numeric: tabular-nums;
+}
