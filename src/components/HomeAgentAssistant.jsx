@@ -1,4 +1,4 @@
-import { ArrowRight, Bot, Sparkles } from 'lucide-react';
+import { ArrowRight, Bot } from 'lucide-react';
 
 export default function HomeAgentAssistant({ onNavigate }) {
   return (
@@ -10,8 +10,7 @@ export default function HomeAgentAssistant({ onNavigate }) {
     >
       <span className="home-agent-icon"><Bot className="h-6 w-6" /></span>
       <span className="min-w-0 flex-1 text-left">
-        <span className="home-agent-title">Agent Rubee Intelligence <Sparkles className="inline h-4 w-4 ml-1" /></span>
-        <span className="home-agent-copy">Asisten operasional · Cloudflare Workers AI</span>
+        <span className="home-agent-title">Agent Rubee Intelligence</span>
       </span>
       <span className="home-agent-action">Buka <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" /></span>
     </button>
