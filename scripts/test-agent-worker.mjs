@@ -275,6 +275,25 @@ test('detectLiveActions maps read-only intents without parameters and caps at tw
   assert.deepEqual(detectLiveActions('buatkan SOP cold storage'), []);
 });
 
+test('exact SKU question routes only to getStockByCode with normalized code and concise answer rules', async () => {
+  const { response, sheetCalls, payload, systemText } = await runLive('Berapa stock kode barang CV-0030');
+  assert.equal(response.status, 200);
+  assert.equal(sheetCalls.length, 1, 'exact SKU must not trigger redundant search');
+  assert.equal(sheetCalls[0].action, 'getStockByCode');
+  assert.equal(sheetCalls[0].kode, 'CV-0030');
+  assert.equal(sheetCalls[0].kodeBarang, 'CV-0030');
+  assert.equal(payload.dataSources[0].action, 'getStockByCode');
+  assert.equal(payload.dataSources[0].ok, true);
+  assert.match(systemText, /DATA LIVE \(read-only\)/);
+  assert.match(systemText, /Pertanyaan angka stok: jawaban 1–3 baris, langsung ke angka/i);
+});
+
+test('exact SKU with whitespace separator normalizes to a canonical code', async () => {
+  const { sheetCalls } = await runLive('cek stok CV 0030');
+  assert.equal(sheetCalls[0].action, 'getStockByCode');
+  assert.equal(sheetCalls[0].kode, 'CV-0030');
+});
+
 test('data questions trigger live read-only read and include provenance', async () => {
   const { response, payload, sheetCalls, systemText } = await runLive('Tolong ringkasan dashboard hari ini');
   assert.equal(response.status, 200); assert.equal(sheetCalls.length, 1);

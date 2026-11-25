@@ -14,6 +14,7 @@ const READ_ONLY_ACTIONS = new Set([
   ...EXTRA_READ_ACTIONS,
 ]);
 const LIVE_INTENTS = [
+  { action: 'getStockByCode', pattern: /\b(?:kode\s*(?:barang)?\s*)?(?:cv|pt|wk|mm|bbcv|bbpt)\s*[-–]?\s*\d{1,5}\b/i },
   ...EXTRA_LIVE_INTENTS.filter((intent) => intent.action === 'getStockoutRisk'),
   { action: 'getDashboardData', pattern: /dashboard|ringkasan|rangkuman|kondisi gudang|overview/i },
   { action: 'getLowStock', pattern: /stok (menipis|kritis|rendah|habis)|low ?stock|di bawah minimum|hampir habis|kritis/i },
@@ -224,6 +225,8 @@ function json(data, status=200, origin='') {
 }
 export function detectLiveActions(message) {
   const text = String(message||'');
+  const exactCode = text.match(/\b(?:bbcv|bbpt|cv|pt|wk|mm)\s*[-–]?\s*\d{1,5}\b/i);
+  if (exactCode) return ['getStockByCode']; // exact SKU lookup takes priority; avoid redundant searches
   const matched = [];
   for (const intent of LIVE_INTENTS) {
     if (intent.pattern.test(text) && READ_ONLY_ACTIONS.has(intent.action)) matched.push(intent.action);
@@ -239,8 +242,12 @@ async function gatherLiveData(env, message) {
   const actions = detectLiveActions(message).slice();
   if (!actions.length && /\b(stok|stock|sisa|fillet|barang)\b/i.test(String(message||''))) actions.push('getAllStock');
   const query = extractStockQuery(message);
+  const codeMatch = String(message||'').match(/\b(?:bbcv|bbpt|cv|pt|wk|mm)\s*[-–]?\s*\d{1,5}\b/i);
+  const exactCode = codeMatch ? codeMatch[0].toUpperCase().replace(/[–\s]/g,'').replace(/^(BB?CV|BB?PT|CV|PT|WK|MM)(\d+)$/, '$1-$2') : '';
+  const entityMatch = String(message||'').match(/\b(CV|PT|WK|MM)\b/i);
   const results = await Promise.all(actions.map(async (action) => {
     const params = {};
+    if (action === 'getStockByCode' && exactCode) { params.kode = exactCode; params.kodeBarang = exactCode; if (entityMatch) params.entitas = entityMatch[1].toUpperCase(); }
     if (action === 'searchByName' && query) { params.q=query; params.query=query; params.nama=query; params.name=query; }
     if (action === 'getAllStock') params.entitas = 'ALL';
     if (action === 'getStockoutRisk') { params.windowDays = 30; params.thresholdDays = 3; }
