@@ -495,8 +495,11 @@ try {
         // Audit rendered text against its nearest opaque surface, not only root theme tokens.
         const renderedTextAudit = await page.evaluate(() => {
           const parse = (value) => {
-            const m = String(value).match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)/i);
-            return m ? { r:+m[1], g:+m[2], b:+m[3], a:m[4] === undefined ? 1 : +m[4] } : null;
+            const raw = String(value).trim();
+            const rgb = raw.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)/i);
+            if (rgb) return { r:+rgb[1], g:+rgb[2], b:+rgb[3], a:rgb[4] === undefined ? 1 : +rgb[4] };
+            const srgb = raw.match(/color\\(srgb\\s+([\\d.]+)\\s+([\\d.]+)\\s+([\\d.]+)(?:\\s*\\/\\s*([\\d.]+))?\\)/i);
+            return srgb ? { r:Math.round(+srgb[1]*255), g:Math.round(+srgb[2]*255), b:Math.round(+srgb[3]*255), a:srgb[4] === undefined ? 1 : +srgb[4] } : null;
           };
           const fallback = parse(getComputedStyle(document.body).backgroundColor) || {r:247,g:247,b:245,a:1};
           const nodes = [...document.querySelectorAll('h1,h2,h3,h4,p,span,button,a,label,small,strong,b,li,input,textarea,select')];
@@ -504,7 +507,8 @@ try {
             const text = (el.innerText || el.value || el.getAttribute('aria-label') || '').trim();
             const rect = el.getBoundingClientRect();
             const style = getComputedStyle(el);
-            return text.length > 0 && rect.width > 0 && rect.height > 0 && style.display !== 'none' &&
+            const hasDirectText = [...el.childNodes].some((node) => node.nodeType === 3 && node.textContent.trim());
+            return hasDirectText && text.length > 0 && rect.width > 0 && rect.height > 0 && style.display !== 'none' &&
               style.visibility !== 'hidden' && Number(style.opacity || 1) > 0.01 && parse(style.color);
           }).map((el) => {
             const fg = parse(getComputedStyle(el).color);
