@@ -498,12 +498,17 @@ try {
         const renderedTextAudit = await page.evaluate(() => {
           const parse = (value) => {
             const raw = String(value).trim();
+            const hex = raw.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
+            if (hex) {
+              const value = hex[1].length === 3 ? hex[1].split('').map((x)=>x+x).join('') : hex[1];
+              return { r:parseInt(value.slice(0,2),16), g:parseInt(value.slice(2,4),16), b:parseInt(value.slice(4,6),16), a:1 };
+            }
             const rgb = raw.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)/i);
             if (rgb) return { r:+rgb[1], g:+rgb[2], b:+rgb[3], a:rgb[4] === undefined ? 1 : +rgb[4] };
             const srgb = raw.match(/color\(srgb\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)(?:\s*\/\s*([\d.]+))?\)/i);
             return srgb ? { r:Math.round(+srgb[1]*255), g:Math.round(+srgb[2]*255), b:Math.round(+srgb[3]*255), a:srgb[4] === undefined ? 1 : +srgb[4] } : null;
           };
-          const fallback = parse(getComputedStyle(document.body).backgroundColor) || {r:247,g:247,b:245,a:1};
+          const fallback = parse(getComputedStyle(document.documentElement).getPropertyValue('--bg-app')) || parse(getComputedStyle(document.body).backgroundColor) || {r:247,g:247,b:245,a:1};
           const nodes = [...document.querySelectorAll('h1,h2,h3,h4,p,span,button,a,label,small,strong,b,li,input,textarea,select')];
           return nodes.filter((el) => {
             const text = (el.innerText || el.value || el.getAttribute('aria-label') || '').trim();
