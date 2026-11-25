@@ -345,3 +345,13 @@ html[data-theme] .app-content .sk-page .sk-entity-block .sk-seg button.on {
   .sk-page .sk-entity-block .sk-seg { gap:8px !important; }
   .sk-page .sk-entity-block .sk-seg button { min-height:48px; font-size:12px; }
 }
+
+
+/* Keep stock status labels and secondary quantities readable on tinted status surfaces. */
+html[data-theme] .sk-page .t-aman,
+html[data-theme] .sk-page .sk-item-status.sk-aman { color: var(--stok-aman) !important; }
+html[data-theme] .sk-page .t-waspada,
+html[data-theme] .sk-page .sk-item-status.sk-waspada { color: var(--stok-waspada) !important; }
+html[data-theme] .sk-page .t-kritis,
+html[data-theme] .sk-page .sk-item-status.sk-kritis { color: var(--stok-kritis) !important; }
+html[data-theme] .sk-page .sk-item-qty small { color: var(--text-main) !important; }
