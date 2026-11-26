@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import InputPage from '../InputPage';
 
 const api = vi.hoisted(() => ({
@@ -109,6 +109,40 @@ describe('InputPage PR 1', () => {
     fireEvent.click(screen.getAllByRole('button', { name: /Kirim 1 item/i })[0]);
     await waitFor(() => expect(screen.getByText('Keranjang (1)')).toBeInTheDocument());
     expect(screen.getByText(/0 terkonfirmasi · 0 masuk Antrian Sinkronisasi · 1 belum terkonfirmasi/)).toBeInTheDocument();
+  });
+
+  it('mengalihkan ke Sinkronisasi tepat setelah 5 detik tanpa membatalkan pengiriman yang masih berjalan', async () => {
+    vi.useFakeTimers();
+    seedCart([item('handoff')]);
+    let resolveSend;
+    api.submitBarangKeluar.mockReturnValue(new Promise((resolve) => { resolveSend = resolve; }));
+    const onNavigate = vi.fn();
+    render(<InputPage onNavigate={onNavigate} />);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /Kirim 1 item/i }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(api.stagePendingTransaction).toHaveBeenCalledTimes(1);
+    expect(api.submitBarangKeluar).toHaveBeenCalledTimes(1);
+    expect(onNavigate).not.toHaveBeenCalled();
+
+    await act(async () => { vi.advanceTimersByTime(4999); });
+    expect(onNavigate).not.toHaveBeenCalled();
+
+    await act(async () => { vi.advanceTimersByTime(1); });
+    expect(onNavigate).toHaveBeenCalledWith('sync');
+    expect(api.submitBarangKeluar).toHaveBeenCalledTimes(1);
+    expect(screen.getByText(/Pengiriman masih berjalan/)).toBeInTheDocument();
+
+    await act(async () => {
+      resolveSend({ results: [{ clientItemId: 'handoff', success: true }] });
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    vi.useRealTimers();
   });
 
   it('menampilkan tiga angka progres success, queued, failed', async () => {
