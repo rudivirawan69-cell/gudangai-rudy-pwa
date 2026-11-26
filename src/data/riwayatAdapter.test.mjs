@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  parseWaktu, normTx, gabung, kelompokkan, filterTx, keCSV, kunciHari, labelHari, jamWIB, hitungStatus, normStatus, ringkasKatalog,
+  parseWaktu, normTx, gabung, kelompokkan, filterTx, keCSV, kunciHari, labelHari, jamWIB, hitungStatus, normStatus, ringkasKatalog, normalisasiRiwayatServer,
 } from "./riwayatAdapter.js";
 
 test("parseWaktu ISO dan epoch", () => {
@@ -94,4 +94,38 @@ test("keCSV header dan pemisah titik koma", () => {
 test("normStatus dari sumber spreadsheet default terkirim", () => {
   assert.equal(normStatus("", "spreadsheet"), "terkirim");
   assert.equal(normStatus("pending", "lokal"), "antrian");
+});
+
+test("normalisasiRiwayatServer converts flat Apps Script rows into valid typed transactions", () => {
+  const incoming = normalisasiRiwayatServer([
+    { row: 18, tanggal: "2026-11-26T01:00:00.000Z", kode: "BBCV-0001", nama: "Bonelles Dada", satuan: "Kg", qty: 4, keterangan: "inbound note", transactionId: "TX-CI-IN", requestId: "CI-IN", entitas: "CV" },
+  ], "Barang masuk");
+  const outgoing = normalisasiRiwayatServer([
+    { row: 29, tanggal: "2026-11-26T02:00:00.000Z", kode: "WK-0004", nama: "Iga Sapi", satuan: "Kg", qty: 2, keterangan: "outbound note", transactionId: "TX-CI-OUT", requestId: "CI-OUT", entitas: "PT" },
+  ], "Barang keluar");
+  const damaged = normalisasiRiwayatServer([
+    { row: 31, tanggal: "2026-11-26T03:00:00.000Z", kode: "BBPT-0012", nama: "Bebek", satuan: "Pack", qty: 1, keterangan: "damage note", transactionId: "TX-CI-DMG", requestId: "CI-DMG", entitas: "PT" },
+  ], "Barang Rusak");
+
+  assert.equal(incoming[0].tipe, "masuk");
+  assert.equal(incoming[0].entitas, "CV");
+  assert.equal(incoming[0].items[0].kode, "BBCV-0001");
+  assert.equal(incoming[0].items[0].qty, 4);
+  assert.equal(incoming[0].kunci, "TX-CI-IN");
+  assert.equal(outgoing[0].tipe, "keluar");
+  assert.equal(outgoing[0].entitas, "PT");
+  assert.equal(outgoing[0].items[0].nama, "Iga Sapi");
+  assert.equal(damaged[0].tipe, "rusak");
+  assert.equal(damaged[0].entitas, "PT");
+  assert.equal(damaged[0].anomali, false);
+});
+
+test("normalisasiRiwayatServer does not invent an entity or transaction identity when server data lacks them", () => {
+  const [row] = normalisasiRiwayatServer([
+    { row: 44, tanggal: "2026-11-26T04:00:00.000Z", kode: "UNKNOWN-01", nama: "Unknown", satuan: "Pack", qty: 1 },
+  ], "Barang keluar");
+  assert.equal(row.entitas, null);
+  assert.equal(row.transactionId, "");
+  assert.equal(row.id, "Barang keluar:44");
+  assert.equal(row.anomali, false);
 });
