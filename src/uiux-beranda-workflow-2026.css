@@ -1,0 +1,240 @@
+/* GudangAI RUDY — Beranda workflow hierarchy + navigation alignment
+   Presentation-only layer. Keeps existing routes, state, data and transaction behavior unchanged. */
+html[data-theme] [data-ui-page="dashboard"] .dashboard-shell {
+  width: min(100%, 1120px) !important;
+  padding: 14px clamp(10px, 2.2vw, 24px) calc(104px + env(safe-area-inset-bottom, 0px)) !important;
+  margin-inline: auto !important;
+  display: flex;
+  flex-direction: column;
+  gap: 14px !important;
+}
+html[data-theme] [data-ui-page="dashboard"] .dashboard-overview-grid {
+  display: grid !important;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 12px !important;
+  min-width: 0;
+}
+html[data-theme] [data-ui-page="dashboard"] .dashboard-overview-grid > div {
+  grid-column: 1 / -1 !important;
+  min-width: 0;
+  width: 100%;
+}
+html[data-theme] [data-ui-page="dashboard"] .dashboard-overview-grid > div:nth-child(5),
+html[data-theme] [data-ui-page="dashboard"] .dashboard-overview-grid > div:nth-child(6) {
+  grid-column: span 6 !important;
+}
+html[data-theme] [data-ui-page="dashboard"] .dashboard-overview-grid .dashboard-panel {
+  height: 100%;
+  min-width: 0;
+  padding: clamp(12px, 1.5vw, 18px) !important;
+  border: 1px solid var(--ux-line) !important;
+  border-radius: var(--ux-radius-lg) !important;
+  background: var(--ux-panel) !important;
+  color: var(--ux-ink) !important;
+  box-shadow: var(--ux-shadow) !important;
+}
+html[data-theme] [data-ui-page="dashboard"] .dashboard-greeting-card {
+  display: block;
+  min-width: 0;
+  border: 1px solid var(--ux-line) !important;
+  border-radius: var(--ux-radius-lg) !important;
+  background: var(--ux-panel) !important;
+  color: var(--ux-ink) !important;
+  box-shadow: var(--ux-shadow) !important;
+}
+html[data-theme] [data-ui-page="dashboard"] .dashboard-greeting-card > summary {
+  min-height: 58px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+html[data-theme] [data-ui-page="dashboard"] .dashboard-greeting-card > summary :is(span,h2,h3) {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+html[data-theme] [data-ui-page="dashboard"] .dashboard-greeting-card > summary .text-slate-900 {
+  color: var(--ux-ink) !important;
+}
+html[data-theme] [data-ui-page="dashboard"] .dashboard-greeting-card > div {
+  border-color: var(--ux-line) !important;
+}
+html[data-theme] [data-ui-page="dashboard"] .dashboard-quick-links {
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--ux-line);
+  border-radius: var(--ux-radius-lg);
+  background: var(--ux-panel);
+  box-shadow: var(--ux-shadow);
+}
+html[data-theme] [data-ui-page="dashboard"] .dashboard-quick-links > h2 {
+  margin: 0;
+  color: var(--ux-ink) !important;
+  font-size: 13px !important;
+  font-weight: 800;
+  letter-spacing: -.01em;
+}
+html[data-theme] [data-ui-page="dashboard"] .dashboard-quick-links .dashboard-quick-card {
+  min-height: 88px !important;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 12px !important;
+  border: 1px solid var(--ux-line) !important;
+  border-radius: 13px !important;
+  background: var(--ux-panel-2) !important;
+  box-shadow: none !important;
+  text-align: left;
+}
+html[data-theme] [data-ui-page="dashboard"] .dashboard-quick-links .dashboard-quick-card-arrow {
+  display: none;
+}
+html[data-theme] [data-ui-page="dashboard"] .ops-status-grid {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px !important;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+html[data-theme] [data-ui-page="dashboard"] .ops-status-grid > .ops-status-card {
+  display: grid !important;
+  grid-template-columns: 20px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px 9px !important;
+  min-width: 0;
+  min-height: 64px;
+  margin: 0 !important;
+  padding: 11px !important;
+  border: 1px solid var(--ux-line) !important;
+  border-radius: 13px !important;
+  background: var(--ux-panel-2) !important;
+  color: var(--ux-ink) !important;
+  box-shadow: none !important;
+}
+html[data-theme] [data-ui-page="dashboard"] .ops-status-grid .ops-status-name {
+  min-width: 0;
+  font-size: 11px;
+  line-height: 1.3;
+  font-weight: 750;
+  overflow-wrap: anywhere;
+}
+html[data-theme] [data-ui-page="dashboard"] .ops-status-grid .ops-status-detail {
+  grid-column: 2 / -1;
+  min-width: 0;
+  font-size: 10px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+html[data-theme] [data-ui-page="dashboard"] .ops-status-grid .ops-status-badge {
+  white-space: nowrap;
+  font-size: 9px;
+}
+html[data-theme] .nav-bar {
+  min-height: calc(70px + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid var(--ux-line, var(--border)) !important;
+  background: var(--nav-bg) !important;
+  box-shadow: 0 -8px 24px rgba(0,0,0,.09) !important;
+}
+html[data-theme] .nav-bar > div {
+  min-height: 70px;
+  max-width: 760px !important;
+  margin-inline: auto !important;
+  align-items: stretch !important;
+}
+html[data-theme] .nav-btn,
+html[data-theme] .nav-fab {
+  min-height: 70px;
+  justify-content: center;
+  gap: 5px;
+  padding: 7px 3px 8px !important;
+  flex: 1 1 0%;
+}
+html[data-theme] .nav-btn .nav-icon-wrap {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 30px;
+}
+html[data-theme] .nav-label {
+  max-width: 100%;
+  font-size: clamp(9px, 2.5vw, 11px) !important;
+  line-height: 1.15;
+  font-weight: 750;
+}
+html[data-theme] .nav-fab-btn {
+  width: 42px !important;
+  height: 42px !important;
+  display: grid;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--nav-active) 35%, transparent) !important;
+  border-radius: 14px !important;
+  background: var(--nav-fab-bg) !important;
+  color: #fff !important;
+  box-shadow: 0 5px 14px rgba(0,0,0,.16) !important;
+  transform: translateY(-5px);
+}
+html[data-theme="soft_light"] .nav-fab-btn { color: #fff !important; }
+html[data-theme="deep_ocean"] .nav-fab-btn,
+html[data-theme="graphite_titanium"] .nav-fab-btn { color: #101820 !important; }
+html[data-theme] .nav-fab .nav-label { margin-top: -3px; }
+html[data-theme] .nav-btn:focus-visible,
+html[data-theme] .nav-fab:focus-visible {
+  outline: 3px solid var(--nav-active) !important;
+  outline-offset: -4px;
+  border-radius: 12px;
+}
+html[data-theme] .more-sheet {
+  width: min(100% - 20px, 520px);
+  margin-inline: auto;
+  padding: 18px 14px calc(14px + env(safe-area-inset-bottom, 0px));
+  border-radius: 22px 22px 0 0 !important;
+}
+html[data-theme] .more-row {
+  min-height: 58px;
+  border: 1px solid var(--ux-line);
+  border-radius: 13px;
+  margin-top: 8px;
+  padding: 9px 11px;
+}
+html[data-theme] .more-row:focus-visible {
+  outline: 3px solid var(--nav-active);
+  outline-offset: 2px;
+}
+@media (max-width: 600px) {
+  html[data-theme] [data-ui-page="dashboard"] .dashboard-overview-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 11px !important;
+  }
+  html[data-theme] [data-ui-page="dashboard"] .dashboard-overview-grid > div:nth-child(5),
+  html[data-theme] [data-ui-page="dashboard"] .dashboard-overview-grid > div:nth-child(6) {
+    grid-column: 1 / -1 !important;
+  }
+  html[data-theme] [data-ui-page="dashboard"] .ops-status-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  html[data-theme] [data-ui-page="dashboard"] .ops-status-grid > .ops-status-card {
+    min-height: 56px;
+  }
+  html[data-theme] [data-ui-page="dashboard"] .dashboard-quick-links {
+    padding: 12px;
+  }
+  html[data-theme] [data-ui-page="dashboard"] .dashboard-quick-links .dashboard-quick-card {
+    min-height: 78px !important;
+    padding: 10px !important;
+  }
+}
+@media (max-width: 360px) {
+  html[data-theme] .nav-label { font-size: 9px !important; }
+  html[data-theme] .nav-btn,
+  html[data-theme] .nav-fab { padding-inline: 0 !important; }
+  html[data-theme] [data-ui-page="dashboard"] .dashboard-quick-links .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  html[data-theme] .nav-btn,
+  html[data-theme] .nav-fab,
+  html[data-theme] .nav-label { transition: none !important; }
+}
