@@ -1,4 +1,4 @@
-import { Fragment, memo, useMemo, useState, useEffect, useCallback, useDeferredValue, useRef } from "react";
+import React, { Fragment, memo, useMemo, useState, useEffect, useCallback, useDeferredValue, useRef } from "react";
 import "./riwayat.css";
 import { getLocalHistory, getPendingQueue, fetchRemoteTransactionHistory } from "../data/api";
 import {
