@@ -153,11 +153,17 @@ export const kunciHari = (ts) => {
   if (!/^(20[2-3]\d)-\d{2}-\d{2}$/.test(key)) return "tanpa-tanggal";
   return key;
 };
-export const jamWIB = (ts) => {
-  if (ts == null) return "--.--";
-  const jam = fmtJam.format(ts);
-  if (jam === "00.00" || jam === "00:00") return "--.--";
-  return `${jam} WIB`;
+function memilikiJam(v) {
+  if (typeof v === "number") return Number.isFinite(v);
+  if (v instanceof Date) return !Number.isNaN(v.getTime());
+  const value = String(v ?? "").trim();
+  if (!value) return false;
+  return /(?:T|\s)\d{1,2}:\d{2}/.test(value) || /\b\d{1,2}:\d{2}(?::\d{2})?\b/.test(value);
+}
+
+export const jamWIB = (ts, adaWaktu = true) => {
+  if (ts == null || !adaWaktu) return "Waktu tidak tercatat";
+  return `${fmtJam.format(ts).replace(".", ":")} WIB`;
 };
 
 export function normTx(r, sumber = "lokal") {
@@ -166,9 +172,9 @@ export function normTx(r, sumber = "lokal") {
   for (let i = 0; i < items.length; i++) totalQty += items[i].qty;
   const tipe = normTipe(r.type ?? r.tipe ?? r.jenis ?? r.action);
   const entitas = normEntitas(r.entity ?? r.entitas ?? r.divisi);
-  const ts = parseWaktu(
-    r.savedAt ?? r.at ?? r.timestamp ?? r.createdAt ?? r.updatedAt ?? r.processingStartedAt ?? r.tanggal ?? r.date
-  );
+  const rawWaktu = r.savedAt ?? r.at ?? r.timestamp ?? r.createdAt ?? r.updatedAt ?? r.processingStartedAt ?? r.tanggal ?? r.date;
+  const adaWaktu = memilikiJam(rawWaktu);
+  const ts = parseWaktu(rawWaktu);
   const status = normStatus(r.status ?? r.syncStatus ?? r.state, sumber);
   const id = String(
     r.id ?? r.requestId ?? r.transactionId ?? `${sumber}-${ts}-${tipe}-${items[0]?.kode || "x"}`
@@ -196,7 +202,8 @@ export function normTx(r, sumber = "lokal") {
     keterangan,
     anomali,
     hariKey: kunciHari(ts),
-    jamLabel: jamWIB(ts),
+    adaWaktu,
+    jamLabel: jamWIB(ts, adaWaktu),
     _hay: hay,
   };
 }
