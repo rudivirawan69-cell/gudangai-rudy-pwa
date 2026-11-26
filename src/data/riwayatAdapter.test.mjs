@@ -81,13 +81,13 @@ test("hitungStatus & ringkasKatalog", () => {
   assert.equal(k.status.gagal, 1);
 });
 
-test("keCSV header dan pemisah titik koma", () => {
+test("keCSV header dan pemisah kolom koma", () => {
   const list = gabung([
     { type: "masuk", entity: "CV", items: [{ kode: "A", nama: "Item A", qty: 3, satuan: "Pack" }], savedAt: Date.now(), keterangan: "uji" },
   ]);
   const csv = keCSV(list);
   assert.ok(csv.includes("Tanggal"));
-  assert.ok(csv.includes(";"));
+  assert.ok(csv.includes(","));
   assert.ok(csv.includes("Item A"));
 });
 
