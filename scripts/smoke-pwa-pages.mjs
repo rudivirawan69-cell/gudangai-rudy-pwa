@@ -474,27 +474,44 @@ try {
           assert.ok(stockFilters.entityButtons.every((value) => value !== '0px'), `Entity tabs must each be standalone: ${JSON.stringify(stockFilters)}`);
         }
         if (label === 'Riwayat') {
-          await page.locator('main[data-ui-page="riwayat"] .rw-filter-group').nth(2).waitFor({ state: 'visible', timeout: 10000 });
-          const historyFilters = await page.evaluate(() => {
-            const groups = [...document.querySelectorAll('.rw-filter-group')];
-            const chips = document.querySelector('.rw-chips');
-            const text = document.body.innerText;
+          const history = page.locator('main[data-ui-page="riwayat"]');
+          const groups = history.locator('.rw-filter-group');
+          await groups.nth(2).waitFor({ state: 'visible', timeout: 10000 });
+          await groups.nth(2).locator('.rw-filter-head').click();
+          await groups.nth(2).locator('.rw-chips').waitFor({ state: 'visible', timeout: 5000 });
+          const historyFilters = await history.evaluate((root) => {
+            const groups = [...root.querySelectorAll('.rw-filter-group')];
+            const chips = root.querySelector('.rw-filter-group.is-open .rw-chips');
+            const text = root.innerText;
+            const rects = groups.map((el) => {
+              const r = el.getBoundingClientRect();
+              return { left: r.left, right: r.right, top: r.top, bottom: r.bottom, width: r.width };
+            });
+            const overlaps = rects.some((a, i) => rects.some((b, j) =>
+              i < j && a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top
+            ));
             return {
               count: groups.length,
               cards: groups.map((el) => ({
                 border: getComputedStyle(el).borderTopWidth,
                 background: getComputedStyle(el).backgroundColor,
               })),
-              chipsBackground: getComputedStyle(chips).backgroundColor,
-              hasLegacyWrapper: Boolean(document.querySelector('.rw-filters')),
+              chipsFound: chips instanceof Element,
+              chipsBackground: chips ? getComputedStyle(chips).backgroundColor : null,
+              openFilterCount: root.querySelectorAll('.rw-filter-group.is-open').length,
+              overlaps,
+              hasLegacyWrapper: Boolean(root.querySelector('.rw-filters')),
               hasZeroCount: /\\b0 transaksi\\b/i.test(text),
               hasLegacyEmptyCopy: text.includes('Transaksi berhasil akan muncul di sini.'),
-              csvClass: document.querySelector('.rw-btn-export')?.className || '',
+              csvClass: root.querySelector('.rw-btn-export')?.className || '',
             };
           });
           assert.equal(historyFilters.count, 3, `Riwayat must show exactly three filter cards: ${JSON.stringify(historyFilters)}`);
           assert.ok(historyFilters.cards.every((card) => card.border !== '0px' && card.background !== 'rgba(0, 0, 0, 0)'), `Riwayat filters are not independent cards: ${JSON.stringify(historyFilters)}`);
+          assert.equal(historyFilters.chipsFound, true, `Expanded Riwayat filter must render its chips: ${JSON.stringify(historyFilters)}`);
+          assert.equal(historyFilters.openFilterCount, 1, `Only one Riwayat filter may be expanded: ${JSON.stringify(historyFilters)}`);
           assert.equal(historyFilters.chipsBackground, 'rgba(0, 0, 0, 0)', `Riwayat tabs must not have a background wrapper: ${JSON.stringify(historyFilters)}`);
+          assert.equal(historyFilters.overlaps, false, `Riwayat filter cards must not overlap: ${JSON.stringify(historyFilters)}`);
           assert.equal(historyFilters.hasLegacyWrapper, false);
           assert.equal(historyFilters.hasZeroCount, false);
           assert.equal(historyFilters.hasLegacyEmptyCopy, false);
