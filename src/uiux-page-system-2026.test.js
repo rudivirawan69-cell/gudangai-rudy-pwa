@@ -209,7 +209,10 @@ describe('GudangAI Metode C UI contract', () => {
     expect(stock).not.toContain('sk-section-label">Divisi');
     expect(stock).not.toContain('sk-section-label">Kondisi stok');
     expect(history).not.toContain('className="rw-filters"');
-    expect((history.match(/className="rw-filter-group"/g) || []).length).toBe(3);
+    expect((history.match(/className={`rw-filter-group\$\{/g) || []).length).toBe(3);
+    expect(history).toContain('aria-label="Filter jenis transaksi"');
+    expect(history).toContain('aria-label="Filter entitas"');
+    expect(history).toContain('aria-label="Filter status pengiriman"');
     expect(history).not.toContain('Transaksi berhasil akan muncul di sini.');
     expect(history).toContain('className="rw-btn-ghost rw-btn-export"');
     expect(input).not.toContain('input-methods-note');
