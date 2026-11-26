@@ -638,10 +638,10 @@ function DashboardStatusSummary({ data, loading }) {
         const raw = data?.status?.[item.key] ?? data?.[item.key];
         const count = raw == null || !Number.isFinite(Number(raw)) ? null : Number(raw);
         return (
-          <div key={item.key} className={`dashboard-status-tile dashboard-status-${item.key} rounded-xl border p-3 text-center`}>
+          <div key={item.key} className={`dashboard-status-tile dashboard-total-centered dashboard-status-${item.key}`}>
             <p className="text-[9px] font-extrabold uppercase tracking-wide">{item.label}</p>
             <p className="mt-1 text-xl font-extrabold tabular-nums" aria-live="polite">{hasSummary && count != null ? count.toLocaleString('id-ID') : loading ? 'Memuat…' : '—'}</p>
-            <p className="text-[9px] font-semibold opacity-70">item</p>
+
           </div>
         );
       })}
