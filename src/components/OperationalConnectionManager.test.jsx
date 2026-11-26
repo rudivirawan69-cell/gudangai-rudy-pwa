@@ -1,5 +1,5 @@
 import React from 'react';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { SWRConfig } from 'swr';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import OperationalConnectionManager from './OperationalConnectionManager';
@@ -55,7 +55,7 @@ describe('OperationalConnectionManager', () => {
   });
 
   it('refreshes checks and sends pending operators to the sync queue', async () => {
-    const { onNavigate, onCheckSpreadsheet } = renderManager();
+    const { onNavigate } = renderManager();
     expect(screen.queryByRole('button', { name: 'Periksa ulang koneksi operasional' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Tinjau antrean (2)' }));
     expect(onNavigate).toHaveBeenCalledWith('sync');
