@@ -51,7 +51,7 @@ beforeEach(() => {
   pdf.extractTextFromImage.mockReset();
   Object.defineProperty(navigator, 'onLine', { configurable: true, value: true });
 });
-afterEach(() => cleanup());
+afterEach(() => { cleanup(); vi.useRealTimers(); });
 
 describe('InputPage PR 1', () => {
   it('melepas busy saat OCR foto gagal dan mengaktifkan semua tombol input', async () => {
