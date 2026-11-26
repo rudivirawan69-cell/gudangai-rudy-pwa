@@ -94,12 +94,10 @@ export function parseWaktu(v) {
     return n;
   }
   const s = String(v).trim();
-  // Date-only YYYY-MM-DD → midnight WIB (display will avoid showing 00.00 as write time)
   if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
     const d = new Date(s + "T00:00:00+07:00");
     return Number.isNaN(d.getTime()) ? null : d.getTime();
   }
-  // DD/MM/YYYY or DD-MM-YYYY optional time
   const m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
   if (m) {
     const dd = m[1].padStart(2, "0");
@@ -152,14 +150,12 @@ const fmtTanggal = new Intl.DateTimeFormat("id-ID", {
 export const kunciHari = (ts) => {
   if (ts == null) return "tanpa-tanggal";
   const key = fmtHari.format(ts);
-  // Guard against absurd years from bad parse
   if (!/^(20[2-3]\d)-\d{2}-\d{2}$/.test(key)) return "tanpa-tanggal";
   return key;
 };
 export const jamWIB = (ts) => {
   if (ts == null) return "--.--";
   const jam = fmtJam.format(ts);
-  // Date-only (midnight WIB) → jangan tampilkan 00.00 sebagai seolah-olah waktu penulisan sukses
   if (jam === "00.00" || jam === "00:00") return "--.--";
   return `${jam} WIB`;
 };
@@ -170,7 +166,6 @@ export function normTx(r, sumber = "lokal") {
   for (let i = 0; i < items.length; i++) totalQty += items[i].qty;
   const tipe = normTipe(r.type ?? r.tipe ?? r.jenis ?? r.action);
   const entitas = normEntitas(r.entity ?? r.entitas ?? r.divisi);
-  // Prefer waktu penulisan sukses (ISO) daripada tanggal-only spreadsheet
   const ts = parseWaktu(
     r.savedAt ?? r.at ?? r.timestamp ?? r.createdAt ?? r.updatedAt ?? r.processingStartedAt ?? r.tanggal ?? r.date
   );
@@ -250,22 +245,25 @@ export function filterTx(list, { tipe = "semua", entitas = "semua", status = "se
 export function kelompokkan(list, now = Date.now()) {
   const map = new Map();
   const anomali = [];
+  let totalValid = 0;
   for (let i = 0; i < list.length; i++) {
     const t = list[i];
     if (t.anomali) {
       anomali.push(t);
       continue;
     }
+    totalValid += 1;
     const k = t.hariKey || kunciHari(t.ts);
-    if (!map.has(k)) {
-      map.set(k, { key: k, label: labelHari(k, now), items: [], ringkas: { masuk: 0, keluar: 0, rusak: 0 } });
+    let g = map.get(k);
+    if (!g) {
+      g = { key: k, label: labelHari(k, now), items: [], ringkas: { masuk: 0, keluar: 0, rusak: 0 } };
+      map.set(k, g);
     }
-    const g = map.get(k);
     g.items.push(t);
     if (t.tipe && g.ringkas[t.tipe] != null) g.ringkas[t.tipe] += t.totalQty || 0;
   }
   const hari = Array.from(map.values()).sort((a, b) => (b.key > a.key ? 1 : -1));
-  return { hari, anomali };
+  return { hari, anomali, totalValid };
 }
 
 export function hitungStatus(list) {
@@ -278,7 +276,6 @@ export function hitungStatus(list) {
   return status;
 }
 
-/** Satu lintasan: valid + hitung status + hitung tipe (untuk chip). */
 export function ringkasKatalog(list) {
   const status = { semua: 0, terkirim: 0, antrian: 0, gagal: 0, lokal: 0 };
   const tipe = { masuk: 0, keluar: 0, rusak: 0 };
