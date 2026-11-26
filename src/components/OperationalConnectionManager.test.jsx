@@ -51,7 +51,7 @@ describe('OperationalConnectionManager', () => {
     expect(screen.getByText('Spreadsheet API')).toBeInTheDocument();
     expect(screen.getByText('Realtime / Delta')).toBeInTheDocument();
     expect(screen.getByText('Sinkronisasi / Outbox')).toBeInTheDocument();
-    expect(screen.getByText('2 item menunggu konfirmasi atau verifikasi.')).toBeInTheDocument();
+    await screen.findByRole('button', { name: 'Tinjau antrean (2)' });
   });
 
   it('refreshes checks and sends pending operators to the sync queue', async () => {
