@@ -208,6 +208,10 @@ describe('GudangAI Metode C UI contract', () => {
     expect(stock).toContain('<h1>Stok Barang</h1>');
     expect(stock).not.toContain('sk-section-label">Divisi');
     expect(stock).not.toContain('sk-section-label">Kondisi stok');
+    expect(history).not.toContain('className="rw-filters"');
+    expect((history.match(/className="rw-filter-group"/g) || []).length).toBe(3);
+    expect(history).not.toContain('Transaksi berhasil akan muncul di sini.');
+    expect(history).toContain('className="rw-btn-ghost rw-btn-export"');
     expect(input).not.toContain('input-methods-note');
     expect(input).not.toContain('Metode input otomatis terkunci');
     expect(history).not.toContain('<small>Aktivitas persediaan</small>');
