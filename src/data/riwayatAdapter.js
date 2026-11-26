@@ -88,10 +88,35 @@ export function parseWaktu(v) {
   if (v == null || v === "") return null;
   if (typeof v === "number") {
     const n = v < 1e12 ? v * 1000 : v;
-    return Number.isFinite(n) ? n : null;
+    if (!Number.isFinite(n)) return null;
+    const y = new Date(n).getFullYear();
+    if (y < 2020 || y > 2035) return null;
+    return n;
   }
-  const d = new Date(String(v).trim());
-  return Number.isNaN(d.getTime()) ? null : d.getTime();
+  const s = String(v).trim();
+  // Date-only YYYY-MM-DD → midnight WIB (display will avoid showing 00.00 as write time)
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+    const d = new Date(s + "T00:00:00+07:00");
+    return Number.isNaN(d.getTime()) ? null : d.getTime();
+  }
+  // DD/MM/YYYY or DD-MM-YYYY optional time
+  const m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
+  if (m) {
+    const dd = m[1].padStart(2, "0");
+    const mm = m[2].padStart(2, "0");
+    const yyyy = m[3];
+    const hh = (m[4] || "00").padStart(2, "0");
+    const mi = (m[5] || "00").padStart(2, "0");
+    const ss = (m[6] || "00").padStart(2, "0");
+    if (Number(yyyy) < 2020 || Number(yyyy) > 2035) return null;
+    const d = new Date(`${yyyy}-${mm}-${dd}T${hh}:${mi}:${ss}+07:00`);
+    return Number.isNaN(d.getTime()) ? null : d.getTime();
+  }
+  const d = new Date(s);
+  if (Number.isNaN(d.getTime())) return null;
+  const y = d.getFullYear();
+  if (y < 2020 || y > 2035) return null;
+  return d.getTime();
 }
 
 export function normItems(r) {
@@ -124,8 +149,20 @@ const fmtTanggal = new Intl.DateTimeFormat("id-ID", {
   year: "numeric",
 });
 
-export const kunciHari = (ts) => (ts == null ? "tanpa-tanggal" : fmtHari.format(ts));
-export const jamWIB = (ts) => (ts == null ? "--.--" : `${fmtJam.format(ts)} WIB`);
+export const kunciHari = (ts) => {
+  if (ts == null) return "tanpa-tanggal";
+  const key = fmtHari.format(ts);
+  // Guard against absurd years from bad parse
+  if (!/^(20[2-3]\d)-\d{2}-\d{2}$/.test(key)) return "tanpa-tanggal";
+  return key;
+};
+export const jamWIB = (ts) => {
+  if (ts == null) return "--.--";
+  const jam = fmtJam.format(ts);
+  // Date-only (midnight WIB) → jangan tampilkan 00.00 sebagai seolah-olah waktu penulisan sukses
+  if (jam === "00.00" || jam === "00:00") return "--.--";
+  return `${jam} WIB`;
+};
 
 export function normTx(r, sumber = "lokal") {
   const items = normItems(r);
@@ -133,7 +170,10 @@ export function normTx(r, sumber = "lokal") {
   for (let i = 0; i < items.length; i++) totalQty += items[i].qty;
   const tipe = normTipe(r.type ?? r.tipe ?? r.jenis ?? r.action);
   const entitas = normEntitas(r.entity ?? r.entitas ?? r.divisi);
-  const ts = parseWaktu(r.savedAt ?? r.at ?? r.timestamp ?? r.createdAt ?? r.tanggal ?? r.date);
+  // Prefer waktu penulisan sukses (ISO) daripada tanggal-only spreadsheet
+  const ts = parseWaktu(
+    r.savedAt ?? r.at ?? r.timestamp ?? r.createdAt ?? r.updatedAt ?? r.processingStartedAt ?? r.tanggal ?? r.date
+  );
   const status = normStatus(r.status ?? r.syncStatus ?? r.state, sumber);
   const id = String(
     r.id ?? r.requestId ?? r.transactionId ?? `${sumber}-${ts}-${tipe}-${items[0]?.kode || "x"}`
@@ -182,77 +222,66 @@ export function gabung(lokal = [], server = []) {
 }
 
 export function labelHari(key, now = Date.now()) {
-  if (key === "tanpa-tanggal") return "Tanpa tanggal";
+  if (!key || key === "tanpa-tanggal") return "Tanpa tanggal";
+  if (!/^(20[2-3]\d)-\d{2}-\d{2}$/.test(key)) return "Tanpa tanggal";
   if (key === kunciHari(now)) return "Hari ini";
   if (key === kunciHari(now - 86400000)) return "Kemarin";
-  return fmtTanggal.format(new Date(`${key}T12:00:00+07:00`)).toUpperCase();
+  try {
+    return fmtTanggal.format(new Date(`${key}T12:00:00+07:00`)).toUpperCase();
+  } catch {
+    return "Tanpa tanggal";
+  }
 }
 
 export function filterTx(list, { tipe = "semua", entitas = "semua", status = "semua", q = "" } = {}) {
-  const k = q.trim().toLowerCase();
+  const qn = String(q || "").trim().toLowerCase();
   const out = [];
   for (let i = 0; i < list.length; i++) {
     const t = list[i];
     if (tipe !== "semua" && t.tipe !== tipe) continue;
     if (entitas !== "semua" && t.entitas !== entitas) continue;
     if (status !== "semua" && t.status !== status) continue;
-    if (k && !(t._hay || "").includes(k)) continue;
+    if (qn && !(t._hay || "").includes(qn)) continue;
     out.push(t);
   }
   return out;
 }
 
-export function ringkasHari(list) {
-  const r = { masuk: 0, keluar: 0, rusak: 0, transaksi: list.length };
-  for (let i = 0; i < list.length; i++) {
-    const t = list[i];
-    if (t.tipe && r[t.tipe] != null) r[t.tipe] += t.totalQty;
-  }
-  return r;
-}
-
 export function kelompokkan(list, now = Date.now()) {
-  const valid = [];
+  const map = new Map();
   const anomali = [];
-  const m = new Map();
   for (let i = 0; i < list.length; i++) {
     const t = list[i];
     if (t.anomali) {
       anomali.push(t);
       continue;
     }
-    valid.push(t);
     const k = t.hariKey || kunciHari(t.ts);
-    let bucket = m.get(k);
-    if (!bucket) {
-      bucket = [];
-      m.set(k, bucket);
+    if (!map.has(k)) {
+      map.set(k, { key: k, label: labelHari(k, now), items: [], ringkas: { masuk: 0, keluar: 0, rusak: 0 } });
     }
-    bucket.push(t);
+    const g = map.get(k);
+    g.items.push(t);
+    if (t.tipe && g.ringkas[t.tipe] != null) g.ringkas[t.tipe] += t.totalQty || 0;
   }
-  const keys = Array.from(m.keys()).sort((a, b) => (a < b ? 1 : -1));
-  const hari = new Array(keys.length);
-  for (let i = 0; i < keys.length; i++) {
-    const key = keys[i];
-    const items = m.get(key);
-    hari[i] = { key, label: labelHari(key, now), items, ringkas: ringkasHari(items) };
-  }
+  const hari = Array.from(map.values()).sort((a, b) => (b.key > a.key ? 1 : -1));
   return { hari, anomali };
 }
 
 export function hitungStatus(list) {
-  const c = { semua: list.length, terkirim: 0, antrian: 0, gagal: 0, lokal: 0 };
+  const status = { semua: 0, terkirim: 0, antrian: 0, gagal: 0, lokal: 0 };
   for (let i = 0; i < list.length; i++) {
     const s = list[i].status;
-    if (c[s] != null) c[s] += 1;
+    status.semua += 1;
+    if (status[s] != null) status[s] += 1;
   }
-  return c;
+  return status;
 }
 
 /** Satu lintasan: valid + hitung status + hitung tipe (untuk chip). */
 export function ringkasKatalog(list) {
   const status = { semua: 0, terkirim: 0, antrian: 0, gagal: 0, lokal: 0 };
-  const tipe = { semua: 0, masuk: 0, keluar: 0, rusak: 0 };
+  const tipe = { masuk: 0, keluar: 0, rusak: 0 };
   let anomali = 0;
   for (let i = 0; i < list.length; i++) {
     const t = list[i];
@@ -261,48 +290,42 @@ export function ringkasKatalog(list) {
       continue;
     }
     status.semua += 1;
-    tipe.semua += 1;
     if (status[t.status] != null) status[t.status] += 1;
     if (tipe[t.tipe] != null) tipe[t.tipe] += 1;
   }
   return { status, tipe, anomali };
 }
 
-const esc = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
 export function keCSV(list) {
   const kepala = ["Tanggal", "Jam", "Tipe", "Entitas", "Kode", "Nama", "Qty", "Satuan", "Status", "Keterangan", "Sumber"];
-  const baris = [kepala];
+  const rows = [kepala.join(",")];
   for (let i = 0; i < list.length; i++) {
     const t = list[i];
-    if (t.anomali) continue;
-    const items = t.items || [];
-    for (let j = 0; j < items.length; j++) {
-      const it = items[j];
-      baris.push([
+    for (let j = 0; j < (t.items || []).length; j++) {
+      const it = t.items[j];
+      rows.push([
         t.hariKey || kunciHari(t.ts),
         t.jamLabel || jamWIB(t.ts),
-        t.tipe,
-        t.entitas ?? "",
-        it.kode,
-        it.nama,
+        t.tipe || "",
+        t.entitas || "",
+        it.kode || "",
+        (it.nama || "").replace(/,/g, " "),
         it.qty,
-        it.satuan,
-        t.status,
-        t.keterangan,
-        t.sumber,
-      ]);
+        it.satuan || "",
+        t.status || "",
+        (t.keterangan || "").replace(/,/g, " "),
+        t.sumber || "",
+      ].join(","));
     }
   }
-  return "\uFEFF" + baris.map((r) => r.map(esc).join(";")).join("\r\n");
+  return rows.join("\n");
 }
 
 export function ringkasanTeks(t) {
-  const judul = `${(t.tipe || "").toUpperCase()} ${t.entitas ?? ""} — ${t.hariKey || kunciHari(t.ts)} ${t.jamLabel || jamWIB(t.ts)}`;
-  const lines = [judul];
-  const items = t.items || [];
-  for (let i = 0; i < items.length; i++) {
-    const it = items[i];
-    lines.push(`• ${it.nama || it.kode} : ${it.qty} ${it.satuan}`.trim());
+  const lines = [`${t.tipe || "?"} · ${t.entitas || "?"} · ${t.jamLabel || ""}`];
+  for (let i = 0; i < (t.items || []).length; i++) {
+    const it = t.items[i];
+    lines.push(`- ${it.nama || it.kode}: ${it.qty} ${it.satuan || ""}`);
   }
   if (t.keterangan) lines.push(`Ket: ${t.keterangan}`);
   return lines.join("\n");

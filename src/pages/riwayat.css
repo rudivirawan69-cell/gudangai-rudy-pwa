@@ -48,15 +48,15 @@
 .rw-rusak .rw-ico,.rw-row.rw-rusak .rw-ico{background:color-mix(in srgb,var(--rw-rusak) 18%,transparent);color:var(--rw-rusak)}
 .rw-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
 .rw-main b{font-size:14px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.rw-main small{font-size:11.5px;color:var(--rw-mut)}
-.rw-pill{flex:0 0 auto;padding:3px 9px;border-radius:99px;font-size:11px;font-weight:800}
-.rw-s-terkirim{background:color-mix(in srgb,var(--rw-masuk) 15%,transparent);color:var(--rw-masuk)}
-.rw-s-antrian{background:color-mix(in srgb,var(--rw-keluar) 15%,transparent);color:var(--rw-keluar)}
-.rw-s-gagal{background:color-mix(in srgb,var(--rw-rusak) 15%,transparent);color:var(--rw-rusak)}
+.rw-main small{font-size:12px;color:var(--rw-mut)}
+.rw-pill{flex-shrink:0;font-size:11px;font-weight:700;padding:4px 8px;border-radius:999px;background:var(--rw-line)}
+.rw-s-terkirim{background:color-mix(in srgb,var(--rw-masuk) 18%,transparent);color:var(--rw-masuk)}
+.rw-s-antrian{background:color-mix(in srgb,var(--rw-keluar) 18%,transparent);color:var(--rw-keluar)}
+.rw-s-gagal{background:color-mix(in srgb,var(--rw-rusak) 18%,transparent);color:var(--rw-rusak)}
 .rw-s-lokal{background:var(--rw-line);color:var(--rw-mut)}
 .rw-detail{padding:0 14px 12px;border-top:1px solid var(--rw-line)}
-.rw-detail ul{list-style:none;margin:10px 0;padding:0}
-.rw-detail li{display:flex;justify-content:space-between;gap:10px;padding:6px 0;font-size:13px;border-bottom:1px solid var(--rw-line)}
+.rw-detail ul{margin:0;padding:8px 0;list-style:none}
+.rw-detail li{display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px solid var(--rw-line);font-size:13px}
 .rw-detail li:last-child{border-bottom:0}
 .rw-detail em{color:var(--rw-mut);font-size:11px}
 .rw-ket{margin:0 0 8px;font-size:12.5px;color:var(--rw-mut)}
@@ -65,10 +65,14 @@
 .rw-more{display:block;width:100%;margin:12px 0 0;min-height:46px;border-radius:14px;border:1px dashed var(--rw-line);font-weight:700;color:var(--rw-brand)}
 
 /* Filter dan transaksi memakai kartu seragam, dengan kontrol yang mudah disentuh. */
-.rw-filter-group{margin:8px 0;padding:10px 12px;border:1px solid var(--rw-line);border-radius:16px;background:var(--rw-card)}
-.rw-filter-group h2{margin:0;font-size:12px;font-weight:800;color:var(--rw-mut)}
-.rw-chips{flex-wrap:wrap;overflow:visible;padding:8px 0 0}
-.rw-chips button{min-height:40px}
+.rw-filters-row{display:flex;gap:8px;margin:0 0 8px;align-items:flex-start}
+.rw-filter-group{flex:1;min-width:0;margin:0;padding:0;border:1px solid var(--rw-line);border-radius:14px;background:var(--rw-card);overflow:hidden}
+.rw-filter-head{display:flex;align-items:center;justify-content:space-between;width:100%;padding:10px 12px;text-align:left;gap:6px;min-height:44px}
+.rw-filter-group h2{margin:0;font-size:11.5px;font-weight:800;color:var(--rw-mut);line-height:1.2}
+.rw-filter-chevron{font-size:11px;color:var(--rw-mut);opacity:.85;flex-shrink:0}
+.rw-filter-group.is-open .rw-filter-head{border-bottom:1px solid var(--rw-line)}
+.rw-filter-group .rw-chips{flex-wrap:wrap;overflow:visible;padding:8px 10px 10px;gap:5px}
+.rw-chips button{min-height:36px}
 .rw-row-head{min-height:60px}
 .rw-audit-table-wrap{display:none}
 .rw-search{padding:0}
@@ -86,9 +90,11 @@
   .rw-page{padding-inline:10px}
   .rw-head{flex-direction:column;gap:8px}
   .rw-head-actions{width:100%;justify-content:flex-start}
-  .rw-filter-group{padding:9px 10px}
-  .rw-chips{gap:6px}
-  .rw-chips button{min-height:40px;padding-inline:10px}
+  .rw-filters-row{gap:5px}
+  .rw-filter-head{padding:8px 8px;min-height:38px}
+  .rw-filter-group h2{font-size:10.5px}
+  .rw-filter-group .rw-chips{gap:4px;padding:6px 6px 8px}
+  .rw-chips button{min-height:32px;padding-inline:8px;font-size:11px}
   .rw-row-head{gap:8px;padding:10px}
   .rw-ico{flex-basis:32px;height:32px}
   .rw-main b{white-space:normal;line-height:1.3}
@@ -114,17 +120,18 @@
 .rw-head p,.rw-sub{font-size:11.5px;line-height:1.35}
 .rw-head-actions{gap:5px}
 .rw-btn-queue,.rw-btn-ghost{min-height:34px;border-radius:11px}
-.rw-filters{gap:6px;margin-bottom:7px}
-.rw-filter-group{margin:0;padding:9px 11px;border-radius:14px;background:var(--rw-card);box-shadow:0 6px 15px rgba(15,50,58,.055),inset 0 1px 0 rgba(255,255,255,.95)}
+.rw-filters-row{gap:6px;margin-bottom:6px}
+.rw-filter-group{border-radius:12px;box-shadow:0 6px 15px rgba(15,50,58,.055),inset 0 1px 0 rgba(255,255,255,.95)}
+.rw-filter-head{padding:9px 10px;min-height:40px}
 .rw-filter-group h2{font-size:11px;letter-spacing:.02em}
-.rw-chips{gap:5px;padding:6px 0 0}
-.rw-chips button{min-height:35px;padding-inline:10px;font-size:11.5px;border-radius:11px}
-.rw-search{margin:0 0 8px;gap:5px}
-.rw-search input{min-height:43px;border-radius:12px;font-size:14px}
+.rw-filter-group .rw-chips{gap:5px;padding:6px 8px 8px}
+.rw-chips button{min-height:32px;padding-inline:9px;font-size:11.5px;border-radius:11px}
+.rw-search{margin:0 0 6px;gap:5px}
+.rw-search input{min-height:42px;border-radius:12px;font-size:14px}
 .rw-btn-export{min-height:38px;border-radius:11px}
-.rw-banner{margin:6px 0 8px;padding:9px 11px;border-radius:13px}
-.rw-day{margin-top:10px}
-.rw-day-head{margin-bottom:6px}
+.rw-banner{margin:4px 0 6px;padding:9px 11px;border-radius:13px}
+.rw-day{margin-top:8px}
+.rw-day-head{margin-bottom:5px}
 .rw-row{margin-bottom:7px;border-radius:14px;box-shadow:0 6px 15px rgba(15,50,58,.045),inset 0 1px 0 rgba(255,255,255,.95)}
 .rw-row-head{gap:10px;padding:10px 12px;min-height:56px}
 .rw-row.is-compact .rw-row-head{min-height:48px;padding:7px 10px}
@@ -136,9 +143,10 @@
  .rw-head-actions{width:auto;justify-content:flex-end;flex-wrap:nowrap}
  .rw-head h1{font-size:21px}
  .rw-head-actions .rw-btn-queue{font-size:10px;padding-inline:8px}
- .rw-filter-group{padding:8px 9px}
- .rw-chips{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}
- .rw-chips::-webkit-scrollbar{display:none}
- .rw-chips button{min-height:34px;padding-inline:9px}
+ .rw-filters-row{gap:4px}
+ .rw-filter-head{padding:7px 7px;min-height:36px}
+ .rw-filter-group h2{font-size:10px}
+ .rw-filter-group .rw-chips{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;padding:5px 6px 7px}
+ .rw-filter-group .rw-chips::-webkit-scrollbar{display:none}
+ .rw-chips button{min-height:30px;padding-inline:8px;font-size:10.5px}
 }
-@media(prefers-reduced-motion:reduce){.rw-row{transition:none}}
