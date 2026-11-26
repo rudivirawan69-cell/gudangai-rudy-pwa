@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import useSWR from 'swr';
 import {
-  Activity, Bot, FileSpreadsheet, ListChecks, RefreshCw, ShieldCheck, Wifi,
+  Activity, Bot, FileSpreadsheet, ListChecks, ShieldCheck, Wifi,
 } from 'lucide-react';
 import { getPendingQueue } from '../data/api';
 import { getAgentHealth } from '../data/claude';
