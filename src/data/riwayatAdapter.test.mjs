@@ -107,25 +107,30 @@ test("normalisasiRiwayatServer converts flat Apps Script rows into valid typed t
     { row: 31, tanggal: "2026-11-26T03:00:00.000Z", kode: "BBPT-0012", nama: "Bebek", satuan: "Pack", qty: 1, keterangan: "damage note", transactionId: "TX-CI-DMG", requestId: "CI-DMG", entitas: "PT" },
   ], "Barang Rusak");
 
-  assert.equal(incoming[0].tipe, "masuk");
-  assert.equal(incoming[0].entitas, "CV");
-  assert.equal(incoming[0].items[0].kode, "BBCV-0001");
-  assert.equal(incoming[0].items[0].qty, 4);
-  assert.equal(incoming[0].kunci, "TX-CI-IN");
-  assert.equal(outgoing[0].tipe, "keluar");
-  assert.equal(outgoing[0].entitas, "PT");
-  assert.equal(outgoing[0].items[0].nama, "Iga Sapi");
-  assert.equal(damaged[0].tipe, "rusak");
-  assert.equal(damaged[0].entitas, "PT");
-  assert.equal(damaged[0].anomali, false);
+  const incomingTx = normTx(incoming[0], "spreadsheet");
+  const outgoingTx = normTx(outgoing[0], "spreadsheet");
+  const damagedTx = normTx(damaged[0], "spreadsheet");
+  assert.equal(incomingTx.tipe, "masuk");
+  assert.equal(incomingTx.entitas, "CV");
+  assert.equal(incomingTx.items[0].kode, "BBCV-0001");
+  assert.equal(incomingTx.items[0].qty, 4);
+  assert.equal(incomingTx.kunci, "TX-CI-IN");
+  assert.equal(outgoingTx.tipe, "keluar");
+  assert.equal(outgoingTx.entitas, "PT");
+  assert.equal(outgoingTx.items[0].nama, "Iga Sapi");
+  assert.equal(damagedTx.tipe, "rusak");
+  assert.equal(damagedTx.entitas, "PT");
+  assert.equal(damagedTx.anomali, false);
 });
 
 test("normalisasiRiwayatServer does not invent an entity or transaction identity when server data lacks them", () => {
   const [row] = normalisasiRiwayatServer([
     { row: 44, tanggal: "2026-11-26T04:00:00.000Z", kode: "UNKNOWN-01", nama: "Unknown", satuan: "Pack", qty: 1 },
   ], "Barang keluar");
+  const tx = normTx(row, "spreadsheet");
   assert.equal(row.entitas, null);
   assert.equal(row.transactionId, "");
   assert.equal(row.id, "Barang keluar:44");
-  assert.equal(row.anomali, false);
+  assert.equal(tx.entitas, null);
+  assert.equal(tx.anomali, false);
 });
