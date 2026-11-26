@@ -138,5 +138,9 @@ export default function OperationalConnectionManager({
       <StatusRow Icon={Wifi} name="Realtime / Delta" {...realtime} />
       <StatusRow Icon={ListChecks} name="Sinkronisasi / Outbox" {...queue} />
     </ul>
+    {pendingCount > 0 && (
+      <button type="button" onClick={() => onNavigate?.('sync')} className="ops-queue-action">Tinjau antrean ({pendingCount})</button>
+    )}
+  
   );
 }
