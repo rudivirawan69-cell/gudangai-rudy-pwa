@@ -32,15 +32,15 @@ afterEach(() => cleanup());
 describe('RiwayatPage remote history', () => {
   it('menampilkan transaksi remote dan tetap menggabungkan riwayat lokal', async () => {
     render(<RiwayatPage />);
-    await waitFor(() => expect(screen.getByText(/Barang Server/)).toBeInTheDocument());
-    expect(screen.getByText(/Barang Lokal/)).toBeInTheDocument();
+    await waitFor(() => expect(screen.getAllByText('Barang Server').length).toBeGreaterThan(0));
+    expect(screen.getAllByText('Barang Lokal').length).toBeGreaterThan(0);
     expect(api.fetchRemoteTransactionHistory).toHaveBeenCalledWith(31);
   });
 
   it('tetap menampilkan riwayat lokal saat pengambilan remote gagal', async () => {
     api.fetchRemoteTransactionHistory.mockRejectedValue(new Error('remote unavailable'));
     render(<RiwayatPage />);
-    await waitFor(() => expect(screen.getByText(/Barang Lokal/)).toBeInTheDocument());
-    expect(screen.queryByText(/Barang Server/)).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.getAllByText('Barang Lokal').length).toBeGreaterThan(0));
+    expect(screen.queryAllByText('Barang Server')).toHaveLength(0);
   });
 });
