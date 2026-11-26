@@ -41,6 +41,49 @@ export function normStatus(v, sumber) {
   return "lokal";
 }
 
+function entitasDariKode(kode) {
+  const prefix = String(kode ?? "").trim().toUpperCase().split("-")[0];
+  if (prefix === "CV" || prefix === "BBCV") return "CV";
+  if (prefix === "PT" || prefix === "WK" || prefix === "MM" || prefix === "BBPT") return "PT";
+  return null;
+}
+
+/** Ubah baris datar getTransactionHistory Apps Script menjadi transaksi yang dapat dirender Riwayat. */
+export function normalisasiRiwayatServer(rows, sheetName) {
+  const tipe = normTipe(sheetName);
+  if (!tipe || !Array.isArray(rows)) return [];
+  return rows.map((row, index) => {
+    const kode = String(row?.kode ?? row?.kodeBarang ?? row?.code ?? "").trim();
+    const rowNumber = Number(row?.row ?? row?.rowNumber) || index + 1;
+    const transactionId = String(row?.transactionId ?? row?.transaction_id ?? "").trim();
+    const requestId = String(row?.requestId ?? row?.request_id ?? "").trim();
+    const id = transactionId || requestId || `${sheetName}:${rowNumber}`;
+    const entitas = normEntitas(row?.entitas ?? row?.entity) || entitasDariKode(kode);
+    const at = row?.at ?? row?.timestamp ?? row?.tanggal ?? row?.date ?? row?.createdAt ?? null;
+    const qty = toNumber(row?.qty ?? row?.jumlah ?? row?.quantity);
+    return {
+      id,
+      transactionId,
+      requestId,
+      type: tipe,
+      entity: entitas,
+      entitas,
+      at,
+      timestamp: at,
+      savedAt: at,
+      status: "success",
+      items: [{
+        kode,
+        nama: String(row?.nama ?? row?.name ?? "").trim(),
+        qty,
+        satuan: String(row?.satuan ?? row?.unit ?? "").trim(),
+      }],
+      keterangan: String(row?.keterangan ?? row?.note ?? row?.notes ?? "").trim(),
+      source: "spreadsheet",
+    };
+  });
+}
+
 export function parseWaktu(v) {
   if (v == null || v === "") return null;
   if (typeof v === "number") {
