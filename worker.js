@@ -416,7 +416,7 @@ async function runNineRouter(env, messages) {
   if (!apiKey || !model) throw new Error('9Router belum dikonfigurasi.');
   const upstream = await fetch('https://9router.com/v1/chat/completions', {
     method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${apiKey}` },
-    body: JSON.stringify({ model, messages, max_tokens: 900 }),
+    body: JSON.stringify({ model, messages, max_tokens: 2000 }),
   });
   const data = await upstream.json().catch(() => ({}));
   if (!upstream.ok) throw new Error(String(data?.error?.message || data?.message || `9Router HTTP ${upstream.status}`).slice(0, 240));
@@ -427,7 +427,7 @@ async function runNineRouter(env, messages) {
 async function runWorkersAI(env, messages) {
   if (!env.AI || typeof env.AI.run!=='function') throw new Error('Workers AI binding AI belum tersedia.');
   const model = String(env.AI_MODEL||DEFAULT_MODEL);
-  const result = await env.AI.run(model, { messages, max_tokens:700 });
+  const result = await env.AI.run(model, { messages, max_tokens: 2000 });
   const reply = extractText(result);
   if (!reply) throw new Error('Workers AI mengembalikan jawaban kosong.');
   return { reply, model, provider:'cloudflare-workers-ai' };
