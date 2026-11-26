@@ -158,7 +158,7 @@ function memilikiJam(v) {
   if (v instanceof Date) return !Number.isNaN(v.getTime());
   const value = String(v ?? "").trim();
   if (!value) return false;
-  return /(?:T|\\s)\\d{1,2}:\\d{2}/.test(value) || /\\b\\d{1,2}:\\d{2}(?::\\d{2})?\\b/.test(value);
+  return /(?:T|\s)\d{1,2}:\d{2}/.test(value) || /\b\d{1,2}:\d{2}(?::\d{2})?\b/.test(value);
 }
 
 export const jamWIB = (ts, adaWaktu = true) => {
