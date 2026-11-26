@@ -845,3 +845,49 @@ test('sync-all returns 502 and success false when every read action fails', asyn
     assert.equal(Object.keys(payload.data).length, 0);
   } finally { globalThis.fetch = originalFetch; }
 });
+
+
+test('agent token budgets are 2000 for Workers AI and 9Router', async () => {
+  await withSupabaseAuth(async () => {
+    let workersInput;
+    const workersResponse = await worker.fetch(makeRequest('/api/agent', {
+      method: 'POST', body: { message: 'Tes batas token Workers AI' },
+    }), {
+      ...validEnv,
+      AI: { run: async (_model, input) => { workersInput = input; return { response: 'OK' }; } },
+    });
+    assert.equal(workersResponse.status, 200);
+    assert.equal(workersInput.max_tokens, 2000);
+  });
+
+  const originalFetch = globalThis.fetch;
+  let routerBody;
+  globalThis.fetch = async (url, options) => {
+    if (String(url) === `${SUPABASE_URL}/auth/v1/user`) {
+      return new Response(JSON.stringify({ id: 'token-test-user' }), { status: 200 });
+    }
+    assert.equal(String(url), 'https://9router.com/v1/chat/completions');
+    routerBody = JSON.parse(options.body);
+    return new Response(JSON.stringify({
+      choices: [{ message: { content: 'OK' } }],
+    }), { status: 200, headers: { 'content-type': 'application/json' } });
+  };
+  try {
+    const response = await worker.fetch(makeRequest('/api/agent', {
+      method: 'POST', body: { message: 'Tes batas token 9Router' },
+    }), {
+      ...validEnv, NINE_ROUTER_API_KEY: 'test-router-key', NINE_ROUTER_MODEL: 'test-model',
+    });
+    assert.equal(response.status, 200);
+    assert.equal(routerBody.max_tokens, 2000);
+  } finally { globalThis.fetch = originalFetch; }
+});
+
+test('agent policy includes audit, source-understanding, and mandatory live dashboard rules', () => {
+  const prompt = buildSystemPrompt({}, '');
+  assert.match(prompt, /19\. AUDIT TANPA TEMUAN/);
+  assert.match(prompt, /20\. WAJIB PAHAMI SUMBER/);
+  assert.match(prompt, /21\. DASHBOARD LIVE WAJIB SUMBER/);
+  assert.match(prompt, /getDashboardData/);
+  assert.deepEqual(detectLiveActions('Tolong ringkasan dashboard gudang'), ['getDashboardData']);
+});
