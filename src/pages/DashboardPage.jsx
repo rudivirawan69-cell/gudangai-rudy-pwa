@@ -1257,34 +1257,48 @@ export default function DashboardPage({ onNavigate, operationalStatus }) {
         <div className="xl:col-span-2">
           <DashboardStatusSummary data={dashboardData} loading={dashboardLoading} />
         </div>
+        <div className="xl:col-span-2 dashboard-panel rounded-2xl bg-white border border-slate-200 shadow-sm p-4 min-w-0">
+          <Movement7Days history={history} />
+        </div>
         <div className="xl:col-span-2">
           <HomeAgentAssistant onNavigate={onNavigate} />
         </div>
-        <div className="dashboard-panel rounded-2xl bg-white border border-slate-200 shadow-sm p-4 min-w-0">
-          <Movement7Days history={history} />
+        <div className="xl:col-span-2">
+          <details className="dashboard-greeting-card group rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+            <summary className="list-none cursor-pointer select-none px-3.5 py-3 sm:px-4 sm:py-3.5 [&::-webkit-details-marker]:hidden">
+              <div className="flex items-center gap-3 min-w-0">
+                <span className="dashboard-icon-badge dashboard-icon-cyan h-10 w-10 shrink-0 rounded-xl flex items-center justify-center">
+                  <Network className="h-5 w-5" aria-hidden="true" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[14px] font-extrabold text-slate-900 truncate">Status sistem operasional</span>
+                </span>
+                <ChevronDown className="h-4 w-4 shrink-0 text-slate-400 transition-transform duration-200 group-open:rotate-180" aria-hidden="true" />
+              </div>
+            </summary>
+            <div className="border-t border-slate-100 px-3.5 py-3 sm:px-4 sm:py-4">
+              <OperationalConnectionManager {...operationalStatus} onNavigate={onNavigate} />
+            </div>
+          </details>
         </div>
-        <div className="dashboard-panel rounded-2xl bg-white border border-slate-200 shadow-sm p-4 min-w-0">
-          <StockComparison cv={stats.cv} pt={stats.pt} />
-        </div>
+      </section>
+
+      <section className="dashboard-panel rounded-2xl bg-white border border-slate-200 shadow-sm p-4 min-w-0" aria-label="Perbandingan stok">
+        <StockComparison cv={stats.cv} pt={stats.pt} />
       </section>
 
       <details className="dashboard-greeting-card group rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
         <summary className="list-none cursor-pointer select-none px-3.5 py-3 sm:px-4 sm:py-3.5 [&::-webkit-details-marker]:hidden">
           <div className="flex items-center gap-3 min-w-0">
             <span className="dashboard-icon-badge dashboard-icon-cyan h-10 w-10 shrink-0 rounded-xl flex items-center justify-center">
-              <Network className="h-5 w-5" aria-hidden="true" />
+              <Layers3 className="h-4 w-4" aria-hidden="true" />
             </span>
             <span className="min-w-0 flex-1">
-              <span className="block text-[14px] font-extrabold text-slate-900 truncate">Status sistem operasional</span>
+              <span className="block text-[14px] font-extrabold text-slate-900 truncate">Status per Divisi</span>
             </span>
             <ChevronDown className="h-4 w-4 shrink-0 text-slate-400 transition-transform duration-200 group-open:rotate-180" aria-hidden="true" />
           </div>
         </summary>
-        <div className="border-t border-slate-100 px-3.5 py-3 sm:px-4 sm:py-4">
-          <OperationalConnectionManager {...operationalStatus} onNavigate={onNavigate} />
-        </div>
-      </details>
-
         <div className="border-t border-slate-100 px-3.5 py-3 sm:px-4 sm:py-4">
           <div className="mb-3">
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[9px] font-semibold">
