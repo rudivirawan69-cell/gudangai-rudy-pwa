@@ -1,0 +1,258 @@
+/* Final UI polish: PO recommendation cards + independent Riwayat filters.
+   CSS-only. Existing React state, labels, handlers, routing and data remain untouched. */
+html[data-theme] [data-ui-page="dashboard"] .po-shortcuts-grid {
+  display:grid !important;
+  grid-template-columns:repeat(2,minmax(0,1fr)) !important;
+  align-items:stretch !important;
+  gap:14px !important;
+  margin-block:12px 16px !important;
+  padding:2px 1px 8px !important;
+  min-width:0 !important;
+  overflow:visible !important;
+}
+html[data-theme] [data-ui-page="dashboard"] .po-shortcut {
+  position:relative;
+  display:grid !important;
+  grid-template-columns:40px minmax(0,1fr) !important;
+  grid-template-rows:auto 1fr !important;
+  align-items:center !important;
+  justify-items:start !important;
+  column-gap:12px !important;
+  row-gap:6px !important;
+  width:100% !important;
+  min-width:0 !important;
+  min-height:136px !important;
+  height:100% !important;
+  padding:16px !important;
+  margin:0 !important;
+  border:1px solid var(--ux-line) !important;
+  border-radius:var(--ux-radius-lg) !important;
+  background:var(--ux-panel) !important;
+  color:var(--ux-ink) !important;
+  box-shadow:var(--ux-shadow) !important;
+  text-align:left !important;
+  white-space:normal !important;
+  overflow-wrap:anywhere !important;
+  scroll-margin-block:96px;
+  transition:background-color .18s ease,border-color .18s ease,color .18s ease,transform .18s ease !important;
+}
+html[data-theme] [data-ui-page="dashboard"] .po-shortcut:focus-visible {
+  outline:3px solid var(--ux-accent) !important;
+  outline-offset:3px;
+}
+html[data-theme] [data-ui-page="dashboard"] .po-shortcut:active {
+  transform:translateY(1px) !important;
+}
+html[data-theme] [data-ui-page="dashboard"] .po-shortcut-icon {
+  grid-column:1;
+  grid-row:1 / span 2;
+  width:40px !important;
+  height:40px !important;
+  display:grid !important;
+  place-items:center !important;
+  flex:0 0 40px !important;
+  border:1px solid var(--ux-line) !important;
+  border-radius:12px !important;
+  background:var(--ux-panel-2) !important;
+  color:var(--ux-accent) !important;
+  box-shadow:none !important;
+}
+html[data-theme] [data-ui-page="dashboard"] .po-shortcut-copy {
+  grid-column:2;
+  grid-row:1 / span 2;
+  display:flex !important;
+  flex-direction:column !important;
+  align-items:flex-start !important;
+  justify-content:center !important;
+  gap:6px !important;
+  min-width:0 !important;
+  width:100% !important;
+  white-space:normal !important;
+  overflow-wrap:anywhere !important;
+}
+html[data-theme] [data-ui-page="dashboard"] .po-shortcut-copy :is(strong,b,.po-shortcut-title) {
+  color:var(--ux-ink) !important;
+  font-size:13px !important;
+  line-height:1.35 !important;
+  font-weight:800 !important;
+}
+html[data-theme] [data-ui-page="dashboard"] .po-shortcut-copy :is(small,.po-shortcut-subtitle) {
+  color:var(--ux-muted) !important;
+  font-size:11px !important;
+  line-height:1.45 !important;
+  white-space:normal !important;
+  overflow-wrap:anywhere !important;
+}
+html[data-theme] [data-ui-page="dashboard"] .po-shortcut:hover {
+  border-color:var(--ux-accent) !important;
+  background:var(--ux-panel-2) !important;
+}
+html[data-theme] [data-ui-page="dashboard"] .po-shortcut.is-selected {
+  border-color:var(--ux-accent) !important;
+  background:var(--ux-panel-2) !important;
+}
+html[data-theme] [data-ui-page="riwayat"] .rw-filters-row {
+  display:grid !important;
+  grid-template-columns:repeat(3,minmax(0,1fr)) !important;
+  align-items:stretch !important;
+  gap:12px !important;
+  width:100% !important;
+  min-width:0 !important;
+  margin:0 0 12px !important;
+  padding:0 !important;
+  border:0 !important;
+  border-radius:0 !important;
+  background:transparent !important;
+  box-shadow:none !important;
+  overflow:visible !important;
+}
+html[data-theme] [data-ui-page="riwayat"] .rw-filter-group {
+  display:flex !important;
+  flex-direction:column !important;
+  align-self:stretch !important;
+  min-width:0 !important;
+  min-height:60px !important;
+  margin:0 !important;
+  padding:0 !important;
+  border:1px solid var(--ux-line) !important;
+  border-radius:var(--ux-radius-lg) !important;
+  background:var(--ux-panel) !important;
+  color:var(--ux-ink) !important;
+  box-shadow:var(--ux-shadow) !important;
+  overflow:hidden !important;
+}
+html[data-theme] [data-ui-page="riwayat"] .rw-filter-group + .rw-filter-group {
+  border-top:1px solid var(--ux-line) !important;
+}
+html[data-theme] [data-ui-page="riwayat"] .rw-filter-head {
+  display:flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+  gap:6px !important;
+  width:100% !important;
+  min-width:0 !important;
+  min-height:58px !important;
+  height:100% !important;
+  padding:10px 8px !important;
+  border:0 !important;
+  border-radius:0 !important;
+  background:transparent !important;
+  color:var(--ux-ink) !important;
+  box-shadow:none !important;
+}
+html[data-theme] [data-ui-page="riwayat"] .rw-filter-head h2 {
+  min-width:0 !important;
+  margin:0 !important;
+  color:var(--ux-ink) !important;
+  font-size:12px !important;
+  line-height:1.25 !important;
+  font-weight:800 !important;
+  overflow-wrap:anywhere;
+}
+html[data-theme] [data-ui-page="riwayat"] .rw-filter-icon {
+  width:16px !important;
+  height:16px !important;
+  flex:0 0 16px !important;
+  color:var(--ux-accent) !important;
+}
+html[data-theme] [data-ui-page="riwayat"] .rw-filter-chevron {
+  width:14px !important;
+  height:14px !important;
+  flex:0 0 14px !important;
+  color:var(--ux-muted) !important;
+}
+html[data-theme] [data-ui-page="riwayat"] .rw-filter-group.is-open {
+  grid-row:span 2;
+  min-height:100px !important;
+}
+html[data-theme] [data-ui-page="riwayat"] .rw-filter-group .rw-chips {
+  display:flex !important;
+  flex-wrap:wrap !important;
+  gap:6px !important;
+  padding:8px !important;
+  border-top:1px solid var(--ux-line) !important;
+  background:var(--ux-panel-2) !important;
+}
+html[data-theme] [data-ui-page="riwayat"] .rw-filter-group .rw-chips button {
+  min-height:36px !important;
+  padding:6px 9px !important;
+  border:1px solid var(--ux-line) !important;
+  border-radius:10px !important;
+  background:var(--ux-panel) !important;
+  color:var(--ux-ink) !important;
+  font-size:11px !important;
+}
+html[data-theme] [data-ui-page="riwayat"] .rw-filter-group .rw-chips button.on {
+  border-color:var(--ux-accent) !important;
+  background:var(--ux-accent) !important;
+  color:#fff !important;
+}
+html[data-theme] [data-ui-page="riwayat"] .rw-filter-group :is(button):focus-visible {
+  outline:3px solid var(--ux-accent) !important;
+  outline-offset:-3px;
+}
+@media(max-width:600px) {
+  html[data-theme] [data-ui-page="dashboard"] .po-shortcuts-grid {
+    gap:12px !important;
+    margin-block:10px 14px !important;
+  }
+  html[data-theme] [data-ui-page="dashboard"] .po-shortcut {
+    min-height:128px !important;
+    padding:12px !important;
+    grid-template-columns:34px minmax(0,1fr) !important;
+    column-gap:9px !important;
+  }
+  html[data-theme] [data-ui-page="dashboard"] .po-shortcut-icon {
+    width:34px !important;
+    height:34px !important;
+  }
+  html[data-theme] [data-ui-page="dashboard"] .po-shortcut-copy :is(strong,b,.po-shortcut-title) {
+    font-size:12px !important;
+  }
+  html[data-theme] [data-ui-page="riwayat"] .rw-filters-row {
+    gap:8px !important;
+    margin-bottom:10px !important;
+  }
+  html[data-theme] [data-ui-page="riwayat"] .rw-filter-group {
+    min-height:56px !important;
+  }
+  html[data-theme] [data-ui-page="riwayat"] .rw-filter-head {
+    min-height:54px !important;
+    flex-wrap:wrap;
+    gap:4px !important;
+    padding:8px 4px !important;
+  }
+  html[data-theme] [data-ui-page="riwayat"] .rw-filter-head h2 {
+    font-size:10px !important;
+  }
+  html[data-theme] [data-ui-page="riwayat"] .rw-filter-icon {
+    width:14px !important;
+    height:14px !important;
+    flex-basis:14px !important;
+  }
+  html[data-theme] [data-ui-page="riwayat"] .rw-filter-chevron {
+    width:12px !important;
+    height:12px !important;
+    flex-basis:12px !important;
+  }
+}
+@media(max-width:360px) {
+  html[data-theme] [data-ui-page="dashboard"] .po-shortcut {
+    grid-template-columns:30px minmax(0,1fr) !important;
+    column-gap:8px !important;
+    padding:10px !important;
+  }
+  html[data-theme] [data-ui-page="dashboard"] .po-shortcut-icon {
+    width:30px !important;
+    height:30px !important;
+  }
+  html[data-theme] [data-ui-page="riwayat"] .rw-filters-row { gap:6px !important; }
+  html[data-theme] [data-ui-page="riwayat"] .rw-filter-head h2 { font-size:9px !important; }
+}
+@media(prefers-reduced-motion:reduce) {
+  html[data-theme] [data-ui-page="dashboard"] .po-shortcut,
+  html[data-theme] [data-ui-page="riwayat"] .rw-filter-group,
+  html[data-theme] [data-ui-page="riwayat"] .rw-filter-head {
+    transition:none !important;
+  }
+}

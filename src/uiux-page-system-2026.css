@@ -619,3 +619,82 @@ html[data-theme] .home-agent-action{display:inline-flex;align-items:center;gap:4
 
 html[data-theme] .ops-queue-action{display:inline-flex;align-items:center;min-height:44px;margin-top:8px;padding:8px 12px;border:1px solid var(--border);border-radius:12px;background:var(--bg-elevated);color:var(--accent);font-size:12px;font-weight:800}
 html[data-theme] .ops-queue-action:active{background:var(--accent-soft)}
+
+
+/* HOTFIX 2026-11-27: restore standalone Beranda cards across all active themes.
+   Use tokens declared in this file; do not depend on legacy --border/--bg-elevated aliases. */
+html[data-theme] .ops-status-grid {
+  display:grid !important;
+  grid-template-columns:repeat(2,minmax(0,1fr)) !important;
+  gap:12px !important;
+  padding:0 !important;
+  margin:0 !important;
+  list-style:none !important;
+}
+html[data-theme] .ops-status-grid > .ops-status-card {
+  display:grid !important;
+  grid-template-columns:20px minmax(0,1fr) auto !important;
+  align-items:center !important;
+  gap:8px !important;
+  min-width:0 !important;
+  min-height:68px !important;
+  padding:12px !important;
+  border:1px solid var(--ux-line) !important;
+  border-radius:var(--ux-radius-lg) !important;
+  background:var(--ux-panel) !important;
+  color:var(--ux-ink) !important;
+  box-shadow:var(--ux-shadow) !important;
+}
+html[data-theme] .ops-status-card .ops-status-name { color:var(--ux-ink) !important; }
+html[data-theme] .ops-status-card .ops-status-detail { color:var(--ux-muted) !important; }
+html[data-theme] .ops-status-card .ops-status-icon { color:var(--ux-accent) !important; }
+html[data-theme] .dashboard-total-grid > .dashboard-total-card,
+html[data-theme] .dashboard-total-card {
+  display:flex !important;
+  flex-direction:column !important;
+  align-items:center !important;
+  justify-content:center !important;
+  min-width:0 !important;
+  min-height:104px !important;
+  padding:14px !important;
+  border:1px solid var(--ux-line) !important;
+  border-radius:var(--ux-radius-lg) !important;
+  background:var(--ux-panel) !important;
+  color:var(--ux-ink) !important;
+  box-shadow:var(--ux-shadow) !important;
+}
+html[data-theme] .dashboard-status-tile {
+  display:flex !important;
+  flex-direction:column !important;
+  align-items:center !important;
+  justify-content:center !important;
+  min-width:0 !important;
+  min-height:88px !important;
+  padding:12px !important;
+  border:1px solid var(--ux-line) !important;
+  border-radius:var(--ux-radius-lg) !important;
+  background:var(--ux-panel) !important;
+  color:var(--ux-ink) !important;
+  box-shadow:var(--ux-shadow) !important;
+}
+html[data-theme] .dashboard-status-tile p { color:inherit !important; }
+html[data-theme] .dashboard-status-aman p:first-child { color:var(--success,var(--ux-accent)) !important; }
+html[data-theme] .dashboard-status-waspada p:first-child { color:var(--warning,#d97706) !important; }
+html[data-theme] .dashboard-status-kritis p:first-child { color:var(--danger,#dc2626) !important; }
+html[data-theme] .dashboard-quick-card,
+html[data-theme] .po-shortcut {
+  border:1px solid var(--ux-line) !important;
+  background:var(--ux-panel) !important;
+  color:var(--ux-ink) !important;
+  box-shadow:var(--ux-shadow) !important;
+}
+@media (max-width:600px) {
+  html[data-theme] .ops-status-grid { grid-template-columns:1fr !important; gap:8px !important; }
+  html[data-theme] .ops-status-grid > .ops-status-card { min-height:60px !important; }
+  html[data-theme] .dashboard-status-tile { min-height:80px !important; }
+}
+@media (prefers-reduced-motion:reduce) {
+  html[data-theme] .page-content *,
+  html[data-theme] .page-content *::before,
+  html[data-theme] .page-content *::after { transition-duration:0.01ms !important; animation-duration:0.01ms !important; }
+}
