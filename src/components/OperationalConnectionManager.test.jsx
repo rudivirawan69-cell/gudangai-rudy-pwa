@@ -1,5 +1,5 @@
 import React from 'react';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { SWRConfig } from 'swr';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import OperationalConnectionManager from './OperationalConnectionManager';
@@ -47,24 +47,16 @@ describe('OperationalConnectionManager', () => {
   it('shows live status for auth, Worker, spreadsheet, realtime and pending queue', async () => {
     renderManager();
 
-    expect(screen.getByText('Status sistem operasional')).toBeInTheDocument();
     expect(screen.getByText('Supabase Auth')).toBeInTheDocument();
     expect(screen.getByText('Spreadsheet API')).toBeInTheDocument();
     expect(screen.getByText('Realtime / Delta')).toBeInTheDocument();
     expect(screen.getByText('Sinkronisasi / Outbox')).toBeInTheDocument();
-    await waitFor(() => expect(screen.getByText('hybrid · read_only_live_data.')).toBeInTheDocument());
-    expect(screen.getByText('2 item menunggu konfirmasi atau verifikasi.')).toBeInTheDocument();
+    await screen.findByRole('button', { name: 'Tinjau antrean (2)' });
   });
 
   it('refreshes checks and sends pending operators to the sync queue', async () => {
-    const { onNavigate, onCheckSpreadsheet } = renderManager();
-    await screen.findByText('hybrid · read_only_live_data.');
-    const healthRequestsBeforeRefresh = mocks.getAgentHealth.mock.calls.length;
-
-    fireEvent.click(screen.getByRole('button', { name: 'Periksa ulang koneksi operasional' }));
-    await waitFor(() => expect(onCheckSpreadsheet).toHaveBeenCalledWith({ quiet: false }));
-    await waitFor(() => expect(mocks.getAgentHealth.mock.calls.length).toBeGreaterThan(healthRequestsBeforeRefresh));
-
+    const { onNavigate } = renderManager();
+    expect(screen.queryByRole('button', { name: 'Periksa ulang koneksi operasional' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Tinjau antrean (2)' }));
     expect(onNavigate).toHaveBeenCalledWith('sync');
   });

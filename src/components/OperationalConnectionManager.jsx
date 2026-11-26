@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import useSWR from 'swr';
 import {
-  Activity, Bot, FileSpreadsheet, ListChecks, RefreshCw, ShieldCheck, Wifi,
+  Activity, Bot, FileSpreadsheet, ListChecks, ShieldCheck, Wifi,
 } from 'lucide-react';
 import { getPendingQueue } from '../data/api';
 import { getAgentHealth } from '../data/claude';
@@ -14,10 +14,10 @@ const STATUS_LABELS = {
 };
 
 const STATUS_CLASSES = {
-  healthy: 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200',
-  warning: 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200',
-  error: 'border-rose-200 bg-rose-50 text-rose-800 dark:border-rose-800 dark:bg-rose-950/40 dark:text-rose-200',
-  checking: 'border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300',
+  healthy: 'ops-status-healthy',
+  warning: 'ops-status-warning',
+  error: 'ops-status-error',
+  checking: 'ops-status-checking',
 };
 
 function countPendingItems() {
@@ -26,18 +26,15 @@ function countPendingItems() {
 
 function StatusRow({ Icon, name, status, detail }) {
   const label = STATUS_LABELS[status] || STATUS_LABELS.checking;
+  const showDetail = status !== 'healthy' && Boolean(detail);
   return (
-    <li className="flex min-w-0 items-start gap-2.5 rounded-xl border border-[var(--border,#e2e8f0)] bg-[var(--bg-card,#fff)] p-3">
-      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--bg-muted,#f1f5f9)] text-[var(--text-main,#334155)]" aria-hidden="true">
-        <Icon className="h-4 w-4" />
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="block text-xs font-bold text-[var(--text-main,#0f172a)]">{name}</span>
-        <span className="mt-0.5 block break-words text-[10px] leading-relaxed text-[var(--text-muted,#64748b)]">{detail}</span>
-      </span>
-      <span className={`shrink-0 rounded-full border px-2 py-1 text-[9px] font-bold ${STATUS_CLASSES[status] || STATUS_CLASSES.checking}`}>
+    <li className="ops-status-card">
+      <Icon className="ops-status-icon" aria-hidden="true" />
+      <span className="ops-status-name">{name}</span>
+      <span className={`ops-status-badge ${STATUS_CLASSES[status] || STATUS_CLASSES.checking}`}>
         {label}
       </span>
+      {showDetail && <span className="ops-status-detail" role={status === 'error' ? 'alert' : 'status'}>{detail}</span>}
     </li>
   );
 }
@@ -134,34 +131,18 @@ export default function OperationalConnectionManager({
   };
 
   return (
-    <section className="dashboard-panel min-w-0 rounded-2xl border border-[var(--border,#e2e8f0)] bg-[var(--bg-card,#fff)] p-4 shadow-sm" aria-labelledby="operational-connection-title">
-      <header className="mb-3 flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-[var(--text-muted,#64748b)]">Operational Connection Manager</p>
-          <h2 id="operational-connection-title" className="mt-1 text-sm font-extrabold text-[var(--text-main,#0f172a)]">Status sistem operasional</h2>
-          <p className="mt-0.5 text-[11px] leading-relaxed text-[var(--text-muted,#64748b)]">Status nyata dari sesi, Worker, spreadsheet, realtime, dan antrean perangkat.</p>
-        </div>
-        <button type="button" onClick={refreshAll} disabled={agentLoading}
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[var(--border,#e2e8f0)] text-[var(--text-main,#334155)] disabled:opacity-50"
-          aria-label="Periksa ulang koneksi operasional" title="Periksa ulang">
-          <RefreshCw className={`h-4 w-4 ${agentLoading ? 'animate-spin' : ''}`} aria-hidden="true" />
-        </button>
-      </header>
-
-      <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2" aria-label="Status layanan">
-        <StatusRow Icon={ShieldCheck} name="Supabase Auth" {...auth} />
-        <StatusRow Icon={Bot} name="Agent / Cloudflare Worker" {...workerStatus} />
-        <StatusRow Icon={FileSpreadsheet} name="Spreadsheet API" {...sheet} />
-        <StatusRow Icon={Wifi} name="Realtime / Delta" {...realtime} />
-        <StatusRow Icon={ListChecks} name="Sinkronisasi / Outbox" {...queue} />
-      </ul>
-
-      {pendingCount > 0 && (
-        <button type="button" onClick={() => onNavigate?.('sync')}
-          className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
-          Tinjau antrean ({pendingCount}) <Activity className="h-3.5 w-3.5" aria-hidden="true" />
-        </button>
-      )}
-    </section>
+    <>
+    <ul className="ops-status-grid" aria-label="Status layanan operasional">
+      <StatusRow Icon={ShieldCheck} name="Supabase Auth" {...auth} />
+      <StatusRow Icon={Bot} name="Agent / Cloudflare Worker" {...workerStatus} />
+      <StatusRow Icon={FileSpreadsheet} name="Spreadsheet API" {...sheet} />
+      <StatusRow Icon={Wifi} name="Realtime / Delta" {...realtime} />
+      <StatusRow Icon={ListChecks} name="Sinkronisasi / Outbox" {...queue} />
+    </ul>
+    {pendingCount > 0 && (
+      <button type="button" onClick={() => onNavigate?.('sync')} className="ops-queue-action">Tinjau antrean ({pendingCount})</button>
+    )}
+  
+    </>
   );
 }
