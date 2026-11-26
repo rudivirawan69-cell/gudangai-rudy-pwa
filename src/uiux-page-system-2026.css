@@ -594,9 +594,9 @@ html[data-theme] .ops-status-card{display:grid;grid-template-columns:20px minmax
 html[data-theme] .ops-status-icon{width:18px;height:18px;stroke-width:1.8;color:var(--accent)}
 html[data-theme] .ops-status-name{font-size:12px;line-height:1.3;font-weight:750;min-width:0}
 html[data-theme] .ops-status-badge{font-size:10px;font-weight:800;line-height:1.2;padding:5px 8px;border-radius:999px;border:1px solid;white-space:nowrap}
-html[data-theme] .ops-status-healthy{color:var(--success);border-color:color-mix(in srgb,var(--success) 40%,var(--border));background:color-mix(in srgb,var(--success) 12%,var(--bg-elevated))}
-html[data-theme] .ops-status-warning{color:var(--warning);border-color:color-mix(in srgb,var(--warning) 45%,var(--border));background:color-mix(in srgb,var(--warning) 12%,var(--bg-elevated))}
-html[data-theme] .ops-status-error{color:var(--danger);border-color:color-mix(in srgb,var(--danger) 45%,var(--border));background:color-mix(in srgb,var(--danger) 12%,var(--bg-elevated))}
+html[data-theme] .ops-status-healthy{color:var(--success);border-color:color-mix(in srgb,var(--success) 40%,var(--border));background:color-mix(in srgb,var(--success) 5%,var(--bg-elevated))}
+html[data-theme] .ops-status-warning{color:var(--warning);border-color:color-mix(in srgb,var(--warning) 45%,var(--border));background:color-mix(in srgb,var(--warning) 5%,var(--bg-elevated))}
+html[data-theme] .ops-status-error{color:var(--danger);border-color:color-mix(in srgb,var(--danger) 45%,var(--border));background:color-mix(in srgb,var(--danger) 5%,var(--bg-elevated))}
 html[data-theme] .ops-status-checking{color:var(--text-muted);border-color:var(--border);background:var(--bg-muted)}
 html[data-theme] .ops-status-detail{grid-column:2/-1;font-size:11px;line-height:1.35;color:var(--text-muted);overflow-wrap:anywhere}
 html[data-theme] .dashboard-total-centered{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:4px;min-width:0}
