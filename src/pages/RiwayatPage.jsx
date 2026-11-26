@@ -357,7 +357,13 @@ export default function RiwayatPage({ onNavigate }) {
         </section>
       </div>
 
-      <div className="rw-count-chips" aria-label="Ringkasan jumlah transaksi">\n        <span className="rw-count-chip"><CircleCheck aria-hidden="true" /> Semua <b>{fmtCount(totalValid)}</b></span>\n        <span className="rw-count-chip rw-count-masuk"><ArrowDownToLine aria-hidden="true" /> Masuk <b>{fmtCount(cntTipe.masuk || 0)}</b></span>\n        <span className="rw-count-chip rw-count-keluar"><ArrowUpFromLine aria-hidden="true" /> Keluar <b>{fmtCount(cntTipe.keluar || 0)}</b></span>\n        <span className="rw-count-chip rw-count-rusak"><AlertTriangle aria-hidden="true" /> Rusak <b>{fmtCount(cntTipe.rusak || 0)}</b></span>\n      </div>\n      <div className="rw-search">
+      <div className="rw-count-chips" aria-label="Ringkasan jumlah transaksi">
+        <span className="rw-count-chip"><CircleCheck aria-hidden="true" /> Semua <b>{fmtCount(totalValid)}</b></span>
+        <span className="rw-count-chip rw-count-masuk"><ArrowDownToLine aria-hidden="true" /> Masuk <b>{fmtCount(cntTipe.masuk || 0)}</b></span>
+        <span className="rw-count-chip rw-count-keluar"><ArrowUpFromLine aria-hidden="true" /> Keluar <b>{fmtCount(cntTipe.keluar || 0)}</b></span>
+        <span className="rw-count-chip rw-count-rusak"><AlertTriangle aria-hidden="true" /> Rusak <b>{fmtCount(cntTipe.rusak || 0)}</b></span>
+      </div>
+      <div className="rw-search">
         <input
           type="search"
           aria-label="Cari transaksi"
@@ -377,13 +383,7 @@ export default function RiwayatPage({ onNavigate }) {
         </button>
       </div>
 
-      {anomali > 0 && (
-        <div className="rw-alert rw-soft">
-          {anomali} entri tidak valid disembunyikan (qty 0 / tanpa item). Tidak dihapus dari perangkat.
-        </div>
-      )}
-
-      {totalValid === 0 && (
+{totalValid === 0 && (
         <div className="rw-empty">
           <b>{adaFilter ? "Tidak ada hasil" : "Belum ada riwayat"}</b>
           {adaFilter ? (
