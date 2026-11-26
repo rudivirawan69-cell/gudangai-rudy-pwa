@@ -1,5 +1,6 @@
 import React, { memo, useMemo, useState, useEffect, useCallback, useDeferredValue, useRef, startTransition } from "react";
 import "./riwayat.css";
+import { ArrowDownToLine, ArrowUpFromLine, AlertTriangle, ArrowLeftRight, Building2, CircleCheck, RefreshCw, CalendarDays, ChevronDown } from "lucide-react";
 import { getLocalHistory, getPendingQueue, fetchRemoteTransactionHistory } from "../data/api";
 import {
   gabung, filterTx, kelompokkan, keCSV, ringkasanTeks, ringkasKatalog,
@@ -46,7 +47,7 @@ const DayGroup = memo(function DayGroup({ h, open, onToggle, onCopy }) {
   return (
     <section className={"rw-day" + (open ? " is-open" : "")}>
       <button type="button" className="rw-day-summary" onClick={onToggle} aria-expanded={open}>
-        <span className="rw-day-summary-icon" aria-hidden="true">▦</span>
+        <CalendarDays className="rw-day-summary-icon" aria-hidden="true" />
         <span className="rw-day-summary-main">
           <strong>{h.label}</strong>
           <span>{first ? (first.items[0]?.nama || first.items[0]?.kode || TIPE_LABEL[first.tipe] || "Transaksi") : "Transaksi"}</span>
@@ -55,7 +56,7 @@ const DayGroup = memo(function DayGroup({ h, open, onToggle, onCopy }) {
         <span className="rw-day-summary-meta">
           <b>{fmt(totalQty)}</b>
           <small>{fmtCount(lineCount)} item</small>
-          <span className={"rw-day-chevron" + (open ? " is-open" : "")} aria-hidden="true">⌄</span>
+          <ChevronDown className={"rw-day-chevron" + (open ? " is-open" : "")} aria-hidden="true" />
         </span>
       </button>
       {open && (
@@ -285,8 +286,8 @@ export default function RiwayatPage({ onNavigate }) {
             onClick={() => setOpenFilter((v) => (v === "tipe" ? null : "tipe"))}
             aria-expanded={openFilter === "tipe"}
           >
-            <h2>Jenis transaksi</h2>
-            <span className="rw-filter-chevron" aria-hidden="true">{openFilter === "tipe" ? "▾" : "▸"}</span>
+            <ArrowLeftRight className="rw-filter-icon" aria-hidden="true" /><h2>Transaksi</h2>
+            <ChevronDown className={"rw-filter-chevron" + (openFilter === "tipe" ? " is-open" : "")} aria-hidden="true" />
           </button>
           {openFilter === "tipe" && (
             <div className="rw-chips" role="group" aria-label="Jenis transaksi">
@@ -311,8 +312,8 @@ export default function RiwayatPage({ onNavigate }) {
             onClick={() => setOpenFilter((v) => (v === "entitas" ? null : "entitas"))}
             aria-expanded={openFilter === "entitas"}
           >
-            <h2>Entitas</h2>
-            <span className="rw-filter-chevron" aria-hidden="true">{openFilter === "entitas" ? "▾" : "▸"}</span>
+            <Building2 className="rw-filter-icon" aria-hidden="true" /><h2>Entitas</h2>
+            <ChevronDown className={"rw-filter-chevron" + (openFilter === "entitas" ? " is-open" : "")} aria-hidden="true" />
           </button>
           {openFilter === "entitas" && (
             <div className="rw-chips" role="group" aria-label="Entitas">
@@ -336,8 +337,8 @@ export default function RiwayatPage({ onNavigate }) {
             onClick={() => setOpenFilter((v) => (v === "status" ? null : "status"))}
             aria-expanded={openFilter === "status"}
           >
-            <h2>Status</h2>
-            <span className="rw-filter-chevron" aria-hidden="true">{openFilter === "status" ? "▾" : "▸"}</span>
+            <CircleCheck className="rw-filter-icon" aria-hidden="true" /><h2>Status</h2>
+            <ChevronDown className={"rw-filter-chevron" + (openFilter === "status" ? " is-open" : "")} aria-hidden="true" />
           </button>
           {openFilter === "status" && (
             <div className="rw-chips" role="group" aria-label="Status pengiriman">
@@ -356,7 +357,7 @@ export default function RiwayatPage({ onNavigate }) {
         </section>
       </div>
 
-      <div className="rw-search">
+      <div className="rw-count-chips" aria-label="Ringkasan jumlah transaksi">\n        <span className="rw-count-chip"><CircleCheck aria-hidden="true" /> Semua <b>{fmtCount(totalValid)}</b></span>\n        <span className="rw-count-chip rw-count-masuk"><ArrowDownToLine aria-hidden="true" /> Masuk <b>{fmtCount(cntTipe.masuk || 0)}</b></span>\n        <span className="rw-count-chip rw-count-keluar"><ArrowUpFromLine aria-hidden="true" /> Keluar <b>{fmtCount(cntTipe.keluar || 0)}</b></span>\n        <span className="rw-count-chip rw-count-rusak"><AlertTriangle aria-hidden="true" /> Rusak <b>{fmtCount(cntTipe.rusak || 0)}</b></span>\n      </div>\n      <div className="rw-search">
         <input
           type="search"
           aria-label="Cari transaksi"
