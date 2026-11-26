@@ -2088,62 +2088,18 @@ function getTransactionHistory(params) {
   const sheetName = params.sheet || "Barang keluar";
   if (!(sheetName in SHEET_CONFIG)) return { success: false, code:"INVALID_TRANSACTION_SHEET", error: "Sheet tidak valid" };
   const config = SHEET_CONFIG[sheetName];
-  const ss = getSS();
-  const sheet = ss.getSheetByName(sheetName);
+  const sheet = getSS().getSheetByName(sheetName);
   if (!sheet) return { success: false, code:"TRANSACTION_SHEET_NOT_FOUND", error: "Sheet tidak ditemukan" };
   const last = getRealLastDataRow(sheet, config);
   if (last < config.headerRow + 1) return { success: true, sheet:sheetName, count: 0, data: [], sourceReadAt:new Date().toISOString() };
-
-  // Join read-only ke ledger berdasarkan sheet + nomor baris; jangan membuat tab ledger saat GET.
-  const ledgerByRow = Object.create(null);
-  const ledgerSheet = ss.getSheetByName(IDEMPOTENCY_SHEET_NAME);
-  if (ledgerSheet && ledgerSheet.getLastRow() >= OPS_DATA_START_ROW) {
-    const ledgerLast = ledgerSheet.getLastRow();
-    const ledgerCount = Math.min(IDEMPOTENCY_SCAN_LIMIT, ledgerLast - OPS_HEADER_ROW);
-    const ledgerStart = Math.max(OPS_DATA_START_ROW, ledgerLast - ledgerCount + 1);
-    const ledgerRows = ledgerSheet.getRange(ledgerStart, 1, ledgerLast - ledgerStart + 1, IDEMPOTENCY_HEADERS.length).getValues();
-    ledgerRows.forEach(function(ledgerRow, index) {
-      const record = mapIdempotencyRow_(ledgerRow, ledgerStart + index);
-      if (record.sheet === sheetName && Number(record.dataRow) > 0 &&
-          record.status === "APPLIED" && String(record.writeOccurred).toLowerCase() === "true") {
-        ledgerByRow[String(record.dataRow)] = record;
-      }
-    });
-  }
-
   const numRows = last - config.headerRow;
   const data = sheet.getRange(config.headerRow + 1, 1, numRows, sheet.getLastColumn()).getValues();
-  const requestedDays = Number(params.days);
-  const days = Number.isFinite(requestedDays) && requestedDays > 0 ? Math.min(31, Math.floor(requestedDays)) : 0;
-  const cutoff = new Date();
-  if (days) cutoff.setDate(cutoff.getDate() - days);
-  const cutoffKey = days ? Utilities.formatDate(cutoff, TIMEZONE, "yyyy-MM-dd") : "";
-  const rows = data.map(function(row, index) {
-    return { values: row, rowNumber: config.headerRow + 1 + index };
-  }).filter(function(entry) {
-    if (!days) return true;
-    const dateKey = normalizeTransactionDateKey_(entry.values[1]);
-    return !dateKey || dateKey >= cutoffKey;
-  });
-  const requestedLimit = Number(params.limit);
-  const limit = Number.isFinite(requestedLimit) && requestedLimit > 0
-    ? Math.min(Math.floor(requestedLimit), rows.length)
-    : rows.length;
-  const result = rows.slice(-limit).reverse().map(function(entry) {
-    const row = entry.values;
-    const ledgerRecord = ledgerByRow[String(entry.rowNumber)] || null;
-    return {
-      row: entry.rowNumber,
-      tanggal: row[1],
-      kode: row[2],
-      nama: row[3],
-      satuan: row[4],
-      qty: row[5],
-      keterangan: row[6],
-      transactionId: ledgerRecord ? ledgerRecord.transactionId : null,
-      requestId: ledgerRecord ? ledgerRecord.requestId : null,
-      entitas: ledgerRecord ? ledgerRecord.entitas : null
-    };
+  const limit = params.limit ? Math.min(Number(params.limit), data.length) : data.length;
+  const result = data.slice(-limit).reverse().map(function(row, index) {
+    const note = String(row[6] || "");
+    const txMatch = note.match(/GUDANGAI_TX=([^;|]+)/);
+    const nonceMatch = note.match(/GUDANGAI_NONCE=([^;|]+)/);
+    return { row: last - index, tanggal: row[1], kode: row[2], nama: row[3], satuan: row[4], qty: row[5], keterangan: row[6], transactionId: txMatch ? txMatch[1] : null, nonce: nonceMatch ? nonceMatch[1] : (txMatch ? txMatch[1] : null) };
   });
   return { success: true, sheet:sheetName, count: result.length, data: result, sourceReadAt:new Date().toISOString() };
 }
