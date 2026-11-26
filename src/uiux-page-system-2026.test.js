@@ -213,6 +213,13 @@ describe('GudangAI Metode C UI contract', () => {
     expect(history).toContain('aria-label="Filter jenis transaksi"');
     expect(history).toContain('aria-label="Filter entitas"');
     expect(history).toContain('aria-label="Filter status pengiriman"');
+    expect(history).toContain('className="rw-day-summary"');
+    expect(history).toContain('className="rw-day-details"');
+    expect(history).toContain('openDayKey === h.key');
+    expect(history).not.toContain('rw-audit-table-wrap');
+    const historyCss = readFileSync(resolve(process.cwd(), 'src/pages/riwayat.css'), 'utf8');
+    expect(historyCss).toContain('grid-template-columns:repeat(3,minmax(0,1fr))');
+    expect(historyCss).toContain('.rw-filter-group.is-open { grid-column:1 / -1; }');
     expect(history).not.toContain('Transaksi berhasil akan muncul di sini.');
     expect(history).toContain('className="rw-btn-ghost rw-btn-export"');
     expect(input).not.toContain('input-methods-note');
