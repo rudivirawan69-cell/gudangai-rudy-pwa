@@ -253,7 +253,7 @@ export default function StokPage() {
       </section>
 
       <section className="sk-filter-block" aria-label="Pilih divisi">
-
+        <h2 className="sk-section-label">Divisi</h2>
         <div className="sk-div-chips" role="group" aria-label="Filter divisi">
         <button type="button" className={!divFilter ? "on" : ""} onClick={() => setDivFilter(null)}>
           Semua
@@ -267,6 +267,7 @@ export default function StokPage() {
       </section>
 
       <section className="sk-filter-block" aria-label="Filter kondisi stok">
+        <h2 className="sk-section-label">Kondisi stok</h2>
         <div className="sk-status-row">
 
           <div className="sk-chips" role="group" aria-label="Filter status">
