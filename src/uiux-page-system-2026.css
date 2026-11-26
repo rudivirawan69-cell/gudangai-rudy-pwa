@@ -616,3 +616,6 @@ html[data-theme] .home-agent-icon{width:24px;height:24px;flex:0 0 24px;stroke-wi
 html[data-theme] .home-agent-title{display:block;color:var(--text-main);font-size:13px;font-weight:800}
 html[data-theme] .home-agent-action{display:inline-flex;align-items:center;gap:4px;min-height:44px;padding-inline:8px;color:var(--accent);font-size:12px;font-weight:800}
 @media(max-width:600px){html[data-theme] .ops-status-grid{grid-template-columns:1fr;gap:8px}html[data-theme] .ops-status-card{min-height:56px;padding:10px}}
+
+html[data-theme] .ops-queue-action{display:inline-flex;align-items:center;min-height:44px;margin-top:8px;padding:8px 12px;border:1px solid var(--border);border-radius:12px;background:var(--bg-elevated);color:var(--accent);font-size:12px;font-weight:800}
+html[data-theme] .ops-queue-action:active{background:var(--accent-soft)}
