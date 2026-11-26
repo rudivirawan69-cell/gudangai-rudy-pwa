@@ -533,15 +533,6 @@ html[data-theme] :is(.sk-filter-block:not(.sk-entity-block),.rw-filter-group) {
   background: var(--bg-elevated) !important;
   box-shadow: var(--shadow-card) !important;
 }
-html[data-theme] .sk-section-label {
-  display: block;
-  margin: 0 0 8px !important;
-  color: var(--text-main) !important;
-  font-size: 12px !important;
-  line-height: 16px;
-  font-weight: 800;
-  letter-spacing: 0;
-}
 html[data-theme] .sk-entity-block {
   margin: 0 0 var(--ux-page-card-gap) !important;
   padding: 0 !important;
