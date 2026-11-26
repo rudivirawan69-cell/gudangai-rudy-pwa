@@ -11,12 +11,11 @@ import {
  * - Satu lintasan ringkasKatalog
  * - Cache jam/hari/haystack di adapter
  * - memo(Baris), callback stabil
- * - Paginasi 40
+ * - Paginasi per tanggal
  * - DayGroup memo + startTransition + content-visibility (2026-11-26)
  */
 
 const TIPE_LABEL = { masuk: "Masuk", keluar: "Keluar", rusak: "Rusak" };
-const ARAH = { masuk: "↓", keluar: "↑", rusak: "!" };
 const STATUS_LABEL = { terkirim: "Terkirim", antrian: "Antrean", gagal: "Gagal", lokal: "Lokal" };
 const ENT = ["semua", "CV", "PT", "Bahan Baku"];
 const TIPE_FILTERS = [
@@ -26,7 +25,6 @@ const TIPE_FILTERS = [
   { id: "rusak", label: "Rusak" },
 ];
 const STATUS_FILTERS = ["semua", "terkirim", "antrian", "gagal", "lokal"];
-const DENSITY_KEY = "gudangai:riwayat:density:v1";
 const BATCH = 10;
 const EMPTY = [];
 
@@ -106,13 +104,6 @@ export default function RiwayatPage({ onNavigate }) {
   const [openDayKey, setOpenDayKey] = useState(null);
   const [openFilter, setOpenFilter] = useState(null);
   const [limit, setLimit] = useState(BATCH);
-  const [ringkas, setRingkas] = useState(() => {
-    try {
-      return localStorage.getItem(DENSITY_KEY) === "compact";
-    } catch {
-      return true;
-    }
-  });
   const [toast, setToast] = useState("");
   const toastTimer = useRef(null);
 
@@ -149,12 +140,6 @@ export default function RiwayatPage({ onNavigate }) {
   const setStatusSafe = useCallback((v) => startTransition(() => setStatus(v)), []);
   const moreSafe = useCallback(() => startTransition(() => setLimit((n) => n + BATCH)), []);
   const toggleDay = useCallback((key) => setOpenDayKey((current) => current === key ? null : key), []);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(DENSITY_KEY, ringkas ? "compact" : "comfortable");
-    } catch {}
-  }, [ringkas]);
 
   useEffect(() => {
     setLimit(BATCH);
@@ -261,14 +246,6 @@ export default function RiwayatPage({ onNavigate }) {
               Antrean {nAntrean}
             </button>
           )}
-          <button
-            type="button"
-            className="rw-btn-ghost"
-            onClick={() => setRingkas((v) => !v)}
-            aria-pressed={ringkas}
-          >
-            {ringkas ? "Nyaman" : "Ringkas"}
-          </button>
           <button type="button" className="rw-btn-ghost" onClick={onRefresh} aria-label="Muat ulang">
             ⟳
           </button>
