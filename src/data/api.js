@@ -1,3 +1,4 @@
+import { normalisasiRiwayatServer } from "./riwayatAdapter.js";
 /** GudangAI RUDY — API layer V6.7.2 stable-chunk (BATCH=20) + queue serial fallback + tanggal YYYY-MM-DD */
 /** PRODUCTION-WRITE-RECOVERY-2026-10-05: canonical main build marker; preserve CV/PT write path and 20-item batching. */
 const RETRY_COUNT = 2;
@@ -938,19 +939,31 @@ export function saveToHistory(entry) {
 }
 export async function fetchRemoteTransactionHistory(days = 7) {
   const safeDays = Math.max(1, Math.min(31, Number(days) || 7));
-  let data = null;
-  try { data = await getJson('getTransactionHistory', { days: String(safeDays) }); }
-  catch (_) { data = await postJson({ action: 'getTransactionHistory', days: safeDays, requestId: newIds().requestId }); }
-  if (!data || data.success === false || data.code === 'UNAUTHORIZED') throw new Error(data?.error || 'Gagal mengambil riwayat transaksi backend');
-  const raw = data.items || data.history || data.transactions || data.data?.items || data.data?.history || data.data?.transactions || data.rows || data.data || [];
-  return (Array.isArray(raw) ? raw : []).map((entry) => ({ ...entry,
-    at: entry?.at ?? entry?.timestamp ?? entry?.time ?? entry?.createdAt ?? entry?.created_at ?? 0,
-    timestamp: entry?.timestamp ?? entry?.at ?? entry?.time ?? entry?.createdAt ?? entry?.created_at ?? 0,
-    type: entry?.type ?? entry?.jenis ?? entry?.action ?? entry?.sheet ?? entry?.sheetName ?? '',
-    transactionId: entry?.transactionId ?? entry?.transaction_id ?? entry?.id ?? '', requestId: entry?.requestId ?? entry?.request_id ?? '',
-    qty: Number(entry?.qty ?? entry?.quantity ?? entry?.jumlah ?? 0) || 0,
-    items: Array.isArray(entry?.items) ? entry.items.map((it) => ({ qty: Number(it?.qty ?? it?.quantity ?? it?.jumlah ?? 0) || 0, kode: it?.kode || it?.kodeBarang || '', nama: it?.nama || it?.name || '' })) : [],
+  const sheets = ["Barang masuk", "Barang keluar", "Barang Rusak"];
+  const histories = await Promise.all(sheets.map(async (sheet) => {
+    let data = null;
+    const params = { sheet, days: String(safeDays), limit: "1000" };
+    try { data = await getJson("getTransactionHistory", params); }
+    catch (_) {
+      data = await postJson({
+        action: "getTransactionHistory",
+        ...params,
+        days: safeDays,
+        limit: 1000,
+        requestId: newIds().requestId,
+      });
+    }
+    if (!data || data.success !== true || data.code === "UNAUTHORIZED") {
+      throw new Error(data?.error || `Gagal mengambil riwayat sheet ${sheet}`);
+    }
+    if (data.sheet && data.sheet !== sheet) {
+      throw new Error(`Sumber riwayat tidak cocok: diminta ${sheet}, diterima ${data.sheet}`);
+    }
+    const rows = data.data || data.items || data.history || data.transactions || data.rows || [];
+    if (!Array.isArray(rows)) throw new Error(`Format riwayat sheet ${sheet} tidak valid`);
+    return normalisasiRiwayatServer(rows, sheet);
   }));
+  return histories.flat();
 }
 export function pushNotification(n) {
   const list = getNotifications();
