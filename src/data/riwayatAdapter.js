@@ -163,7 +163,7 @@ function memilikiJam(v) {
 
 export const jamWIB = (ts, adaWaktu = true) => {
   if (ts == null || !adaWaktu) return "Waktu tidak tercatat";
-  return `${fmtJam.format(ts)} WIB`;
+  return `${fmtJam.format(ts).replace(".", ":")} WIB`;
 };
 
 export function normTx(r, sumber = "lokal") {
