@@ -452,6 +452,55 @@ try {
         if (label !== 'Lainnya') {
           await page.getByText(markerText, { exact: false }).first().waitFor({ state: 'visible', timeout: 10000 });
         }
+        if (label === 'Stok') {
+          await page.locator('main[data-ui-page="stok"] .sk-item-card').first().waitFor({ state: 'visible', timeout: 10000 });
+          const stockFilters = await page.evaluate(() => {
+            const cards = [...document.querySelectorAll('.sk-filter-block:not(.sk-entity-block)')];
+            const entity = document.querySelector('.sk-entity-block');
+            return {
+              filterCards: cards.map((el) => ({
+                border: getComputedStyle(el).borderTopWidth,
+                background: getComputedStyle(el).backgroundColor,
+              })),
+              entityBorder: getComputedStyle(entity).borderTopWidth,
+              entityBackground: getComputedStyle(entity).backgroundColor,
+              entityButtons: [...document.querySelectorAll('.sk-entity-block .sk-seg button')].map((el) => getComputedStyle(el).borderTopWidth),
+            };
+          });
+          assert.equal(stockFilters.filterCards.length, 2, `Stok must expose two standalone filter cards: ${JSON.stringify(stockFilters)}`);
+          assert.ok(stockFilters.filterCards.every((card) => card.border !== '0px' && card.background !== 'rgba(0, 0, 0, 0)'), `Stok filters are not independent cards: ${JSON.stringify(stockFilters)}`);
+          assert.equal(stockFilters.entityBorder, '0px', `Entity tabs must not have an outer wrapper: ${JSON.stringify(stockFilters)}`);
+          assert.equal(stockFilters.entityBackground, 'rgba(0, 0, 0, 0)', `Entity tabs must not sit on a wrapper background: ${JSON.stringify(stockFilters)}`);
+          assert.ok(stockFilters.entityButtons.every((value) => value !== '0px'), `Entity tabs must each be standalone: ${JSON.stringify(stockFilters)}`);
+        }
+        if (label === 'Riwayat') {
+          await page.locator('main[data-ui-page="riwayat"] .rw-filter-group').nth(2).waitFor({ state: 'visible', timeout: 10000 });
+          const historyFilters = await page.evaluate(() => {
+            const groups = [...document.querySelectorAll('.rw-filter-group')];
+            const chips = document.querySelector('.rw-chips');
+            const text = document.body.innerText;
+            return {
+              count: groups.length,
+              cards: groups.map((el) => ({
+                border: getComputedStyle(el).borderTopWidth,
+                background: getComputedStyle(el).backgroundColor,
+              })),
+              chipsBackground: getComputedStyle(chips).backgroundColor,
+              hasLegacyWrapper: Boolean(document.querySelector('.rw-filters')),
+              hasZeroCount: /\\b0 transaksi\\b/i.test(text),
+              hasLegacyEmptyCopy: text.includes('Transaksi berhasil akan muncul di sini.'),
+              csvClass: document.querySelector('.rw-btn-export')?.className || '',
+            };
+          });
+          assert.equal(historyFilters.count, 3, `Riwayat must show exactly three filter cards: ${JSON.stringify(historyFilters)}`);
+          assert.ok(historyFilters.cards.every((card) => card.border !== '0px' && card.background !== 'rgba(0, 0, 0, 0)'), `Riwayat filters are not independent cards: ${JSON.stringify(historyFilters)}`);
+          assert.equal(historyFilters.chipsBackground, 'rgba(0, 0, 0, 0)', `Riwayat tabs must not have a background wrapper: ${JSON.stringify(historyFilters)}`);
+          assert.equal(historyFilters.hasLegacyWrapper, false);
+          assert.equal(historyFilters.hasZeroCount, false);
+          assert.equal(historyFilters.hasLegacyEmptyCopy, false);
+          assert.ok(historyFilters.csvClass.includes('rw-btn-ghost'), `CSV must share the ghost button shape: ${JSON.stringify(historyFilters)}`);
+        }
+        await page.evaluate(() => window.scrollTo(0, 0));
         if (label === 'PO') {
           for (const [tabLabel, panelClass, slugSuffix] of [
             ['PO CS', 'po-recommendation-cs', 'cs'],
@@ -505,7 +554,7 @@ try {
   }
 
   // Stock cards: all three entities at 360/412px across all three themes.
-  const stockEvidenceRoot = 'artifacts/visual-stock-cards';
+  const stockEvidenceRoot = 'artifacts/visual-phase3/stock-cards';
   await mkdir(stockEvidenceRoot, { recursive: true });
   for (const theme of ['soft_light', 'deep_ocean', 'graphite_titanium']) {
     await page.evaluate((value) => localStorage.setItem('gudangai_theme', value), theme);

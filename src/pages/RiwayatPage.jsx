@@ -239,9 +239,11 @@ export default function RiwayatPage({ onNavigate }) {
         <div>
 
           <h1>Riwayat Transaksi</h1>
-          <p className="rw-sub">
-            {fmtCount(totalValid)} transaksi{anomali > 0 ? ` · ${fmtCount(anomali)} invalid` : ""}
-          </p>
+            {totalValid > 0 && (
+              <p className="rw-sub">
+                {fmtCount(totalValid)} transaksi{anomali > 0 ? ` · ${fmtCount(anomali)} invalid` : ""}
+              </p>
+            )}
         </div>
         <div className="rw-head-actions">
           {nAntrean > 0 && (
@@ -288,8 +290,7 @@ export default function RiwayatPage({ onNavigate }) {
         </div>
       )}
 
-      <div className="rw-filters">
-        <section className="rw-filter-group" aria-label="Filter jenis transaksi">
+      <section className="rw-filter-group" aria-label="Filter jenis transaksi">
           <h2>Jenis transaksi</h2>
           <div className="rw-chips" role="group" aria-label="Jenis transaksi">
             {TIPE_FILTERS.map((x) => (
@@ -334,8 +335,7 @@ export default function RiwayatPage({ onNavigate }) {
               </button>
             ))}
           </div>
-        </section>
-      </div>
+      </section>
 
       <div className="rw-search">
         <input
@@ -352,7 +352,7 @@ export default function RiwayatPage({ onNavigate }) {
             ✕
           </button>
         )}
-        <button type="button" className="rw-btn-export" onClick={ekspor} title="Ekspor CSV">
+        <button type="button" className="rw-btn-ghost rw-btn-export" onClick={ekspor} title="Ekspor CSV">
           CSV
         </button>
       </div>
@@ -366,7 +366,6 @@ export default function RiwayatPage({ onNavigate }) {
       {totalValid === 0 && (
         <div className="rw-empty">
           <b>{adaFilter ? "Tidak ada hasil" : "Belum ada riwayat"}</b>
-          <p>{adaFilter ? "Ubah filter atau reset." : "Transaksi berhasil akan muncul di sini."}</p>
           {adaFilter ? (
             <button type="button" className="rw-primary" onClick={resetFilter}>Reset filter</button>
           ) : (
