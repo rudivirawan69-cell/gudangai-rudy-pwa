@@ -498,3 +498,101 @@ html[data-theme] [data-ui-page="settings"] .settings-page > :is(
   box-shadow: none !important;
   pointer-events: none !important;
 }
+
+
+/* 2026-11-26 — shared page rhythm for Beranda, Stok, and Riwayat.
+   AppHeader is intentionally excluded. */
+:root {
+  --ux-page-gutter: 16px;
+  --ux-page-title-top: 2px;
+  --ux-page-title-bottom: 12px;
+  --ux-page-card-gap: 12px;
+}
+html[data-theme] .page-content {
+  padding-inline: var(--ux-page-gutter) !important;
+}
+html[data-theme] .dashboard-shell {
+  padding-inline: 0 !important;
+  padding-top: var(--ux-page-title-top) !important;
+}
+html[data-theme] .dashboard-overview-grid {
+  gap: var(--ux-page-card-gap) !important;
+}
+html[data-theme] :is(.sk-page,.rw-page) {
+  padding-inline: 0 !important;
+  padding-top: var(--ux-page-title-top) !important;
+}
+html[data-theme] :is(.sk-head,.rw-head) {
+  margin: 0 0 var(--ux-page-title-bottom) !important;
+}
+html[data-theme] :is(.sk-filter-block:not(.sk-entity-block),.rw-filter-group) {
+  margin: 0 0 var(--ux-page-card-gap) !important;
+  padding: 12px !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 16px !important;
+  background: var(--bg-elevated) !important;
+  box-shadow: var(--shadow-card) !important;
+}
+html[data-theme] .sk-section-label {
+  display: block;
+  margin: 0 0 8px !important;
+  color: var(--text-main) !important;
+  font-size: 12px !important;
+  line-height: 16px;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+html[data-theme] .sk-entity-block {
+  margin: 0 0 var(--ux-page-card-gap) !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+html[data-theme] .sk-entity-block .sk-seg {
+  gap: 8px !important;
+  background: transparent !important;
+}
+html[data-theme] .sk-entity-block .sk-seg button {
+  background: var(--bg-elevated) !important;
+}
+html[data-theme] :is(.sk-div-chips,.sk-status-row .sk-chips,.rw-chips) {
+  background: transparent !important;
+}
+html[data-theme] :is(.sk-div-chips button,.sk-status-row .sk-chips button,.rw-chips button) {
+  box-shadow: none !important;
+}
+html[data-theme] .rw-filter-group h2 {
+  margin: 0 !important;
+  color: var(--text-main) !important;
+  font-size: 12px !important;
+  line-height: 16px;
+  font-weight: 800;
+}
+html[data-theme] .rw-chips {
+  padding-top: 8px !important;
+}
+html[data-theme] .rw-chips button {
+  background: transparent !important;
+}
+html[data-theme] .rw-btn-export {
+  min-height: 38px !important;
+  height: 38px;
+  padding: 0 12px !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 11px !important;
+  background: var(--bg-elevated) !important;
+  color: var(--text-main) !important;
+  box-shadow: var(--shadow-card) !important;
+  font-size: 11.5px !important;
+  font-weight: 700 !important;
+}
+html[data-theme] .rw-btn-export:active {
+  background: var(--accent-soft) !important;
+}
+@media (max-width: 600px) {
+  html[data-theme] .page-content { padding-inline: var(--ux-page-gutter) !important; }
+  html[data-theme] .dashboard-shell { padding-inline: 0 !important; }
+  html[data-theme] :is(.sk-page,.rw-page) { padding-inline: 0 !important; }
+}
