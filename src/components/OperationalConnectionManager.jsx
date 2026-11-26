@@ -131,6 +131,7 @@ export default function OperationalConnectionManager({
   };
 
   return (
+    <>
     <ul className="ops-status-grid" aria-label="Status layanan operasional">
       <StatusRow Icon={ShieldCheck} name="Supabase Auth" {...auth} />
       <StatusRow Icon={Bot} name="Agent / Cloudflare Worker" {...workerStatus} />
@@ -142,5 +143,6 @@ export default function OperationalConnectionManager({
       <button type="button" onClick={() => onNavigate?.('sync')} className="ops-queue-action">Tinjau antrean ({pendingCount})</button>
     )}
   
+    </>
   );
 }
