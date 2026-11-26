@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { kelompokkan, normTx } from "./riwayatAdapter.js";
+import { gabung, kelompokkan, normTx } from "./riwayatAdapter.js";
 
 const transaksi = (at, id = "tx-1") => normTx({
   id,
@@ -24,7 +24,7 @@ describe("Riwayat transaction time and date grouping", () => {
   it("groups every transaction on the same Jakarta calendar date", () => {
     const a = transaksi("2026-11-25T17:30:00.000Z", "a");
     const b = transaksi("2026-11-26T08:15:00+07:00", "b");
-    const grouped = kelompokkan([a, b]);
+    const grouped = kelompokkan(gabung([a, b]));
     expect(grouped.hari).toHaveLength(1);
     expect(grouped.hari[0].items.map((tx) => tx.id)).toEqual(["b", "a"]);
     expect(grouped.totalValid).toBe(2);
