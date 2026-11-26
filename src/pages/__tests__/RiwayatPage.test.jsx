@@ -1,6 +1,6 @@
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import RiwayatPage from '../RiwayatPage';
 
 const api = vi.hoisted(() => ({
@@ -33,7 +33,9 @@ describe('RiwayatPage remote history', () => {
   it('menampilkan transaksi remote dan tetap menggabungkan riwayat lokal', async () => {
     render(<RiwayatPage />);
     await waitFor(() => expect(screen.getAllByText('Barang Server').length).toBeGreaterThan(0));
-    expect(screen.getAllByText('Barang Lokal').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Barang Lokal')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /2 transaksi/ }));
+    await waitFor(() => expect(screen.getByText('Barang Lokal')).toBeInTheDocument());
     expect(api.fetchRemoteTransactionHistory).toHaveBeenCalledWith(31);
   });
 
@@ -49,7 +51,7 @@ describe('RiwayatPage remote history', () => {
       items: [{ kode: 'CV-0001', nama: 'Barang Sama', qty: 1, satuan: 'Pack' }],
     }]);
     render(<RiwayatPage />);
-    await waitFor(() => expect(screen.getByText('1 transaksi')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('1 transaksi', { selector: '.rw-day-summary-main small' })).toBeInTheDocument());
   });
 
   it('tetap menampilkan riwayat lokal saat pengambilan remote gagal', async () => {
