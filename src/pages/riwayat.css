@@ -368,4 +368,25 @@
   .rw-filter-group h2 { font-size:9px; }
   .rw-day-summary-meta b { font-size:12px; }
 }
-\n/* Visual refinement 27 Nov: theme-token cards, equal filter controls, neutral count chips. */\n.rw-filter-head { display:flex; align-items:center; gap:6px; min-height:48px; padding:10px; border:1px solid var(--rw-line)!important; border-radius:12px!important; background:var(--rw-card)!important; color:var(--rw-ink)!important; }\n.rw-filter-icon { flex:0 0 16px; width:16px; height:16px; stroke-width:1.8; color:var(--rw-brand); }\n.rw-filter-head h2 { flex:1; margin:0; font-size:12px; font-weight:800; line-height:1.2; white-space:nowrap; }\n.rw-filter-chevron { width:16px;height:16px;flex:0 0 16px;stroke-width:2; transition:transform 180ms ease; color:var(--rw-mut); }\n.rw-filter-chevron.is-open { transform:rotate(180deg); }\n.rw-count-chips { display:flex; gap:8px; flex-wrap:wrap; margin:8px 0; }\n.rw-count-chip { display:inline-flex; align-items:center; gap:6px; min-height:36px; padding:6px 10px; border:1px solid var(--rw-line); border-radius:999px; background:var(--rw-card); color:var(--rw-ink); font-size:11px; font-weight:700; }\n.rw-count-chip svg { width:14px;height:14px;stroke-width:1.8;color:var(--rw-brand); }\n.rw-count-chip b { font-variant-numeric:tabular-nums; }\n.rw-count-masuk svg {color:var(--rw-masuk)} .rw-count-keluar svg {color:var(--rw-keluar)} .rw-count-rusak svg {color:var(--rw-rusak)}\n.rw-refresh { display:inline-flex;align-items:center;justify-content:center;min-width:44px;min-height:44px;padding:0;border-radius:12px; }\n.rw-refresh svg { width:18px;height:18px;stroke-width:1.8; }\n.rw-search input,.rw-btn-export { min-height:44px!important;height:44px!important;border-radius:12px!important; }\n.rw-day-summary-icon { width:24px;height:24px; background:transparent!important; border-radius:0!important; stroke-width:1.8; color:var(--rw-brand); }\n.rw-day-summary { min-height:88px; }\n.rw-day-chevron { width:18px;height:18px;stroke-width:2; }\n.rw-chips button.on { background:var(--accent-strong)!important;border-color:var(--accent-strong)!important;color:var(--text-on-accent)!important; }\n.rw-chips button:focus-visible,.rw-filter-head:focus-visible,.rw-count-chip:focus-visible { outline:2px solid var(--accent)!important;outline-offset:2px; }\n@media(max-width:430px){.rw-filter-head{min-height:48px;padding:8px 6px}.rw-filter-head h2{font-size:11px}.rw-filter-icon{width:14px;height:14px;flex-basis:14px}.rw-filter-chevron{width:14px;flex-basis:14px}.rw-count-chips{gap:6px}.rw-count-chip{padding:5px 8px;min-height:34px;font-size:10px}.rw-day-summary{min-height:84px}}\n@media(prefers-reduced-motion:reduce){.rw-filter-chevron,.rw-day-chevron{transition:none}}\n
+
+/* Visual refinement 27 Nov: theme-token cards, equal filter controls, neutral count chips. */
+.rw-filter-head { display:flex; align-items:center; gap:6px; min-height:48px; padding:10px; border:1px solid var(--rw-line)!important; border-radius:12px!important; background:var(--rw-card)!important; color:var(--rw-ink)!important; }
+.rw-filter-icon { flex:0 0 16px; width:16px; height:16px; stroke-width:1.8; color:var(--rw-brand); }
+.rw-filter-head h2 { flex:1; margin:0; font-size:12px; font-weight:800; line-height:1.2; white-space:nowrap; }
+.rw-filter-chevron { width:16px;height:16px;flex:0 0 16px;stroke-width:2; transition:transform 180ms ease; color:var(--rw-mut); }
+.rw-filter-chevron.is-open { transform:rotate(180deg); }
+.rw-count-chips { display:flex; gap:8px; flex-wrap:wrap; margin:8px 0; }
+.rw-count-chip { display:inline-flex; align-items:center; gap:6px; min-height:36px; padding:6px 10px; border:1px solid var(--rw-line); border-radius:999px; background:var(--rw-card); color:var(--rw-ink); font-size:11px; font-weight:700; }
+.rw-count-chip svg { width:14px;height:14px;stroke-width:1.8;color:var(--rw-brand); }
+.rw-count-chip b { font-variant-numeric:tabular-nums; }
+.rw-count-masuk svg {color:var(--rw-masuk)} .rw-count-keluar svg {color:var(--rw-keluar)} .rw-count-rusak svg {color:var(--rw-rusak)}
+.rw-refresh { display:inline-flex;align-items:center;justify-content:center;min-width:44px;min-height:44px;padding:0;border-radius:12px; }
+.rw-refresh svg { width:18px;height:18px;stroke-width:1.8; }
+.rw-search input,.rw-btn-export { min-height:44px!important;height:44px!important;border-radius:12px!important; }
+.rw-day-summary-icon { width:24px;height:24px; background:transparent!important; border-radius:0!important; stroke-width:1.8; color:var(--rw-brand); }
+.rw-day-summary { min-height:88px; }
+.rw-day-chevron { width:18px;height:18px;stroke-width:2; }
+.rw-chips button.on { background:var(--accent-strong)!important;border-color:var(--accent-strong)!important;color:var(--text-on-accent)!important; }
+.rw-chips button:focus-visible,.rw-filter-head:focus-visible,.rw-count-chip:focus-visible { outline:2px solid var(--accent)!important;outline-offset:2px; }
+@media(max-width:430px){.rw-filter-head{min-height:48px;padding:8px 6px}.rw-filter-head h2{font-size:11px}.rw-filter-icon{width:14px;height:14px;flex-basis:14px}.rw-filter-chevron{width:14px;flex-basis:14px}.rw-count-chips{gap:6px}.rw-count-chip{padding:5px 8px;min-height:34px;font-size:10px}.rw-day-summary{min-height:84px}}
+@media(prefers-reduced-motion:reduce){.rw-filter-chevron,.rw-day-chevron{transition:none}}
