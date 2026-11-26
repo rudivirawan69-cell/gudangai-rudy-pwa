@@ -1,0 +1,81 @@
+--- a/Code.gs.6.6.6-HOLD-SIMPLE-AGENT-KNOWLEDGE.gs
++++ b/Code.gs.6.6.6-HOLD-SIMPLE-AGENT-KNOWLEDGE.gs
+@@ -481,7 +481,7 @@
+     case "getDashboard":
+     case "getDashboardData": return jsonResponse(withSourceReadAt_(getDashboardData()));
+     case "getDashboardLegacy": return jsonResponse(withSourceReadAt_(getDashboard()));
+-    case "getTransactionHistory": return jsonResponse(withSourceReadAt_(getTransactionHistory({ sheet: e.parameter.sheet, limit: e.parameter.limit })));
++    case "getTransactionHistory": return jsonResponse(withSourceReadAt_(getTransactionHistory({ sheet: e.parameter.sheet, limit: e.parameter.limit, days: e.parameter.days })));
+     case "getTransactionStatus": return jsonResponse(withSourceReadAt_(getTransactionStatus({ transactionId: e.parameter.transactionId, nonce: e.parameter.nonce, sheet: e.parameter.sheet })));
+     case "searchByName": return jsonResponse(withSourceReadAt_(searchByName(e.parameter.query || e.parameter.q)));
+     case "getLastUpdate": return jsonResponse(withSourceReadAt_({ success: true, timestamp: getLastUpdateTimestamp() }));
+@@ -2040,18 +2040,62 @@
+   const sheetName = params.sheet || "Barang keluar";
+   if (!(sheetName in SHEET_CONFIG)) return { success: false, error: "Sheet tidak valid" };
+   const config = SHEET_CONFIG[sheetName];
+-  const sheet = getSS().getSheetByName(sheetName);
++  const ss = getSS();
++  const sheet = ss.getSheetByName(sheetName);
+   if (!sheet) return { success: false, error: "Sheet tidak ditemukan" };
+   const last = getRealLastDataRow(sheet, config);
+   if (last < config.headerRow + 1) return { success: true, sheet: sheetName, count: 0, data: [] };
++
++  // Read-only join ke ledger; tidak membuat atau mengubah tab saat GET.
++  const ledgerByRow = Object.create(null);
++  const ledgerSheet = ss.getSheetByName(IDEMPOTENCY_SHEET_NAME);
++  if (ledgerSheet && ledgerSheet.getLastRow() >= OPS_DATA_START_ROW) {
++    const ledgerLast = ledgerSheet.getLastRow();
++    const ledgerCount = Math.min(IDEMPOTENCY_SCAN_LIMIT, ledgerLast - OPS_HEADER_ROW);
++    const ledgerStart = Math.max(OPS_DATA_START_ROW, ledgerLast - ledgerCount + 1);
++    const ledgerRows = ledgerSheet.getRange(ledgerStart, 1, ledgerLast - ledgerStart + 1, IDEMPOTENCY_HEADERS.length).getValues();
++    ledgerRows.forEach(function(ledgerRow, index) {
++      const record = mapIdempotencyRow_(ledgerRow, ledgerStart + index);
++      if (record.sheet === sheetName && Number(record.dataRow) > 0 &&
++          record.status === "APPLIED" && String(record.writeOccurred).toLowerCase() === "true") {
++        ledgerByRow[String(record.dataRow)] = record;
++      }
++    });
++  }
++
+   const numRows = last - config.headerRow;
+   const data = sheet.getRange(config.headerRow + 1, 1, numRows, sheet.getLastColumn()).getValues();
+-  const limit = params.limit ? Math.min(Number(params.limit), data.length) : data.length;
+-  const result = data.slice(-limit).reverse().map(function(row, index) {
+-    const note = String(row[6] || "");
+-    const txMatch = note.match(/GUDANGAI_TX=([^;|]+)/);
+-    const nonceMatch = note.match(/GUDANGAI_NONCE=([^;|]+)/);
+-    return { row: last - index, tanggal: row[1], kode: row[2], nama: row[3], satuan: row[4], qty: row[5], keterangan: row[6], transactionId: txMatch ? txMatch[1] : null, nonce: nonceMatch ? nonceMatch[1] : (txMatch ? txMatch[1] : null) };
++  const requestedDays = Number(params.days);
++  const days = Number.isFinite(requestedDays) && requestedDays > 0 ? Math.min(31, Math.floor(requestedDays)) : 0;
++  const cutoff = new Date();
++  if (days) cutoff.setDate(cutoff.getDate() - days);
++  const cutoffKey = days ? Utilities.formatDate(cutoff, TIMEZONE, "yyyy-MM-dd") : "";
++  const rows = data.map(function(row, index) {
++    return { values: row, rowNumber: config.headerRow + 1 + index };
++  }).filter(function(entry) {
++    if (!days) return true;
++    const dateKey = normalizeTransactionDateKey_(entry.values[1]);
++    return !dateKey || dateKey >= cutoffKey;
++  });
++  const requestedLimit = Number(params.limit);
++  const limit = Number.isFinite(requestedLimit) && requestedLimit > 0
++    ? Math.min(Math.floor(requestedLimit), rows.length)
++    : rows.length;
++  const result = rows.slice(-limit).reverse().map(function(entry) {
++    const row = entry.values;
++    const ledgerRecord = ledgerByRow[String(entry.rowNumber)] || null;
++    return {
++      row: entry.rowNumber,
++      tanggal: row[1],
++      kode: row[2],
++      nama: row[3],
++      satuan: row[4],
++      qty: row[5],
++      keterangan: row[6],
++      transactionId: ledgerRecord ? ledgerRecord.transactionId : null,
++      requestId: ledgerRecord ? ledgerRecord.requestId : null,
++      entitas: ledgerRecord ? ledgerRecord.entitas : null
++    };
+   });
+   return { success: true, sheet: sheetName, count: result.length, data: result };
+ }

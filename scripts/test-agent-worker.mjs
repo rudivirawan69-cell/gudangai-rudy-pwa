@@ -5,6 +5,7 @@ import worker, { detectLiveActions, liveDataBlock } from '../worker.js';
 import { buildSystemPrompt } from '../cloudflare/agentSkills.js';
 
 const codeGs = readFileSync(new URL('../Code.gs', import.meta.url), 'utf8');
+const historyPatch = readFileSync(new URL('../patches/Code.gs-6.6.6-riwayat-history.patch', import.meta.url), 'utf8');
 
 const ORIGIN = 'https://gudangai-rudy-pwa-69.rudivirawan69.workers.dev';
 const SUPABASE_URL = 'https://project.supabase.co';
@@ -511,6 +512,11 @@ test('Apps Script transaction history returns requested sheet identity and sourc
   assert.match(handler, /sheet:sheetName/);
   assert.ok(handler.includes('sourceReadAt:new Date().toISOString()'));
   assert.match(handler, /count: result.length, data: result/);
+  assert.match(historyPatch, /ledgerByRow/);
+  assert.match(historyPatch, /transactionId: ledgerRecord/);
+  assert.match(historyPatch, /entitas: ledgerRecord/);
+  assert.match(historyPatch, /params\.days/);
+  assert.match(historyPatch, /Code\.gs\.6\.6\.6-HOLD-SIMPLE-AGENT-KNOWLEDGE\.gs/);
 });
 
 test('Rubee capability policy forbids unsupported claims of full mastery', () => {

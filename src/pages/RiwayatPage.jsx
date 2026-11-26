@@ -1,6 +1,6 @@
-import { Fragment, memo, useMemo, useState, useEffect, useCallback, useDeferredValue, useRef } from "react";
+import React, { Fragment, memo, useMemo, useState, useEffect, useCallback, useDeferredValue, useRef } from "react";
 import "./riwayat.css";
-import { getLocalHistory, getPendingQueue } from "../data/api";
+import { getLocalHistory, getPendingQueue, fetchRemoteTransactionHistory } from "../data/api";
 import {
   gabung, filterTx, kelompokkan, keCSV, ringkasanTeks, ringkasKatalog,
 } from "../data/riwayatAdapter.js";
@@ -87,6 +87,7 @@ const Baris = memo(function Baris({ t, buka, onToggle, onRetry, onCopy, ringkas 
 
 export default function RiwayatPage({ onNavigate }) {
   const [tick, setTick] = useState(0);
+  const [remote, setRemote] = useState(EMPTY);
   const [tipe, setTipe] = useState("semua");
   const [entitas, setEntitas] = useState("semua");
   const [status, setStatus] = useState("semua");
@@ -110,6 +111,14 @@ export default function RiwayatPage({ onNavigate }) {
     } catch {
       return EMPTY;
     }
+  }, [tick]);
+
+  useEffect(() => {
+    let active = true;
+    fetchRemoteTransactionHistory(31)
+      .then((rows) => { if (active) setRemote(Array.isArray(rows) ? rows : EMPTY); })
+      .catch(() => { if (active) setRemote(EMPTY); });
+    return () => { active = false; };
   }, [tick]);
 
   const queueCount = useMemo(() => {
@@ -149,7 +158,7 @@ export default function RiwayatPage({ onNavigate }) {
     if (toastTimer.current) clearTimeout(toastTimer.current);
   }, []);
 
-  const semua = useMemo(() => gabung(local, EMPTY), [local]);
+  const semua = useMemo(() => gabung(local, remote), [local, remote]);
 
   const katalog = useMemo(() => ringkasKatalog(semua), [semua]);
   const cntStatus = katalog.status;
