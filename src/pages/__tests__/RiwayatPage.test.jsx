@@ -37,6 +37,21 @@ describe('RiwayatPage remote history', () => {
     expect(api.fetchRemoteTransactionHistory).toHaveBeenCalledWith(31);
   });
 
+  it('deduplicates a server row against its matching local transaction identity', async () => {
+    api.getLocalHistory.mockReturnValue([{
+      id: 'local-same', transactionId: 'TX-SAME', type: 'masuk', entity: 'CV',
+      status: 'success', at: '2026-11-26T01:00:00+07:00',
+      items: [{ kode: 'CV-0001', nama: 'Barang Sama', qty: 1, satuan: 'Pack' }],
+    }]);
+    api.fetchRemoteTransactionHistory.mockResolvedValue([{
+      id: 'remote-same', transactionId: 'TX-SAME', type: 'masuk', entity: 'CV',
+      status: 'success', at: '2026-11-26T01:00:00+07:00',
+      items: [{ kode: 'CV-0001', nama: 'Barang Sama', qty: 1, satuan: 'Pack' }],
+    }]);
+    render(<RiwayatPage />);
+    await waitFor(() => expect(screen.getByText('1 transaksi')).toBeInTheDocument());
+  });
+
   it('tetap menampilkan riwayat lokal saat pengambilan remote gagal', async () => {
     api.fetchRemoteTransactionHistory.mockRejectedValue(new Error('remote unavailable'));
     render(<RiwayatPage />);
