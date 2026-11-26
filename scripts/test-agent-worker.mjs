@@ -511,6 +511,11 @@ test('Apps Script transaction history returns requested sheet identity and sourc
   assert.match(handler, /sheet:sheetName/);
   assert.ok(handler.includes('sourceReadAt:new Date().toISOString()'));
   assert.match(handler, /count: result.length, data: result/);
+  assert.match(handler, /IDEMPOTENCY_SHEET_NAME/);
+  assert.match(handler, /ledgerByRow/);
+  assert.match(handler, /transactionId: ledgerRecord/);
+  assert.match(handler, /entitas: ledgerRecord/);
+  assert.match(handler, /params\.days/);
 });
 
 test('Rubee capability policy forbids unsupported claims of full mastery', () => {
