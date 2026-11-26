@@ -208,7 +208,7 @@
   min-width:0;
   padding:12px;
   border:1px solid var(--rw-line) !important;
-  border-radius:15px;
+  border-radius:15px !important;
   background:var(--rw-card) !important;
   text-align:left;
   overflow:hidden;

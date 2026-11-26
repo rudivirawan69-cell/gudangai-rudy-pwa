@@ -54,6 +54,7 @@ async function waitForServer() {
 }
 
 const browser = await chromium.launch({ headless: true });
+let transactionWriteCalls = 0;
 try {
   await waitForServer();
   const page = await browser.newPage({ viewport: { width: 390, height: 844 }, serviceWorkers: 'block' });
@@ -81,6 +82,12 @@ try {
     localStorage.setItem('gudangai_api_secret', 'ci-mock-secret');
     localStorage.setItem('gudangai_input_draft_v1', JSON.stringify(inputDraft));
     localStorage.setItem('gudangai_po_draft_v1', JSON.stringify(poDraft));
+    localStorage.setItem('gudangai_history', JSON.stringify([{
+      id: 'CI-HISTORY-001', transactionId: 'CI-HISTORY-001', type: 'masuk', entity: 'CV',
+      savedAt: '2026-11-26T02:00:00.000Z', status: 'success', syncStatus: 'success',
+      items: [{ kode: 'CV-0001', nama: 'Ayam Fillet Dada', qty: 2, satuan: 'Pack' }],
+      keterangan: 'CI note must not appear on the collapsed day card',
+    }]));
   }, {
     inputDraft: {
       version: 1, entity: 'CV', txType: 'masuk', tanggal: '01/11/2026',
@@ -122,6 +129,7 @@ try {
     let action = url.searchParams.get('action') || '';
     if (request.method() === 'POST') {
       try { action = JSON.parse(request.postData() || '{}').action || action; } catch (_) {}
+      if (action === 'bulkTransaction' || action === 'addTransaction') transactionWriteCalls += 1;
     }
     let data;
     if (action === 'ping' || action === 'status') {
@@ -282,6 +290,31 @@ try {
       }
       const boundaryErrors = await page.getByText('Halaman gagal dimuat', { exact: false }).count();
       assert.equal(boundaryErrors, 0, `Error boundary shown on ${label}`);
+      if (label === 'Stok') {
+        await page.locator('.sk-item-card').first().waitFor({ state: 'visible', timeout: 10000 });
+        const stockCards = await page.evaluate(() => {
+          const list = document.querySelector('.sk-item-list');
+          const card = document.querySelector('.sk-item-card');
+          if (!list || !card) return null;
+          const outer = getComputedStyle(list);
+          const tile = getComputedStyle(card);
+          return {
+            outerBackground: outer.backgroundColor, outerBorder: outer.borderTopWidth,
+            outerShadow: outer.boxShadow, outerPadding: outer.padding,
+            gap: parseFloat(outer.rowGap || outer.gap),
+            cardBorder: tile.borderTopWidth, cardRadius: tile.borderTopLeftRadius,
+            cardWidth: card.getBoundingClientRect().width, listWidth: list.getBoundingClientRect().width,
+          };
+        });
+        assert.ok(stockCards, 'Stock cards must render independently.');
+        assert.equal(stockCards.outerBackground, 'rgba(0, 0, 0, 0)', `Stock list must not be a long enclosing surface: ${JSON.stringify(stockCards)}`);
+        assert.equal(stockCards.outerBorder, '0px', `Stock list wrapper must have no border: ${JSON.stringify(stockCards)}`);
+        assert.equal(stockCards.outerShadow, 'none', `Stock list wrapper must have no shadow: ${JSON.stringify(stockCards)}`);
+        assert.equal(stockCards.outerPadding, '0px', `Stock list wrapper must not inset item cards: ${JSON.stringify(stockCards)}`);
+        assert.ok(stockCards.gap >= 8, `Stock cards need visible separation: ${JSON.stringify(stockCards)}`);
+        assert.ok(parseFloat(stockCards.cardBorder) > 0 && parseFloat(stockCards.cardRadius) >= 12, `Each SKU must be a rounded independent card: ${JSON.stringify(stockCards)}`);
+        assert.ok(Math.abs(stockCards.cardWidth - stockCards.listWidth) <= 1, `Stock cards should align with the list width: ${JSON.stringify(stockCards)}`);
+      }
       if (label === 'Input') {
         const inputAudit = await page.evaluate(() => {
           const controls = [...document.querySelectorAll('.input-date-field,.input-entity-btn,.input-notification-btn')];
@@ -311,8 +344,26 @@ try {
     }
 
     // Hidden destinations are reached through the actual 5th navigation item.
+    await page.setViewportSize({ width: 412, height: 915 });
     await openMorePage('Riwayat', 'Transaksi');
-    await assertNoHorizontalOverflow('Riwayat', viewport);
+    await assertNoHorizontalOverflow('Riwayat', { width: 412, height: 915 });
+    const historySummary = page.locator('.rw-day-summary').first();
+    await historySummary.scrollIntoViewIfNeeded();
+    await historySummary.waitFor({ state: 'visible', timeout: 10000 });
+    const collapsedNoteCount = await page.getByText('Keterangan: CI note must not appear on the collapsed day card', { exact: true }).count();
+    assert.equal(collapsedNoteCount, 0, 'Transaction details must stay collapsed until the operator opens a date.');
+    const historyCard = await historySummary.evaluate((node) => ({
+      border: getComputedStyle(node).borderTopWidth,
+      radius: getComputedStyle(node).borderTopLeftRadius,
+      background: getComputedStyle(node).backgroundColor,
+      width: node.getBoundingClientRect().width,
+      parentWidth: node.parentElement.getBoundingClientRect().width,
+    }));
+    assert.ok(parseFloat(historyCard.border) > 0 && parseFloat(historyCard.radius) >= 12, `Each date summary must be its own card: ${JSON.stringify(historyCard)}`);
+    assert.ok(Math.abs(historyCard.width - historyCard.parentWidth) <= 1, `Date summary cards should align with the history page: ${JSON.stringify(historyCard)}`);
+    await historySummary.click();
+    await page.locator('.rw-day-details').first().waitFor({ state: 'visible', timeout: 5000 });
+    assert.equal(await page.getByText('Keterangan: CI note must not appear on the collapsed day card', { exact: true }).count(), 1, 'Transaction notes should appear once in the expanded detail, not on the collapsed card.');
     await openMorePage('Pengaturan', 'Mode Tampilan');
     await assertNoHorizontalOverflow('Pengaturan', viewport);
     const settingsCards = await page.evaluate(() => {
@@ -627,9 +678,22 @@ try {
   await page.locator('nav.nav-bar button').filter({ hasText: 'Stok' }).first().click();
   await page.locator('nav.nav-bar button').filter({ hasText: 'Input' }).first().click();
   await page.getByText('Draft transaksi dipulihkan', { exact: false }).waitFor({ state: 'visible' });
+  await page.getByRole('button', { name: 'Antrekan 1 item' }).click();
+  await page.getByText('1 item dalam antrean', { exact: false }).waitFor({ state: 'visible', timeout: 10000 });
+  assert.equal(transactionWriteCalls, 0, 'Input must only stage the transaction; no backend write is allowed before explicit queue confirmation.');
+  await page.getByRole('button', { name: /Tinjau Keranjang & Sinkronisasi/ }).click();
+  await page.getByText('Belum ada data yang dikirim.', { exact: false }).waitFor({ state: 'visible' });
+  await page.getByRole('button', { name: 'Konfirmasi & Kirim ke Spreadsheet' }).click();
+  await page.getByText(/1 item terkonfirmasi/).waitFor({ state: 'visible', timeout: 15000 });
+  assert.equal(transactionWriteCalls, 1, 'SyncQueue must own the single confirmed backend write.');
+  await page.getByRole('button', { name: 'Buka Riwayat' }).click();
+  await page.locator('.rw-day-summary').first().waitFor({ state: 'visible', timeout: 10000 });
+  const historyEntries = await page.evaluate(() => JSON.parse(localStorage.getItem('gudangai_history') || '[]'));
+  assert.equal(historyEntries.filter((entry) => entry.clientItemId === 'CI-E2E-INPUT-001').length, 1,
+    'A confirmed queue item must appear exactly once in final history.');
 
   assert.deepEqual(pageErrors, [], 'Uncaught browser errors were detected during page smoke tests.');
-  console.log('PASS: five primary tabs + MoreSheet destinations + Data Stock CV/PT/division behavior + full-screen edges + Input draft recovery + five viewport widths + three themes.');
+  console.log('PASS: independent Stok/Riwayat cards, three-theme responsive pages, Input → SyncQueue → Riwayat single-writer flow, and draft recovery.');
 } finally {
   await browser.close();
   server.kill('SIGTERM');

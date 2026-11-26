@@ -10,9 +10,8 @@ import {
   detectEntityFromText, scanBarcodeFromVideo,
 } from '../data/pdfValidate';
 import {
-  submitBarangMasuk, submitBarangKeluar, submitBarangRusak, fetchStock,
-  saveToHistory, stagePendingTransaction, updatePendingItemStates, removePendingByClientIds, finishPendingTransaction,
-  pushNotification, getNotifications, markNotificationsRead, unreadNotificationCount,
+  fetchStock, stagePendingTransaction,
+  getNotifications, markNotificationsRead, unreadNotificationCount,
 } from '../data/api';
 import { searchMaster } from '../data/master';
 import { useBootstrapRevision } from '../hooks/useBootstrapRevision';
@@ -95,7 +94,6 @@ export default function InputPage({ onNavigate }) {
   const [showPhotoSource, setShowPhotoSource] = useState(false);
   const [photoCameraOpen, setPhotoCameraOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [submitProgress, setSubmitProgress] = useState(null);
   const [showPaste, setShowPaste] = useState(false);
   const [pasteText, setPasteText] = useState('');
   const [showNotif, setShowNotif] = useState(false);
@@ -151,14 +149,6 @@ export default function InputPage({ onNavigate }) {
     window.addEventListener('gudangai-notification', refreshUnread);
     return () => window.removeEventListener('gudangai-notification', refreshUnread);
   }, [showNotif]);
-  useEffect(() => {
-    const handler = (e) => {
-      const d = e.detail || {};
-      setSubmitProgress({ sent: d.sent || 0, total: d.total || 0, success: d.success || 0, queued: d.queued || 0, failed: d.failed || 0 });
-    };
-    window.addEventListener('gudangai-submit-progress', handler);
-    return () => window.removeEventListener('gudangai-submit-progress', handler);
-  }, []);
   useEffect(() => {
     let cancelled = false;
     const loadStockCatalog = async () => {
@@ -608,74 +598,49 @@ export default function InputPage({ onNavigate }) {
 
 
   const handleSubmit = async () => {
-    const unresolved = cart.filter((c) => (c.unmatched || !c.kode) && Number(c.qty) > 0);
+    const unresolved = cart.filter((item) => (item.unmatched || !item.kode) && Number(item.qty) > 0);
     if (unresolved.length > 0) {
-      setStatusBanner('Masih ada ' + unresolved.length + ' item PDF yang belum dipetakan. Pilih master atau abaikan sebelum Kirim.');
+      setStatusBanner(`Masih ada ${unresolved.length} item PDF yang belum dipetakan. Pilih master atau abaikan sebelum dimasukkan ke antrean.`);
       return;
     }
     if (pdfReview.length > 0) {
-      setStatusBanner('Masih ada ' + pdfReview.length + ' baris PDF/Foto yang perlu divalidasi sebelum dikirim. Tidak ada item yang boleh terlewat.');
+      setStatusBanner(`Masih ada ${pdfReview.length} baris PDF/Foto yang perlu divalidasi sebelum dimasukkan ke antrean.`);
       return;
     }
     if (submittingRef.current || !cart.length) return;
-    const uiSubmitStartedAt = Date.now();
+    const orderedCart = [...cart].sort((a, b) => (Number(a.pdfSourceIndex) || 999999) - (Number(b.pdfSourceIndex) || 999999));
+    const items = orderedCart.filter((item) => Number(item.qty) > 0).map((item) => ({
+      kode: item.kode, nama: item.nama || '', satuan: item.satuan || '', qty: Number(item.qty),
+      keterangan: item.keterangan || '', clientItemId: item.clientItemId,
+    }));
+    if (!items.length) {
+      setStatusBanner('Tambahkan minimal satu item dengan jumlah lebih dari 0 sebelum melanjutkan.');
+      return;
+    }
+
     submittingRef.current = true;
     setSubmitting(true);
-    const zeroItems = cart.filter((c) => !(Number(c.qty) > 0));
-    const orderedCart = [...cart].sort((a, b) => (Number(a.pdfSourceIndex) || 999999) - (Number(b.pdfSourceIndex) || 999999));
-    const items = orderedCart.filter((c) => Number(c.qty) > 0).map((c) => ({
-      kode: c.kode, nama: c.nama || '', satuan: c.satuan || '', qty: Number(c.qty),
-      keterangan: c.keterangan || '', clientItemId: c.clientItemId,
-    }));
-    setSubmitProgress({ sent: 0, total: items.length, success: 0, queued: 0, failed: 0 });
-    if (zeroItems.length) setStatusBanner(zeroItems.length + ' item qty 0 tidak dikirim');
-    if (!items.length) {
-      setSubmitting(false); submittingRef.current = false; setSubmitProgress(null); return;
-    }
-    let handoffTimer = null;
-    let handedOff = false;
-    let stagedIds = [];
     try {
       const queueType = txType === 'masuk' ? 'barangMasuk' : txType === 'rusak' ? 'barangRusak' : 'barangKeluar';
-      stagedIds = await stagePendingTransaction({ type: queueType, entity, tanggal, items });
-      handoffTimer = setTimeout(() => {
-        if (submittingRef.current) { handedOff = true; setStatusBanner('Pengiriman masih berjalan. Proses dilanjutkan dan dapat dipantau di Sinkronisasi.'); onNavigate?.('sync'); }
-      }, 5000);
-      const fn = txType === 'masuk' ? submitBarangMasuk : txType === 'rusak' ? submitBarangRusak : submitBarangKeluar;
-      const res = await fn({ entity, tanggal, items });
-      const resultMap = new Map((res?.results || []).filter((r) => r?.clientItemId).map((r) => [r.clientItemId, r]));
-      const confirmedItems = items.filter((item) => { const r = resultMap.get(item.clientItemId); return r?.success === true || r?.skipped === true; });
-      const queuedItems = items.filter((item) => { const r = resultMap.get(item.clientItemId); return r?.queued === true && r?.queueStored === true; });
-      const confirmedIds = new Set(confirmedItems.map((item) => item.clientItemId));
-      const queuedIds = new Set(queuedItems.map((item) => item.clientItemId));
-      const knownIds = new Set((res?.results || []).map((r) => r?.clientItemId).filter(Boolean));
-      const failedItems = items.filter((item) => !confirmedIds.has(item.clientItemId) && !queuedIds.has(item.clientItemId));
-      for (const item of confirmedItems) saveToHistory({ type: txType, entity, items: [item], kode: item.kode, nama: item.nama, qty: item.qty, tanggal, at: Date.now(), status: 'sukses', source: 'backend-confirmed', clientItemId: item.clientItemId, transactionId: 'TX-' + item.clientItemId });
-      if (confirmedIds.size) await removePendingByClientIds([...confirmedIds]);
-      const deterministicFailed = failedItems.filter((item) => { const r = resultMap.get(item.clientItemId); return knownIds.has(item.clientItemId) && r?.uncertain !== true && !r?.queued; });
-      if (deterministicFailed.length) await removePendingByClientIds(deterministicFailed.map((item) => item.clientItemId));
-      const pendingItems = [...queuedItems, ...failedItems.filter((item) => !deterministicFailed.includes(item))];
-      if (pendingItems.length) await updatePendingItemStates(pendingItems.map((item) => item.clientItemId), 'PENDING_VERIFY');
-      const totalPending = failedItems.length + zeroItems.length;
-      if (queuedItems.length || failedItems.length || zeroItems.length) {
-        pushNotification({ type: failedItems.length ? 'warning' : 'success', title: 'Hasil pengiriman', body: confirmedItems.length + ' terkonfirmasi · ' + queuedItems.length + ' masuk antrean sinkronisasi · ' + totalPending + ' belum terkonfirmasi.' });
-        setStatusBanner(confirmedItems.length + ' terkonfirmasi · ' + queuedItems.length + ' masuk Antrian Sinkronisasi · ' + totalPending + ' belum terkonfirmasi.');
-      } else {
-        pushNotification({ type: 'success', title: 'Transaksi selesai', body: confirmedItems.length + ' item terkonfirmasi ditulis backend.' });
-        setStatusBanner(confirmedItems.length + ' terkonfirmasi · 0 masuk antrean sinkronisasi · 0 belum terkonfirmasi');
-      }
-      setCart(cart.filter((item) => Number(item.qty) <= 0 || failedItems.some((x) => x.clientItemId === item.clientItemId)));
-      if (!failedItems.length && !zeroItems.length) { setAccuracy(null); setPdfReview([]); setReviewSourceLabel('PDF'); }
-      if (confirmedItems.length > 0) window.dispatchEvent(new Event('gudangai-stock-refresh'));
-      if (handedOff) window.dispatchEvent(new CustomEvent('gudangai-navigate', { detail: { tab: 'sync' } }));
-    } catch (err) {
-      if (stagedIds.length) { try { await updatePendingItemStates(stagedIds, 'PENDING_VERIFY', { lastError: String(err?.message || 'Unknown send outcome') }); } catch (_) {} }
-      setStatusBanner(err.message || 'Gagal kirim. Item dipertahankan untuk pemeriksaan.');
+      await stagePendingTransaction({ type: queueType, entity, tanggal, items, status: 'PENDING_REVIEW' });
+      const remainingCart = cart.filter((item) => !(Number(item.qty) > 0));
+      const nextDraft = {
+        ...(draftSnapshotRef.current || {}), version: 1, savedAt: Date.now(), entity, txType, tanggal,
+        accuracy: null, cart: remainingCart, pdfReview: [], reviewSourceLabel: 'PDF',
+      };
+      draftSnapshotRef.current = nextDraft;
+      persistInputDraft(nextDraft);
+      setCart(remainingCart);
+      setAccuracy(null);
+      setPdfReview([]);
+      setReviewSourceLabel('PDF');
+      setStatusBanner(`${items.length} item disiapkan. Belum ada data yang dikirim; periksa dan konfirmasi di Sinkronisasi.`);
+      onNavigate?.('sync');
+    } catch (error) {
+      setStatusBanner(error?.message || 'Antrean tidak tersimpan. Item tetap ada di keranjang.');
     } finally {
-      if (handoffTimer) clearTimeout(handoffTimer);
-      if (stagedIds.length) finishPendingTransaction(stagedIds);
-      console.info('[GudangAI timing]', JSON.stringify({ event: 'client', phase: 'spinner mati', ms: Date.now() - uiSubmitStartedAt }));
-      setSubmitting(false); submittingRef.current = false; setSubmitProgress(null);
+      setSubmitting(false);
+      submittingRef.current = false;
     }
   };
 
@@ -869,15 +834,10 @@ export default function InputPage({ onNavigate }) {
           </div>
           {cart.map((c) => <CartRow key={c.clientItemId} item={c} onUpdateQty={updateQty} onSetQty={setQtyValue} onRemove={removeCart} onSetKet={setKet} />)}
           <div className="fixed bottom-16 left-0 right-0 px-4 z-20">
-            {submitProgress && (
-              <p className="text-center text-xs text-cyan-700 mb-1 font-semibold">
-                Mengirim {submitProgress.sent}/{submitProgress.total} · ok {submitProgress.success} · antri {submitProgress.queued} · gagal {submitProgress.failed}
-              </p>
-            )}
-            <button type="button" onClick={handleSubmit} disabled={submitting || !cart.length}
+            <button type="button" onClick={handleSubmit} disabled={submitting || !cart.some((item) => Number(item.qty) > 0)}
               className="w-full py-3 rounded-2xl bg-cyan-600 text-white font-bold shadow-lg flex items-center justify-center gap-2 disabled:opacity-50">
               {submitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
-              {submitting ? 'Mengirim…' : `Kirim ${cart.length} item`}
+              {submitting ? 'Menyiapkan antrean…' : `Antrekan ${cart.filter((item) => Number(item.qty) > 0).length} item`}
             </button>
           </div>
         </div>
