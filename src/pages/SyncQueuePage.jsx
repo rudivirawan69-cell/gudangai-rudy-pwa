@@ -2,10 +2,8 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   getPendingQueue,
   syncPendingQueue,
+  resolvePendingItem,
   removePendingByClientIds,
-  verifyPendingItem,
-  saveToHistory,
-  pushNotification,
   getWriteCircuitState,
 } from '../data/api';
 import {
@@ -16,7 +14,6 @@ import {
   ClipboardList,
   Send,
   Clock3,
-  Server,
 } from 'lucide-react';
 
 const TYPE_LABEL = {
@@ -50,6 +47,8 @@ function flattenQueue(queue) {
         entity,
         tanggal,
         entryId,
+        queueStatus: it.queueStatus || entry.status || 'PENDING_REVIEW',
+        lastError: it.lastError || entry.lastError || '',
       });
     }
   }
@@ -80,13 +79,13 @@ function summarizeRows(rows) {
   return Array.from(map.values());
 }
 
-export default function SyncQueuePage({ onBack }) {
+export default function SyncQueuePage({ onBack, onNavigate }) {
   const [rows, setRows] = useState([]);
   const [syncing, setSyncing] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
   const [reviewing, setReviewing] = useState(false);
-  const [lastSyncReport, setLastSyncReport] = useState(null);
+  const [progress, setProgress] = useState(null);
   const [circuit, setCircuit] = useState(() => getWriteCircuitState());
 
   const refresh = useCallback(() => {
@@ -98,12 +97,15 @@ export default function SyncQueuePage({ onBack }) {
     refresh();
     const onQueue = () => refresh();
     const onCircuit = (e) => setCircuit(e.detail || getWriteCircuitState());
+    const onProgress = (e) => setProgress(e.detail || null);
     window.addEventListener('gudangai-queue-changed', onQueue);
     window.addEventListener('gudangai-circuit', onCircuit);
+    window.addEventListener('gudangai-submit-progress', onProgress);
     const id = setInterval(() => setCircuit(getWriteCircuitState()), 1000);
     return () => {
       window.removeEventListener('gudangai-queue-changed', onQueue);
       window.removeEventListener('gudangai-circuit', onCircuit);
+      window.removeEventListener('gudangai-submit-progress', onProgress);
       clearInterval(id);
     };
   }, [refresh]);
@@ -127,43 +129,16 @@ export default function SyncQueuePage({ onBack }) {
     setError(null);
     setResult(null);
     setSyncing(true);
-    const verification = await verifyPendingItem(row);
+    const verification = await resolvePendingItem(row);
     if (!verification.success) {
       setSyncing(false);
       setError(verification.error || 'Server belum mengonfirmasi transaksi. Item tetap di antrean.');
       setResult({ synced: 0, failed: 1, message: 'Belum terkonfirmasi — item tetap di antrean.' });
       return;
     }
-    saveToHistory({
-      type: row.type,
-      entity: row.entity,
-      kode: row.kode,
-      nama: row.nama,
-      qty: row.qty,
-      keterangan: row.keterangan || '',
-      tanggal: row.tanggal,
-      source: 'queue-readback-confirmed',
-      clientItemId: row.clientItemId,
-      status: 'success',
-      transactionId: verification.transactionId || `TX-${row.clientItemId}`,
-      readBack: verification.readBack || null,
-      items: [{ kode: row.kode, nama: row.nama, qty: row.qty, satuan: row.satuan || '' }],
-    });
-    try {
-      await removePendingByClientIds([row.clientItemId]);
-    } catch (err) {
-      setSyncing(false);
-      setError(err?.message || 'Riwayat tersimpan, tetapi antrean belum dapat diperbarui. Jangan kirim ulang.');
-      return;
-    }
-    setRows((prev) => prev.filter((r) => r.clientItemId !== row.clientItemId));
+    setRows(flattenQueue(getPendingQueue()));
     setSyncing(false);
-    setResult({ synced: 1, failed: 0, message: `${row.nama || row.kode} terverifikasi dari server · masuk Riwayat` });
-    pushNotification({
-      type: 'ok',
-      title: 'Read-back terverifikasi',
-      body: `${row.nama || row.kode} dikonfirmasi APPLIED oleh server dan dihapus dari antrian.`,
-    });
+    setResult({ synced: 1, failed: 0, message: 'Item terverifikasi dan dicatat di Riwayat.' });
   };
 
   const handleSendAll = async () => {
@@ -172,43 +147,29 @@ export default function SyncQueuePage({ onBack }) {
     setSyncing(true);
     setResult(null);
     setError(null);
+    setProgress(null);
     const before = flattenQueue(getPendingQueue());
     try {
       const res = await syncPendingQueue();
       const after = flattenQueue(getPendingQueue());
-      const afterIds = new Set(after.map((r) => r.clientItemId).filter(Boolean));
-      const succeeded = before.filter((r) => r.clientItemId && !afterIds.has(r.clientItemId));
-      setLastSyncReport({ confirmed: summarizeRows(succeeded), remaining: summarizeRows(after), at: Date.now() });
-      for (const item of succeeded) {
-        saveToHistory({
-          type: item.type, entity: item.entity, kode: item.kode, nama: item.nama,
-          qty: item.qty, keterangan: item.keterangan, tanggal: item.tanggal,
-          source: 'sync-queue', clientItemId: item.clientItemId, status: 'success',
-          transactionId: 'TX-' + item.clientItemId,
-          items: [{ kode: item.kode, nama: item.nama, qty: item.qty, satuan: item.satuan || '' }],
-        });
-      }
+      const afterIds = new Set(after.map((row) => row.clientItemId).filter(Boolean));
+      const confirmedCount = before.filter((row) => row.clientItemId && !afterIds.has(row.clientItemId)).length;
       setRows(after);
       setResult({
-        synced: res.synced ?? succeeded.length,
+        synced: res.synced ?? confirmedCount,
         failed: res.failed ?? 0,
         skipped: !!res.skipped,
         message: res.skipped
           ? 'Lewati — offline atau sinkronisasi sedang berjalan.'
-          : `Berhasil: ${succeeded.length} · Gagal / sisa: ${after.length}`,
+          : `${res.synced ?? confirmedCount} item terkonfirmasi · ${after.length} item masih perlu verifikasi. Rincian akhir ada di Riwayat.`,
       });
-      if (succeeded.length > 0) {
-        window.dispatchEvent(new Event('gudangai-stock-refresh'));
-        pushNotification({ type: 'ok', title: 'Sinkronisasi selesai', body: `${succeeded.length} item berhasil dikirim ke spreadsheet.` });
-      }
-      if (after.length > 0 && !res.skipped) {
-        pushNotification({ type: 'warn', title: 'Sebagian gagal', body: `${after.length} item masih pending. Coba lagi nanti.` });
-      }
+      if (confirmedCount > 0) window.dispatchEvent(new Event('gudangai-stock-refresh'));
     } catch (err) {
       setError(err?.message || 'Gagal mengeksekusi sinkronisasi.');
       refresh();
     } finally {
       setSyncing(false);
+      setProgress(null);
     }
   };
 
@@ -227,6 +188,13 @@ export default function SyncQueuePage({ onBack }) {
           </p>
         </div>
       </div>
+
+      {syncing && progress && (
+        <div className="rounded-xl border border-cyan-200 bg-cyan-50 px-3 py-2.5 text-xs text-cyan-900" role="status">
+          <p className="font-semibold">Mengirim {progress.sent || 0}/{progress.total || 0} · terkonfirmasi {progress.success || 0} · perlu verifikasi {progress.failed || 0}</p>
+          <progress className="mt-2 h-1.5 w-full accent-cyan-700" aria-label="Progres sinkronisasi" max={Math.max(1, progress.total || 1)} value={Math.min(progress.total || 0, progress.sent || 0)} />
+        </div>
+      )}
 
       {circuit.open && (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-[11px] text-amber-900">
@@ -282,8 +250,12 @@ export default function SyncQueuePage({ onBack }) {
                         {row.entity || '—'}
                       </span>
                       {row.tanggal ? <span className="text-[10px] text-slate-400">{row.tanggal}</span> : null}
+                      <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${row.queueStatus === 'PENDING_VERIFY' ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-600'}`}>
+                        {row.queueStatus === 'PENDING_VERIFY' ? 'Perlu verifikasi' : 'Menunggu konfirmasi'}
+                      </span>
                     </div>
                     <p className="text-sm font-bold text-slate-900 mt-1">{row.nama || row.kode}</p>
+                    {row.lastError ? <p className="mt-1 text-[11px] text-amber-800" role="status">{row.lastError}</p> : null}
                     <p className="text-[11px] text-slate-500 mt-0.5">
                       Qty: <b className="text-slate-800">{row.qty}</b>
                       {row.keterangan ? ' · ' + row.keterangan : ''}
@@ -294,8 +266,10 @@ export default function SyncQueuePage({ onBack }) {
                         Verifikasi server
                       </button>
                       <button type="button" onClick={() => handleRemove(row.clientItemId)}
-                        className="px-2.5 py-1 rounded-lg bg-red-50 border border-red-200 text-red-600 text-[11px] font-bold">
-                        Hapus
+                        disabled={syncing || row.queueStatus === 'PENDING_VERIFY'}
+                        title={row.queueStatus === 'PENDING_VERIFY' ? 'Lakukan read-back sebelum menghapus transaksi yang hasilnya belum pasti.' : 'Hapus item yang belum dikirim.'}
+                        className="px-2.5 py-1 rounded-lg bg-red-50 border border-red-200 text-red-600 text-[11px] font-bold disabled:cursor-not-allowed disabled:opacity-50">
+                        {row.queueStatus === 'PENDING_VERIFY' ? 'Verifikasi dulu' : 'Hapus'}
                       </button>
                     </div>
                   </div>
@@ -366,50 +340,15 @@ export default function SyncQueuePage({ onBack }) {
         </>
       )}
 
-      {lastSyncReport && (
-        <div className="rounded-2xl bg-white border border-slate-200 shadow-sm p-3.5 space-y-3">
-          <div className="flex items-center gap-2">
-            <Server className="w-4 h-4 text-slate-700" />
-            <div>
-              <p className="text-sm font-bold text-slate-900">Hasil sinkronisasi</p>
-              <p className="text-[10px] text-slate-500">{new Date(lastSyncReport.at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</p>
-            </div>
-          </div>
-          {lastSyncReport.confirmed.length > 0 && (
-            <div>
-              <p className="text-[11px] font-bold text-emerald-700 mb-1.5">TERKONFIRMASI</p>
-              <div className="space-y-1.5">
-                {lastSyncReport.confirmed.map((row) => (
-                  <div key={'ok-' + row.key} className="flex items-center justify-between gap-2 rounded-xl bg-emerald-50 border border-emerald-100 px-3 py-2">
-                    <p className="text-xs font-bold text-emerald-900 truncate">{row.nama}</p>
-                    <b className="text-sm text-emerald-800 tabular-nums">{row.qty}</b>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-          {lastSyncReport.remaining.length > 0 && (
-            <div>
-              <p className="text-[11px] font-bold text-amber-700 mb-1.5">MASIH DALAM ANTREAN</p>
-              <div className="space-y-1.5">
-                {lastSyncReport.remaining.map((row) => (
-                  <div key={'p-' + row.key} className="flex items-center justify-between gap-2 rounded-xl bg-amber-50 border border-amber-100 px-3 py-2">
-                    <p className="text-xs font-bold text-amber-900 truncate">{row.nama}</p>
-                    <b className="text-sm text-amber-800 tabular-nums">{row.qty}</b>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
       {result && (
         <div className={`rounded-2xl border p-3 text-xs ${
           result.failed || result.skipped
             ? 'bg-amber-50 text-amber-800 border-amber-100'
             : 'bg-emerald-50 text-emerald-800 border-emerald-100'
-        }`}>{result.message}</div>
+        }`}>
+          <p>{result.message}</p>
+          {result.synced > 0 && <button type="button" onClick={() => onNavigate?.('riwayat')} className="mt-2 font-bold underline underline-offset-2">Buka Riwayat</button>}
+        </div>
       )}
       {error && (
         <div className="rounded-2xl border border-red-100 bg-red-50 p-3 text-xs text-red-700 flex items-start gap-2">

@@ -7,10 +7,10 @@ import {
   extractTextFromPdf, extractTextFromImage, parseLinesFromText, validateItems,
   summarizeValidation, scanBarcodeFromVideo,
 } from '../data/pdfValidate';
-import { submitBarangKeluar, saveToHistory } from '../data/api';
+import { stagePendingTransaction } from '../data/api';
 import { searchMaster } from '../data/master';
 
-export default function ValidasiPage() {
+export default function ValidasiPage({ onNavigate }) {
   const [entity, setEntity] = useState('CV');
   const [mode, setMode] = useState('pdf');
   const [busy, setBusy] = useState(false);
@@ -192,20 +192,17 @@ export default function ValidasiPage() {
     }
     setSubmitting(true); setSubmitMsg(null);
     try {
-      const payload = summary.matchedItems.map((i) => ({
-        kode: i.kode, qty: i.qty,
-        keterangan: (i.keterangan || 'Validasi PDF/Nota').slice(0, 200),
+      const items = summary.matchedItems.map((item) => ({
+        clientItemId: item.clientItemId,
+        kode: item.kode, nama: item.nama, satuan: item.satuan || '', qty: Number(item.qty),
+        keterangan: (item.keterangan || 'Validasi PDF/Nota').slice(0, 200),
       }));
-      const res = await submitBarangKeluar({ entity, tanggal, items: payload });
-      saveToHistory({
-        type: 'keluar', entity,
-        items: summary.matchedItems.map((i) => ({ kode: i.kode, nama: i.nama, qty: i.qty, keterangan: i.keterangan })),
-        ...res,
-      });
-      setSubmitMsg(res);
-      if (res.success) { setResults([]); setRawText(''); setPreviewUrl(''); }
+      await stagePendingTransaction({ type: 'barangKeluar', entity, tanggal, items, status: 'PENDING_REVIEW' });
+      setSubmitMsg({ success: true, message: `${items.length} item disiapkan di antrean. Belum ada data yang dikirim.` });
+      setResults([]); setRawText(''); setPreviewUrl('');
+      onNavigate?.('sync');
     } catch (err) {
-      setSubmitMsg({ success: false, error: err.message });
+      setSubmitMsg({ success: false, error: err.message || 'Antrean gagal disimpan; hasil validasi tetap dipertahankan.' });
     } finally {
       setSubmitting(false);
     }
@@ -326,7 +323,7 @@ export default function ValidasiPage() {
         <button onClick={sendAsKeluar} disabled={submitting}
           className="w-full py-3 rounded-xl bg-gradient-to-r from-orange-500 to-red-500 text-white text-sm font-bold flex items-center justify-center gap-2 shadow-lg disabled:opacity-60">
           {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-          Kirim {summary.matched} item sebagai Barang Keluar ({entity})
+              Antrekan {summary.matched} item sebagai Barang Keluar ({entity})
         </button>
       )}
       {summary.matched > 0 && summary.ambiguous > 0 && (
@@ -335,7 +332,7 @@ export default function ValidasiPage() {
 
       {submitMsg && (
         <div className={`text-xs px-3 py-2 rounded-lg ${submitMsg.success ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
-          {submitMsg.success ? (submitMsg.offline ? 'Disimpan offline — akan sync saat online' : `${submitMsg.written || summary.matched} item terkirim ke server`) : (submitMsg.error || 'Gagal mengirim')}
+              {submitMsg.success ? (submitMsg.message || 'Transaksi disiapkan di antrean untuk ditinjau.') : (submitMsg.error || 'Antrean gagal disimpan')}
         </div>
       )}
     </div>

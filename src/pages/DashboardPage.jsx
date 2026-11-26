@@ -6,6 +6,7 @@ import {
 } from '../data/api';
 import { classifyStockLevel } from '../data/stockStatus';
 import HomeAgentAssistant from '../components/HomeAgentAssistant';
+import OperationalConnectionManager from '../components/OperationalConnectionManager';
 import {
   AlertTriangle, RefreshCw, FileText, Package, Users, Boxes, ShieldAlert, CheckCircle2, AlertCircle, X,
   CalendarDays, CalendarClock, ClipboardCheck, FilePlus2, Mail, Clock3, Layers3, ArrowUpRight,
@@ -1009,7 +1010,7 @@ function StatusPOCard({ data, loading, error, onRefresh, onConfirm, confirmingId
   );
 }
 
-export default function DashboardPage({ onNavigate }) {
+export default function DashboardPage({ onNavigate, operationalStatus }) {
 
   // DASHBOARD MASTER SOURCE:
   // Ringkasan total/status/divisi hanya berasal dari Dashboard Live.
@@ -1255,6 +1256,9 @@ export default function DashboardPage({ onNavigate }) {
         </div>
         <div className="xl:col-span-2">
           <DashboardStatusSummary data={dashboardData} loading={dashboardLoading} />
+        </div>
+        <div className="xl:col-span-2">
+          <OperationalConnectionManager {...operationalStatus} onNavigate={onNavigate} />
         </div>
         <div className="xl:col-span-2">
           <HomeAgentAssistant onNavigate={onNavigate} />

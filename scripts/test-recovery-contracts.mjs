@@ -5,9 +5,11 @@ import vm from 'node:vm';
 const pdfPath = new URL('../src/data/pdfValidate.js', import.meta.url);
 const gsPath = new URL('../Code.gs', import.meta.url);
 const inputPath = new URL('../src/pages/InputPage.jsx', import.meta.url);
+const validationPath = new URL('../src/pages/ValidasiPage.jsx', import.meta.url);
 const pdf = readFileSync(pdfPath, 'utf8');
 const gs = readFileSync(gsPath, 'utf8');
 const inputPage = readFileSync(inputPath, 'utf8');
+const validationPage = readFileSync(validationPath, 'utf8');
 
 const fallbackMatch = pdf.match(/export function applyStockAwareFallback\(rows\)\s*\{([\s\S]*?)\n\}/);
 assert.ok(fallbackMatch, 'Missing conservative applyStockAwareFallback(rows)');
@@ -142,6 +144,16 @@ assert.match(apiSource, /DASHBOARD_LIVE_READ_FAILED/,
   'Dashboard API must fail closed instead of rebuilding status counts from CV/PT stock.');
 assert.match(inputPage, /gudangai_input_draft_v1/);
 assert.match(inputPage, /Draft transaksi dipulihkan/);
+assert.match(inputPage, /stagePendingTransaction/);
+assert.match(inputPage, /status:\s*'PENDING_REVIEW'/);
+assert.doesNotMatch(inputPage, /submitBarang(?:Masuk|Keluar|Rusak)\s*\(/,
+  'Input must only validate and stage transactions; SyncQueue owns server writes.');
+assert.match(validationPage, /stagePendingTransaction/);
+assert.doesNotMatch(validationPage, /submitBarangKeluar\s*\(|saveToHistory\s*\(/,
+  'PDF validation must hand off to SyncQueue instead of writing or finalizing directly.');
+assert.match(queueSource, /syncPendingQueue\(\)/);
+assert.doesNotMatch(queueSource, /saveToHistory\s*\(|pushNotification\s*\(/,
+  'SyncQueue UI must delegate final history and notifications to the API history service.');
 assert.match(poSource, /gudangai_po_draft_v1/);
 assert.match(poSource, /const poDate = localISODate\(\)/);
 assert.match(appSource, /function AppHeader\(\{ user, tab, onOpenSettings, online, hasUrl, status, syncing, sheetLabel, onRefresh \}\)/);

@@ -207,12 +207,13 @@ function AppShell() {
     setInstallPrompt(null);
   };
 
-  const { user, loading } = useAuth();
+  const { user, loading, authStatus } = useAuth();
   const [tab, setTab] = useState('dashboard');
   const [pageKey, setPageKey] = useState(0);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [realtimeStatus, setRealtimeStatus] = useState({ state: 'checking' });
   const tabRef = useRef('dashboard');
-  const { online, hasUrl, status, message, syncing, checkHealth } = useConnection({ pollMs: 90000 });
+  const { online, apiOk, hasUrl, status, message, lastCheck, syncing, checkHealth } = useConnection({ pollMs: 90000 });
   const sheetLabel = useSheetUpdate();
   useBootstrap();
 
@@ -230,6 +231,7 @@ function AppShell() {
         }));
       },
       onStatus: (s) => {
+        setRealtimeStatus(s || { state: 'checking' });
         if (s?.state === 'error' || s?.state === 'circuit_open') console.warn('[realTimeSync]', s);
       },
     });
@@ -261,15 +263,35 @@ function AppShell() {
 
   let page;
   switch (tab) {
-    case 'dashboard': page = <DashboardPage onNavigate={goTab} />; break;
+    case 'dashboard': page = (
+      <DashboardPage
+        onNavigate={goTab}
+        operationalStatus={{
+          authStatus,
+          connection: { online, apiOk, hasUrl, status, message, lastCheck },
+          realtimeStatus,
+          onCheckSpreadsheet: checkHealth,
+        }}
+      />
+    ); break;
     case 'stok': page = <StokPage />; break;
     case 'input': page = <InputPage onNavigate={goTab} />; break;
     case 'po': page = <POPage onNavigate={goTab} />; break;
     case 'ai': page = <AIAssistantPage onNavigate={goTab} />; break;
     case 'riwayat': page = <RiwayatPage onNavigate={goTab} />; break;
     case 'settings': page = <SettingsPage onNavigate={goTab} />; break;
-    case 'sync': page = <SyncQueuePage onBack={() => goTab('settings')} />; break;
-    default: page = <DashboardPage onNavigate={goTab} />;
+    case 'sync': page = <SyncQueuePage onBack={() => goTab('settings')} onNavigate={goTab} />; break;
+    default: page = (
+      <DashboardPage
+        onNavigate={goTab}
+        operationalStatus={{
+          authStatus,
+          connection: { online, apiOk, hasUrl, status, message, lastCheck },
+          realtimeStatus,
+          onCheckSpreadsheet: checkHealth,
+        }}
+      />
+    );
   }
 
   const navTab = MORE_IDS.has(tab) ? 'more' : tab;

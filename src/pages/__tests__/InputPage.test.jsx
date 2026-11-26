@@ -71,85 +71,46 @@ describe('InputPage PR 1', () => {
     await waitFor(() => expect(screen.getByDisplayValue('1.5')).toBeInTheDocument());
   });
 
-  it('mengosongkan keranjang jika semua item confirmed', async () => {
-    seedCart([item('one'), item('two')]);
-    api.submitBarangKeluar.mockResolvedValue({
-      results: [{ clientItemId: 'one', success: true }, { clientItemId: 'two', skipped: true }],
-      count: 2, queuedCount: 0, failed: 0,
-    });
-    render(<InputPage />);
-    fireEvent.click(screen.getByRole('button', { name: /Kirim 2 item/i }));
-    await waitFor(() => expect(screen.queryByText('Keranjang (2)')).not.toBeInTheDocument());
-    expect(api.saveToHistory).toHaveBeenCalledWith(expect.objectContaining({ items: expect.arrayContaining([expect.objectContaining({ clientItemId: 'one' })]) }));
-  });
-
-  it('menyisakan hanya failed dan qty 0, serta menghapus confirmed dan queued tersimpan', async () => {
-    seedCart([item('confirmed'), item('queued'), item('failed'), item('zero', 0)]);
-    api.submitBarangKeluar.mockResolvedValue({
-      results: [
-        { clientItemId: 'confirmed', success: true },
-        { clientItemId: 'queued', queued: true, queueStored: true },
-        { clientItemId: 'failed', success: false },
-      ], count: 1, queuedCount: 1, failed: 1,
-    });
-    render(<InputPage />);
-    fireEvent.click(screen.getByRole('button', { name: /Kirim 4 item/i }));
-    await waitFor(() => expect(screen.getByText('Keranjang (2)')).toBeInTheDocument());
-    expect(screen.getByText('Barang failed')).toBeInTheDocument();
-    expect(screen.getByText('Barang zero')).toBeInTheDocument();
-    expect(screen.queryByText('Barang confirmed')).not.toBeInTheDocument();
-    expect(screen.queryByText('Barang queued')).not.toBeInTheDocument();
-    expect(screen.getByText(/1 terkonfirmasi · 1 masuk Antrian Sinkronisasi · 2 belum terkonfirmasi/)).toBeInTheDocument();
-  });
-
-  it('tidak menghapus queued bila tidak ada bukti tersimpan', async () => {
-    seedCart([item('queued')]);
-    api.submitBarangKeluar.mockResolvedValue({ results: [{ clientItemId: 'queued', queued: true }] });
-    render(<InputPage />);
-    fireEvent.click(screen.getAllByRole('button', { name: /Kirim 1 item/i })[0]);
-    await waitFor(() => expect(screen.getByText('Keranjang (1)')).toBeInTheDocument());
-    expect(screen.getByText(/0 terkonfirmasi · 0 masuk Antrian Sinkronisasi · 1 belum terkonfirmasi/)).toBeInTheDocument();
-  });
-
-  it('mengalihkan ke Sinkronisasi tepat setelah 5 detik tanpa membatalkan pengiriman yang masih berjalan', async () => {
-    vi.useFakeTimers();
-    seedCart([item('handoff')]);
-    let resolveSend;
-    api.submitBarangKeluar.mockReturnValue(new Promise((resolve) => { resolveSend = resolve; }));
+  it('menyiapkan transaksi untuk antrean tanpa menulis ke backend atau membuat hasil akhir', async () => {
+    seedCart([item('one'), item('two'), item('zero', 0)]);
     const onNavigate = vi.fn();
     render(<InputPage onNavigate={onNavigate} />);
 
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: /Kirim 1 item/i }));
-      await Promise.resolve();
-      await Promise.resolve();
-    });
+    fireEvent.click(screen.getByRole('button', { name: /Antrekan 2 item/i }));
 
-    expect(api.stagePendingTransaction).toHaveBeenCalledTimes(1);
-    expect(api.submitBarangKeluar).toHaveBeenCalledTimes(1);
-    expect(onNavigate).not.toHaveBeenCalled();
-
-    await act(async () => { vi.advanceTimersByTime(4999); });
-    expect(onNavigate).not.toHaveBeenCalled();
-
-    await act(async () => { vi.advanceTimersByTime(1); });
-    expect(onNavigate).toHaveBeenCalledWith('sync');
-    expect(api.submitBarangKeluar).toHaveBeenCalledTimes(1);
-    expect(screen.getByText(/Pengiriman masih berjalan/)).toBeInTheDocument();
-
-    await act(async () => {
-      resolveSend({ results: [{ clientItemId: 'handoff', success: true }] });
-      await Promise.resolve();
-      await Promise.resolve();
-    });
-    vi.useRealTimers();
+    await waitFor(() => expect(onNavigate).toHaveBeenCalledWith('sync'));
+    expect(api.stagePendingTransaction).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'barangKeluar', entity: 'CV', status: 'PENDING_REVIEW',
+      items: expect.arrayContaining([expect.objectContaining({ clientItemId: 'one' }), expect.objectContaining({ clientItemId: 'two' })]),
+    }));
+    expect(api.submitBarangMasuk).not.toHaveBeenCalled();
+    expect(api.submitBarangKeluar).not.toHaveBeenCalled();
+    expect(api.submitBarangRusak).not.toHaveBeenCalled();
+    expect(api.saveToHistory).not.toHaveBeenCalled();
+    expect(api.pushNotification).not.toHaveBeenCalled();
+    expect(screen.getByText('Barang zero')).toBeInTheDocument();
+    expect(screen.queryByText('Barang one')).not.toBeInTheDocument();
   });
 
-  it('menampilkan tiga angka progres success, queued, failed', async () => {
-    seedCart([item('one')]);
+  it('mempertahankan keranjang dan tidak berpindah jika antrean gagal disimpan', async () => {
+    seedCart([item('retry')]);
+    api.stagePendingTransaction.mockRejectedValueOnce(new Error('Penyimpanan antrean gagal'));
+    const onNavigate = vi.fn();
+    render(<InputPage onNavigate={onNavigate} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Antrekan 1 item/i }));
+
+    await waitFor(() => expect(screen.getByText(/Penyimpanan antrean gagal/)).toBeInTheDocument());
+    expect(screen.getByText('Keranjang (1)')).toBeInTheDocument();
+    expect(onNavigate).not.toHaveBeenCalled();
+    expect(api.submitBarangKeluar).not.toHaveBeenCalled();
+  });
+
+  it('tidak mengantrekan keranjang yang seluruh jumlahnya nol', async () => {
+    seedCart([item('zero-only', 0)]);
     render(<InputPage />);
-    window.dispatchEvent(new CustomEvent('gudangai-submit-progress', { detail: { sent: 1, total: 3, success: 1, queued: 1, failed: 1 } }));
-    await waitFor(() => expect(screen.getByText(/ok 1 · antri 1 · gagal 1/)).toBeInTheDocument());
+    expect(screen.getByRole('button', { name: /Antrekan 0 item/i })).toBeDisabled();
+    expect(api.stagePendingTransaction).not.toHaveBeenCalled();
   });
 });
 
