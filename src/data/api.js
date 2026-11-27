@@ -399,30 +399,26 @@ function ensureClientItemId(it) {
 }
 async function enqueue(type, entity, items, meta = {}) {
   if (!items?.length) return [];
-  const queue = getPendingQueue();
   const normalized = items.map((item) => ({
     ...ensureClientItemId(item),
     kode: normalizeItemCode(item.kode || item.kodeBarang),
     nama: normalizeTransactionText(item.nama),
     keterangan: normalizeTransactionText(item.keterangan),
   }));
-  const existingIds = new Set(queue.flatMap((entry) => (entry.items || []).map((item) => String(item.clientItemId || ''))));
-  const freshItems = normalized.filter((item) => !existingIds.has(String(item.clientItemId)));
-  if (!freshItems.length) return normalized.map((item) => String(item.clientItemId));
-  const transactionId = String(meta.transactionId || '').trim() || 'TX-RUDY-' + (crypto.randomUUID ? crypto.randomUUID() : Date.now());
-  queue.push({
-    id: 'Q-' + transactionId,
-    transactionId,
-    status: meta.status || 'PENDING_VERIFY',
-    type, entity,
-    items: freshItems,
-    tanggal: normalizeTanggal(meta.tanggal),
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
+  let freshIds = [];
+  await mutateQueueLocal((queue) => {
+    const existingIds = new Set(queue.flatMap((entry) => (entry.items || []).map((item) => String(item.clientItemId || ''))));
+    const freshItems = normalized.filter((item) => !existingIds.has(String(item.clientItemId)));
+    freshIds = freshItems.map((item) => String(item.clientItemId));
+    if (!freshItems.length) return queue;
+    const transactionId = String(meta.transactionId || '').trim() || 'TX-RUDY-' + (crypto.randomUUID ? crypto.randomUUID() : Date.now());
+    queue.push({
+      id: 'Q-' + transactionId, transactionId, status: meta.status || 'PENDING_VERIFY', type, entity,
+      items: freshItems, tanggal: normalizeTanggal(meta.tanggal), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+    });
+    return queue;
   });
-  await commitQueueLocal(queue);
-  const stored = getPendingQueue();
-  const storedIds = new Set(stored.flatMap((entry) => (entry.items || []).map((item) => String(item.clientItemId || ''))));
+  const storedIds = new Set(getPendingQueue().flatMap((entry) => (entry.items || []).map((item) => String(item.clientItemId || ''))));
   return normalized.map((item) => String(item.clientItemId)).filter((id) => storedIds.has(id));
 }
 async function submitOneItem(sheetOrAction, entity, it, tanggal) {
@@ -883,8 +879,8 @@ export async function removePendingByClientIds(ids) {
   });
   return { success: true, remaining };
 }
-export async function clearPendingQueue() { await commitQueueLocal([]); return { success: true }; }
-export async function clearSyncedQueue() { await commitQueueLocal([]); return { success: true }; }
+export async function clearPendingQueue() { await mutateQueueLocal(() => []); return { success: true }; }
+export async function clearSyncedQueue() { await mutateQueueLocal(() => []); return { success: true }; }
 export async function syncPendingQueue({ clientItemIds = null } = {}) {
   const url = getApiUrl();
   if (!url || !navigator.onLine) return { synced: 0, failed: 0, skipped: true };
@@ -893,15 +889,14 @@ export async function syncPendingQueue({ clientItemIds = null } = {}) {
   try {
     const rawQueue = getPendingQueue();
     const nowMs = Date.now();
-    const queue = rawQueue.map((entry) => {
+    const queue = await mutateQueueLocal((currentQueue) => currentQueue.map((entry) => {
       if ((entry.items || []).some((item) => _activeSendIds.has(String(item.clientItemId)))) return entry;
       if (entry.status !== 'PROCESSING') return entry;
       const started = Date.parse(entry.processingStartedAt || entry.updatedAt || entry.createdAt || '');
       return Number.isFinite(started) && nowMs - started < 120000
         ? entry
         : { ...entry, status: 'PENDING_VERIFY', recoveredAt: new Date(nowMs).toISOString() };
-    });
-    if (queue.some((entry, index) => entry !== rawQueue[index])) await commitQueueLocal(queue);
+    }));
     const processQueue = queue.filter((entry) => entry.status !== 'PROCESSING');
     const targetIds = clientItemIds ? new Set(clientItemIds.map(String)) : null;
     const eligibleIds = new Set(processQueue.flatMap((entry) => (entry.items || []).map((item) => String(item.clientItemId || '')).filter((id) => id && (!targetIds || targetIds.has(id)))));
