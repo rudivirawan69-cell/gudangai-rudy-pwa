@@ -710,14 +710,10 @@ try {
   await page.locator('nav.nav-bar button').filter({ hasText: 'Stok' }).first().click();
   await page.locator('nav.nav-bar button').filter({ hasText: 'Input' }).first().click();
   await page.getByText('Draft transaksi dipulihkan', { exact: false }).waitFor({ state: 'visible' });
-  await page.getByRole('button', { name: 'Antrekan 1 item' }).click();
-  await page.getByText('1 item dalam antrean', { exact: false }).waitFor({ state: 'visible', timeout: 10000 });
-  assert.equal(transactionWriteCalls, 0, 'Input must only stage the transaction; no backend write is allowed before explicit queue confirmation.');
-  await page.getByRole('button', { name: /Tinjau Keranjang & Sinkronisasi/ }).click();
-  await page.getByText('Belum ada data yang dikirim.', { exact: false }).waitFor({ state: 'visible' });
-  await page.getByRole('button', { name: 'Konfirmasi & Kirim ke Spreadsheet' }).click();
+  await page.getByRole('button', { name: /Kirim 1 item/i }).click();
+  await page.getByText('Sinkronisasi', { exact: false }).first().waitFor({ state: 'visible', timeout: 10000 });
   await page.getByText(/1 item terkonfirmasi/).waitFor({ state: 'visible', timeout: 15000 });
-  assert.equal(transactionWriteCalls, 1, 'SyncQueue must own the single confirmed backend write.');
+  assert.equal(transactionWriteCalls, 1, 'Input handoff must trigger one background write owned by SyncQueue.');
   await page.getByRole('button', { name: 'Buka Riwayat' }).click();
   await page.locator('.rw-day-summary').first().waitFor({ state: 'visible', timeout: 10000 });
   const historyEntries = await page.evaluate(() => JSON.parse(localStorage.getItem('gudangai_history') || '[]'));
