@@ -39,6 +39,32 @@ function judul(t) {
   return t.jumlahItem > 1 ? `${nama} +${fmtCount(t.jumlahItem - 1)} lainnya` : nama;
 }
 
+const TransactionCard = memo(function TransactionCard({ tx, onCopy }) {
+  return (
+    <article className="rw-tx-detail">
+      <header className="rw-tx-detail-head">
+        <span className={"rw-tx-type rw-" + tx.tipe}>{TIPE_LABEL[tx.tipe] || tx.tipe || "Transaksi"}</span>
+        <strong>{tx.jamLabel || "Waktu tidak tercatat"}</strong>
+        <span className={"rw-pill rw-s-" + tx.status}>{STATUS_LABEL[tx.status] || tx.status}</span>
+      </header>
+      <div className="rw-tx-detail-meta">
+        <span>Entitas: <b>{tx.entitas || "—"}</b></span>
+        <span>{fmtCount(tx.jumlahItem)} item · {fmt(tx.totalQty)} total qty</span>
+      </div>
+      <ul className="rw-tx-items">
+        {(tx.items || EMPTY).map((item, index) => (
+          <li key={tx.id + "-" + index}>
+            <span><b>{item.nama || item.kode || "Item tanpa nama"}</b>{item.kode && item.nama ? <small>{item.kode}</small> : null}</span>
+            <strong>{fmt(item.qty)} {item.satuan || ""}</strong>
+          </li>
+        ))}
+      </ul>
+      {tx.keterangan ? <p className="rw-ket">Keterangan: {tx.keterangan}</p> : null}
+      <div className="rw-actions"><button type="button" onClick={() => onCopy(tx)}>Salin transaksi</button></div>
+    </article>
+  );
+});
+
 const DayGroup = memo(function DayGroup({ h, open, onToggle, onCopy }) {
   const first = h.items[0];
   const otherCount = Math.max(0, h.items.length - 1);
@@ -65,24 +91,7 @@ const DayGroup = memo(function DayGroup({ h, open, onToggle, onCopy }) {
             <strong>Rincian {fmtCount(h.items.length)} transaksi</strong>
             <span>{fmtCount(lineCount)} baris item · {fmt(totalQty)} total qty</span>
           </div>
-          {h.items.map((tx) => (
-            <article className="rw-tx-detail" key={tx.id}>
-              <header className="rw-tx-detail-head">
-                <span className={"rw-tx-type rw-" + tx.tipe}>{TIPE_LABEL[tx.tipe] || tx.tipe || "Transaksi"}</span>
-                <strong>{tx.jamLabel || "Waktu tidak tercatat"}</strong>
-                <span className={"rw-pill rw-s-" + tx.status}>{STATUS_LABEL[tx.status] || tx.status}</span>
-              </header>
-              <div className="rw-tx-detail-meta">
-                <span>Entitas: <b>{tx.entitas || "—"}</b></span>
-                <span>{fmtCount(tx.jumlahItem)} item · {fmt(tx.totalQty)} total qty</span>
-              </div>
-              <ul className="rw-tx-items">
-                {(tx.items || EMPTY).map((item, index) => (
-                  <li key={tx.id + "-" + index}>
-                    <span><b>{item.nama || item.kode || "Item tanpa nama"}</b>{item.kode && item.nama ? <small>{item.kode}</small> : null}</span>
-                    <strong>{fmt(item.qty)} {item.satuan || ""}</strong>
-                  </li>
-                ))}
+          {h.items.map((tx) => <TransactionCard key={tx.id} tx={tx} onCopy={onCopy} />)}
               </ul>
               {tx.keterangan ? <p className="rw-ket">Keterangan: {tx.keterangan}</p> : null}
               <div className="rw-actions"><button type="button" onClick={() => onCopy(tx)}>Salin transaksi</button></div>
