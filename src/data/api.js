@@ -871,7 +871,7 @@ export async function removePendingByClientIds(ids) {
 }
 export async function clearPendingQueue() { await commitQueueLocal([]); return { success: true }; }
 export async function clearSyncedQueue() { await commitQueueLocal([]); return { success: true }; }
-export async function syncPendingQueue() {
+export async function syncPendingQueue({ clientItemIds = null } = {}) {
   const url = getApiUrl();
   if (!url || !navigator.onLine) return { synced: 0, failed: 0, skipped: true };
   if (_syncLock) return { synced: 0, failed: 0, skipped: true, reason: 'sync-in-progress' };
@@ -889,6 +889,7 @@ export async function syncPendingQueue() {
     });
     if (queue.some((entry, index) => entry !== rawQueue[index])) await commitQueueLocal(queue);
     const processQueue = queue.filter((entry) => entry.status !== 'PROCESSING');
+    const targetIds = clientItemIds ? new Set(clientItemIds.map(String)) : null;
     const groups = new Map();
     const conflictingIds = new Set();
     const identitySignatures = new Map();
@@ -904,7 +905,7 @@ export async function syncPendingQueue() {
       const group = groups.get(key);
       for (const item of entry.items) {
         const id = String(item.clientItemId || '');
-        if (!id) continue;
+        if (!id || (targetIds && !targetIds.has(id))) continue;
         const signature = JSON.stringify([type, entity, tanggal, item.kode, item.qty, item.keterangan]);
         const globalPrior = identitySignatures.get(id);
         if (globalPrior && globalPrior !== signature) conflictingIds.add(id);
