@@ -57,7 +57,8 @@ describe('OperationalConnectionManager', () => {
   it('refreshes checks and sends pending operators to the sync queue', async () => {
     const { onNavigate } = renderManager();
     expect(screen.queryByRole('button', { name: 'Periksa ulang koneksi operasional' })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Tinjau antrean (2)' }));
+    const queueButton = await screen.findByRole('button', { name: 'Tinjau antrean (2)' });
+    fireEvent.click(queueButton);
     expect(onNavigate).toHaveBeenCalledWith('sync');
   });
 });
