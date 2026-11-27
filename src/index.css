@@ -1058,3 +1058,10 @@ html[data-theme="graphite_titanium"] .po-page .po-recommendation-metrics > div {
   .po-page .po-hub-card-btn { transition:none; }
   .po-page .po-hub-card-btn:active { transform:none; }
 }
+
+
+/* Long-list performance: progressive rendering + browser paint containment. */
+.po-page .po-item-list > .po-item-card, .sq-page .sq-item {
+  contain: layout style paint; content-visibility: auto; contain-intrinsic-size: auto 90px;
+}
+.po-page .po-item-list, .sq-page { min-width: 0; -webkit-overflow-scrolling: touch; }

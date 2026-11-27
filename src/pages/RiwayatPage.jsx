@@ -39,14 +39,41 @@ function judul(t) {
   return t.jumlahItem > 1 ? `${nama} +${fmtCount(t.jumlahItem - 1)} lainnya` : nama;
 }
 
-const DayGroup = memo(function DayGroup({ h, open, onToggle, onCopy }) {
+const TransactionCard = memo(function TransactionCard({ tx, onCopy }) {
+  return (
+    <article className="rw-tx-detail">
+      <header className="rw-tx-detail-head">
+        <span className={"rw-tx-type rw-" + tx.tipe}>{TIPE_LABEL[tx.tipe] || tx.tipe || "Transaksi"}</span>
+        <strong>{tx.jamLabel || "Waktu tidak tercatat"}</strong>
+        <span className={"rw-pill rw-s-" + tx.status}>{STATUS_LABEL[tx.status] || tx.status}</span>
+      </header>
+      <div className="rw-tx-detail-meta">
+        <span>Entitas: <b>{tx.entitas || "—"}</b></span>
+        <span>{fmtCount(tx.jumlahItem)} item · {fmt(tx.totalQty)} total qty</span>
+      </div>
+      <ul className="rw-tx-items">
+        {(tx.items || EMPTY).map((item, index) => (
+          <li key={tx.id + "-" + index}>
+            <span><b>{item.nama || item.kode || "Item tanpa nama"}</b>{item.kode && item.nama ? <small>{item.kode}</small> : null}</span>
+            <strong>{fmt(item.qty)} {item.satuan || ""}</strong>
+          </li>
+        ))}
+      </ul>
+      {tx.keterangan ? <p className="rw-ket">Keterangan: {tx.keterangan}</p> : null}
+      <div className="rw-actions"><button type="button" onClick={() => onCopy(tx)}>Salin transaksi</button></div>
+    </article>
+  );
+});
+
+const DayGroup = memo(function DayGroup({ h, open, onToggleDay, onCopy }) {
+  const handleToggle = useCallback(() => onToggleDay(h.key), [onToggleDay, h.key]);
   const first = h.items[0];
   const otherCount = Math.max(0, h.items.length - 1);
   const lineCount = h.items.reduce((sum, tx) => sum + tx.jumlahItem, 0);
   const totalQty = h.items.reduce((sum, tx) => sum + tx.totalQty, 0);
   return (
     <section className={"rw-day" + (open ? " is-open" : "")}>
-      <button type="button" className="rw-day-summary" onClick={onToggle} aria-expanded={open}>
+      <button type="button" className="rw-day-summary" onClick={handleToggle} aria-expanded={open}>
         <CalendarDays className="rw-day-summary-icon" aria-hidden="true" />
         <span className="rw-day-summary-main">
           <strong>{h.label}</strong>
@@ -65,29 +92,7 @@ const DayGroup = memo(function DayGroup({ h, open, onToggle, onCopy }) {
             <strong>Rincian {fmtCount(h.items.length)} transaksi</strong>
             <span>{fmtCount(lineCount)} baris item · {fmt(totalQty)} total qty</span>
           </div>
-          {h.items.map((tx) => (
-            <article className="rw-tx-detail" key={tx.id}>
-              <header className="rw-tx-detail-head">
-                <span className={"rw-tx-type rw-" + tx.tipe}>{TIPE_LABEL[tx.tipe] || tx.tipe || "Transaksi"}</span>
-                <strong>{tx.jamLabel || "Waktu tidak tercatat"}</strong>
-                <span className={"rw-pill rw-s-" + tx.status}>{STATUS_LABEL[tx.status] || tx.status}</span>
-              </header>
-              <div className="rw-tx-detail-meta">
-                <span>Entitas: <b>{tx.entitas || "—"}</b></span>
-                <span>{fmtCount(tx.jumlahItem)} item · {fmt(tx.totalQty)} total qty</span>
-              </div>
-              <ul className="rw-tx-items">
-                {(tx.items || EMPTY).map((item, index) => (
-                  <li key={tx.id + "-" + index}>
-                    <span><b>{item.nama || item.kode || "Item tanpa nama"}</b>{item.kode && item.nama ? <small>{item.kode}</small> : null}</span>
-                    <strong>{fmt(item.qty)} {item.satuan || ""}</strong>
-                  </li>
-                ))}
-              </ul>
-              {tx.keterangan ? <p className="rw-ket">Keterangan: {tx.keterangan}</p> : null}
-              <div className="rw-actions"><button type="button" onClick={() => onCopy(tx)}>Salin transaksi</button></div>
-            </article>
-          ))}
+          {h.items.map((tx) => <TransactionCard key={tx.id} tx={tx} onCopy={onCopy} />)}
         </div>
       )}
     </section>
@@ -395,7 +400,7 @@ export default function RiwayatPage({ onNavigate }) {
           key={h.key}
           h={h}
           open={openDayKey === h.key}
-          onToggle={() => toggleDay(h.key)}
+          onToggleDay={toggleDay}
           onCopy={salin}
         />
       ))}

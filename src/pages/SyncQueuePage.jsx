@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo, memo, startTransition } from 'react';
 import {
   getPendingQueue,
   syncPendingQueue,
@@ -15,6 +15,8 @@ import {
   Send,
   Clock3,
 } from 'lucide-react';
+
+const BATCH = 30;
 
 const TYPE_LABEL = {
   masuk: 'Barang Masuk',
@@ -80,8 +82,36 @@ function summarizeRows(rows) {
   return Array.from(map.values());
 }
 
+const QueueItem = memo(function QueueItem({ row, onVerify, onRemove, syncing }) {
+  const verify = useCallback(() => onVerify(row), [onVerify, row]);
+  const remove = useCallback(() => onRemove(row.clientItemId), [onRemove, row.clientItemId]);
+  return (
+    <div className="sq-item rounded-2xl bg-white border border-slate-200 shadow-sm p-3.5">
+      <div className="flex items-start gap-3">
+        <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center shrink-0"><Clock3 className="w-4 h-4" /></div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">{TYPE_LABEL[row.type] || row.type}</span>
+            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-cyan-50 text-cyan-700 border border-cyan-100">{row.entity || '—'}</span>
+            {row.tanggal ? <span className="text-[10px] text-slate-400">{row.tanggal}</span> : null}
+            <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${row.queueStatus === 'PENDING_VERIFY' ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-600'}`}>{row.queueStatus === 'PENDING_VERIFY' ? 'Perlu verifikasi' : 'Menunggu konfirmasi'}</span>
+          </div>
+          <p className="text-sm font-bold text-slate-900 mt-1">{row.nama || row.kode}</p>
+          {row.lastError ? <p className="mt-1 text-[11px] text-amber-800" role="status">{row.lastError}</p> : null}
+          <p className="text-[11px] text-slate-500 mt-0.5">Qty: <b className="text-slate-800">{row.qty}</b>{row.keterangan ? ' · ' + row.keterangan : ''}</p>
+          <div className="mt-2 flex gap-2">
+            <button type="button" onClick={verify} disabled={syncing} className="px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-[11px] font-bold">Verifikasi server</button>
+            <button type="button" onClick={remove} disabled={syncing || row.queueStatus === 'PENDING_VERIFY'} title={row.queueStatus === 'PENDING_VERIFY' ? 'Lakukan read-back sebelum menghapus transaksi yang hasilnya belum pasti.' : 'Hapus item yang belum dikirim.'} className="px-2.5 py-1 rounded-lg bg-red-50 border border-red-200 text-red-600 text-[11px] font-bold disabled:cursor-not-allowed disabled:opacity-50">{row.queueStatus === 'PENDING_VERIFY' ? 'Verifikasi dulu' : 'Hapus'}</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+});
+
 export default function SyncQueuePage({ onBack, onNavigate }) {
   const [rows, setRows] = useState([]);
+  const [limit, setLimit] = useState(BATCH);
   const [syncing, setSyncing] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
@@ -152,8 +182,13 @@ export default function SyncQueuePage({ onBack, onNavigate }) {
   }, [refresh]);
 
   const total = rows.length;
+  const visibleRows = useMemo(() => rows.slice(0, limit), [rows, limit]);
+  const summaryRows = useMemo(() => summarizeRows(rows), [rows]);
+  const visibleSummaryRows = useMemo(() => summaryRows.slice(0, limit), [summaryRows, limit]);
+  const loadMore = useCallback(() => startTransition(() => setLimit((n) => n + BATCH)), []);
+  useEffect(() => { setLimit(BATCH); }, [total]);
 
-  const handleRemove = async (clientItemId) => {
+  const handleRemove = useCallback(async (clientItemId) => {
     if (!clientItemId || syncing) return;
     try {
       await removePendingByClientIds([clientItemId]);
@@ -163,9 +198,9 @@ export default function SyncQueuePage({ onBack, onNavigate }) {
     } catch (err) {
       setError(err?.message || 'Antrean belum dapat diubah secara aman.');
     }
-  };
+  }, [syncing]);
 
-  const handleMarkSuccess = async (row) => {
+  const handleMarkSuccess = useCallback(async (row) => {
     if (!row?.clientItemId) return;
     setError(null);
     setResult(null);
@@ -180,7 +215,7 @@ export default function SyncQueuePage({ onBack, onNavigate }) {
     setRows(flattenQueue(getPendingQueue()));
     setSyncing(false);
     setResult({ synced: 1, failed: 0, message: 'Item terverifikasi dan dicatat di Riwayat.' });
-  };
+  }, []);
 
   const handleSendAll = useCallback(async () => {
     if (total === 0 || syncing || circuit.open) return;
@@ -216,7 +251,7 @@ export default function SyncQueuePage({ onBack, onNavigate }) {
 
 
   return (
-    <div className="pb-4 animate-fade-in space-y-3.5">
+    <div className="sq-page pb-4 animate-fade-in space-y-3.5">
       <div className="flex items-center gap-3">
         <button type="button" onClick={onBack}
           className="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-600 shadow-sm"
@@ -277,47 +312,8 @@ export default function SyncQueuePage({ onBack, onNavigate }) {
               </div>
             </div>
 
-            {rows.map((row) => (
-              <div key={row.key} className="rounded-2xl bg-white border border-slate-200 shadow-sm p-3.5">
-                <div className="flex items-start gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center shrink-0">
-                    <Clock3 className="w-4 h-4" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">
-                        {TYPE_LABEL[row.type] || row.type}
-                      </span>
-                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-cyan-50 text-cyan-700 border border-cyan-100">
-                        {row.entity || '—'}
-                      </span>
-                      {row.tanggal ? <span className="text-[10px] text-slate-400">{row.tanggal}</span> : null}
-                      <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${row.queueStatus === 'PENDING_VERIFY' ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-600'}`}>
-                        {row.queueStatus === 'PENDING_VERIFY' ? 'Perlu verifikasi' : 'Menunggu konfirmasi'}
-                      </span>
-                    </div>
-                    <p className="text-sm font-bold text-slate-900 mt-1">{row.nama || row.kode}</p>
-                    {row.lastError ? <p className="mt-1 text-[11px] text-amber-800" role="status">{row.lastError}</p> : null}
-                    <p className="text-[11px] text-slate-500 mt-0.5">
-                      Qty: <b className="text-slate-800">{row.qty}</b>
-                      {row.keterangan ? ' · ' + row.keterangan : ''}
-                    </p>
-                    <div className="mt-2 flex gap-2">
-                      <button type="button" onClick={() => handleMarkSuccess(row)} disabled={syncing}
-                        className="px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-[11px] font-bold">
-                        Verifikasi server
-                      </button>
-                      <button type="button" onClick={() => handleRemove(row.clientItemId)}
-                        disabled={syncing || row.queueStatus === 'PENDING_VERIFY'}
-                        title={row.queueStatus === 'PENDING_VERIFY' ? 'Lakukan read-back sebelum menghapus transaksi yang hasilnya belum pasti.' : 'Hapus item yang belum dikirim.'}
-                        className="px-2.5 py-1 rounded-lg bg-red-50 border border-red-200 text-red-600 text-[11px] font-bold disabled:cursor-not-allowed disabled:opacity-50">
-                        {row.queueStatus === 'PENDING_VERIFY' ? 'Verifikasi dulu' : 'Hapus'}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))}
+            {visibleRows.map((row) => <QueueItem key={row.key} row={row} onVerify={handleMarkSuccess} onRemove={handleRemove} syncing={syncing} />)}
+            {rows.length > limit && <button type="button" onClick={loadMore} className="w-full py-2.5 rounded-xl border border-cyan-200 bg-cyan-50 text-cyan-800 text-xs font-bold">Tampilkan lebih banyak ({rows.length - limit} tersisa)</button>}
           </div>
 
           <div className="sticky bottom-0 pt-2 pb-1">
@@ -347,7 +343,7 @@ export default function SyncQueuePage({ onBack, onNavigate }) {
                   <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-[11px] text-amber-900">
                     <b>Belum ada data yang dikirim.</b> Server menerima data setelah tombol konfirmasi ditekan.
                   </div>
-                  {summarizeRows(rows).map((row) => (
+                  {visibleSummaryRows.map((row) => (
                     <div key={row.key} className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
                       <div className="flex items-start gap-2.5">
                         <div className="flex-1 min-w-0">
@@ -364,6 +360,7 @@ export default function SyncQueuePage({ onBack, onNavigate }) {
                       </div>
                     </div>
                   ))}
+                  {summaryRows.length > limit && <button type="button" onClick={loadMore} className="w-full py-2.5 rounded-xl border border-cyan-200 bg-cyan-50 text-cyan-800 text-xs font-bold">Tampilkan ringkasan lainnya ({summaryRows.length - limit} tersisa)</button>}
                 </div>
                 <div className="p-3 border-t border-slate-200 space-y-2 bg-white">
                   <button type="button" onClick={handleSendAll} disabled={syncing || total === 0 || circuit.open}

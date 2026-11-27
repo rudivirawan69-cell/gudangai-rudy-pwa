@@ -390,3 +390,10 @@
 .rw-chips button:focus-visible,.rw-filter-head:focus-visible,.rw-count-chip:focus-visible { outline:2px solid var(--accent)!important;outline-offset:2px; }
 @media(max-width:430px){.rw-filter-head{min-height:48px;padding:8px 6px}.rw-filter-head h2{font-size:11px}.rw-filter-icon{width:14px;height:14px;flex-basis:14px}.rw-filter-chevron{width:14px;flex-basis:14px}.rw-count-chips{gap:6px}.rw-count-chip{padding:5px 8px;min-height:34px;font-size:10px}.rw-day-summary{min-height:84px}}
 @media(prefers-reduced-motion:reduce){.rw-filter-chevron,.rw-day-chevron{transition:none}}
+
+
+/* Long-list scroll containment: day groups and transaction cards. */
+.rw-day { contain: layout style paint; content-visibility: auto; contain-intrinsic-size: auto 120px; }
+.rw-tx-detail { contain: layout style paint; content-visibility: auto; contain-intrinsic-size: auto 180px; }
+.rw-tx-items li { contain: layout style; }
+.rw-day-details { min-width: 0; }
