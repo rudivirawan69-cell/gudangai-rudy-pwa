@@ -659,7 +659,7 @@ function formatPOPeriod(startValue, endValue, weekKey) {
   const format = (value) => {
     const raw = String(value || '').trim();
     if (!raw) return '';
-    const match = raw.match(/^(\\d{4})-(\\d{1,2})-(\\d{1,2})$/);
+    const match = raw.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
     const date = match ? new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3])) : new Date(raw);
     if (Number.isNaN(date.getTime())) return raw;
     return new Intl.DateTimeFormat('id-ID', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'Asia/Jakarta' }).format(date);
