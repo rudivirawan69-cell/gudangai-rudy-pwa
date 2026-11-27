@@ -1,7 +1,6 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   getPendingQueue,
-  claimPendingAutoSend,
   syncPendingQueue,
   resolvePendingItem,
   removePendingByClientIds,
@@ -89,7 +88,6 @@ export default function SyncQueuePage({ onBack, onNavigate }) {
   const [reviewing, setReviewing] = useState(false);
   const [progress, setProgress] = useState(null);
   const [circuit, setCircuit] = useState(() => getWriteCircuitState());
-  const autoHandoffStartedRef = useRef(false);
 
   const refresh = useCallback(() => {
     setRows(flattenQueue(getPendingQueue()));
@@ -101,14 +99,38 @@ export default function SyncQueuePage({ onBack, onNavigate }) {
     const onQueue = () => refresh();
     const onCircuit = (e) => setCircuit(e.detail || getWriteCircuitState());
     const onProgress = (e) => setProgress(e.detail || null);
+    const onAutoSyncStatus = (e) => {
+      const detail = e.detail || {};
+      if (detail.state === 'started') {
+        setSyncing(true);
+        setProgress(null);
+        setError(null);
+        setResult({ synced: 0, failed: 0, message: `Sinkronisasi latar belakang mengambil alih ${detail.count || 0} item dari Input…` });
+      } else if (detail.state === 'completed') {
+        setRows(flattenQueue(getPendingQueue()));
+        setSyncing(false);
+        setProgress(null);
+        setResult({
+          synced: Number(detail.result?.synced || 0),
+          failed: Number(detail.result?.failed || 0),
+          skipped: !!detail.result?.skipped,
+          message: detail.result?.skipped ? 'Sinkronisasi tertunda. Item tetap aman di antrean.' : `${detail.result?.synced || 0} item terkonfirmasi · ${flattenQueue(getPendingQueue()).length} item masih perlu verifikasi.`,
+        });
+      } else if (detail.state === 'failed') {
+        setSyncing(false);
+        setError(detail.error || 'Sinkronisasi latar belakang gagal.');
+      }
+    };
     window.addEventListener('gudangai-queue-changed', onQueue);
     window.addEventListener('gudangai-circuit', onCircuit);
     window.addEventListener('gudangai-submit-progress', onProgress);
+    window.addEventListener('gudangai-auto-sync-status', onAutoSyncStatus);
     const id = setInterval(() => setCircuit(getWriteCircuitState()), 1000);
     return () => {
       window.removeEventListener('gudangai-queue-changed', onQueue);
       window.removeEventListener('gudangai-circuit', onCircuit);
       window.removeEventListener('gudangai-submit-progress', onProgress);
+      window.removeEventListener('gudangai-auto-sync-status', onAutoSyncStatus);
       clearInterval(id);
     };
   }, [refresh]);
@@ -175,20 +197,6 @@ export default function SyncQueuePage({ onBack, onNavigate }) {
       setProgress(null);
     }
   }, [total, syncing, circuit.open]);
-
-  useEffect(() => {
-    const autoIds = rows.filter((row) => row.autoSendRequested && row.clientItemId).map((row) => row.clientItemId);
-    if (!autoIds.length || syncing || circuit.open || autoHandoffStartedRef.current) return;
-    autoHandoffStartedRef.current = true;
-    setResult({ synced: 0, failed: 0, message: 'Penyerahan dari Input diterima. Sinkronisasi otomatis dimulai…' });
-    void claimPendingAutoSend(autoIds).then((claimed) => {
-      if (claimed.length) void handleSendAll();
-      else autoHandoffStartedRef.current = false;
-    }).catch((err) => {
-      autoHandoffStartedRef.current = false;
-      setError(err?.message || 'Gagal mengambil alih antrean otomatis. Item tetap aman di antrean.');
-    });
-  }, [rows, handleSendAll, syncing, circuit.open]);
 
 
   return (
