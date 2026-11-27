@@ -154,12 +154,17 @@ try {
   await page.goto(HOST, { waitUntil: 'domcontentloaded' });
   await page.locator('nav.nav-bar').waitFor({ state: 'visible', timeout: 15000 });
   assert.equal((await page.locator('.app-header-card h1').innerText()).trim(), 'GUDANG69_PRODIS', 'Sticky header brand must match the approved product name.');
+  await page.getByRole('button', { name: 'Pusat notifikasi' }).click();
+  await page.getByText('Pusat Notifikasi', { exact: false }).first().waitFor({ state: 'visible', timeout: 10000 });
+  await page.locator('nav.nav-bar button').filter({ hasText: 'Beranda' }).first().click();
+  await page.getByText('Status per Divisi', { exact: false }).first().waitFor({ state: 'visible', timeout: 10000 });
 
   const tabs = [
     ['Beranda', 'Status per Divisi'],
     ['Stok', 'Stok barang'],
     ['Input', 'Draft transaksi dipulihkan'],
     ['Agent', 'Agent Rubee Intelligence'],
+    ['Notifikasi', 'Pusat Notifikasi'],
   ];
   // PO recommendation visual contract: run before unrelated Input-page assertions.
   const poScreenshotRoot = 'artifacts/visual-phase3';
@@ -220,10 +225,19 @@ try {
     // The previous visual scenario may intentionally leave the More menu open.
     // Do not click the underlying nav button while the backdrop intercepts it.
     if (!(await sheet.isVisible().catch(() => false))) {
-      await page.locator('nav.nav-bar button').filter({ hasText: 'Lainnya' }).first().click();
+      const moreButton = page.locator('nav.nav-bar button').filter({ hasText: 'Lainnya' }).first();
+      await moreButton.waitFor({ state: 'visible', timeout: 5000 });
+      await moreButton.click({ force: true });
     }
-    await sheet.waitFor({ state: 'visible', timeout: 5000 });
-    await sheet.locator('button').filter({ hasText: label }).first().click();
+    try {
+      await sheet.waitFor({ state: 'visible', timeout: 10000 });
+    } catch (error) {
+      throw new Error(`More menu failed to open before navigating to "${label}". Cause: ${error.message}`);
+    }
+    const menuButton = sheet.locator('button').filter({ hasText: label }).first();
+    await menuButton.waitFor({ state: 'visible', timeout: 5000 });
+    await menuButton.scrollIntoViewIfNeeded();
+    await menuButton.evaluate((element) => element.click());
     await page.getByText(marker, { exact: false }).first().waitFor({ state: 'visible', timeout: 10000 });
   };
 
@@ -296,6 +310,7 @@ try {
     assert.ok(navAudit.labels.every((node) => node.visible && node.fits), `Navigation labels are clipped: ${JSON.stringify(navAudit)}`);
     for (const [label, marker] of tabs) {
       if (label === 'Agent') await openMorePage('Agent Rubee AI', marker);
+      else if (label === 'Notifikasi') await openMorePage('Notifikasi', marker);
       else await page.locator('nav.nav-bar button').filter({ hasText: label }).first().click();
       const visibleMarker = page.getByText(marker, { exact: false }).last();
       try {
@@ -348,7 +363,7 @@ try {
             }),
           };
         });
-        assert.equal(inputAudit.controlHeights.length, 4, 'Input must show date, CV, PT, and notification controls.');
+        assert.equal(inputAudit.controlHeights.length, 3, 'Input must only show date and entity controls; notification entry is centralized in the header.');
         assert.ok(inputAudit.controlHeights.every((height) => height >= 44), `Input control touch target below 44px: ${JSON.stringify(inputAudit)}`);
         assert.equal(inputAudit.controlContainerBorder, '0px', `Input controls still share an outer card: ${JSON.stringify(inputAudit)}`);
         assert.ok(inputAudit.controlBounds.slice(1).every((box, index) => box.left - inputAudit.controlBounds[index].right >= 6), `Input date, CV, PT and notification controls are not separated: ${JSON.stringify(inputAudit)}`);
@@ -474,6 +489,7 @@ try {
     ['Riwayat', 'Riwayat Transaksi', 'riwayat'],
     ['Lainnya', 'Agent Rubee AI', 'more'],
     ['Agent', 'Agent Rubee Intelligence', 'agent'],
+    ['Notifikasi', 'Pusat Notifikasi', 'notifications'],
     ['Pengaturan', 'Mode Tampilan', 'settings'],
     ['Sinkronisasi', 'Sinkronisasi', 'sync'],
   ];
@@ -511,7 +527,7 @@ try {
         } else if (label === 'Lainnya') {
           await page.locator('nav.nav-bar button').filter({ hasText: 'Lainnya' }).first().click();
           await page.locator('.more-sheet').waitFor({ state: 'visible', timeout: 10000 });
-        } else if (['Riwayat', 'Pengaturan', 'Sinkronisasi', 'Agent'].includes(label)) {
+        } else if (['Riwayat', 'Pengaturan', 'Sinkronisasi', 'Agent', 'Notifikasi'].includes(label)) {
           await openMorePage(label === 'Agent' ? 'Agent Rubee AI' : label === 'Sinkronisasi' ? 'Sinkronisasi' : label, markerText);
         } else {
           await page.locator('nav.nav-bar button').filter({ hasText: label }).first().click();
@@ -694,14 +710,10 @@ try {
   await page.locator('nav.nav-bar button').filter({ hasText: 'Stok' }).first().click();
   await page.locator('nav.nav-bar button').filter({ hasText: 'Input' }).first().click();
   await page.getByText('Draft transaksi dipulihkan', { exact: false }).waitFor({ state: 'visible' });
-  await page.getByRole('button', { name: 'Antrekan 1 item' }).click();
-  await page.getByText('1 item dalam antrean', { exact: false }).waitFor({ state: 'visible', timeout: 10000 });
-  assert.equal(transactionWriteCalls, 0, 'Input must only stage the transaction; no backend write is allowed before explicit queue confirmation.');
-  await page.getByRole('button', { name: /Tinjau Keranjang & Sinkronisasi/ }).click();
-  await page.getByText('Belum ada data yang dikirim.', { exact: false }).waitFor({ state: 'visible' });
-  await page.getByRole('button', { name: 'Konfirmasi & Kirim ke Spreadsheet' }).click();
+  await page.getByRole('button', { name: /Kirim 1 item/i }).click();
+  await page.getByText('Sinkronisasi', { exact: false }).first().waitFor({ state: 'visible', timeout: 10000 });
   await page.getByText(/1 item terkonfirmasi/).waitFor({ state: 'visible', timeout: 15000 });
-  assert.equal(transactionWriteCalls, 1, 'SyncQueue must own the single confirmed backend write.');
+  assert.equal(transactionWriteCalls, 1, 'Input handoff must trigger one background write owned by SyncQueue.');
   await page.getByRole('button', { name: 'Buka Riwayat' }).click();
   await page.locator('.rw-day-summary').first().waitFor({ state: 'visible', timeout: 10000 });
   const historyEntries = await page.evaluate(() => JSON.parse(localStorage.getItem('gudangai_history') || '[]'));

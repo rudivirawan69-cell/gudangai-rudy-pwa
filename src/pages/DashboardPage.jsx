@@ -3,6 +3,7 @@ import { useStock } from '../hooks/useStock';
 import {
   getPendingQueue, getStatusPO, getDashboardData, getCachedDashboardData, getDashboardDataSignature,
   confirmPOStatus, getLocalHistory, getApiUrl, getApiSecret,
+  getPendingHomeSuccessReceipt, acknowledgeHomeSuccessReceipt,
 } from '../data/api';
 import { classifyStockLevel } from '../data/stockStatus';
 import HomeAgentAssistant from '../components/HomeAgentAssistant';
@@ -1060,6 +1061,7 @@ export default function DashboardPage({ onNavigate, operationalStatus }) {
   const dashboardSignatureRef = useRef(getDashboardDataSignature(getCachedDashboardData()));
   const historySignatureRef = useRef('');
   const [history, setHistory] = useState(() => getLocalHistory());
+  const [homeSuccessReceipt, setHomeSuccessReceipt] = useState(null);
   const loadMovementHistory = useCallback(async () => {
     const local = getLocalHistory();
     setHistory(local);
@@ -1174,6 +1176,23 @@ export default function DashboardPage({ onNavigate, operationalStatus }) {
     }
   }, [applyDashboardSnapshot]);
 
+  const acceptHomeSuccessReceipt = useCallback((receipt) => {
+    if (!receipt?.id || !Number(receipt.count)) return;
+    setHomeSuccessReceipt(receipt);
+    void loadPO({ silent: true });
+    void loadDashboardData();
+    void loadMovementHistory();
+    window.dispatchEvent(new CustomEvent('gudangai-stock-refresh', { detail: { source: 'home-success-receipt', receiptId: receipt.id } }));
+  }, [loadPO, loadDashboardData, loadMovementHistory]);
+
+  useEffect(() => {
+    const onHomeSuccess = (event) => acceptHomeSuccessReceipt(event?.detail);
+    window.addEventListener('gudangai-home-success', onHomeSuccess);
+    const pendingReceipt = getPendingHomeSuccessReceipt();
+    if (pendingReceipt) acceptHomeSuccessReceipt(pendingReceipt);
+    return () => window.removeEventListener('gudangai-home-success', onHomeSuccess);
+  }, [acceptHomeSuccessReceipt]);
+
   useEffect(() => {
     const onDashboardLiveUpdated = (event) => applyDashboardSnapshot(event?.detail);
     window.addEventListener('gudangai-dashboard-live-updated', onDashboardLiveUpdated);
@@ -1266,6 +1285,22 @@ export default function DashboardPage({ onNavigate, operationalStatus }) {
           Dashboard Live belum berhasil diperbarui: {dashboardError}
           {dashboardData ? ' Menampilkan pembacaan Dashboard Live terakhir yang berhasil.' : ' Total dan status ditahan; tidak diganti hitungan lokal.'}
         </p>
+      )}
+
+      {homeSuccessReceipt && (
+        <section className="rounded-2xl border border-emerald-200 bg-emerald-50 px-3.5 py-3 text-emerald-900 shadow-sm" role="status" aria-live="polite">
+          <div className="flex items-start gap-2.5">
+            <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-600 mt-0.5" aria-hidden="true" />
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-extrabold">{homeSuccessReceipt.count} item berhasil dikonfirmasi di Spreadsheet</p>
+              <p className="mt-1 text-[11px] leading-relaxed text-emerald-800">Antrean sukses telah dicatat di Riwayat. Beranda sedang memperbarui Dashboard Live, stok, dan Status PO.</p>
+              {homeSuccessReceipt.items?.length ? <p className="mt-1 text-[10px] text-emerald-800">{homeSuccessReceipt.items.slice(0, 3).map((item) => item.nama || item.kode).filter(Boolean).join(' · ')}{homeSuccessReceipt.items.length > 3 ? ' …' : ''}</p> : null}
+            </div>
+            <button type="button" onClick={() => { acknowledgeHomeSuccessReceipt(homeSuccessReceipt.id); setHomeSuccessReceipt(null); }} aria-label="Tutup konfirmasi sukses" className="rounded-lg p-1 text-emerald-700 hover:bg-emerald-100">
+              <X className="h-4 w-4" aria-hidden="true" />
+            </button>
+          </div>
+        </section>
       )}
 
       <section className="dashboard-overview-grid grid grid-cols-1 xl:grid-cols-2 gap-4" aria-label="Ringkasan operasional">

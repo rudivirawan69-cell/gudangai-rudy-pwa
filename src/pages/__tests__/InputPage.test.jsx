@@ -76,11 +76,11 @@ describe('InputPage PR 1', () => {
     const onNavigate = vi.fn();
     render(<InputPage onNavigate={onNavigate} />);
 
-    fireEvent.click(screen.getByRole('button', { name: /Antrekan 2 item/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Kirim 2 item/i }));
 
     await waitFor(() => expect(onNavigate).toHaveBeenCalledWith('sync'));
     expect(api.stagePendingTransaction).toHaveBeenCalledWith(expect.objectContaining({
-      type: 'barangKeluar', entity: 'CV', status: 'PENDING_REVIEW',
+      type: 'barangKeluar', entity: 'CV', status: 'PENDING_REVIEW', autoSend: true,
       items: expect.arrayContaining([expect.objectContaining({ clientItemId: 'one' }), expect.objectContaining({ clientItemId: 'two' })]),
     }));
     expect(api.submitBarangMasuk).not.toHaveBeenCalled();
@@ -92,13 +92,31 @@ describe('InputPage PR 1', () => {
     expect(screen.queryByText('Barang one')).not.toBeInTheDocument();
   });
 
+  it('mengalihkan tanggung jawab ke Sinkronisasi setelah lima detik bila staging lokal tertahan', async () => {
+    seedCart([item('slow-handoff')]);
+    let resolveStage;
+    api.stagePendingTransaction.mockReturnValueOnce(new Promise((resolve) => { resolveStage = resolve; }));
+    const onNavigate = vi.fn();
+    vi.useFakeTimers();
+    render(<InputPage onNavigate={onNavigate} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Kirim 1 item/i }));
+    await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
+    expect(onNavigate).toHaveBeenCalledWith('sync');
+    expect(screen.getByText(/Input melepas proses setelah 5 detik/)).toBeInTheDocument();
+
+    await act(async () => { resolveStage(['slow-handoff']); });
+    expect(api.stagePendingTransaction).toHaveBeenCalledWith(expect.objectContaining({ autoSend: true }));
+    expect(onNavigate).toHaveBeenCalledTimes(1);
+  });
+
   it('mempertahankan keranjang dan tidak berpindah jika antrean gagal disimpan', async () => {
     seedCart([item('retry')]);
     api.stagePendingTransaction.mockRejectedValueOnce(new Error('Penyimpanan antrean gagal'));
     const onNavigate = vi.fn();
     render(<InputPage onNavigate={onNavigate} />);
 
-    fireEvent.click(screen.getByRole('button', { name: /Antrekan 1 item/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Kirim 1 item/i }));
 
     await waitFor(() => expect(screen.getByText(/Penyimpanan antrean gagal/)).toBeInTheDocument());
     expect(screen.getByText('Keranjang (1)')).toBeInTheDocument();
@@ -109,7 +127,7 @@ describe('InputPage PR 1', () => {
   it('tidak mengantrekan keranjang yang seluruh jumlahnya nol', async () => {
     seedCart([item('zero-only', 0)]);
     render(<InputPage />);
-    expect(screen.getByRole('button', { name: /Antrekan 0 item/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /Kirim 0 item/i })).toBeDisabled();
     expect(api.stagePendingTransaction).not.toHaveBeenCalled();
   });
 });

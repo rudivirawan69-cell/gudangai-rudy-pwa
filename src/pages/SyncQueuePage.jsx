@@ -48,6 +48,7 @@ function flattenQueue(queue) {
         tanggal,
         entryId,
         queueStatus: it.queueStatus || entry.status || 'PENDING_REVIEW',
+        autoSendRequested: !!entry.autoSendRequested,
         lastError: it.lastError || entry.lastError || '',
       });
     }
@@ -98,14 +99,54 @@ export default function SyncQueuePage({ onBack, onNavigate }) {
     const onQueue = () => refresh();
     const onCircuit = (e) => setCircuit(e.detail || getWriteCircuitState());
     const onProgress = (e) => setProgress(e.detail || null);
+    const onAutoSyncStatus = (e) => {
+      const detail = e.detail || {};
+      if (detail.state === 'started') {
+        setSyncing(true);
+        setProgress(null);
+        setError(null);
+        setResult({ synced: 0, failed: 0, message: `Sinkronisasi latar belakang mengambil alih ${detail.count || 0} item dari Input…` });
+      } else if (detail.state === 'completed') {
+        setRows(flattenQueue(getPendingQueue()));
+        setSyncing(false);
+        setProgress(null);
+        setResult({
+          synced: Number(detail.result?.synced || 0),
+          failed: Number(detail.result?.failed || 0),
+          skipped: !!detail.result?.skipped,
+          message: detail.result?.skipped ? 'Sinkronisasi tertunda. Item tetap aman di antrean.' : `${detail.result?.synced || 0} item terkonfirmasi · ${flattenQueue(getPendingQueue()).length} item masih perlu verifikasi.`,
+        });
+      } else if (detail.state === 'failed') {
+        setSyncing(false);
+        setError(detail.error || 'Sinkronisasi latar belakang gagal.');
+      }
+    };
     window.addEventListener('gudangai-queue-changed', onQueue);
     window.addEventListener('gudangai-circuit', onCircuit);
     window.addEventListener('gudangai-submit-progress', onProgress);
+    window.addEventListener('gudangai-auto-sync-status', onAutoSyncStatus);
+    try {
+      const saved = JSON.parse(localStorage.getItem('gudangai_auto_sync_status_v1') || 'null');
+      if (saved && Date.now() - Number(saved.at || 0) < 30 * 60 * 1000) {
+        if (saved.state === 'started') {
+          setSyncing(true);
+          setResult({ synced: 0, failed: 0, message: 'Sinkronisasi otomatis masih berjalan di latar belakang…' });
+        } else if (saved.state === 'completed') {
+          setResult({
+            synced: Number(saved.result?.synced || 0),
+            failed: Number(saved.result?.failed || 0),
+            skipped: !!saved.result?.skipped,
+            message: saved.result?.skipped ? 'Sinkronisasi tertunda. Item tetap aman di antrean.' : `${saved.result?.synced || 0} item terkonfirmasi. Hasil terbaru sudah diproses.`,
+          });
+        } else if (saved.state === 'failed') setError(saved.error || 'Sinkronisasi otomatis gagal.');
+      }
+    } catch (_) {}
     const id = setInterval(() => setCircuit(getWriteCircuitState()), 1000);
     return () => {
       window.removeEventListener('gudangai-queue-changed', onQueue);
       window.removeEventListener('gudangai-circuit', onCircuit);
       window.removeEventListener('gudangai-submit-progress', onProgress);
+      window.removeEventListener('gudangai-auto-sync-status', onAutoSyncStatus);
       clearInterval(id);
     };
   }, [refresh]);
@@ -141,7 +182,7 @@ export default function SyncQueuePage({ onBack, onNavigate }) {
     setResult({ synced: 1, failed: 0, message: 'Item terverifikasi dan dicatat di Riwayat.' });
   };
 
-  const handleSendAll = async () => {
+  const handleSendAll = useCallback(async () => {
     if (total === 0 || syncing || circuit.open) return;
     setReviewing(false);
     setSyncing(true);
@@ -171,7 +212,8 @@ export default function SyncQueuePage({ onBack, onNavigate }) {
       setSyncing(false);
       setProgress(null);
     }
-  };
+  }, [total, syncing, circuit.open]);
+
 
   return (
     <div className="pb-4 animate-fade-in space-y-3.5">

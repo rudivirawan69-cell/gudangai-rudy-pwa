@@ -154,33 +154,35 @@ function readQueueLocal() {
     return { revision: _queueRevision, queue: Array.isArray(raw) ? raw : [] };
   } catch (_) { return { revision: 0, queue: [] }; }
 }
-async function commitQueueLocal(queue) {
-  const safeQueue = Array.isArray(queue) ? queue : [];
+let _queueCommitChain = Promise.resolve();
+async function writeQueueSnapshot(safeQueue) {
   const next = Math.max(_queueRevision + 1, Date.now());
-
-  // IndexedDB commit + read-back is the durability gate. If it fails, do not
-  // acknowledge this queue mutation or allow the caller to clear its cart.
+  // IndexedDB commit + read-back is the durability gate.
   await persistQueueBackup(safeQueue, next);
-
   try {
     localStorage.setItem(QUEUE_KEY, JSON.stringify(safeQueue));
     localStorage.setItem(QUEUE_KEY + '_rev', String(next));
     const verified = readQueueLocal();
-    if (verified.revision !== next || JSON.stringify(verified.queue) !== JSON.stringify(safeQueue)) {
-      throw new Error('Verifikasi localStorage antrean gagal.');
-    }
+    if (verified.revision !== next || JSON.stringify(verified.queue) !== JSON.stringify(safeQueue)) throw new Error('Verifikasi localStorage antrean gagal.');
   } catch (error) {
-    // IndexedDB already contains the committed snapshot. Leave it recoverable;
-    // caller must keep the original input visible until a later hydration.
     throw new Error('Cadangan IndexedDB tersimpan, tetapi cache antrean perangkat gagal diverifikasi: ' + (error?.message || 'storage error'));
   }
-
   _queueRevision = next;
   try {
     window.dispatchEvent(new CustomEvent('gudangai-queue-changed', {
       detail: { count: safeQueue.reduce((sum, entry) => sum + (entry.items || []).length, 0), revision: next }
     }));
   } catch (_) {}
+}
+function mutateQueueLocal(mutator) {
+  const run = _queueCommitChain.then(async () => {
+    const current = getPendingQueue();
+    const next = mutator(current);
+    await writeQueueSnapshot(Array.isArray(next) ? next : current);
+    return next;
+  });
+  _queueCommitChain = run.catch(() => {});
+  return run;
 }
 export async function hydrateOfflineQueue() {
   return hydrateQueueBackup(readQueueLocal, (queue, revision) => {
@@ -391,30 +393,24 @@ function ensureClientItemId(it) {
 }
 async function enqueue(type, entity, items, meta = {}) {
   if (!items?.length) return [];
-  const queue = getPendingQueue();
   const normalized = items.map((item) => ({
     ...ensureClientItemId(item),
     kode: normalizeItemCode(item.kode || item.kodeBarang),
     nama: normalizeTransactionText(item.nama),
     keterangan: normalizeTransactionText(item.keterangan),
   }));
-  const existingIds = new Set(queue.flatMap((entry) => (entry.items || []).map((item) => String(item.clientItemId || ''))));
-  const freshItems = normalized.filter((item) => !existingIds.has(String(item.clientItemId)));
-  if (!freshItems.length) return normalized.map((item) => String(item.clientItemId));
-  const transactionId = String(meta.transactionId || '').trim() || 'TX-RUDY-' + (crypto.randomUUID ? crypto.randomUUID() : Date.now());
-  queue.push({
-    id: 'Q-' + transactionId,
-    transactionId,
-    status: meta.status || 'PENDING_VERIFY',
-    type, entity,
-    items: freshItems,
-    tanggal: normalizeTanggal(meta.tanggal),
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
+  await mutateQueueLocal((queue) => {
+    const existingIds = new Set(queue.flatMap((entry) => (entry.items || []).map((item) => String(item.clientItemId || ''))));
+    const freshItems = normalized.filter((item) => !existingIds.has(String(item.clientItemId)));
+    if (!freshItems.length) return queue;
+    const transactionId = String(meta.transactionId || '').trim() || 'TX-RUDY-' + (crypto.randomUUID ? crypto.randomUUID() : Date.now());
+    queue.push({
+      id: 'Q-' + transactionId, transactionId, status: meta.status || 'PENDING_VERIFY', type, entity,
+      items: freshItems, tanggal: normalizeTanggal(meta.tanggal), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+    });
+    return queue;
   });
-  await commitQueueLocal(queue);
-  const stored = getPendingQueue();
-  const storedIds = new Set(stored.flatMap((entry) => (entry.items || []).map((item) => String(item.clientItemId || ''))));
+  const storedIds = new Set(getPendingQueue().flatMap((entry) => (entry.items || []).map((item) => String(item.clientItemId || ''))));
   return normalized.map((item) => String(item.clientItemId)).filter((id) => storedIds.has(id));
 }
 async function submitOneItem(sheetOrAction, entity, it, tanggal) {
@@ -688,30 +684,78 @@ export async function submitBarangRusak({ entity, tanggal, items }) { return sub
 export function getPendingQueue() { return readQueueLocal().queue; }
 
 /** Persist a complete send intent before the first backend request. */
-export async function stagePendingTransaction({ type, entity, tanggal, items, status = 'PENDING_REVIEW' }) {
+export async function stagePendingTransaction({ type, entity, tanggal, items, status = 'PENDING_REVIEW', autoSend = false }) {
   const validItems = (items || []).map((item) => ({
     ...ensureClientItemId(item), kode: normalizeItemCode(item.kode || item.kodeBarang),
     nama: normalizeTransactionText(item.nama), keterangan: normalizeTransactionText(item.keterangan),
   }));
   if (!validItems.length || validItems.some((item) => !item.clientItemId || !item.kode || !(Number(item.qty) > 0))) throw new Error('Transaksi tidak valid; antrean tidak dibuat.');
-  const queue = getPendingQueue();
-  const existing = new Set(queue.flatMap((entry) => (entry.items || []).map((item) => String(item.clientItemId || ''))));
-  if (validItems.some((item) => existing.has(String(item.clientItemId)))) throw new Error('Ada ID item yang sudah berada di antrean. Periksa Sinkronisasi sebelum mengirim ulang.');
   const now = new Date().toISOString();
   const queueStatus = status === 'PROCESSING' ? 'PROCESSING' : 'PENDING_REVIEW';
   const entry = {
     id: 'Q-SEND-' + (crypto.randomUUID ? crypto.randomUUID() : Date.now()),
     transactionId: 'TX-BATCH-' + (crypto.randomUUID ? crypto.randomUUID() : Date.now()),
-    status: queueStatus, type, entity: String(entity || '').toUpperCase(), items: validItems,
+    status: queueStatus, type, entity: String(entity || '').toUpperCase(), items: validItems, ...(autoSend ? { autoSendRequested: true } : {}),
     tanggal: normalizeTanggal(tanggal), createdAt: now, updatedAt: now,
     ...(queueStatus === 'PROCESSING' ? { processingStartedAt: now } : {}),
   };
-  queue.push(entry);
-  await commitQueueLocal(queue);
+  await mutateQueueLocal((queue) => {
+    const existing = new Set(queue.flatMap((queued) => (queued.items || []).map((item) => String(item.clientItemId || ''))));
+    if (validItems.some((item) => existing.has(String(item.clientItemId)))) throw new Error('Ada ID item yang sudah berada di antrean. Periksa Sinkronisasi sebelum mengirim ulang.');
+    queue.push(entry);
+    return queue;
+  });
   if (queueStatus === 'PROCESSING') validItems.forEach((item) => _activeSendIds.add(String(item.clientItemId)));
   const stagedIds = new Set(getPendingQueue().flatMap((entry) => (entry.items || []).map((item) => String(item.clientItemId || ''))));
   if (validItems.some((item) => !stagedIds.has(String(item.clientItemId)))) throw new Error('Verifikasi antrean gagal. Permintaan ke server dibatalkan.');
   return validItems.map((item) => item.clientItemId);
+}
+
+/** Atomically consumes the one-shot auto-send request before processing it. */
+export async function claimPendingAutoSend(clientItemIds = []) {
+  const wanted = new Set((clientItemIds || []).map(String).filter(Boolean));
+  const claimed = [];
+  await mutateQueueLocal((queue) => {
+    const next = queue.map((entry) => {
+      const ids = (entry.items || []).map((item) => String(item.clientItemId || '')).filter((id) => wanted.has(id));
+      if (!entry.autoSendRequested || !ids.length) return entry;
+      claimed.push(...ids);
+      return { ...entry, autoSendRequested: false, autoSendClaimedAt: new Date().toISOString(), status: 'PENDING_REVIEW' };
+    });
+    return claimed.length ? next : queue;
+  });
+  return claimed;
+}
+
+export function getPendingHomeSuccessReceipt() {
+  try {
+    const receipt = JSON.parse(localStorage.getItem(HOME_SUCCESS_RECEIPT_KEY) || 'null');
+    if (!receipt || receipt.expiresAt < Date.now()) {
+      localStorage.removeItem(HOME_SUCCESS_RECEIPT_KEY);
+      return null;
+    }
+    return receipt;
+  } catch (_) { return null; }
+}
+export function acknowledgeHomeSuccessReceipt(receiptId) {
+  const current = getPendingHomeSuccessReceipt();
+  if (!current || (receiptId && current.id !== receiptId)) return false;
+  try { localStorage.removeItem(HOME_SUCCESS_RECEIPT_KEY); return true; } catch (_) { return false; }
+}
+function publishHomeSuccessReceipt(rows) {
+  if (!Array.isArray(rows) || !rows.length) return;
+  const previous = getPendingHomeSuccessReceipt();
+  const receipt = {
+    id: 'HOME-SUCCESS-' + Date.now(),
+    confirmedAt: new Date().toISOString(),
+    count: Number(previous?.count || 0) + rows.length,
+    items: [...(previous?.items || []), ...rows].slice(-100).map((row) => ({ kode: row.kode, nama: row.nama, qty: Number(row.qty) || 0, entity: row.entity, type: row.type })),
+    expiresAt: Date.now() + 24 * 60 * 60 * 1000,
+  };
+  try {
+    localStorage.setItem(HOME_SUCCESS_RECEIPT_KEY, JSON.stringify(receipt));
+    window.dispatchEvent(new CustomEvent('gudangai-home-success', { detail: receipt }));
+  } catch (_) {}
 }
 
 export function finishPendingTransaction(ids) {
@@ -722,7 +766,7 @@ export async function updatePendingItemStates(ids, status, details = {}) {
   const wanted = new Set((ids || []).map(String));
   if (!wanted.size) return { success: true, updated: 0 };
   const now = new Date().toISOString();
-  const queue = getPendingQueue().map((entry) => {
+  await mutateQueueLocal((queue) => queue.map((entry) => {
     const hasTarget = (entry.items || []).some((item) => wanted.has(String(item.clientItemId)));
     return {
       ...entry,
@@ -731,8 +775,7 @@ export async function updatePendingItemStates(ids, status, details = {}) {
         ? { ...item, queueStatus: status, queueUpdatedAt: now, ...details }
         : item),
     };
-  });
-  await commitQueueLocal(queue);
+  }));
   return { success: true, updated: wanted.size };
 }
 function queueItemIdentity(item) {
@@ -820,13 +863,17 @@ export async function resolvePendingItem(item) {
 
 export async function removePendingByClientIds(ids) {
   const set = new Set((ids || []).map(String));
-  const q = getPendingQueue().map((e) => ({ ...e, items: (e.items || []).filter((it) => !set.has(String(it.clientItemId))) })).filter((e) => e.items.length);
-  await commitQueueLocal(q);
-  return { success: true, remaining: q.reduce((n, entry) => n + entry.items.length, 0) };
+  let remaining = 0;
+  await mutateQueueLocal((queue) => {
+    const next = queue.map((entry) => ({ ...entry, items: (entry.items || []).filter((item) => !set.has(String(item.clientItemId))) })).filter((entry) => entry.items.length);
+    remaining = next.reduce((n, entry) => n + entry.items.length, 0);
+    return next;
+  });
+  return { success: true, remaining };
 }
-export async function clearPendingQueue() { await commitQueueLocal([]); return { success: true }; }
-export async function clearSyncedQueue() { await commitQueueLocal([]); return { success: true }; }
-export async function syncPendingQueue() {
+export async function clearPendingQueue() { await mutateQueueLocal(() => []); return { success: true }; }
+export async function clearSyncedQueue() { await mutateQueueLocal(() => []); return { success: true }; }
+export async function syncPendingQueue({ clientItemIds = null } = {}) {
   const url = getApiUrl();
   if (!url || !navigator.onLine) return { synced: 0, failed: 0, skipped: true };
   if (_syncLock) return { synced: 0, failed: 0, skipped: true, reason: 'sync-in-progress' };
@@ -834,16 +881,17 @@ export async function syncPendingQueue() {
   try {
     const rawQueue = getPendingQueue();
     const nowMs = Date.now();
-    const queue = rawQueue.map((entry) => {
+    const queue = await mutateQueueLocal((currentQueue) => currentQueue.map((entry) => {
       if ((entry.items || []).some((item) => _activeSendIds.has(String(item.clientItemId)))) return entry;
       if (entry.status !== 'PROCESSING') return entry;
       const started = Date.parse(entry.processingStartedAt || entry.updatedAt || entry.createdAt || '');
       return Number.isFinite(started) && nowMs - started < 120000
         ? entry
         : { ...entry, status: 'PENDING_VERIFY', recoveredAt: new Date(nowMs).toISOString() };
-    });
-    if (queue.some((entry, index) => entry !== rawQueue[index])) await commitQueueLocal(queue);
+    }));
     const processQueue = queue.filter((entry) => entry.status !== 'PROCESSING');
+    const targetIds = clientItemIds ? new Set(clientItemIds.map(String)) : null;
+    const eligibleIds = new Set(processQueue.flatMap((entry) => (entry.items || []).map((item) => String(item.clientItemId || '')).filter((id) => id && (!targetIds || targetIds.has(id)))));
     const groups = new Map();
     const conflictingIds = new Set();
     const identitySignatures = new Map();
@@ -859,7 +907,7 @@ export async function syncPendingQueue() {
       const group = groups.get(key);
       for (const item of entry.items) {
         const id = String(item.clientItemId || '');
-        if (!id) continue;
+        if (!id || !eligibleIds.has(id)) continue;
         const signature = JSON.stringify([type, entity, tanggal, item.kode, item.qty, item.keterangan]);
         const globalPrior = identitySignatures.get(id);
         if (globalPrior && globalPrior !== signature) conflictingIds.add(id);
@@ -895,14 +943,13 @@ export async function syncPendingQueue() {
     }
     for (const id of conflictingIds) failureDetails.set(String(id), 'ID transaksi digunakan untuk payload yang berbeda. Perlu pemeriksaan manual.');
 
-    const remaining = [];
     let synced = 0, failed = 0;
     const appliedAfterSync = getAppliedMap();
-    // History must be durably written before any confirmed outbox item is removed.
+    // Persist history first, but only for IDs that this run actually owns.
     for (const entry of queue) {
       for (const item of entry.items || []) {
         const id = String(item.clientItemId || '');
-        if (!id || (!confirmedIds.has(id) && !appliedAfterSync[id])) continue;
+        if (!id || !eligibleIds.has(id) || (!confirmedIds.has(id) && !appliedAfterSync[id])) continue;
         const metadata = confirmedHistory.get(id) || { item, type: entry.type, entity: entry.entity, tanggal: entry.tanggal };
         saveToHistory({
           type: metadata.type, entity: metadata.entity, tanggal: metadata.tanggal,
@@ -914,29 +961,32 @@ export async function syncPendingQueue() {
         });
       }
     }
-    for (const entry of queue) {
-      const remainingItems = entry.items
-        .filter((item) => !confirmedIds.has(item.clientItemId) && !appliedAfterSync[item.clientItemId])
-        .map((item) => {
-          const error = failureDetails.get(String(item.clientItemId));
-          return error
-            ? { ...item, queueStatus: 'PENDING_VERIFY', lastError: String(error) }
-            : item;
-        });
-      synced += entry.items.length - remainingItems.length;
-      if (remainingItems.length) {
-        const isProcessing = entry.status === 'PROCESSING';
-        const hasEntryFailure = remainingItems.some((item) => failureDetails.has(String(item.clientItemId)));
-        if (!isProcessing) failed += remainingItems.length;
-        remaining.push({
-          ...entry,
-          status: isProcessing ? 'PROCESSING' : (hasEntryFailure ? 'PENDING_VERIFY' : entry.status),
-          updatedAt: isProcessing ? entry.updatedAt : new Date().toISOString(),
-          items: remainingItems,
-        });
+    // Finalize against the latest queue snapshot under the serialized mutation lock.
+    await mutateQueueLocal((currentQueue) => {
+      const next = [];
+      for (const entry of currentQueue) {
+        const remainingItems = [];
+        for (const item of entry.items || []) {
+          const id = String(item.clientItemId || '');
+          const owned = eligibleIds.has(id);
+          if (owned && (confirmedIds.has(id) || !!appliedAfterSync[id])) { synced += 1; continue; }
+          if (owned) {
+            failed += 1;
+            const error = failureDetails.get(id) || 'Write belum terkonfirmasi. Item dipertahankan untuk verifikasi.';
+            remainingItems.push({ ...item, queueStatus: 'PENDING_VERIFY', lastError: String(error) });
+          } else remainingItems.push(item);
+        }
+        if (remainingItems.length) {
+          const hasOwnedFailure = remainingItems.some((item) => eligibleIds.has(String(item.clientItemId)));
+          next.push({ ...entry, status: hasOwnedFailure && entry.status !== 'PROCESSING' ? 'PENDING_VERIFY' : entry.status, updatedAt: hasOwnedFailure && entry.status !== 'PROCESSING' ? new Date().toISOString() : entry.updatedAt, items: remainingItems });
+        }
       }
-    }
-    await commitQueueLocal(remaining);
+      return next;
+    });
+    const confirmedHomeRows = queue.flatMap((entry) => (entry.items || [])
+      .filter((item) => eligibleIds.has(String(item.clientItemId)) && (confirmedIds.has(String(item.clientItemId)) || !!appliedAfterSync[String(item.clientItemId)]))
+      .map((item) => ({ ...item, entity: entry.entity, type: entry.type })));
+    publishHomeSuccessReceipt(confirmedHomeRows);
     if (synced > 0 || failed > 0) {
       pushNotification({
         type: failed > 0 ? 'warning' : 'success',
@@ -950,6 +1000,7 @@ export async function syncPendingQueue() {
   }
 }
 const HISTORY_KEY = 'gudangai_history';
+const HOME_SUCCESS_RECEIPT_KEY = 'gudangai_home_success_receipt_v1';
 export function getTransactionHistory() { try { return JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]'); } catch { return []; } }
 export function getLocalHistory() {
   try {

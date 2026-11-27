@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { fetchRemoteTransactionHistory } from "./api.js";
+import { fetchRemoteTransactionHistory, claimPendingAutoSend, getPendingHomeSuccessReceipt, acknowledgeHomeSuccessReceipt } from "./api.js";
+
+vi.mock("./offlineStore", () => ({ persistQueueBackup: vi.fn(async () => {}), hydrateQueueBackup: vi.fn(async () => ({ queue: [], revision: 0 })) }));
 
 describe("fetchRemoteTransactionHistory", () => {
   beforeEach(() => {
@@ -55,3 +57,32 @@ describe("fetchRemoteTransactionHistory", () => {
     });
   });
 });
+describe("sync handoff and home success receipt", () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  it("claims an auto-send request once and leaves item data in the pending queue", async () => {
+    const queued = [{
+      id: "Q-1", type: "barangKeluar", entity: "CV", tanggal: "2026-11-27",
+      status: "PENDING_REVIEW", autoSendRequested: true,
+      items: [{ clientItemId: "CI-1", kode: "CV-0001", nama: "Barang", qty: 2 }],
+    }];
+    localStorage.setItem("gudangai_queue", JSON.stringify(queued));
+    const claimed = await claimPendingAutoSend(["CI-1"]);
+    expect(claimed).toEqual(["CI-1"]);
+    const stored = JSON.parse(localStorage.getItem("gudangai_queue"));
+    expect(stored[0]).toMatchObject({ autoSendRequested: false, status: "PENDING_REVIEW" });
+    expect(stored[0].items[0]).toMatchObject({ clientItemId: "CI-1", kode: "CV-0001", qty: 2 });
+    expect(await claimPendingAutoSend(["CI-1"])).toEqual([]);
+  });
+
+  it("exposes a durable home success receipt until acknowledged", () => {
+    const receipt = { id: "HOME-SUCCESS-1", count: 2, expiresAt: Date.now() + 60000 };
+    localStorage.setItem("gudangai_home_success_receipt_v1", JSON.stringify(receipt));
+    expect(getPendingHomeSuccessReceipt()).toEqual(receipt);
+    expect(acknowledgeHomeSuccessReceipt(receipt.id)).toBe(true);
+    expect(getPendingHomeSuccessReceipt()).toBeNull();
+  });
+});
+

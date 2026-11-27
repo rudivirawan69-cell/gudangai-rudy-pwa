@@ -156,7 +156,13 @@ assert.doesNotMatch(queueSource, /saveToHistory\s*\(|pushNotification\s*\(/,
   'SyncQueue UI must delegate final history and notifications to the API history service.');
 assert.match(poSource, /gudangai_po_draft_v1/);
 assert.match(poSource, /const poDate = localISODate\(\)/);
-assert.match(appSource, /function AppHeader\(\{ user, tab, onOpenSettings, online, hasUrl, status, syncing, sheetLabel, onRefresh \}\)/);
+assert.match(appSource, /function AppHeader\(\{ user, tab, onOpenSettings, onOpenNotifications, unreadNotifications, online, hasUrl, status, syncing, sheetLabel, onRefresh \}\)/);
+assert.match(appSource, /case 'notifications': page = <NotificationsPage \/>/);
+assert.match(appSource, /onOpenNotifications=\{\(\) => goTab\('notifications'\)\}/);
+assert.match(appSource, /unreadNotifications > 0/);
+assert.match(appSource, /function MoreSheet\(\{ open, onClose, onNavigate, activeId, pendingCount, unreadNotifications \}\)/);
+assert.match(appSource, /pendingCount=\{pendingCount\} unreadNotifications=\{unreadNotifications\}/);
+assert.doesNotMatch(inputPage, /input-notification-btn|openNotif|showNotif/, 'Input page must not own notification UI.');
 assert.match(appSource, /formatSpreadsheetTimestamp\(sheetLabel\)/);
 const sheetTimestampSource = readFileSync(new URL('../src/utils/sheetTimestamp.js', import.meta.url), 'utf8');
 assert.match(sheetTimestampSource, /Asia\/Jakarta/);

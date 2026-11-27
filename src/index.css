@@ -562,6 +562,9 @@ body{font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-ser
 }
 .more-sheet{
   width:min(100%,32rem);
+  max-height:82vh;
+  overflow-y:auto;
+  overscroll-behavior:contain;
   padding:10px 14px calc(14px + env(safe-area-inset-bottom,0px));
   background:#fff;border-radius:24px 24px 0 0;
   box-shadow:0 -14px 40px rgba(8,28,34,.22);

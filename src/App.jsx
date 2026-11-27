@@ -8,10 +8,10 @@ import { useSheetUpdate } from './hooks/useSheetUpdate';
 import { formatSpreadsheetTimestamp } from './utils/sheetTimestamp';
 import { useBootstrap } from './hooks/useBootstrap';
 import { startRealtimeSync, syncNow } from './data/realTimeSync';
-import { getPendingQueue, getDashboardData } from './data/api';
+import { getPendingQueue, getDashboardData, claimPendingAutoSend, syncPendingQueue, unreadNotificationCount } from './data/api';
 import {
   LayoutDashboard, Package, PackagePlus, Clock, Settings, ClipboardList,
-  AlertTriangle, Loader2, RefreshCw, BrainCircuit, MoreHorizontal, X,
+  AlertTriangle, Loader2, RefreshCw, BrainCircuit, MoreHorizontal, X, Bell,
 } from 'lucide-react';
 
 const DashboardPage = lazy(() => import('./pages/DashboardPage'));
@@ -22,6 +22,7 @@ const RiwayatPage = lazy(() => import('./pages/RiwayatPage'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 const SyncQueuePage = lazy(() => import('./pages/SyncQueuePage'));
 const AIAssistantPage = lazy(() => import('./pages/AIAssistantPage'));
+const NotificationsPage = lazy(() => import('./pages/NotificationsPage'));
 
 class ErrorBoundary extends Component {
   constructor(props) {
@@ -59,10 +60,17 @@ const MORE_TABS = [
   { id: 'ai', label: 'Agent Rubee AI', icon: BrainCircuit, chip: 'bg-orange-500/25' },
   { id: 'riwayat', label: 'Riwayat', icon: Clock, chip: 'bg-amber-500/25' },
   { id: 'sync', label: 'Sinkronisasi', icon: RefreshCw, chip: 'bg-teal-500/25' },
+  { id: 'notifications', label: 'Notifikasi', icon: Bell, chip: 'bg-cyan-500/25' },
   { id: 'settings', label: 'Pengaturan', icon: Settings, chip: 'bg-slate-500/25' },
 ];
 
 const MORE_IDS = new Set(MORE_TABS.map((t) => t.id));
+
+function publishAutoSyncStatus(detail) {
+  const snapshot = { ...detail, at: Date.now() };
+  try { localStorage.setItem('gudangai_auto_sync_status_v1', JSON.stringify(snapshot)); } catch (_) {}
+  window.dispatchEvent(new CustomEvent('gudangai-auto-sync-status', { detail: snapshot }));
+}
 
 function ConnBanner({ hasUrl, status, message }) {
   if (!hasUrl || status !== 'error') return null;
@@ -73,7 +81,7 @@ function ConnBanner({ hasUrl, status, message }) {
   );
 }
 
-function MoreSheet({ open, onClose, onNavigate, activeId, pendingCount }) {
+function MoreSheet({ open, onClose, onNavigate, activeId, pendingCount, unreadNotifications }) {
   if (!open) return null;
   return (
     <div className="more-sheet-backdrop" onClick={onClose}>
@@ -90,6 +98,7 @@ function MoreSheet({ open, onClose, onNavigate, activeId, pendingCount }) {
 
               </span>
               {t.id === 'sync' && pendingCount > 0 && <span className="more-row-badge">{pendingCount}</span>}
+              {t.id === 'notifications' && unreadNotifications > 0 && <span className="more-row-badge">{unreadNotifications > 99 ? '99+' : unreadNotifications}</span>}
             </button>
           );
         })}
@@ -98,7 +107,7 @@ function MoreSheet({ open, onClose, onNavigate, activeId, pendingCount }) {
   );
 }
 
-function AppHeader({ user, tab, onOpenSettings, online, hasUrl, status, syncing, sheetLabel, onRefresh }) {
+function AppHeader({ user, tab, onOpenSettings, onOpenNotifications, unreadNotifications, online, hasUrl, status, syncing, sheetLabel, onRefresh }) {
   const [refreshing, setRefreshing] = useState(false);
   const photo = (user?.photo && String(user.photo).length > 40) ? user.photo : DEFAULT_PROFILE_PHOTO;
   const connected = hasUrl && online && status !== 'offline' && status !== 'error';
@@ -133,6 +142,10 @@ function AppHeader({ user, tab, onOpenSettings, online, hasUrl, status, syncing,
                   : <><span className="sync-dot is-online" />Tersinkron{sheetLabel ? ` · ${formatSpreadsheetTimestamp(sheetLabel)}` : ''}</>}
             </p>
           </div>
+          <button type="button" onClick={onOpenNotifications} className="shrink-0 relative w-10 h-10 rounded-xl bg-[var(--bg-muted,#f8fafc)] border border-[var(--border,#e2e8f0)] flex items-center justify-center active:scale-95" aria-label={unreadNotifications > 0 ? `Notifikasi, ${unreadNotifications} belum dibaca` : 'Pusat notifikasi'} title="Pusat notifikasi">
+            <Bell className="w-4 h-4 text-[var(--text-muted,#475569)]" />
+            {unreadNotifications > 0 && <span className="absolute -top-1 -right-1 min-w-[17px] h-[17px] px-1 rounded-full bg-rose-500 text-white text-[9px] font-black leading-[17px] text-center">{unreadNotifications > 99 ? '99+' : unreadNotifications}</span>}
+          </button>
           <button type="button" onClick={handleRefresh} disabled={refreshing} className="shrink-0 w-10 h-10 rounded-xl bg-[var(--bg-muted,#f8fafc)] border border-[var(--border,#e2e8f0)] flex items-center justify-center active:scale-95 disabled:opacity-60" aria-label="Cek koneksi ke spreadsheet" title="Cek koneksi">
             <RefreshCw className={`w-3.5 h-3.5 text-[var(--text-muted,#475569)] ${refreshing ? 'animate-spin' : ''}`} />
           </button>
@@ -181,6 +194,19 @@ function AppShell() {
   const [installPrompt, setInstallPrompt] = useState(null);
   const [installDismissed, setInstallDismissed] = useState(() => localStorage.getItem('gudangai_install_dismissed') === '1');
   const [pendingCount, setPendingCount] = useState(() => getPendingQueue().length);
+  const [unreadNotifications, setUnreadNotifications] = useState(() => unreadNotificationCount());
+  const autoSyncRunningRef = useRef(false);
+
+  useEffect(() => {
+    const refreshUnreadNotifications = () => setUnreadNotifications(unreadNotificationCount());
+    refreshUnreadNotifications();
+    window.addEventListener('gudangai-notification', refreshUnreadNotifications);
+    window.addEventListener('storage', refreshUnreadNotifications);
+    return () => {
+      window.removeEventListener('gudangai-notification', refreshUnreadNotifications);
+      window.removeEventListener('storage', refreshUnreadNotifications);
+    };
+  }, []);
 
   useEffect(() => {
     if (installDismissed) return;
@@ -218,10 +244,40 @@ function AppShell() {
   useBootstrap();
 
   useEffect(() => {
-    const onQueue = () => setPendingCount(getPendingQueue().length);
+    const runAutoSync = async () => {
+      if (!user || autoSyncRunningRef.current || !navigator.onLine) return;
+      const pending = getPendingQueue();
+      const ids = pending.filter((entry) => entry.autoSendRequested)
+        .flatMap((entry) => (entry.items || []).map((item) => String(item.clientItemId || '')).filter(Boolean));
+      if (!ids.length) return;
+      autoSyncRunningRef.current = true;
+      publishAutoSyncStatus({ state: 'started', count: ids.length });
+      try {
+        const claimed = await claimPendingAutoSend(ids);
+        if (!claimed.length) {
+          publishAutoSyncStatus({ state: 'completed', result: { synced: 0, failed: 0, skipped: true, reason: 'handoff-already-claimed' } });
+          return;
+        }
+        const result = await syncPendingQueue({ clientItemIds: claimed });
+        if (Number(result?.synced || 0) > 0) window.dispatchEvent(new Event('gudangai-stock-refresh'));
+        publishAutoSyncStatus({ state: 'completed', result });
+      } catch (error) {
+        publishAutoSyncStatus({ state: 'failed', error: error?.message || 'Sinkronisasi otomatis gagal.' });
+      } finally {
+        autoSyncRunningRef.current = false;
+        setPendingCount(getPendingQueue().length);
+      }
+    };
+    const onQueue = () => { setPendingCount(getPendingQueue().length); void runAutoSync(); };
+    const onOnline = () => { void runAutoSync(); };
     window.addEventListener('gudangai-queue-changed', onQueue);
-    return () => window.removeEventListener('gudangai-queue-changed', onQueue);
-  }, []);
+    window.addEventListener('online', onOnline);
+    void runAutoSync();
+    return () => {
+      window.removeEventListener('gudangai-queue-changed', onQueue);
+      window.removeEventListener('online', onOnline);
+    };
+  }, [user]);
 
   useEffect(() => {
     const stop = startRealtimeSync({
@@ -280,6 +336,7 @@ function AppShell() {
     case 'ai': page = <AIAssistantPage onNavigate={goTab} />; break;
     case 'riwayat': page = <RiwayatPage onNavigate={goTab} />; break;
     case 'settings': page = <SettingsPage onNavigate={goTab} />; break;
+    case 'notifications': page = <NotificationsPage />; break;
     case 'sync': page = <SyncQueuePage onBack={() => goTab('settings')} onNavigate={goTab} />; break;
     default: page = (
       <DashboardPage
@@ -301,7 +358,7 @@ function AppShell() {
     <div className="app-shell min-h-screen text-[var(--text-main,#10232b)]">
       <div className="app-bg" aria-hidden="true" />
       <ConnBanner hasUrl={hasUrl} status={status} message={message} />
-      <AppHeader user={user} tab={tab} onOpenSettings={() => goTab('settings')} online={online} hasUrl={hasUrl} status={status} syncing={syncing} sheetLabel={sheetLabel} onRefresh={() => Promise.allSettled([checkHealth({ quiet: false }), getDashboardData()])} />
+      <AppHeader user={user} tab={tab} onOpenSettings={() => goTab('settings')} onOpenNotifications={() => goTab('notifications')} unreadNotifications={unreadNotifications} online={online} hasUrl={hasUrl} status={status} syncing={syncing} sheetLabel={sheetLabel} onRefresh={() => Promise.allSettled([checkHealth({ quiet: false }), getDashboardData()])} />
       <InstallBanner installPrompt={installPrompt} onInstall={installApp} onDismiss={dismissInstall} />
       <main data-ui-page={tab} className="page-content app-content w-full max-w-none mx-0 min-h-0 px-3 pb-6 pt-1">
         <div key={pageKey} className="animate-page-in">
@@ -338,7 +395,7 @@ function AppShell() {
           })}
         </div>
       </nav>
-      <MoreSheet open={moreOpen} onClose={() => setMoreOpen(false)} onNavigate={goTab} activeId={tab} pendingCount={pendingCount} />
+      <MoreSheet open={moreOpen} onClose={() => setMoreOpen(false)} onNavigate={goTab} activeId={tab} pendingCount={pendingCount} unreadNotifications={unreadNotifications} />
       <DeltaToast />
       <SpeedInsights />
     </div>

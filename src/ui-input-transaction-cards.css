@@ -22,16 +22,16 @@ html[data-theme="graphite_titanium"] {
 }
 .input-control-card {
   display: grid;
-  grid-template-columns: minmax(0, 1.4fr) minmax(112px, 1fr) 48px;
+  grid-template-columns: minmax(0, 1.4fr) minmax(112px, 1fr);
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   width: 100%;
   min-width: 0;
-  padding: 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--card-radius, 16px);
-  background: var(--bg-elevated);
-  box-shadow: var(--shadow-card, none);
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
   box-sizing: border-box;
 }
 .input-date-control { display: flex; min-width: 0; align-items: center; }
