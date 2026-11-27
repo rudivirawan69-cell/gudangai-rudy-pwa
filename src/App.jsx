@@ -8,7 +8,7 @@ import { useSheetUpdate } from './hooks/useSheetUpdate';
 import { formatSpreadsheetTimestamp } from './utils/sheetTimestamp';
 import { useBootstrap } from './hooks/useBootstrap';
 import { startRealtimeSync, syncNow } from './data/realTimeSync';
-import { getPendingQueue, getDashboardData } from './data/api';
+import { getPendingQueue, getDashboardData, claimPendingAutoSend, syncPendingQueue } from './data/api';
 import {
   LayoutDashboard, Package, PackagePlus, Clock, Settings, ClipboardList,
   AlertTriangle, Loader2, RefreshCw, BrainCircuit, MoreHorizontal, X,
@@ -181,6 +181,7 @@ function AppShell() {
   const [installPrompt, setInstallPrompt] = useState(null);
   const [installDismissed, setInstallDismissed] = useState(() => localStorage.getItem('gudangai_install_dismissed') === '1');
   const [pendingCount, setPendingCount] = useState(() => getPendingQueue().length);
+  const autoSyncRunningRef = useRef(false);
 
   useEffect(() => {
     if (installDismissed) return;
@@ -218,9 +219,35 @@ function AppShell() {
   useBootstrap();
 
   useEffect(() => {
-    const onQueue = () => setPendingCount(getPendingQueue().length);
+    const runAutoSync = async () => {
+      if (autoSyncRunningRef.current || !navigator.onLine) return;
+      const pending = getPendingQueue();
+      const ids = pending.filter((entry) => entry.autoSendRequested)
+        .flatMap((entry) => (entry.items || []).map((item) => String(item.clientItemId || '')).filter(Boolean));
+      if (!ids.length) return;
+      autoSyncRunningRef.current = true;
+      window.dispatchEvent(new CustomEvent('gudangai-auto-sync-status', { detail: { state: 'started', count: ids.length } }));
+      try {
+        const claimed = await claimPendingAutoSend(ids);
+        if (!claimed.length) return;
+        const result = await syncPendingQueue();
+        window.dispatchEvent(new CustomEvent('gudangai-auto-sync-status', { detail: { state: 'completed', result } }));
+      } catch (error) {
+        window.dispatchEvent(new CustomEvent('gudangai-auto-sync-status', { detail: { state: 'failed', error: error?.message || 'Sinkronisasi otomatis gagal.' } }));
+      } finally {
+        autoSyncRunningRef.current = false;
+        setPendingCount(getPendingQueue().length);
+      }
+    };
+    const onQueue = () => { setPendingCount(getPendingQueue().length); void runAutoSync(); };
+    const onOnline = () => { void runAutoSync(); };
     window.addEventListener('gudangai-queue-changed', onQueue);
-    return () => window.removeEventListener('gudangai-queue-changed', onQueue);
+    window.addEventListener('online', onOnline);
+    void runAutoSync();
+    return () => {
+      window.removeEventListener('gudangai-queue-changed', onQueue);
+      window.removeEventListener('online', onOnline);
+    };
   }, []);
 
   useEffect(() => {
