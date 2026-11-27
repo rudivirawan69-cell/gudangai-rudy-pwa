@@ -98,6 +98,7 @@ function MoreSheet({ open, onClose, onNavigate, activeId, pendingCount }) {
 
               </span>
               {t.id === 'sync' && pendingCount > 0 && <span className="more-row-badge">{pendingCount}</span>}
+              {t.id === 'notifications' && unreadNotifications > 0 && <span className="more-row-badge">{unreadNotifications > 99 ? '99+' : unreadNotifications}</span>}
             </button>
           );
         })}
