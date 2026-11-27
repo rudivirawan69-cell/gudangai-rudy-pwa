@@ -160,6 +160,7 @@ try {
     ['Stok', 'Stok barang'],
     ['Input', 'Draft transaksi dipulihkan'],
     ['Agent', 'Agent Rubee Intelligence'],
+    ['Notifikasi', 'Pusat Notifikasi'],
   ];
   // PO recommendation visual contract: run before unrelated Input-page assertions.
   const poScreenshotRoot = 'artifacts/visual-phase3';
@@ -296,6 +297,7 @@ try {
     assert.ok(navAudit.labels.every((node) => node.visible && node.fits), `Navigation labels are clipped: ${JSON.stringify(navAudit)}`);
     for (const [label, marker] of tabs) {
       if (label === 'Agent') await openMorePage('Agent Rubee AI', marker);
+      else if (label === 'Notifikasi') await openMorePage('Notifikasi', marker);
       else await page.locator('nav.nav-bar button').filter({ hasText: label }).first().click();
       const visibleMarker = page.getByText(marker, { exact: false }).last();
       try {
@@ -348,7 +350,7 @@ try {
             }),
           };
         });
-        assert.equal(inputAudit.controlHeights.length, 4, 'Input must show date, CV, PT, and notification controls.');
+        assert.equal(inputAudit.controlHeights.length, 3, 'Input must only show date and entity controls; notification entry is centralized in the header.');
         assert.ok(inputAudit.controlHeights.every((height) => height >= 44), `Input control touch target below 44px: ${JSON.stringify(inputAudit)}`);
         assert.equal(inputAudit.controlContainerBorder, '0px', `Input controls still share an outer card: ${JSON.stringify(inputAudit)}`);
         assert.ok(inputAudit.controlBounds.slice(1).every((box, index) => box.left - inputAudit.controlBounds[index].right >= 6), `Input date, CV, PT and notification controls are not separated: ${JSON.stringify(inputAudit)}`);
@@ -474,6 +476,7 @@ try {
     ['Riwayat', 'Riwayat Transaksi', 'riwayat'],
     ['Lainnya', 'Agent Rubee AI', 'more'],
     ['Agent', 'Agent Rubee Intelligence', 'agent'],
+    ['Notifikasi', 'Pusat Notifikasi', 'notifications'],
     ['Pengaturan', 'Mode Tampilan', 'settings'],
     ['Sinkronisasi', 'Sinkronisasi', 'sync'],
   ];
@@ -511,7 +514,7 @@ try {
         } else if (label === 'Lainnya') {
           await page.locator('nav.nav-bar button').filter({ hasText: 'Lainnya' }).first().click();
           await page.locator('.more-sheet').waitFor({ state: 'visible', timeout: 10000 });
-        } else if (['Riwayat', 'Pengaturan', 'Sinkronisasi', 'Agent'].includes(label)) {
+        } else if (['Riwayat', 'Pengaturan', 'Sinkronisasi', 'Agent', 'Notifikasi'].includes(label)) {
           await openMorePage(label === 'Agent' ? 'Agent Rubee AI' : label === 'Sinkronisasi' ? 'Sinkronisasi' : label, markerText);
         } else {
           await page.locator('nav.nav-bar button').filter({ hasText: label }).first().click();
