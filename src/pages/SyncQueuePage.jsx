@@ -144,21 +144,7 @@ export default function SyncQueuePage({ onBack, onNavigate }) {
     setResult({ synced: 1, failed: 0, message: 'Item terverifikasi dan dicatat di Riwayat.' });
   };
 
-  useEffect(() => {
-    const autoIds = rows.filter((row) => row.autoSendRequested && row.clientItemId).map((row) => row.clientItemId);
-    if (!autoIds.length || syncing || circuit.open || autoHandoffStartedRef.current) return;
-    autoHandoffStartedRef.current = true;
-    setResult({ synced: 0, failed: 0, message: 'Penyerahan dari Input diterima. Sinkronisasi otomatis dimulai…' });
-    void claimPendingAutoSend(autoIds).then((claimed) => {
-      if (claimed.length) void handleSendAll();
-      else autoHandoffStartedRef.current = false;
-    }).catch((err) => {
-      autoHandoffStartedRef.current = false;
-      setError(err?.message || 'Gagal mengambil alih antrean otomatis. Item tetap aman di antrean.');
-    });
-  }, [rows, syncing, circuit.open]);
-
-  const handleSendAll = async () => {
+  const handleSendAll = useCallback(async () => {
     if (total === 0 || syncing || circuit.open) return;
     setReviewing(false);
     setSyncing(true);
@@ -188,7 +174,22 @@ export default function SyncQueuePage({ onBack, onNavigate }) {
       setSyncing(false);
       setProgress(null);
     }
-  };
+  }, [total, syncing, circuit.open]);
+
+  useEffect(() => {
+    const autoIds = rows.filter((row) => row.autoSendRequested && row.clientItemId).map((row) => row.clientItemId);
+    if (!autoIds.length || syncing || circuit.open || autoHandoffStartedRef.current) return;
+    autoHandoffStartedRef.current = true;
+    setResult({ synced: 0, failed: 0, message: 'Penyerahan dari Input diterima. Sinkronisasi otomatis dimulai…' });
+    void claimPendingAutoSend(autoIds).then((claimed) => {
+      if (claimed.length) void handleSendAll();
+      else autoHandoffStartedRef.current = false;
+    }).catch((err) => {
+      autoHandoffStartedRef.current = false;
+      setError(err?.message || 'Gagal mengambil alih antrean otomatis. Item tetap aman di antrean.');
+    });
+  }, [rows, handleSendAll, syncing, circuit.open]);
+
 
   return (
     <div className="pb-4 animate-fade-in space-y-3.5">
