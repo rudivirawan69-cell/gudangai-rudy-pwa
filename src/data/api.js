@@ -756,11 +756,12 @@ export function acknowledgeHomeSuccessReceipt(receiptId) {
 }
 function publishHomeSuccessReceipt(rows) {
   if (!Array.isArray(rows) || !rows.length) return;
+  const previous = getPendingHomeSuccessReceipt();
   const receipt = {
     id: 'HOME-SUCCESS-' + Date.now(),
     confirmedAt: new Date().toISOString(),
-    count: rows.length,
-    items: rows.slice(0, 100).map((row) => ({ kode: row.kode, nama: row.nama, qty: Number(row.qty) || 0, entity: row.entity, type: row.type })),
+    count: Number(previous?.count || 0) + rows.length,
+    items: [...(previous?.items || []), ...rows].slice(-100).map((row) => ({ kode: row.kode, nama: row.nama, qty: Number(row.qty) || 0, entity: row.entity, type: row.type })),
     expiresAt: Date.now() + 24 * 60 * 60 * 1000,
   };
   try {
