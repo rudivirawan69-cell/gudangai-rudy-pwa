@@ -64,6 +64,12 @@ const MORE_TABS = [
 
 const MORE_IDS = new Set(MORE_TABS.map((t) => t.id));
 
+function publishAutoSyncStatus(detail) {
+  const snapshot = { ...detail, at: Date.now() };
+  try { localStorage.setItem('gudangai_auto_sync_status_v1', JSON.stringify(snapshot)); } catch (_) {}
+  window.dispatchEvent(new CustomEvent('gudangai-auto-sync-status', { detail: snapshot }));
+}
+
 function ConnBanner({ hasUrl, status, message }) {
   if (!hasUrl || status !== 'error') return null;
   return (
@@ -182,11 +188,6 @@ function AppShell() {
   const [installDismissed, setInstallDismissed] = useState(() => localStorage.getItem('gudangai_install_dismissed') === '1');
   const [pendingCount, setPendingCount] = useState(() => getPendingQueue().length);
   const autoSyncRunningRef = useRef(false);
-  const publishAutoSyncStatus = (detail) => {
-    const snapshot = { ...detail, at: Date.now() };
-    try { localStorage.setItem('gudangai_auto_sync_status_v1', JSON.stringify(snapshot)); } catch (_) {}
-    window.dispatchEvent(new CustomEvent('gudangai-auto-sync-status', { detail: snapshot }));
-  };
 
   useEffect(() => {
     if (installDismissed) return;
