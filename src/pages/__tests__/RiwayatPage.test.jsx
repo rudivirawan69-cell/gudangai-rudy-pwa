@@ -29,7 +29,20 @@ beforeEach(() => {
 
 afterEach(() => cleanup());
 
-describe('RiwayatPage remote history', () => {
+describe('RiwayatPage remote history', () => {\n  it('mempertahankan tiga filter utama dan menghilangkan chip ringkasan Semua/Masuk/Keluar/Rusak', async () => {
+    render(<RiwayatPage />);
+    expect(screen.getByRole('group', { name: 'Filter transaksi' })).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: 'Filter jenis transaksi' })).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: 'Filter entitas' })).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: 'Filter status pengiriman' })).toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: 'Filter transaksi', hidden: true })).toBeNull();
+    expect(screen.queryByText('Semua', { selector: '.rw-count-chip' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Masuk', { selector: '.rw-count-chip' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Keluar', { selector: '.rw-count-chip' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Rusak', { selector: '.rw-count-chip' })).not.toBeInTheDocument();
+  });
+
+
   it('menampilkan transaksi remote dan tetap menggabungkan riwayat lokal', async () => {
     render(<RiwayatPage />);
     await waitFor(() => expect(screen.getAllByText('Barang Server').length).toBeGreaterThan(0));
