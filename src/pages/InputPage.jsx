@@ -3,15 +3,14 @@ import {
   Search, Trash2, Send, Loader2,
   Plus, Minus,
   PackagePlus, PackageMinus, AlertOctagon, Mic, Upload,
-  QrCode, Bell, X, CheckCircle2, Clipboard, Image, Camera,
+  QrCode, X, CheckCircle2, Clipboard, Image, Camera,
 } from 'lucide-react';
 import {
   extractTextFromPdf, extractTextFromImage, parseLinesFromText, validateItems, applyStockAwareFallback,
   detectEntityFromText, scanBarcodeFromVideo,
 } from '../data/pdfValidate';
 import {
-  fetchStock, stagePendingTransaction,
-  getNotifications, markNotificationsRead, unreadNotificationCount, pushNotification,
+  fetchStock, stagePendingTransaction, pushNotification,
 } from '../data/api';
 import { searchMaster } from '../data/master';
 import { useBootstrapRevision } from '../hooks/useBootstrapRevision';
@@ -96,9 +95,6 @@ export default function InputPage({ onNavigate }) {
   const [submitting, setSubmitting] = useState(false);
   const [showPaste, setShowPaste] = useState(false);
   const [pasteText, setPasteText] = useState('');
-  const [showNotif, setShowNotif] = useState(false);
-  const [notifs, setNotifs] = useState([]);
-  const [unread, setUnread] = useState(0);
   const filePdfRef = useRef(null);
   const fileImgRef = useRef(null);
   const videoRef = useRef(null);
@@ -143,12 +139,6 @@ export default function InputPage({ onNavigate }) {
     };
   }, []);
 
-  useEffect(() => {
-    const refreshUnread = () => setUnread(unreadNotificationCount());
-    refreshUnread();
-    window.addEventListener('gudangai-notification', refreshUnread);
-    return () => window.removeEventListener('gudangai-notification', refreshUnread);
-  }, [showNotif]);
   useEffect(() => {
     let cancelled = false;
     const loadStockCatalog = async () => {
@@ -656,7 +646,6 @@ export default function InputPage({ onNavigate }) {
     }
   };
 
-  const openNotif = () => { setNotifs(getNotifications()); markNotificationsRead(); setUnread(0); setShowNotif((v) => !v); };
 
   return (
     <div className="input-page pb-28 space-y-4 overflow-x-hidden w-full max-w-full box-border">
@@ -687,11 +676,7 @@ export default function InputPage({ onNavigate }) {
               className={`input-entity-btn ${entity === e ? 'is-active' : ''}`}>{e}</button>
           ))}
         </div>
-        <button type="button" onClick={openNotif} aria-label={unread > 0 ? `Notifikasi, ${unread} belum dibaca` : 'Notifikasi'}
-          className="input-notification-btn">
-          <Bell className="w-5 h-5" aria-hidden="true" />
-          {unread > 0 && <span className="input-notification-badge" aria-hidden="true">{unread > 99 ? '99+' : unread}</span>}
-        </button>
+
       </section>
 
       <div className="input-tx-segmented grid grid-cols-3 gap-3.5 sm:gap-4" role="group" aria-label="Jenis transaksi">
@@ -888,20 +873,6 @@ export default function InputPage({ onNavigate }) {
         </div>
       )}
 
-      {showNotif && (
-        <div className="rounded-xl border border-slate-200 bg-white shadow-sm max-h-60 overflow-y-auto">
-          <div className="flex items-center justify-between px-3 py-2 border-b border-slate-100">
-            <span className="text-sm font-semibold">Notifikasi</span>
-            <button type="button" onClick={() => setShowNotif(false)}><X className="w-4 h-4" /></button>
-          </div>
-          {notifs.length === 0 ? <p className="p-3 text-sm text-slate-500">Kosong</p> : notifs.slice(0, 20).map((n) => (
-            <div key={n.id} className="px-3 py-2 border-b border-slate-50">
-              <p className="text-sm font-semibold text-slate-800">{n.title}</p>
-              <p className="text-xs text-slate-500">{n.body}</p>
-            </div>
-          ))}
-        </div>
-      )}
 
       {showPaste && (
         <div className="fixed inset-0 z-30 bg-black/40 flex items-end justify-center">
