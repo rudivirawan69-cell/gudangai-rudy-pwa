@@ -11,7 +11,7 @@ import {
 } from '../data/pdfValidate';
 import {
   fetchStock, stagePendingTransaction,
-  getNotifications, markNotificationsRead, unreadNotificationCount,
+  getNotifications, markNotificationsRead, unreadNotificationCount, pushNotification,
 } from '../data/api';
 import { searchMaster } from '../data/master';
 import { useBootstrapRevision } from '../hooks/useBootstrapRevision';
@@ -620,9 +620,18 @@ export default function InputPage({ onNavigate }) {
 
     submittingRef.current = true;
     setSubmitting(true);
+    let handoffAfterTimeout = false;
+    const handoffTimer = setTimeout(() => {
+      if (!submittingRef.current) return;
+      handoffAfterTimeout = true;
+      setSubmitting(false);
+      setStatusBanner('Input melepas proses setelah 5 detik. Sinkronisasi mengambil alih di latar belakang; antrean tetap dijaga.');
+      onNavigate?.('sync');
+    }, 5000);
     try {
       const queueType = txType === 'masuk' ? 'barangMasuk' : txType === 'rusak' ? 'barangRusak' : 'barangKeluar';
-      await stagePendingTransaction({ type: queueType, entity, tanggal, items, status: 'PENDING_REVIEW' });
+      await stagePendingTransaction({ type: queueType, entity, tanggal, items, status: 'PENDING_REVIEW', autoSend: true });
+      clearTimeout(handoffTimer);
       const remainingCart = cart.filter((item) => !(Number(item.qty) > 0));
       const nextDraft = {
         ...(draftSnapshotRef.current || {}), version: 1, savedAt: Date.now(), entity, txType, tanggal,
@@ -634,10 +643,13 @@ export default function InputPage({ onNavigate }) {
       setAccuracy(null);
       setPdfReview([]);
       setReviewSourceLabel('PDF');
-      setStatusBanner(`${items.length} item disiapkan. Belum ada data yang dikirim; periksa dan konfirmasi di Sinkronisasi.`);
-      onNavigate?.('sync');
+      setStatusBanner(`${items.length} item diserahkan ke Sinkronisasi. Proses pengiriman berjalan otomatis; hasil terverifikasi diteruskan ke Beranda.`);
+      if (!handoffAfterTimeout) onNavigate?.('sync');
     } catch (error) {
-      setStatusBanner(error?.message || 'Antrean tidak tersimpan. Item tetap ada di keranjang.');
+      clearTimeout(handoffTimer);
+      const message = error?.message || 'Antrean tidak tersimpan. Item tetap ada di keranjang.';
+      setStatusBanner(message);
+      if (handoffAfterTimeout) pushNotification({ type: 'warning', title: 'Input belum berhasil diserahkan', body: message + ' Draft input tetap dipertahankan.' });
     } finally {
       setSubmitting(false);
       submittingRef.current = false;
