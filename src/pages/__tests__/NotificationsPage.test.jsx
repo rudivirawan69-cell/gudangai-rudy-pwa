@@ -1,11 +1,11 @@
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import NotificationsPage from '../NotificationsPage';
 
 beforeEach(() => {
   localStorage.clear();
-  localStorage.setItem('gudangai_notifications', JSON.stringify([
+  localStorage.setItem('gudangai_notif', JSON.stringify([
     { id: 'N-1', title: 'Transaksi terkonfirmasi', body: '2 item berhasil disimpan.', at: Date.now(), read: false },
     { id: 'N-2', title: 'Koneksi pulih', body: 'Sinkronisasi aktif.', at: Date.now() - 1000, read: true },
   ]));
@@ -25,15 +25,15 @@ describe('NotificationsPage', () => {
     render(<NotificationsPage />);
     fireEvent.click(screen.getByRole('button', { name: /Baca semua/i }));
     expect(screen.getByText('2 notifikasi · 0 belum dibaca')).toBeInTheDocument();
-    expect(JSON.parse(localStorage.getItem('gudangai_notifications') || '[]').every((item) => item.read)).toBe(true);
+    expect(JSON.parse(localStorage.getItem('gudangai_notif') || '[]').every((item) => item.read)).toBe(true);
   });
 
   it('updates when a new notification event arrives', () => {
     render(<NotificationsPage />);
-    const list = JSON.parse(localStorage.getItem('gudangai_notifications') || '[]');
+    const list = JSON.parse(localStorage.getItem('gudangai_notif') || '[]');
     list.unshift({ id: 'N-3', title: 'Antrean menunggu verifikasi', body: 'Periksa sinkronisasi.', at: Date.now(), read: false });
-    localStorage.setItem('gudangai_notifications', JSON.stringify(list));
-    window.dispatchEvent(new CustomEvent('gudangai-notification', { detail: list[0] }));
+    localStorage.setItem('gudangai_notif', JSON.stringify(list));
+    act(() => window.dispatchEvent(new CustomEvent('gudangai-notification', { detail: list[0] })));
     expect(screen.getByText('3 notifikasi · 2 belum dibaca')).toBeInTheDocument();
     expect(screen.getByText('Antrean menunggu verifikasi')).toBeInTheDocument();
   });
