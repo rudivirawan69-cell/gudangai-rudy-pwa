@@ -65,14 +65,15 @@ const TransactionCard = memo(function TransactionCard({ tx, onCopy }) {
   );
 });
 
-const DayGroup = memo(function DayGroup({ h, open, onToggle, onCopy }) {
+const DayGroup = memo(function DayGroup({ h, open, onToggleDay, onCopy }) {
+  const handleToggle = useCallback(() => onToggleDay(h.key), [onToggleDay, h.key]);
   const first = h.items[0];
   const otherCount = Math.max(0, h.items.length - 1);
   const lineCount = h.items.reduce((sum, tx) => sum + tx.jumlahItem, 0);
   const totalQty = h.items.reduce((sum, tx) => sum + tx.totalQty, 0);
   return (
     <section className={"rw-day" + (open ? " is-open" : "")}>
-      <button type="button" className="rw-day-summary" onClick={onToggle} aria-expanded={open}>
+      <button type="button" className="rw-day-summary" onClick={handleToggle} aria-expanded={open}>
         <CalendarDays className="rw-day-summary-icon" aria-hidden="true" />
         <span className="rw-day-summary-main">
           <strong>{h.label}</strong>
@@ -399,7 +400,7 @@ export default function RiwayatPage({ onNavigate }) {
           key={h.key}
           h={h}
           open={openDayKey === h.key}
-          onToggle={() => toggleDay(h.key)}
+          onToggleDay={toggleDay}
           onCopy={salin}
         />
       ))}
