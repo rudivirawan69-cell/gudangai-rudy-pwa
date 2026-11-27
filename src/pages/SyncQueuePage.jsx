@@ -125,6 +125,22 @@ export default function SyncQueuePage({ onBack, onNavigate }) {
     window.addEventListener('gudangai-circuit', onCircuit);
     window.addEventListener('gudangai-submit-progress', onProgress);
     window.addEventListener('gudangai-auto-sync-status', onAutoSyncStatus);
+    try {
+      const saved = JSON.parse(localStorage.getItem('gudangai_auto_sync_status_v1') || 'null');
+      if (saved && Date.now() - Number(saved.at || 0) < 30 * 60 * 1000) {
+        if (saved.state === 'started') {
+          setSyncing(true);
+          setResult({ synced: 0, failed: 0, message: 'Sinkronisasi otomatis masih berjalan di latar belakang…' });
+        } else if (saved.state === 'completed') {
+          setResult({
+            synced: Number(saved.result?.synced || 0),
+            failed: Number(saved.result?.failed || 0),
+            skipped: !!saved.result?.skipped,
+            message: saved.result?.skipped ? 'Sinkronisasi tertunda. Item tetap aman di antrean.' : `${saved.result?.synced || 0} item terkonfirmasi. Hasil terbaru sudah diproses.`,
+          });
+        } else if (saved.state === 'failed') setError(saved.error || 'Sinkronisasi otomatis gagal.');
+      }
+    } catch (_) {}
     const id = setInterval(() => setCircuit(getWriteCircuitState()), 1000);
     return () => {
       window.removeEventListener('gudangai-queue-changed', onQueue);
