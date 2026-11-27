@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef, useCallback, memo } from 'react';
+import { useState, useMemo, useEffect, useRef, useCallback, memo, startTransition } from 'react';
 import { useBootstrapRevision } from '../hooks/useBootstrapRevision';
 import { useStock } from '../hooks/useStock';
 import {
@@ -89,6 +89,7 @@ function localISODate(date = new Date()) {
 }
 
 const PO_DRAFT_KEY = 'gudangai_po_draft_v1';
+const BATCH = 40;
 
 function persistPODraft(draft) {
   if (!draft) return;
@@ -206,6 +207,7 @@ export default function POPage({ onNavigate }) {
   const [initialDraft] = useState(loadPODraft);
   const [density, setDensity] = useState(() => localStorage.getItem('gudangai_density') || 'comfortable');
   const [hub, setHub] = useState(initialDraft.hub ?? null);
+  const [limit, setLimit] = useState(BATCH);
   const gapClass = density === 'compact' ? 'space-y-2' : 'space-y-2.5';
   const stockCV = useStock('CV');
   const stockPT = useStock('PT');
@@ -216,6 +218,8 @@ export default function POPage({ onNavigate }) {
     stockPT.refresh?.({ force: true });
   }, [bootstrapRevision]);
   const [tab, setTab] = useState(initialDraft.tab || 'cs');
+  useEffect(() => { setLimit(BATCH); }, [tab]);
+  const loadMore = useCallback(() => startTransition(() => setLimit((n) => n + BATCH)), []);
   const [csItems, setCsItems] = useState(initialDraft.csItems || []);
   const [prodItems, setProdItems] = useState(initialDraft.prodItems || []);
   const [csGenerated, setCsGenerated] = useState(!!initialDraft.csGenerated);
@@ -272,6 +276,7 @@ export default function POPage({ onNavigate }) {
     }));
   }, [activeList, generated]);
   const generate = useCallback(() => {
+    setLimit(BATCH);
     setPoSaved(false); setCopied(false); setPoSaveMessage('');
     const src = tab === 'cs' ? criticalCS : criticalProd;
     const mapped = src.map((i) => ({
@@ -391,7 +396,8 @@ export default function POPage({ onNavigate }) {
             <>
               {loading ? <div className={gapClass}>{[...Array(5)].map((_, i) => <div key={i} className="skeleton h-14 rounded-xl" />)}</div>
               : activeList.length === 0 ? <div className="text-center py-12"><CheckCircle className="w-12 h-12 text-emerald-400 mx-auto mb-3" /><p className="text-slate-600 text-sm">{tab === 'cs' ? 'Stok CS aman!' : 'Tidak ada item produksi kritis'}</p></div>
-              : <div className={`po-item-list ${gapClass} mb-2`}>{previewList.map((item) => <ItemCard key={`${item.entity}-${item.kode}`} item={item} editable={false} />)}</div>}
+              : <div className={`po-item-list ${gapClass} mb-2`}>{previewList.slice(0, limit).map((item) => <ItemCard key={`${item.entity}-${item.kode}`} item={item} editable={false} />)}</div>}
+              {previewList.length > limit && <button type="button" onClick={loadMore} className="w-full py-2.5 mb-2 rounded-xl border border-cyan-200 bg-cyan-50 text-cyan-800 text-xs font-bold">Tampilkan lebih banyak ({previewList.length - limit} tersisa)</button>}
               {activeList.length > 0 && !loading && (
                 <button type="button" onClick={generate} className="w-full py-3 rounded-xl bg-cyan-700 text-white text-sm font-extrabold shadow-md">Generate keranjang PO</button>
               )}
@@ -399,10 +405,11 @@ export default function POPage({ onNavigate }) {
           ) : (
             <>
               <div className={`po-item-list ${gapClass} mb-3`}>
-                {editList.map((item) => (
+                {editList.slice(0, limit).map((item) => (
                   <ItemCard key={`${item.entity}-${item.kode}`} item={item} editable onUpdate={onUpdateItem} onRemove={onRemoveItem} />
                 ))}
               </div>
+              {editList.length > limit && <button type="button" onClick={loadMore} className="w-full py-2.5 mb-2 rounded-xl border border-cyan-200 bg-cyan-50 text-cyan-800 text-xs font-bold">Tampilkan lebih banyak ({editList.length - limit} tersisa)</button>}
               {poSaveMessage && (
                 <p className={`text-[11px] text-center mb-2 font-semibold ${poSaveMessage.startsWith('Tersimpan') ? 'text-emerald-700' : 'text-amber-700'}`}>
                   {poSaveMessage}
