@@ -370,11 +370,11 @@ export default function POPage({ onNavigate }) {
             <button type="button" onClick={() => { const next = density === 'compact' ? 'comfortable' : 'compact'; setDensity(next); try { localStorage.setItem('gudangai_density', next); } catch (_) {} }} className="text-[10px] font-bold px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 shadow-sm">{density === 'compact' ? 'Grid padat' : 'Grid longgar'}</button>
           </div>
           <div className="grid grid-cols-2 gap-2 mb-3">
-            <button type="button" onClick={() => setTab('cs')} className={`po-generator-tab po-generator-tab-cs rounded-xl px-3 py-3 flex items-center gap-2 border-2 ${tab === 'cs' ? 'is-active' : ''}`}>
+            <button type="button" onClick={() => startTransition(() => setTab('cs'))} className={`po-generator-tab po-generator-tab-cs rounded-xl px-3 py-3 flex items-center gap-2 border-2 ${tab === 'cs' ? 'is-active' : ''}`}>
               <Snowflake className="po-generator-tab-icon w-5 h-5" aria-hidden="true" />
               <div className="text-left"><p className="po-generator-tab-title text-xs font-bold">PO CS</p></div>
             </button>
-            <button type="button" onClick={() => setTab('produksi')} className={`po-generator-tab po-generator-tab-produksi rounded-xl px-3 py-3 flex items-center gap-2 border-2 ${tab === 'produksi' ? 'is-active' : ''}`}>
+            <button type="button" onClick={() => startTransition(() => setTab('produksi'))} className={`po-generator-tab po-generator-tab-produksi rounded-xl px-3 py-3 flex items-center gap-2 border-2 ${tab === 'produksi' ? 'is-active' : ''}`}>
               <ChefHat className="po-generator-tab-icon w-5 h-5" aria-hidden="true" />
               <div className="text-left"><p className="po-generator-tab-title text-xs font-bold">PO Produksi</p></div>
             </button>
