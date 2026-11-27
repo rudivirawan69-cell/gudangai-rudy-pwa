@@ -30,6 +30,18 @@ beforeEach(() => {
 afterEach(() => cleanup());
 
 describe('RiwayatPage remote history', () => {
+  it('mempertahankan tiga filter utama dan menghilangkan chip ringkasan Semua/Masuk/Keluar/Rusak', async () => {
+    render(<RiwayatPage />);
+    expect(screen.getByRole('button', { name: 'Transaksi' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Entitas' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Status' })).toBeInTheDocument();
+    expect(screen.queryByText('Semua', { selector: '.rw-count-chip' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Masuk', { selector: '.rw-count-chip' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Keluar', { selector: '.rw-count-chip' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Rusak', { selector: '.rw-count-chip' })).not.toBeInTheDocument();
+  });
+
+
   it('menampilkan transaksi remote dan tetap menggabungkan riwayat lokal', async () => {
     render(<RiwayatPage />);
     await waitFor(() => expect(screen.getAllByText('Barang Server').length).toBeGreaterThan(0));

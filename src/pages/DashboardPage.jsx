@@ -655,6 +655,22 @@ function DashboardStatusSummary({ data, loading }) {
   );
 }
 
+function formatPOPeriod(startValue, endValue, weekKey) {
+  const format = (value) => {
+    const raw = String(value || '').trim();
+    if (!raw) return '';
+    const match = raw.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+    const date = match ? new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3])) : new Date(raw);
+    if (Number.isNaN(date.getTime())) return raw;
+    return new Intl.DateTimeFormat('id-ID', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'Asia/Jakarta' }).format(date);
+  };
+  const start = format(startValue);
+  const end = format(endValue);
+  if (start && end) return start === end ? start : `${start} – ${end}`;
+  if (start || end) return start || end;
+  return String(weekKey || 'Periode tidak tersedia');
+}
+
 function POQuickActions({ onNavigate, onSelect, activeView, currentCount = 0, previousCount = 0, confirmCount = 0 }) {
   const actions = [
     { id: 'generate', title: 'PO', Icon: FilePlus2, count: null, action: () => onNavigate?.('po') },
@@ -663,7 +679,7 @@ function POQuickActions({ onNavigate, onSelect, activeView, currentCount = 0, pr
     { id: 'confirm', title: 'Konfirmasi PO', Icon: ClipboardCheck, count: confirmCount, action: () => onSelect?.('confirm') },
   ];
   return (
-    <div className="po-shortcuts-grid grid grid-cols-2 sm:grid-cols-4 gap-2" aria-label="Akses cepat PO">
+    <div className="po-shortcuts-grid" aria-label="Akses cepat PO">
       {actions.map(({ id, title, Icon, count, action }) => {
         const selected = id !== 'generate' && activeView === id;
         return (
@@ -675,10 +691,7 @@ function POQuickActions({ onNavigate, onSelect, activeView, currentCount = 0, pr
             className={`po-shortcut dashboard-3d-card ${selected ? 'is-selected' : ''}`}
           >
             <span className={`po-shortcut-icon po-shortcut-icon-${id}`}><Icon className="h-5 w-5" aria-hidden="true" /></span>
-            <span className="po-shortcut-copy">
-              <span className="po-shortcut-title">{title}</span>
-
-            </span>
+            <span className="po-shortcut-copy"><span className="po-shortcut-title">{title}</span></span>
             <span className="po-shortcut-footer">
               {count !== null ? <span className="po-shortcut-count tabular-nums">{count} item</span> : null}
               <ArrowUpRight className="h-4 w-4 shrink-0" aria-hidden="true" />
@@ -858,6 +871,11 @@ function StatusPOCard({ data, loading, error, onRefresh, onConfirm, confirmingId
           <p className="text-[10px] text-slate-500 tabular-nums">{menunggu} item</p>
         </div>
       </div>
+
+      <p className="po-period-caption" aria-label="Masa berlaku periode PO">
+        <CalendarClock className="h-4 w-4 shrink-0" aria-hidden="true" />
+        <span><strong>Periode berlaku:</strong> {formatPOPeriod(data.poStartDate, data.poEndDate, data.weekKey)}</span>
+      </p>
 
       <POQuickActions
         onNavigate={onNavigate}
