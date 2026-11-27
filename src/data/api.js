@@ -726,15 +726,16 @@ export async function stagePendingTransaction({ type, entity, tanggal, items, st
 /** Atomically consumes the one-shot auto-send request before processing it. */
 export async function claimPendingAutoSend(clientItemIds = []) {
   const wanted = new Set((clientItemIds || []).map(String).filter(Boolean));
-  const queue = getPendingQueue();
   const claimed = [];
-  const next = queue.map((entry) => {
-    const ids = (entry.items || []).map((item) => String(item.clientItemId || '')).filter((id) => wanted.has(id));
-    if (!entry.autoSendRequested || !ids.length) return entry;
-    claimed.push(...ids);
-    return { ...entry, autoSendRequested: false, autoSendClaimedAt: new Date().toISOString(), status: 'PENDING_REVIEW' };
+  await mutateQueueLocal((queue) => {
+    const next = queue.map((entry) => {
+      const ids = (entry.items || []).map((item) => String(item.clientItemId || '')).filter((id) => wanted.has(id));
+      if (!entry.autoSendRequested || !ids.length) return entry;
+      claimed.push(...ids);
+      return { ...entry, autoSendRequested: false, autoSendClaimedAt: new Date().toISOString(), status: 'PENDING_REVIEW' };
+    });
+    return claimed.length ? next : queue;
   });
-  if (claimed.length) await commitQueueLocal(next);
   return claimed;
 }
 
