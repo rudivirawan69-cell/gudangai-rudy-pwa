@@ -405,11 +405,9 @@ async function enqueue(type, entity, items, meta = {}) {
     nama: normalizeTransactionText(item.nama),
     keterangan: normalizeTransactionText(item.keterangan),
   }));
-  let freshIds = [];
   await mutateQueueLocal((queue) => {
     const existingIds = new Set(queue.flatMap((entry) => (entry.items || []).map((item) => String(item.clientItemId || ''))));
     const freshItems = normalized.filter((item) => !existingIds.has(String(item.clientItemId)));
-    freshIds = freshItems.map((item) => String(item.clientItemId));
     if (!freshItems.length) return queue;
     const transactionId = String(meta.transactionId || '').trim() || 'TX-RUDY-' + (crypto.randomUUID ? crypto.randomUUID() : Date.now());
     queue.push({
