@@ -31,11 +31,9 @@ afterEach(() => cleanup());
 
 describe('RiwayatPage remote history', () => {\n  it('mempertahankan tiga filter utama dan menghilangkan chip ringkasan Semua/Masuk/Keluar/Rusak', async () => {
     render(<RiwayatPage />);
-    expect(screen.getByRole('group', { name: 'Filter transaksi' })).toBeInTheDocument();
-    expect(screen.getByRole('group', { name: 'Filter jenis transaksi' })).toBeInTheDocument();
-    expect(screen.getByRole('group', { name: 'Filter entitas' })).toBeInTheDocument();
-    expect(screen.getByRole('group', { name: 'Filter status pengiriman' })).toBeInTheDocument();
-    expect(screen.queryByRole('group', { name: 'Filter transaksi', hidden: true })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Transaksi' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Entitas' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Status' })).toBeInTheDocument();
     expect(screen.queryByText('Semua', { selector: '.rw-count-chip' })).not.toBeInTheDocument();
     expect(screen.queryByText('Masuk', { selector: '.rw-count-chip' })).not.toBeInTheDocument();
     expect(screen.queryByText('Keluar', { selector: '.rw-count-chip' })).not.toBeInTheDocument();
