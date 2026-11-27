@@ -170,8 +170,8 @@ html[data-theme] [data-ui-page="riwayat"] .rw-filter-group .rw-chips {
   flex-wrap:wrap !important;
   gap:6px !important;
   padding:8px !important;
-  border-top:1px solid var(--ux-line) !important;
-  background:var(--ux-panel-2) !important;
+  border-top:0 !important;
+  background:transparent !important;
 }
 html[data-theme] [data-ui-page="riwayat"] .rw-filter-group .rw-chips button {
   min-height:36px !important;

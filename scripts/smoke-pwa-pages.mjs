@@ -256,12 +256,28 @@ try {
       dimensions.document <= dimensions.viewport + 2 && dimensions.body <= dimensions.viewport + 2,
       `Horizontal overflow on ${label} at ${viewport.width}px: ${JSON.stringify(dimensions)}`
     );
-    for (const edge of ['header', 'nav', 'navInner']) {
+    // Header and navigation shell must be truly edge-to-edge. The inner
+    // navigation row may retain the intentional 4px horizontal safety inset
+    // used by the app shell; verify that inset is small and symmetrical rather
+    // than incorrectly requiring the inner row itself to touch the viewport.
+    for (const edge of ['header', 'nav']) {
       assert.ok(
         dimensions[edge] && dimensions[edge].left <= 1 && dimensions[edge].right >= dimensions.viewport - 1,
         `Full-screen ${edge} is not edge-to-edge on ${label} at ${viewport.width}px: ${JSON.stringify(dimensions)}`
       );
     }
+    assert.ok(dimensions.navInner && dimensions.navInner.left >= dimensions.nav.left - 1 &&
+      dimensions.navInner.right <= dimensions.nav.right + 1,
+    `Navigation inner row must remain inside the full-width navigation shell on ${label} at ${viewport.width}px: ${JSON.stringify(dimensions)}`);
+    const navInsetLeft = dimensions.navInner.left - dimensions.nav.left;
+    const navInsetRight = dimensions.nav.right - dimensions.navInner.right;
+    const centered = Math.abs(navInsetLeft - navInsetRight) <= 1.5;
+    const withinDesktopMaxWidth = dimensions.navInner.width <= 760.5;
+    const mobileSafetyInset = viewport.width > 768 ||
+      (navInsetLeft >= -1 && navInsetRight >= -1 &&
+       navInsetLeft <= 5.5 && navInsetRight <= 5.5);
+    assert.ok(centered && withinDesktopMaxWidth && mobileSafetyInset,
+    `Navigation inner row must be centered, respect its 760px max-width, and use a small mobile safety inset on ${label} at ${viewport.width}px: ${JSON.stringify({ ...dimensions, navInsetLeft, navInsetRight, centered, withinDesktopMaxWidth, mobileSafetyInset })}`);
   };
 
   // Every primary page is opened at every target viewport.
