@@ -29,7 +29,8 @@ beforeEach(() => {
 
 afterEach(() => cleanup());
 
-describe('RiwayatPage remote history', () => {\n  it('mempertahankan tiga filter utama dan menghilangkan chip ringkasan Semua/Masuk/Keluar/Rusak', async () => {
+describe('RiwayatPage remote history', () => {
+  it('mempertahankan tiga filter utama dan menghilangkan chip ringkasan Semua/Masuk/Keluar/Rusak', async () => {
     render(<RiwayatPage />);
     expect(screen.getByRole('button', { name: 'Transaksi' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Entitas' })).toBeInTheDocument();
