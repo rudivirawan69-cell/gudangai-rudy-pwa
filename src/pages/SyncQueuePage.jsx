@@ -183,6 +183,8 @@ export default function SyncQueuePage({ onBack, onNavigate }) {
 
   const total = rows.length;
   const visibleRows = useMemo(() => rows.slice(0, limit), [rows, limit]);
+  const summaryRows = useMemo(() => summarizeRows(rows), [rows]);
+  const visibleSummaryRows = useMemo(() => summaryRows.slice(0, limit), [summaryRows, limit]);
   const loadMore = useCallback(() => startTransition(() => setLimit((n) => n + BATCH)), []);
   useEffect(() => { setLimit(BATCH); }, [total]);
 
@@ -341,7 +343,7 @@ export default function SyncQueuePage({ onBack, onNavigate }) {
                   <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-[11px] text-amber-900">
                     <b>Belum ada data yang dikirim.</b> Server menerima data setelah tombol konfirmasi ditekan.
                   </div>
-                  {summarizeRows(rows).map((row) => (
+                  {visibleSummaryRows.map((row) => (
                     <div key={row.key} className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
                       <div className="flex items-start gap-2.5">
                         <div className="flex-1 min-w-0">
@@ -358,6 +360,7 @@ export default function SyncQueuePage({ onBack, onNavigate }) {
                       </div>
                     </div>
                   ))}
+                  {summaryRows.length > limit && <button type="button" onClick={loadMore} className="w-full py-2.5 rounded-xl border border-cyan-200 bg-cyan-50 text-cyan-800 text-xs font-bold">Tampilkan ringkasan lainnya ({summaryRows.length - limit} tersisa)</button>}
                 </div>
                 <div className="p-3 border-t border-slate-200 space-y-2 bg-white">
                   <button type="button" onClick={handleSendAll} disabled={syncing || total === 0 || circuit.open}
