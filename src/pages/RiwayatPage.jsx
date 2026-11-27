@@ -357,12 +357,6 @@ export default function RiwayatPage({ onNavigate }) {
         </section>
       </div>
 
-      <div className="rw-count-chips" role="group" aria-label="Filter transaksi">
-        <button type="button" className={"rw-count-chip" + (tipe === "semua" ? " is-selected" : "")} aria-pressed={tipe === "semua"} onClick={() => setTipeSafe("semua")}><CircleCheck aria-hidden="true" /> Semua <b>{fmtCount(cntStatus.semua)}</b></button>
-        <button type="button" className={"rw-count-chip rw-count-masuk" + (tipe === "masuk" ? " is-selected" : "")} aria-pressed={tipe === "masuk"} onClick={() => setTipeSafe("masuk")}><ArrowDownToLine aria-hidden="true" /> Masuk <b>{fmtCount(cntTipe.masuk || 0)}</b></button>
-        <button type="button" className={"rw-count-chip rw-count-keluar" + (tipe === "keluar" ? " is-selected" : "")} aria-pressed={tipe === "keluar"} onClick={() => setTipeSafe("keluar")}><ArrowUpFromLine aria-hidden="true" /> Keluar <b>{fmtCount(cntTipe.keluar || 0)}</b></button>
-        <button type="button" className={"rw-count-chip rw-count-rusak" + (tipe === "rusak" ? " is-selected" : "")} aria-pressed={tipe === "rusak"} onClick={() => setTipeSafe("rusak")}><AlertTriangle aria-hidden="true" /> Rusak <b>{fmtCount(cntTipe.rusak || 0)}</b></button>
-      </div>
       <div className="rw-search">
         <input
           type="search"
