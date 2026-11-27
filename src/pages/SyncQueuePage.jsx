@@ -311,7 +311,7 @@ export default function SyncQueuePage({ onBack, onNavigate }) {
             </div>
 
             {visibleRows.map((row) => <QueueItem key={row.key} row={row} onVerify={handleMarkSuccess} onRemove={handleRemove} syncing={syncing} />)}
-            {rows.length > limit && <button type="button" onClick={loadMore} className="w-full py-2.5 rounded-xl border border-cyan-200 bg-cyan-50 text-cyan-800 text-xs font-bold">Tampilkan lebih banyak ({rows.length - limit} tersisa)</button>})}
+            {rows.length > limit && <button type="button" onClick={loadMore} className="w-full py-2.5 rounded-xl border border-cyan-200 bg-cyan-50 text-cyan-800 text-xs font-bold">Tampilkan lebih banyak ({rows.length - limit} tersisa)</button>}
           </div>
 
           <div className="sticky bottom-0 pt-2 pb-1">
