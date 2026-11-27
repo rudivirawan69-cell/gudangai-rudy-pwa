@@ -1,6 +1,6 @@
 import React, { memo, useMemo, useState, useEffect, useCallback, useDeferredValue, useRef, startTransition } from "react";
 import "./riwayat.css";
-import { ArrowDownToLine, ArrowUpFromLine, AlertTriangle, ArrowLeftRight, Building2, CircleCheck, RefreshCw, CalendarDays, ChevronDown } from "lucide-react";
+import { ArrowLeftRight, Building2, CircleCheck, RefreshCw, CalendarDays, ChevronDown } from "lucide-react";
 import { getLocalHistory, getPendingQueue, fetchRemoteTransactionHistory } from "../data/api";
 import {
   gabung, filterTx, kelompokkan, keCSV, ringkasanTeks, ringkasKatalog,
