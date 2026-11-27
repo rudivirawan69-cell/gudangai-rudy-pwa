@@ -256,12 +256,25 @@ try {
       dimensions.document <= dimensions.viewport + 2 && dimensions.body <= dimensions.viewport + 2,
       `Horizontal overflow on ${label} at ${viewport.width}px: ${JSON.stringify(dimensions)}`
     );
-    for (const edge of ['header', 'nav', 'navInner']) {
+    // Header and navigation shell must be truly edge-to-edge. The inner
+    // navigation row may retain the intentional 4px horizontal safety inset
+    // used by the app shell; verify that inset is small and symmetrical rather
+    // than incorrectly requiring the inner row itself to touch the viewport.
+    for (const edge of ['header', 'nav']) {
       assert.ok(
         dimensions[edge] && dimensions[edge].left <= 1 && dimensions[edge].right >= dimensions.viewport - 1,
         `Full-screen ${edge} is not edge-to-edge on ${label} at ${viewport.width}px: ${JSON.stringify(dimensions)}`
       );
     }
+    assert.ok(dimensions.navInner && dimensions.navInner.left >= dimensions.nav.left - 1 &&
+      dimensions.navInner.right <= dimensions.nav.right + 1,
+    `Navigation inner row must remain inside the full-width navigation shell on ${label} at ${viewport.width}px: ${JSON.stringify(dimensions)}`);
+    const navInsetLeft = dimensions.navInner.left - dimensions.nav.left;
+    const navInsetRight = dimensions.nav.right - dimensions.navInner.right;
+    assert.ok(navInsetLeft >= -1 && navInsetRight >= -1 &&
+      navInsetLeft <= 5.5 && navInsetRight <= 5.5 &&
+      Math.abs(navInsetLeft - navInsetRight) <= 1.5,
+    `Navigation inner row must keep a balanced safety inset of at most 5px on ${label} at ${viewport.width}px: ${JSON.stringify({ ...dimensions, navInsetLeft, navInsetRight })}`);
   };
 
   // Every primary page is opened at every target viewport.
