@@ -849,7 +849,7 @@ export default function InputPage({ onNavigate }) {
             <button type="button" onClick={handleSubmit} disabled={submitting || !cart.some((item) => Number(item.qty) > 0)}
               className="w-full py-3 rounded-2xl bg-cyan-600 text-white font-bold shadow-lg flex items-center justify-center gap-2 disabled:opacity-50">
               {submitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
-              {submitting ? 'Menyiapkan antrean…' : `Antrekan ${cart.filter((item) => Number(item.qty) > 0).length} item`}
+              {submitting ? 'Menyerahkan ke Sinkronisasi…' : `Kirim ${cart.filter((item) => Number(item.qty) > 0).length} item`}
             </button>
           </div>
         </div>
