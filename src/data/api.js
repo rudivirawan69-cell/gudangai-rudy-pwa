@@ -777,7 +777,7 @@ export async function updatePendingItemStates(ids, status, details = {}) {
   const wanted = new Set((ids || []).map(String));
   if (!wanted.size) return { success: true, updated: 0 };
   const now = new Date().toISOString();
-  const queue = getPendingQueue().map((entry) => {
+  await mutateQueueLocal((queue) => queue.map((entry) => {
     const hasTarget = (entry.items || []).some((item) => wanted.has(String(item.clientItemId)));
     return {
       ...entry,
@@ -786,8 +786,7 @@ export async function updatePendingItemStates(ids, status, details = {}) {
         ? { ...item, queueStatus: status, queueUpdatedAt: now, ...details }
         : item),
     };
-  });
-  await commitQueueLocal(queue);
+  }));
   return { success: true, updated: wanted.size };
 }
 function queueItemIdentity(item) {
@@ -875,9 +874,13 @@ export async function resolvePendingItem(item) {
 
 export async function removePendingByClientIds(ids) {
   const set = new Set((ids || []).map(String));
-  const q = getPendingQueue().map((e) => ({ ...e, items: (e.items || []).filter((it) => !set.has(String(it.clientItemId))) })).filter((e) => e.items.length);
-  await commitQueueLocal(q);
-  return { success: true, remaining: q.reduce((n, entry) => n + entry.items.length, 0) };
+  let remaining = 0;
+  await mutateQueueLocal((queue) => {
+    const next = queue.map((entry) => ({ ...entry, items: (entry.items || []).filter((item) => !set.has(String(item.clientItemId))) })).filter((entry) => entry.items.length);
+    remaining = next.reduce((n, entry) => n + entry.items.length, 0);
+    return next;
+  });
+  return { success: true, remaining };
 }
 export async function clearPendingQueue() { await commitQueueLocal([]); return { success: true }; }
 export async function clearSyncedQueue() { await commitQueueLocal([]); return { success: true }; }
