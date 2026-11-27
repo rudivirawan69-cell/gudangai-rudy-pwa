@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Bell, CheckCheck, Circle, Clock3, Inbox } from 'lucide-react';
 import { getNotifications, markNotificationsRead, unreadNotificationCount } from '../data/api';
 
