@@ -1062,23 +1062,6 @@ export default function DashboardPage({ onNavigate, operationalStatus }) {
   const historySignatureRef = useRef('');
   const [history, setHistory] = useState(() => getLocalHistory());
   const [homeSuccessReceipt, setHomeSuccessReceipt] = useState(null);
-  const acceptHomeSuccessReceipt = useCallback((receipt) => {
-    if (!receipt?.id || !Number(receipt.count)) return;
-    setHomeSuccessReceipt(receipt);
-    void loadPO({ silent: true });
-    void loadDashboardData();
-    void loadMovementHistory();
-    window.dispatchEvent(new CustomEvent('gudangai-stock-refresh', { detail: { source: 'home-success-receipt', receiptId: receipt.id } }));
-  }, [loadPO, loadDashboardData, loadMovementHistory]);
-
-  useEffect(() => {
-    const onHomeSuccess = (event) => acceptHomeSuccessReceipt(event?.detail);
-    window.addEventListener('gudangai-home-success', onHomeSuccess);
-    const pendingReceipt = getPendingHomeSuccessReceipt();
-    if (pendingReceipt) acceptHomeSuccessReceipt(pendingReceipt);
-    return () => window.removeEventListener('gudangai-home-success', onHomeSuccess);
-  }, [acceptHomeSuccessReceipt]);
-
   const loadMovementHistory = useCallback(async () => {
     const local = getLocalHistory();
     setHistory(local);
@@ -1192,6 +1175,23 @@ export default function DashboardPage({ onNavigate, operationalStatus }) {
       setDashboardLoading(false);
     }
   }, [applyDashboardSnapshot]);
+
+  const acceptHomeSuccessReceipt = useCallback((receipt) => {
+    if (!receipt?.id || !Number(receipt.count)) return;
+    setHomeSuccessReceipt(receipt);
+    void loadPO({ silent: true });
+    void loadDashboardData();
+    void loadMovementHistory();
+    window.dispatchEvent(new CustomEvent('gudangai-stock-refresh', { detail: { source: 'home-success-receipt', receiptId: receipt.id } }));
+  }, [loadPO, loadDashboardData, loadMovementHistory]);
+
+  useEffect(() => {
+    const onHomeSuccess = (event) => acceptHomeSuccessReceipt(event?.detail);
+    window.addEventListener('gudangai-home-success', onHomeSuccess);
+    const pendingReceipt = getPendingHomeSuccessReceipt();
+    if (pendingReceipt) acceptHomeSuccessReceipt(pendingReceipt);
+    return () => window.removeEventListener('gudangai-home-success', onHomeSuccess);
+  }, [acceptHomeSuccessReceipt]);
 
   useEffect(() => {
     const onDashboardLiveUpdated = (event) => applyDashboardSnapshot(event?.detail);
