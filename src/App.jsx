@@ -220,7 +220,7 @@ function AppShell() {
 
   useEffect(() => {
     const runAutoSync = async () => {
-      if (autoSyncRunningRef.current || !navigator.onLine) return;
+      if (!user || autoSyncRunningRef.current || !navigator.onLine) return;
       const pending = getPendingQueue();
       const ids = pending.filter((entry) => entry.autoSendRequested)
         .flatMap((entry) => (entry.items || []).map((item) => String(item.clientItemId || '')).filter(Boolean));
@@ -233,7 +233,7 @@ function AppShell() {
           window.dispatchEvent(new CustomEvent('gudangai-auto-sync-status', { detail: { state: 'completed', result: { synced: 0, failed: 0, skipped: true, reason: 'handoff-already-claimed' } } }));
           return;
         }
-        const result = await syncPendingQueue();
+        const result = await syncPendingQueue({ clientItemIds: claimed });
         if (Number(result?.synced || 0) > 0) window.dispatchEvent(new Event('gudangai-stock-refresh'));
         window.dispatchEvent(new CustomEvent('gudangai-auto-sync-status', { detail: { state: 'completed', result } }));
       } catch (error) {
@@ -252,7 +252,7 @@ function AppShell() {
       window.removeEventListener('gudangai-queue-changed', onQueue);
       window.removeEventListener('online', onOnline);
     };
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     const stop = startRealtimeSync({
