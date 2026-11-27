@@ -154,6 +154,10 @@ try {
   await page.goto(HOST, { waitUntil: 'domcontentloaded' });
   await page.locator('nav.nav-bar').waitFor({ state: 'visible', timeout: 15000 });
   assert.equal((await page.locator('.app-header-card h1').innerText()).trim(), 'GUDANG69_PRODIS', 'Sticky header brand must match the approved product name.');
+  await page.getByRole('button', { name: 'Pusat notifikasi' }).click();
+  await page.getByText('Pusat Notifikasi', { exact: false }).first().waitFor({ state: 'visible', timeout: 10000 });
+  await page.locator('nav.nav-bar button').filter({ hasText: 'Beranda' }).first().click();
+  await page.getByText('Status per Divisi', { exact: false }).first().waitFor({ state: 'visible', timeout: 10000 });
 
   const tabs = [
     ['Beranda', 'Status per Divisi'],
