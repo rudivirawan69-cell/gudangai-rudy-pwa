@@ -702,9 +702,6 @@ export async function stagePendingTransaction({ type, entity, tanggal, items, st
     nama: normalizeTransactionText(item.nama), keterangan: normalizeTransactionText(item.keterangan),
   }));
   if (!validItems.length || validItems.some((item) => !item.clientItemId || !item.kode || !(Number(item.qty) > 0))) throw new Error('Transaksi tidak valid; antrean tidak dibuat.');
-  const queue = getPendingQueue();
-  const existing = new Set(queue.flatMap((entry) => (entry.items || []).map((item) => String(item.clientItemId || ''))));
-  if (validItems.some((item) => existing.has(String(item.clientItemId)))) throw new Error('Ada ID item yang sudah berada di antrean. Periksa Sinkronisasi sebelum mengirim ulang.');
   const now = new Date().toISOString();
   const queueStatus = status === 'PROCESSING' ? 'PROCESSING' : 'PENDING_REVIEW';
   const entry = {
@@ -714,8 +711,12 @@ export async function stagePendingTransaction({ type, entity, tanggal, items, st
     tanggal: normalizeTanggal(tanggal), createdAt: now, updatedAt: now,
     ...(queueStatus === 'PROCESSING' ? { processingStartedAt: now } : {}),
   };
-  queue.push(entry);
-  await commitQueueLocal(queue);
+  await mutateQueueLocal((queue) => {
+    const existing = new Set(queue.flatMap((queued) => (queued.items || []).map((item) => String(item.clientItemId || ''))));
+    if (validItems.some((item) => existing.has(String(item.clientItemId)))) throw new Error('Ada ID item yang sudah berada di antrean. Periksa Sinkronisasi sebelum mengirim ulang.');
+    queue.push(entry);
+    return queue;
+  });
   if (queueStatus === 'PROCESSING') validItems.forEach((item) => _activeSendIds.add(String(item.clientItemId)));
   const stagedIds = new Set(getPendingQueue().flatMap((entry) => (entry.items || []).map((item) => String(item.clientItemId || ''))));
   if (validItems.some((item) => !stagedIds.has(String(item.clientItemId)))) throw new Error('Verifikasi antrean gagal. Permintaan ke server dibatalkan.');
