@@ -160,7 +160,7 @@ assert.match(appSource, /function AppHeader\(\{ user, tab, onOpenSettings, onOpe
 assert.match(appSource, /case 'notifications': page = <NotificationsPage \/>/);
 assert.match(appSource, /onOpenNotifications=\{\(\) => goTab\('notifications'\)\}/);
 assert.match(appSource, /unreadNotifications > 0/);
-assert.doesNotMatch(inputSource, /input-notification-btn|openNotif|showNotif/, 'Input page must not own notification UI.');
+assert.doesNotMatch(inputPage, /input-notification-btn|openNotif|showNotif/, 'Input page must not own notification UI.');
 assert.match(appSource, /formatSpreadsheetTimestamp\(sheetLabel\)/);
 const sheetTimestampSource = readFileSync(new URL('../src/utils/sheetTimestamp.js', import.meta.url), 'utf8');
 assert.match(sheetTimestampSource, /Asia\/Jakarta/);
