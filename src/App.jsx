@@ -81,7 +81,7 @@ function ConnBanner({ hasUrl, status, message }) {
   );
 }
 
-function MoreSheet({ open, onClose, onNavigate, activeId, pendingCount }) {
+function MoreSheet({ open, onClose, onNavigate, activeId, pendingCount, unreadNotifications }) {
   if (!open) return null;
   return (
     <div className="more-sheet-backdrop" onClick={onClose}>
@@ -395,7 +395,7 @@ function AppShell() {
           })}
         </div>
       </nav>
-      <MoreSheet open={moreOpen} onClose={() => setMoreOpen(false)} onNavigate={goTab} activeId={tab} pendingCount={pendingCount} />
+      <MoreSheet open={moreOpen} onClose={() => setMoreOpen(false)} onNavigate={goTab} activeId={tab} pendingCount={pendingCount} unreadNotifications={unreadNotifications} />
       <DeltaToast />
       <SpeedInsights />
     </div>
