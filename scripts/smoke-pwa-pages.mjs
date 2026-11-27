@@ -225,10 +225,16 @@ try {
     // The previous visual scenario may intentionally leave the More menu open.
     // Do not click the underlying nav button while the backdrop intercepts it.
     if (!(await sheet.isVisible().catch(() => false))) {
-      await page.locator('nav.nav-bar button').filter({ hasText: 'Lainnya' }).first().click();
+      const moreButton = page.locator('nav.nav-bar button').filter({ hasText: 'Lainnya' }).first();
+      await moreButton.waitFor({ state: 'visible', timeout: 5000 });
+      await moreButton.click({ force: true });
     }
-    await sheet.waitFor({ state: 'visible', timeout: 5000 });
-    await sheet.locator('button').filter({ hasText: label }).first().click();
+    try {
+      await sheet.waitFor({ state: 'visible', timeout: 10000 });
+    } catch (error) {
+      throw new Error(`More menu failed to open before navigating to "${label}". Cause: ${error.message}`);
+    }
+    await sheet.locator('button').filter({ hasText: label }).first().click({ force: true });
     await page.getByText(marker, { exact: false }).first().waitFor({ state: 'visible', timeout: 10000 });
   };
 
