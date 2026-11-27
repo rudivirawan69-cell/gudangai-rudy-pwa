@@ -900,6 +900,7 @@ export async function syncPendingQueue({ clientItemIds = null } = {}) {
     if (queue.some((entry, index) => entry !== rawQueue[index])) await commitQueueLocal(queue);
     const processQueue = queue.filter((entry) => entry.status !== 'PROCESSING');
     const targetIds = clientItemIds ? new Set(clientItemIds.map(String)) : null;
+    const eligibleIds = new Set(processQueue.flatMap((entry) => (entry.items || []).map((item) => String(item.clientItemId || '')).filter((id) => id && (!targetIds || targetIds.has(id))));
     const groups = new Map();
     const conflictingIds = new Set();
     const identitySignatures = new Map();
@@ -915,7 +916,7 @@ export async function syncPendingQueue({ clientItemIds = null } = {}) {
       const group = groups.get(key);
       for (const item of entry.items) {
         const id = String(item.clientItemId || '');
-        if (!id || (targetIds && !targetIds.has(id))) continue;
+        if (!id || !eligibleIds.has(id)) continue;
         const signature = JSON.stringify([type, entity, tanggal, item.kode, item.qty, item.keterangan]);
         const globalPrior = identitySignatures.get(id);
         if (globalPrior && globalPrior !== signature) conflictingIds.add(id);
@@ -951,14 +952,13 @@ export async function syncPendingQueue({ clientItemIds = null } = {}) {
     }
     for (const id of conflictingIds) failureDetails.set(String(id), 'ID transaksi digunakan untuk payload yang berbeda. Perlu pemeriksaan manual.');
 
-    const remaining = [];
     let synced = 0, failed = 0;
     const appliedAfterSync = getAppliedMap();
-    // History must be durably written before any confirmed outbox item is removed.
+    // Persist history first, but only for IDs that this run actually owns.
     for (const entry of queue) {
       for (const item of entry.items || []) {
         const id = String(item.clientItemId || '');
-        if (!id || (targetIds && !targetIds.has(id)) || (!confirmedIds.has(id) && !appliedAfterSync[id])) continue;
+        if (!id || !eligibleIds.has(id) || (!confirmedIds.has(id) && !appliedAfterSync[id])) continue;
         const metadata = confirmedHistory.get(id) || { item, type: entry.type, entity: entry.entity, tanggal: entry.tanggal };
         saveToHistory({
           type: metadata.type, entity: metadata.entity, tanggal: metadata.tanggal,
@@ -970,31 +970,30 @@ export async function syncPendingQueue({ clientItemIds = null } = {}) {
         });
       }
     }
-    for (const entry of queue) {
-      const remainingItems = entry.items
-        .filter((item) => (targetIds && !targetIds.has(String(item.clientItemId))) || (!confirmedIds.has(item.clientItemId) && !appliedAfterSync[item.clientItemId]))
-        .map((item) => {
-          const error = failureDetails.get(String(item.clientItemId));
-          return error
-            ? { ...item, queueStatus: 'PENDING_VERIFY', lastError: String(error) }
-            : item;
-        });
-      synced += entry.items.length - remainingItems.length;
-      if (remainingItems.length) {
-        const isProcessing = entry.status === 'PROCESSING';
-        const hasEntryFailure = remainingItems.some((item) => failureDetails.has(String(item.clientItemId)));
-        if (!isProcessing) failed += remainingItems.length;
-        remaining.push({
-          ...entry,
-          status: isProcessing ? 'PROCESSING' : (hasEntryFailure ? 'PENDING_VERIFY' : entry.status),
-          updatedAt: isProcessing ? entry.updatedAt : new Date().toISOString(),
-          items: remainingItems,
-        });
+    // Finalize against the latest queue snapshot under the serialized mutation lock.
+    await mutateQueueLocal((currentQueue) => {
+      const next = [];
+      for (const entry of currentQueue) {
+        const remainingItems = [];
+        for (const item of entry.items || []) {
+          const id = String(item.clientItemId || '');
+          const owned = eligibleIds.has(id);
+          if (owned && (confirmedIds.has(id) || !!appliedAfterSync[id])) { synced += 1; continue; }
+          if (owned) {
+            failed += 1;
+            const error = failureDetails.get(id) || 'Write belum terkonfirmasi. Item dipertahankan untuk verifikasi.';
+            remainingItems.push({ ...item, queueStatus: 'PENDING_VERIFY', lastError: String(error) });
+          } else remainingItems.push(item);
+        }
+        if (remainingItems.length) {
+          const hasOwnedFailure = remainingItems.some((item) => eligibleIds.has(String(item.clientItemId)));
+          next.push({ ...entry, status: hasOwnedFailure && entry.status !== 'PROCESSING' ? 'PENDING_VERIFY' : entry.status, updatedAt: hasOwnedFailure && entry.status !== 'PROCESSING' ? new Date().toISOString() : entry.updatedAt, items: remainingItems });
+        }
       }
-    }
-    await commitQueueLocal(remaining);
+      return next;
+    });
     const confirmedHomeRows = queue.flatMap((entry) => (entry.items || [])
-      .filter((item) => (!targetIds || targetIds.has(String(item.clientItemId))) && (confirmedIds.has(String(item.clientItemId)) || !!appliedAfterSync[String(item.clientItemId)]))
+      .filter((item) => eligibleIds.has(String(item.clientItemId)) && (confirmedIds.has(String(item.clientItemId)) || !!appliedAfterSync[String(item.clientItemId)]))
       .map((item) => ({ ...item, entity: entry.entity, type: entry.type })));
     publishHomeSuccessReceipt(confirmedHomeRows);
     if (synced > 0 || failed > 0) {
