@@ -1,11 +1,27 @@
-/* ── PO Page polish (27 Nov 2026) — clean delete, spacing, scroll, 3-action row, theme contrast ── */
+/* ── PO Page polish v2 (27 Nov 2026) — spacing, scroll stability, theme contrast ── */
+
+/* Stronger gap between cards */
+.po-item-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  transform: translateZ(0);
+  -webkit-overflow-scrolling: touch;
+  will-change: contents;
+}
+.po-item-list > * + * {
+  margin-top: 0 !important;
+}
+
+/* Card: stable paint, no heavy motion, no cut-off flash */
 .po-item-card {
   position: relative;
   overflow: hidden;
   contain: layout style paint;
-  content-visibility: auto;
-  contain-intrinsic-size: auto 76px;
-  transition: box-shadow 0.12s ease, border-color 0.12s ease;
+  content-visibility: visible;
+  transition: border-color 0.12s ease, background-color 0.12s ease;
+  box-shadow: 0 1px 3px rgba(15, 50, 58, 0.06) !important;
+  padding: 0.7rem 0.75rem !important;
 }
 .app-content .po-item-card::before,
 .po-item-card::before {
@@ -13,14 +29,21 @@
   content: none !important;
   background: none !important;
 }
-.po-item-card:hover {
-  transform: none;
-  box-shadow: 0 4px 12px rgba(15, 50, 58, 0.07), inset 0 1px 0 rgba(255, 255, 255, 0.95);
+.app-content .po-item-card::after,
+.po-item-card::after {
+  display: none !important;
 }
-.po-item-list {
-  transform: translateZ(0);
-  -webkit-overflow-scrolling: touch;
+.po-item-card:hover,
+.app-content .po-item-card:hover {
+  transform: none !important;
+  box-shadow: 0 2px 8px rgba(15, 50, 58, 0.08) !important;
 }
+.po-item-card:active,
+.app-content .po-item-card:active {
+  transform: none !important;
+}
+
+/* Action row */
 .po-action-row { gap: 0.5rem; }
 .po-action-btn {
   min-height: 2.75rem;
@@ -29,70 +52,83 @@
   justify-content: center;
   text-align: center;
   line-height: 1.2;
-  transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+  transition: background-color 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
 }
 .po-action-save { background: linear-gradient(145deg, #0f8c91, #0b7a7e); }
 .po-action-save:active:not(:disabled) { transform: scale(0.98); }
 .po-action-copy:active, .po-action-back:active { transform: scale(0.98); }
+
+/* Theme: deep_ocean */
 html[data-theme="deep_ocean"] .po-item-card {
-  background: rgba(22, 42, 64, 0.92) !important;
-  border-color: rgba(56, 189, 248, 0.28) !important;
-  color: #e8f4fc;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.22);
+  background: rgba(22, 42, 64, 0.94) !important;
+  border-color: rgba(56, 189, 248, 0.32) !important;
+  color: #e8f4fc !important;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.22) !important;
 }
 html[data-theme="deep_ocean"] .po-item-card .text-slate-900,
-html[data-theme="deep_ocean"] .po-item-card p { color: #f1f7fc !important; }
+html[data-theme="deep_ocean"] .po-item-card p {
+  color: #f1f7fc !important;
+}
 html[data-theme="deep_ocean"] .po-item-card input,
 html[data-theme="deep_ocean"] .po-item-card button:not([aria-label="Hapus"]) {
-  background: rgba(15, 30, 48, 0.7);
-  border-color: rgba(56, 189, 248, 0.25);
-  color: #e2eef8;
+  background: rgba(15, 30, 48, 0.75) !important;
+  border-color: rgba(56, 189, 248, 0.28) !important;
+  color: #e2eef8 !important;
 }
 html[data-theme="deep_ocean"] .po-action-copy,
 html[data-theme="deep_ocean"] .po-action-back {
-  background: rgba(22, 42, 64, 0.9);
-  border-color: rgba(56, 189, 248, 0.3);
-  color: #e8f4fc;
+  background: rgba(22, 42, 64, 0.95) !important;
+  border-color: rgba(56, 189, 248, 0.35) !important;
+  color: #e8f4fc !important;
 }
 html[data-theme="deep_ocean"] .po-action-save {
-  background: linear-gradient(145deg, #0e8a96, #0a6f78);
+  background: linear-gradient(145deg, #0e8a96, #0a6f78) !important;
   box-shadow: 0 4px 12px rgba(14, 138, 150, 0.35);
 }
+
+/* Theme: graphite_titanium */
 html[data-theme="graphite_titanium"] .po-item-card {
   background: linear-gradient(145deg, #2c3645, #222b38) !important;
   border-color: #4a5a6e !important;
-  color: #f0f4f8;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.28);
+  color: #f0f4f8 !important;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.28) !important;
 }
 html[data-theme="graphite_titanium"] .po-item-card .text-slate-900,
-html[data-theme="graphite_titanium"] .po-item-card p { color: #f4f7fb !important; }
+html[data-theme="graphite_titanium"] .po-item-card p {
+  color: #f4f7fb !important;
+}
 html[data-theme="graphite_titanium"] .po-item-card input,
 html[data-theme="graphite_titanium"] .po-item-card button:not([aria-label="Hapus"]) {
-  background: #1a2330;
-  border-color: #4a5a6e;
-  color: #e8eef5;
+  background: #1a2330 !important;
+  border-color: #4a5a6e !important;
+  color: #e8eef5 !important;
 }
 html[data-theme="graphite_titanium"] .po-action-copy,
 html[data-theme="graphite_titanium"] .po-action-back {
-  background: #2a3444;
-  border-color: #4a5a6e;
-  color: #eef2f7;
+  background: #2a3444 !important;
+  border-color: #4a5a6e !important;
+  color: #eef2f7 !important;
 }
 html[data-theme="graphite_titanium"] .po-action-save {
-  background: linear-gradient(145deg, #0f8c91, #0a6f74);
+  background: linear-gradient(145deg, #0f8c91, #0a6f74) !important;
 }
+
+/* Theme: ocean_glass */
 html[data-theme="ocean_glass"] .po-item-card {
-  background: rgba(255, 255, 255, 0.82) !important;
-  border-color: rgba(14, 140, 145, 0.22) !important;
+  background: rgba(255, 255, 255, 0.88) !important;
+  border-color: rgba(14, 140, 145, 0.25) !important;
   backdrop-filter: blur(8px);
+  box-shadow: 0 2px 10px rgba(14, 100, 110, 0.08) !important;
 }
 html[data-theme="ocean_glass"] .po-action-save {
-  background: linear-gradient(145deg, #0f9da1, #0b7f83);
+  background: linear-gradient(145deg, #0f9da1, #0b7f83) !important;
 }
-.po-page { transition: opacity 0.18s ease, transform 0.18s ease; }
-.po-hub-card-btn {
-  transition: border-color 0.16s ease, box-shadow 0.16s ease, background-color 0.16s ease, transform 0.14s ease;
-}
+
 @media (prefers-reduced-motion: reduce) {
-  .po-item-card, .po-action-btn, .po-page, .po-hub-card-btn { transition: none !important; }
+  .po-item-card,
+  .po-action-btn,
+  .po-page,
+  .po-hub-card-btn {
+    transition: none !important;
+  }
 }
