@@ -237,7 +237,7 @@ try {
     const menuButton = sheet.locator('button').filter({ hasText: label }).first();
     await menuButton.waitFor({ state: 'visible', timeout: 5000 });
     await menuButton.scrollIntoViewIfNeeded();
-    await menuButton.click({ force: true });
+    await menuButton.evaluate((element) => element.click());
     await page.getByText(marker, { exact: false }).first().waitFor({ state: 'visible', timeout: 10000 });
   };
 
