@@ -948,7 +948,7 @@ export async function syncPendingQueue({ clientItemIds = null } = {}) {
     for (const entry of queue) {
       for (const item of entry.items || []) {
         const id = String(item.clientItemId || '');
-        if (!id || (!confirmedIds.has(id) && !appliedAfterSync[id])) continue;
+        if (!id || (targetIds && !targetIds.has(id)) || (!confirmedIds.has(id) && !appliedAfterSync[id])) continue;
         const metadata = confirmedHistory.get(id) || { item, type: entry.type, entity: entry.entity, tanggal: entry.tanggal };
         saveToHistory({
           type: metadata.type, entity: metadata.entity, tanggal: metadata.tanggal,
@@ -962,7 +962,7 @@ export async function syncPendingQueue({ clientItemIds = null } = {}) {
     }
     for (const entry of queue) {
       const remainingItems = entry.items
-        .filter((item) => !confirmedIds.has(item.clientItemId) && !appliedAfterSync[item.clientItemId])
+        .filter((item) => (targetIds && !targetIds.has(String(item.clientItemId))) || (!confirmedIds.has(item.clientItemId) && !appliedAfterSync[item.clientItemId]))
         .map((item) => {
           const error = failureDetails.get(String(item.clientItemId));
           return error
@@ -984,7 +984,7 @@ export async function syncPendingQueue({ clientItemIds = null } = {}) {
     }
     await commitQueueLocal(remaining);
     const confirmedHomeRows = queue.flatMap((entry) => (entry.items || [])
-      .filter((item) => confirmedIds.has(String(item.clientItemId)) || !!appliedAfterSync[String(item.clientItemId)])
+      .filter((item) => (!targetIds || targetIds.has(String(item.clientItemId))) && (confirmedIds.has(String(item.clientItemId)) || !!appliedAfterSync[String(item.clientItemId)]))
       .map((item) => ({ ...item, entity: entry.entity, type: entry.type })));
     publishHomeSuccessReceipt(confirmedHomeRows);
     if (synced > 0 || failed > 0) {
