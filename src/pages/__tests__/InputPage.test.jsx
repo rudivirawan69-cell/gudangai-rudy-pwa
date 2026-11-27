@@ -127,7 +127,7 @@ describe('InputPage PR 1', () => {
   it('tidak mengantrekan keranjang yang seluruh jumlahnya nol', async () => {
     seedCart([item('zero-only', 0)]);
     render(<InputPage />);
-    expect(screen.getByRole('button', { name: /Antrekan 0 item/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /Kirim 0 item/i })).toBeDisabled();
     expect(api.stagePendingTransaction).not.toHaveBeenCalled();
   });
 });
