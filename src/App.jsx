@@ -182,6 +182,11 @@ function AppShell() {
   const [installDismissed, setInstallDismissed] = useState(() => localStorage.getItem('gudangai_install_dismissed') === '1');
   const [pendingCount, setPendingCount] = useState(() => getPendingQueue().length);
   const autoSyncRunningRef = useRef(false);
+  const publishAutoSyncStatus = (detail) => {
+    const snapshot = { ...detail, at: Date.now() };
+    try { localStorage.setItem('gudangai_auto_sync_status_v1', JSON.stringify(snapshot)); } catch (_) {}
+    window.dispatchEvent(new CustomEvent('gudangai-auto-sync-status', { detail: snapshot }));
+  };
 
   useEffect(() => {
     if (installDismissed) return;
@@ -226,18 +231,18 @@ function AppShell() {
         .flatMap((entry) => (entry.items || []).map((item) => String(item.clientItemId || '')).filter(Boolean));
       if (!ids.length) return;
       autoSyncRunningRef.current = true;
-      window.dispatchEvent(new CustomEvent('gudangai-auto-sync-status', { detail: { state: 'started', count: ids.length } }));
+      publishAutoSyncStatus({ state: 'started', count: ids.length });
       try {
         const claimed = await claimPendingAutoSend(ids);
         if (!claimed.length) {
-          window.dispatchEvent(new CustomEvent('gudangai-auto-sync-status', { detail: { state: 'completed', result: { synced: 0, failed: 0, skipped: true, reason: 'handoff-already-claimed' } } }));
+          publishAutoSyncStatus({ state: 'completed', result: { synced: 0, failed: 0, skipped: true, reason: 'handoff-already-claimed' } });
           return;
         }
         const result = await syncPendingQueue({ clientItemIds: claimed });
         if (Number(result?.synced || 0) > 0) window.dispatchEvent(new Event('gudangai-stock-refresh'));
-        window.dispatchEvent(new CustomEvent('gudangai-auto-sync-status', { detail: { state: 'completed', result } }));
+        publishAutoSyncStatus({ state: 'completed', result });
       } catch (error) {
-        window.dispatchEvent(new CustomEvent('gudangai-auto-sync-status', { detail: { state: 'failed', error: error?.message || 'Sinkronisasi otomatis gagal.' } }));
+        publishAutoSyncStatus({ state: 'failed', error: error?.message || 'Sinkronisasi otomatis gagal.' });
       } finally {
         autoSyncRunningRef.current = false;
         setPendingCount(getPendingQueue().length);
