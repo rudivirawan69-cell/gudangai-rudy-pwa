@@ -234,7 +234,10 @@ try {
     } catch (error) {
       throw new Error(`More menu failed to open before navigating to "${label}". Cause: ${error.message}`);
     }
-    await sheet.locator('button').filter({ hasText: label }).first().click({ force: true });
+    const menuButton = sheet.locator('button').filter({ hasText: label }).first();
+    await menuButton.waitFor({ state: 'visible', timeout: 5000 });
+    await menuButton.scrollIntoViewIfNeeded();
+    await menuButton.click({ force: true });
     await page.getByText(marker, { exact: false }).first().waitFor({ state: 'visible', timeout: 10000 });
   };
 
