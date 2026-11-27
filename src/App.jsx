@@ -229,8 +229,12 @@ function AppShell() {
       window.dispatchEvent(new CustomEvent('gudangai-auto-sync-status', { detail: { state: 'started', count: ids.length } }));
       try {
         const claimed = await claimPendingAutoSend(ids);
-        if (!claimed.length) return;
+        if (!claimed.length) {
+          window.dispatchEvent(new CustomEvent('gudangai-auto-sync-status', { detail: { state: 'completed', result: { synced: 0, failed: 0, skipped: true, reason: 'handoff-already-claimed' } } }));
+          return;
+        }
         const result = await syncPendingQueue();
+        if (Number(result?.synced || 0) > 0) window.dispatchEvent(new Event('gudangai-stock-refresh'));
         window.dispatchEvent(new CustomEvent('gudangai-auto-sync-status', { detail: { state: 'completed', result } }));
       } catch (error) {
         window.dispatchEvent(new CustomEvent('gudangai-auto-sync-status', { detail: { state: 'failed', error: error?.message || 'Sinkronisasi otomatis gagal.' } }));
