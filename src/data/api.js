@@ -174,12 +174,6 @@ async function writeQueueSnapshot(safeQueue) {
     }));
   } catch (_) {}
 }
-function commitQueueLocal(queue) {
-  const snapshot = Array.isArray(queue) ? queue : [];
-  const run = _queueCommitChain.then(() => writeQueueSnapshot(snapshot));
-  _queueCommitChain = run.catch(() => {});
-  return run;
-}
 function mutateQueueLocal(mutator) {
   const run = _queueCommitChain.then(async () => {
     const current = getPendingQueue();
