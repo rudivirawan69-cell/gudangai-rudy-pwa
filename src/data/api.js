@@ -688,7 +688,7 @@ export async function submitBarangRusak({ entity, tanggal, items }) { return sub
 export function getPendingQueue() { return readQueueLocal().queue; }
 
 /** Persist a complete send intent before the first backend request. */
-export async function stagePendingTransaction({ type, entity, tanggal, items, status = 'PENDING_REVIEW' }) {
+export async function stagePendingTransaction({ type, entity, tanggal, items, status = 'PENDING_REVIEW', autoSend = false }) {
   const validItems = (items || []).map((item) => ({
     ...ensureClientItemId(item), kode: normalizeItemCode(item.kode || item.kodeBarang),
     nama: normalizeTransactionText(item.nama), keterangan: normalizeTransactionText(item.keterangan),
@@ -702,7 +702,7 @@ export async function stagePendingTransaction({ type, entity, tanggal, items, st
   const entry = {
     id: 'Q-SEND-' + (crypto.randomUUID ? crypto.randomUUID() : Date.now()),
     transactionId: 'TX-BATCH-' + (crypto.randomUUID ? crypto.randomUUID() : Date.now()),
-    status: queueStatus, type, entity: String(entity || '').toUpperCase(), items: validItems,
+    status: queueStatus, type, entity: String(entity || '').toUpperCase(), items: validItems, ...(autoSend ? { autoSendRequested: true } : {}),
     tanggal: normalizeTanggal(tanggal), createdAt: now, updatedAt: now,
     ...(queueStatus === 'PROCESSING' ? { processingStartedAt: now } : {}),
   };
@@ -712,6 +712,51 @@ export async function stagePendingTransaction({ type, entity, tanggal, items, st
   const stagedIds = new Set(getPendingQueue().flatMap((entry) => (entry.items || []).map((item) => String(item.clientItemId || ''))));
   if (validItems.some((item) => !stagedIds.has(String(item.clientItemId)))) throw new Error('Verifikasi antrean gagal. Permintaan ke server dibatalkan.');
   return validItems.map((item) => item.clientItemId);
+}
+
+/** Atomically consumes the one-shot auto-send request before processing it. */
+export async function claimPendingAutoSend(clientItemIds = []) {
+  const wanted = new Set((clientItemIds || []).map(String).filter(Boolean));
+  const queue = getPendingQueue();
+  const claimed = [];
+  const next = queue.map((entry) => {
+    const ids = (entry.items || []).map((item) => String(item.clientItemId || '')).filter((id) => wanted.has(id));
+    if (!entry.autoSendRequested || !ids.length) return entry;
+    claimed.push(...ids);
+    return { ...entry, autoSendRequested: false, autoSendClaimedAt: new Date().toISOString(), status: 'PENDING_REVIEW' };
+  });
+  if (claimed.length) await commitQueueLocal(next);
+  return claimed;
+}
+
+export function getPendingHomeSuccessReceipt() {
+  try {
+    const receipt = JSON.parse(localStorage.getItem(HOME_SUCCESS_RECEIPT_KEY) || 'null');
+    if (!receipt || receipt.expiresAt < Date.now()) {
+      localStorage.removeItem(HOME_SUCCESS_RECEIPT_KEY);
+      return null;
+    }
+    return receipt;
+  } catch (_) { return null; }
+}
+export function acknowledgeHomeSuccessReceipt(receiptId) {
+  const current = getPendingHomeSuccessReceipt();
+  if (!current || (receiptId && current.id !== receiptId)) return false;
+  try { localStorage.removeItem(HOME_SUCCESS_RECEIPT_KEY); return true; } catch (_) { return false; }
+}
+function publishHomeSuccessReceipt(rows) {
+  if (!Array.isArray(rows) || !rows.length) return;
+  const receipt = {
+    id: 'HOME-SUCCESS-' + Date.now(),
+    confirmedAt: new Date().toISOString(),
+    count: rows.length,
+    items: rows.slice(0, 100).map((row) => ({ kode: row.kode, nama: row.nama, qty: Number(row.qty) || 0, entity: row.entity, type: row.type })),
+    expiresAt: Date.now() + 24 * 60 * 60 * 1000,
+  };
+  try {
+    localStorage.setItem(HOME_SUCCESS_RECEIPT_KEY, JSON.stringify(receipt));
+    window.dispatchEvent(new CustomEvent('gudangai-home-success', { detail: receipt }));
+  } catch (_) {}
 }
 
 export function finishPendingTransaction(ids) {
@@ -937,6 +982,10 @@ export async function syncPendingQueue() {
       }
     }
     await commitQueueLocal(remaining);
+    const confirmedHomeRows = queue.flatMap((entry) => (entry.items || [])
+      .filter((item) => confirmedIds.has(String(item.clientItemId)) || !!appliedAfterSync[String(item.clientItemId)])
+      .map((item) => ({ ...item, entity: entry.entity, type: entry.type })));
+    publishHomeSuccessReceipt(confirmedHomeRows);
     if (synced > 0 || failed > 0) {
       pushNotification({
         type: failed > 0 ? 'warning' : 'success',
@@ -950,6 +999,7 @@ export async function syncPendingQueue() {
   }
 }
 const HISTORY_KEY = 'gudangai_history';
+const HOME_SUCCESS_RECEIPT_KEY = 'gudangai_home_success_receipt_v1';
 export function getTransactionHistory() { try { return JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]'); } catch { return []; } }
 export function getLocalHistory() {
   try {
