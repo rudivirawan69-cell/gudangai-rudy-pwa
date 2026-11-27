@@ -92,11 +92,6 @@ const DayGroup = memo(function DayGroup({ h, open, onToggle, onCopy }) {
             <span>{fmtCount(lineCount)} baris item · {fmt(totalQty)} total qty</span>
           </div>
           {h.items.map((tx) => <TransactionCard key={tx.id} tx={tx} onCopy={onCopy} />)}
-              </ul>
-              {tx.keterangan ? <p className="rw-ket">Keterangan: {tx.keterangan}</p> : null}
-              <div className="rw-actions"><button type="button" onClick={() => onCopy(tx)}>Salin transaksi</button></div>
-            </article>
-          ))}
         </div>
       )}
     </section>
