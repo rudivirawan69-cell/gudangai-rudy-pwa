@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Bell, CheckCheck, Circle, Clock3, Inbox } from 'lucide-react';
 import { getNotifications, markNotificationsRead, unreadNotificationCount } from '../data/api';
 
@@ -12,10 +12,10 @@ export default function NotificationsPage() {
   const [notifications, setNotifications] = useState(() => getNotifications());
   const [unread, setUnread] = useState(() => unreadNotificationCount());
 
-  const refresh = () => {
+  const refresh = useCallback(() => {
     setNotifications(getNotifications());
     setUnread(unreadNotificationCount());
-  };
+  }, []);
 
   useEffect(() => {
     refresh();
@@ -25,7 +25,7 @@ export default function NotificationsPage() {
       window.removeEventListener('gudangai-notification', refresh);
       window.removeEventListener('storage', refresh);
     };
-  }, []);
+  }, [refresh]);
 
   const markAllRead = () => {
     markNotificationsRead();
