@@ -1,6 +1,7 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   getPendingQueue,
+  claimPendingAutoSend,
   syncPendingQueue,
   resolvePendingItem,
   removePendingByClientIds,
@@ -48,6 +49,7 @@ function flattenQueue(queue) {
         tanggal,
         entryId,
         queueStatus: it.queueStatus || entry.status || 'PENDING_REVIEW',
+        autoSendRequested: !!entry.autoSendRequested,
         lastError: it.lastError || entry.lastError || '',
       });
     }
@@ -87,6 +89,7 @@ export default function SyncQueuePage({ onBack, onNavigate }) {
   const [reviewing, setReviewing] = useState(false);
   const [progress, setProgress] = useState(null);
   const [circuit, setCircuit] = useState(() => getWriteCircuitState());
+  const autoHandoffStartedRef = useRef(false);
 
   const refresh = useCallback(() => {
     setRows(flattenQueue(getPendingQueue()));
@@ -140,6 +143,20 @@ export default function SyncQueuePage({ onBack, onNavigate }) {
     setSyncing(false);
     setResult({ synced: 1, failed: 0, message: 'Item terverifikasi dan dicatat di Riwayat.' });
   };
+
+  useEffect(() => {
+    const autoIds = rows.filter((row) => row.autoSendRequested && row.clientItemId).map((row) => row.clientItemId);
+    if (!autoIds.length || syncing || circuit.open || autoHandoffStartedRef.current) return;
+    autoHandoffStartedRef.current = true;
+    setResult({ synced: 0, failed: 0, message: 'Penyerahan dari Input diterima. Sinkronisasi otomatis dimulai…' });
+    void claimPendingAutoSend(autoIds).then((claimed) => {
+      if (claimed.length) void handleSendAll();
+      else autoHandoffStartedRef.current = false;
+    }).catch((err) => {
+      autoHandoffStartedRef.current = false;
+      setError(err?.message || 'Gagal mengambil alih antrean otomatis. Item tetap aman di antrean.');
+    });
+  }, [rows, syncing, circuit.open]);
 
   const handleSendAll = async () => {
     if (total === 0 || syncing || circuit.open) return;
