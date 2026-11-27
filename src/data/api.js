@@ -900,7 +900,7 @@ export async function syncPendingQueue({ clientItemIds = null } = {}) {
     if (queue.some((entry, index) => entry !== rawQueue[index])) await commitQueueLocal(queue);
     const processQueue = queue.filter((entry) => entry.status !== 'PROCESSING');
     const targetIds = clientItemIds ? new Set(clientItemIds.map(String)) : null;
-    const eligibleIds = new Set(processQueue.flatMap((entry) => (entry.items || []).map((item) => String(item.clientItemId || '')).filter((id) => id && (!targetIds || targetIds.has(id))));
+    const eligibleIds = new Set(processQueue.flatMap((entry) => (entry.items || []).map((item) => String(item.clientItemId || '')).filter((id) => id && (!targetIds || targetIds.has(id)))));
     const groups = new Map();
     const conflictingIds = new Set();
     const identitySignatures = new Map();
