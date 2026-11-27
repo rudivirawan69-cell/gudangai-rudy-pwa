@@ -154,33 +154,41 @@ function readQueueLocal() {
     return { revision: _queueRevision, queue: Array.isArray(raw) ? raw : [] };
   } catch (_) { return { revision: 0, queue: [] }; }
 }
-async function commitQueueLocal(queue) {
-  const safeQueue = Array.isArray(queue) ? queue : [];
+let _queueCommitChain = Promise.resolve();
+async function writeQueueSnapshot(safeQueue) {
   const next = Math.max(_queueRevision + 1, Date.now());
-
-  // IndexedDB commit + read-back is the durability gate. If it fails, do not
-  // acknowledge this queue mutation or allow the caller to clear its cart.
+  // IndexedDB commit + read-back is the durability gate.
   await persistQueueBackup(safeQueue, next);
-
   try {
     localStorage.setItem(QUEUE_KEY, JSON.stringify(safeQueue));
     localStorage.setItem(QUEUE_KEY + '_rev', String(next));
     const verified = readQueueLocal();
-    if (verified.revision !== next || JSON.stringify(verified.queue) !== JSON.stringify(safeQueue)) {
-      throw new Error('Verifikasi localStorage antrean gagal.');
-    }
+    if (verified.revision !== next || JSON.stringify(verified.queue) !== JSON.stringify(safeQueue)) throw new Error('Verifikasi localStorage antrean gagal.');
   } catch (error) {
-    // IndexedDB already contains the committed snapshot. Leave it recoverable;
-    // caller must keep the original input visible until a later hydration.
     throw new Error('Cadangan IndexedDB tersimpan, tetapi cache antrean perangkat gagal diverifikasi: ' + (error?.message || 'storage error'));
   }
-
   _queueRevision = next;
   try {
     window.dispatchEvent(new CustomEvent('gudangai-queue-changed', {
       detail: { count: safeQueue.reduce((sum, entry) => sum + (entry.items || []).length, 0), revision: next }
     }));
   } catch (_) {}
+}
+function commitQueueLocal(queue) {
+  const snapshot = Array.isArray(queue) ? queue : [];
+  const run = _queueCommitChain.then(() => writeQueueSnapshot(snapshot));
+  _queueCommitChain = run.catch(() => {});
+  return run;
+}
+function mutateQueueLocal(mutator) {
+  const run = _queueCommitChain.then(async () => {
+    const current = getPendingQueue();
+    const next = mutator(current);
+    await writeQueueSnapshot(Array.isArray(next) ? next : current);
+    return next;
+  });
+  _queueCommitChain = run.catch(() => {});
+  return run;
 }
 export async function hydrateOfflineQueue() {
   return hydrateQueueBackup(readQueueLocal, (queue, revision) => {
