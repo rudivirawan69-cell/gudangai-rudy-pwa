@@ -27,6 +27,7 @@ const TIPE_FILTERS = [
 ];
 const STATUS_FILTERS = ["semua", "terkirim", "antrian", "gagal", "lokal"];
 const BATCH = 10;
+const TX_BATCH = 20;
 const EMPTY = [];
 
 const fmt = (n) =>
@@ -67,6 +68,10 @@ const TransactionCard = memo(function TransactionCard({ tx, onCopy }) {
 
 const DayGroup = memo(function DayGroup({ h, open, onToggleDay, onCopy }) {
   const handleToggle = useCallback(() => onToggleDay(h.key), [onToggleDay, h.key]);
+  const [txLimit, setTxLimit] = useState(TX_BATCH);
+  const showMoreTransactions = useCallback(() => {
+    startTransition(() => setTxLimit((current) => Math.min(current + TX_BATCH, h.items.length)));
+  }, [h.items.length]);
   const first = h.items[0];
   const otherCount = Math.max(0, h.items.length - 1);
   const lineCount = h.items.reduce((sum, tx) => sum + tx.jumlahItem, 0);
@@ -92,7 +97,12 @@ const DayGroup = memo(function DayGroup({ h, open, onToggleDay, onCopy }) {
             <strong>Rincian {fmtCount(h.items.length)} transaksi</strong>
             <span>{fmtCount(lineCount)} baris item · {fmt(totalQty)} total qty</span>
           </div>
-          {h.items.map((tx) => <TransactionCard key={tx.id} tx={tx} onCopy={onCopy} />)}
+          {h.items.slice(0, txLimit).map((tx) => <TransactionCard key={tx.id} tx={tx} onCopy={onCopy} />)}
+          {txLimit < h.items.length ? (
+            <button type="button" className="rw-more-transactions" onClick={showMoreTransactions}>
+              Tampilkan {fmtCount(Math.min(TX_BATCH, h.items.length - txLimit))} transaksi berikutnya · {fmtCount(h.items.length - txLimit)} tersisa
+            </button>
+          ) : null}
         </div>
       )}
     </section>

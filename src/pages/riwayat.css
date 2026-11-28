@@ -397,3 +397,8 @@
 .rw-tx-detail { contain: layout style paint; content-visibility: auto; contain-intrinsic-size: auto 180px; }
 .rw-tx-items li { contain: layout style; }
 .rw-day-details { min-width: 0; }
+
+
+/* Progressive rendering for high-volume days */
+.rw-more-transactions{display:block;width:100%;min-height:42px;margin:8px 0 2px;padding:9px 12px;border:1px solid var(--rw-line)!important;border-radius:11px!important;background:var(--rw-card)!important;color:var(--rw-brand)!important;font-size:12px!important;font-weight:800!important;text-align:center}
+.rw-more-transactions:focus-visible{outline:2px solid var(--rw-brand);outline-offset:2px}
